@@ -66,7 +66,7 @@ impl<'a> OpenCLCWriter<'_> {
         Ok(true)
     }
 
-    pub fn emit_local(&self, local: &wast::Local, debug: bool) -> String {
+    fn emit_local(&self, local: &wast::Local, debug: bool) -> String {
         /*
          * When emitting locals we know we have access to the global stack.
          * We zero-init all values.
@@ -77,13 +77,20 @@ impl<'a> OpenCLCWriter<'_> {
         if debug {
             match local.ty {
                 wast::ValType::I32 => {
-                    String::from("\tstack_u32[*sp] = 0;\n\t*sp += 2;\n")
+                    let local_id = match local.id {
+                        Some(id) => id.name(),
+                        None => panic!("Unexpected local without identifier"),
+                    };
+                    String::from(format!("\t{}\n\t{}\n\t{}\n",
+                                 format!("/* local id: {} */", local_id),
+                                 "stack_u32[*sp] = 0;",
+                                 "*sp += 1;"))
                 },
                 wast::ValType::I64 => {
                     String::from("\tstack_u64[*sp] = 0;\n\t*sp += 2;\n")
                 },
                 wast::ValType::F32 => {
-                    String::from("\tstack_u32[*sp] = 0;\n\t*sp += 2;\n")
+                    String::from("\tstack_u32[*sp] = 0;\n\t*sp += 1;\n")
                 },
                 wast::ValType::F64 => {
                     String::from("\tstack_u64[*sp] = 0;\n\t*sp += 2;\n")
@@ -97,9 +104,9 @@ impl<'a> OpenCLCWriter<'_> {
 
     fn emit_i32_const(&self, val: &i32, debug: bool) -> String {
         if debug {
-            format!("\tstack_u32[*sp] = (uint){};\n\t*sp += 2;\n", val)
+            format!("\tstack_u32[*sp] = (uint){};\n\t*sp += 1;\n", val)
         } else {
-            format!("\tstack_u32[*sp] = (uint){};\n\t*sp += 2;\n", val)
+            format!("\tstack_u32[*sp] = (uint){};\n\t*sp += 1;\n", val)
         }
     }
 
@@ -115,27 +122,113 @@ impl<'a> OpenCLCWriter<'_> {
     }
 
     // TODO: this needs to take the function type into account
-    fn function_unwind(&self, debug: bool) -> String {
+    fn function_unwind(&self, func_ret_info: &Option<wast::FunctionType>, debug: bool) -> String {
+        let mut final_str = String::from("");
+
+        let results: Vec<wast::ValType> = match func_ret_info {
+            Some(s) => (*s.results).to_vec(),
+            None => vec![]
+        };
+        
         if debug {
-            // stack_frames[*sfp] contains the stack pointer pointing to the start of the stack frame
-            // we want to use this as the index to write the function return value
-            format!("\t{}\n\t{}\n\t{}\n",
-                    "stack_u64[stack_frames[*sfp - 1] / 2] = stack_u64[(*sp / 2) - 1];",
-                    // now that we have set the return value, we want to reset the stack pointer
-                    // it ends up pointing right after the returned value from "call"
-                    "*sp = (stack_frames[*sfp - 1] / 2) + 1;",
-                    // now reset the stack frame pointer
-                    "*sfp -= 1;")
+            final_str += &format!("\t{}\n", "/* function unwind */");
+            // for each value returned by the function, return it on the stack
+            // keep track of the change to stack ptr from previous returns
+            let mut sp_counter = 0;
+            let mut offset = String::from("");
+            for value in results {
+                match value {
+                    wast::ValType::I32 => {
+                        // compute the offset to read from the bottom of the stack
+                        if sp_counter > 0 {
+                            offset = format!("stack_u32[stack_frames[*sfp - 1]] = stack_u32[*sp - {} - 1];", sp_counter);
+                        } else {
+                            offset = String::from("stack_u32[stack_frames[*sfp - 1]] = stack_u32[*sp - 1];");
+                        }
+                        final_str += &format!("\t{}\n", offset);
+                        sp_counter += 1;
+                    },
+                    wast::ValType::I64 => {
+                        // compute the offset to read from the bottom of the stack
+                        if sp_counter > 0 {
+                            offset = format!("stack_u64[stack_frames[*sfp - 1]] = stack_u64[*sp - {} - 1];", sp_counter);
+                        } else {
+                            offset = String::from("stack_u64[stack_frames[*sfp - 1]] = *(ulong *)(stack_u32 + *sp - 1);");
+                        }
+                        final_str += &format!("\t{}\n", offset);
+                        sp_counter += 1;
+                    },
+                    _ => panic!("Unimplemented function return type!!!"),
+                }
+            }
+            final_str += &format!("\t{}\n\t{}\n",
+                                  // reset the stack pointer to point at the end of the previous frame
+                                  "*sp = stack_frames[*sfp - 1];",
+                                  // now reset the stack frame pointer
+                                  "*sfp -= 1;");
         } else {
-            format!("")
+            final_str += &format!("");
         }
+        final_str
     }
 
-    pub fn emit_instructions(&self, instr: &wast::Instruction, debug: bool) -> String {
+    fn emit_instructions(&self, instr: &wast::Instruction, debug: bool) -> String {
         match instr {
             wast::Instruction::I32Const(val) => self.emit_i32_const(val, debug),
             _ => panic!("Instruction {:?} not yet implemented", instr)
         }
+    }
+
+    fn emit_function(&self, func: &wast::Func, debug: bool) -> String {
+        let mut final_string = String::from("");
+        dbg!("{:?}", func);
+        // Function header
+        match (&func.kind, &func.id, &func.ty) {
+            (wast::FuncKind::Import(_), _, _) => {
+                dbg!("InlineImport function");
+                // In this case, we have an InlineImport of the form:
+                // (func (type 3) (import "foo" "bar"))
+                panic!("InlineImport functions not yet implemented");
+            },
+            (wast::FuncKind::Inline{locals, expression}, Some(id), typeuse) => {
+                dbg!("InlineImport function");
+                dbg!(id.name());
+                dbg!("{:?}", locals);
+                dbg!("{:?}", expression);
+                final_string += &format!("void {} (uint *stack_u32, ulong *stack_u64, uint *heap_u32, ulong *heap_u64, uint *stack_frames, ulong *sp, ulong *sfp) {{\n", id.name());
+                /*
+                 * Stack setup for each function:
+                 * parameters *then* locals onto the same stack
+                 * when emitting code we index into the stack since we know
+                 * exactly how many parameters, locals we have.
+                 * 
+                 * 
+                 * Calling convention:
+                 *      The caller of a function is always responsible for stack frame init. 
+                 * In our case - if the caller is external to the runtime, then they have to set up the stack
+                 * frame and increment sfp + pass arguments onto the frame appropriately.
+                 * 
+                 */
+
+                // for each local, push them onto the stack
+                for local in locals {
+                    final_string += &self.emit_local(local.clone(), debug);
+                }
+
+                // we are now ready to execute instructions!
+                for instruction in expression.instrs.iter() {
+                    final_string += &self.emit_instructions(instruction, debug);
+                }
+
+                // to unwind from the function we unwind the call stack by moving the stack pointer
+                // and returning the last value on the stack 
+                final_string += &self.function_unwind(&typeuse.inline, debug);
+
+                final_string += "}\n\n";
+            },
+            (_, _, _) => panic!("Inline function must always have a valid identifier in wasm")
+        };
+        final_string
     }
 
     pub fn write_opencl_file(&self, filename: &str, debug: bool) -> () {
@@ -155,59 +248,12 @@ impl<'a> OpenCLCWriter<'_> {
             write!(output, "{}", format!("#define uint unsigned int\n"));
         }
 
-
         /*
          * Generate code for each function in the file first
          */
         for function in &self.funcs {
-            dbg!("{:?}", function);
-            // Function header
-            match (&function.kind, &function.id) {
-                (wast::FuncKind::Import(_), _) => {
-                    dbg!("InlineImport function");
-                    // In this case, we have an InlineImport of the form:
-                    // (func (type 3) (import "foo" "bar"))
-                    continue
-                },
-                (wast::FuncKind::Inline{locals, expression}, Some(id)) => {
-                    dbg!("InlineImport function");
-                    dbg!(id.name());
-                    dbg!("{:?}", locals);
-                    dbg!("{:?}", expression);
-                    write!(output, "{}", format!("void {} (uint *stack_u32, ulong *stack_u64, uint *heap_u32, ulong *heap_u64, uint *stack_frames, ulong *sp, ulong *sfp) {{\n", id.name()));
-
-                    /*
-                     * Stack setup for each function:
-                     * parameters *then* locals onto the same stack
-                     * when emitting code we index into the stack since we know
-                     * exactly how many parameters, locals we have.
-                     * 
-                     * 
-                     * Calling convention:
-                     *      The caller of a function is always responsible for stack frame init. 
-                     * In our case - if the caller is external to the runtime, then they have to set up the stack
-                     * frame and increment sfp + pass arguments onto the frame appropriately.
-                     * 
-                     */
-
-                    // for each local, push them onto the stack
-                    for local in locals {
-                        write!(output, "{}", self.emit_local(local.clone(), debug));
-                    }
- 
-                    // we are now ready to execute instructions!
-                    for instruction in expression.instrs.iter() {
-                        write!(output, "{}", self.emit_instructions(instruction, debug));
-                    }
-
-                    // to unwind from the function we unwind the call stack by moving the stack pointer
-                    // and returning the last value on the stack 
-                    write!(output, "{}", self.function_unwind(debug));
-
-                    write!(output, "}}\n\n");
-                },
-                (_, _) => panic!("Inline function must always have a valid identifier in wasm")
-            }
+            let func = self.emit_function(function, debug);
+            write!(output, "{}", func);
         }
 
         if debug {
@@ -222,11 +268,11 @@ impl<'a> OpenCLCWriter<'_> {
             write!(output, "{}", format!("\tstack_frames[sfp - 1] = sp;\n"));
 
             // demo: pass 42 as an argument
-            write!(output, "{}", format!("\tstack_u32[sp] = 42;\n"));
-            write!(output, "{}", format!("\tsp += 1;\n"));
+            //write!(output, "{}", format!("\tstack_u32[sp] = 42;\n"));
+            //write!(output, "{}", format!("\tsp += 1;\n"));
             write!(output, "{}", format!("\t_main(stack_u32, stack_u64, heap_u32, heap_u64, stack_frames, &sp, &sfp);\n"));
             // now check the result
-            write!(output, "{}", format!("\tprintf(\"%d\", stack_u32[sp]);\n"));
+            write!(output, "{}", format!("\tprintf(\"%d\\n\", stack_u32[sp]);\n"));
 
             write!(output, "}}\n\n");
         }
