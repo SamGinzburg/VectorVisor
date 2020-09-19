@@ -8,6 +8,7 @@ use std::path::Path;
 use std::fmt;
 use std::fs::File;
 use std::io::{Write, BufReader, BufRead, Error};
+use std::collections::HashMap;
 
 pub struct OpenCLCWriter<'a> {
     types: Vec<wast::Type<'a>>,
@@ -110,6 +111,98 @@ impl<'a> OpenCLCWriter<'_> {
         }
     }
 
+    fn emit_i64_const(&self, val: &i64, debug: bool) -> String {
+        if debug {
+            format!("\t{}{};\n\t*sp += 2;\n",
+                    "*(ulong *)(stack_u32+*sp) = (ulong)",
+                    val)
+        } else {
+            format!("\t{}{};\n\t*sp += 2;\n",
+                    "*(ulong *)(stack_u32+*sp) = (ulong)",
+                    val)
+        }
+    }
+
+    fn get_size_valtype(&self, t: &ValType) -> u32 {
+        match t {
+            wast::ValType::I32 => 1,
+            wast::ValType::F32 => 1,
+            wast::ValType::I64 => 2,
+            wast::ValType::F64 => 2,
+            _ => panic!("Unknown local size found"),
+        }
+    }
+
+    fn emit_local_get(&self, id: &str, offsets: &HashMap<&str, u32>, type_info: &HashMap<&str, ValType>, debug: bool) -> String {
+        if debug {
+            let offset = offsets.get(id).unwrap();
+            let t = type_info.get(id).unwrap();
+            dbg!(id);
+            dbg!(offset);
+            dbg!(t);
+            // stack_frames[*sfp - 1] start of stack frame
+            match t {
+                wast::ValType::I32 => {
+                    format!("\t{}\n\t{}\n",
+                            format!("stack_u32[*sp] = *(uint *)(stack_u32 + stack_frames[*sfp - 1] + {});", offset),
+                            "*sp += 1;")
+                },
+                wast::ValType::I64 => {
+                    format!("\t{}\n\t{}\n",
+                            format!("stack_u64[*sp] = *(uint *)(stack_u32 + stack_frames[*sfp - 1] + {});", offset),
+                            "*sp += 2;")
+                },
+                wast::ValType::F32 => {
+                    format!("\t{}\n",
+                            format!("stack_u32[*sp] = *(uint *)(stack_u32 + stack_frames[*sfp - 1] + {});", offset))
+                },
+                wast::ValType::F64 => {
+                    format!("\t{}\n\t{}\n",
+                            format!("stack_u64[*sp] = *(uint *)(stack_u32 + stack_frames[*sfp - 1] + {});", offset),
+                            "*sp += 2;")
+                },
+                _ => panic!("emit_local_set type not handled")
+            }
+        } else {
+            format!("\t{};\n\t*sp += 2;\n",
+                    "*(ulong *)(stack_u32+*sp) = (ulong)")
+        }
+
+    }
+
+    fn emit_local_set(&self, id: &str, offsets: &HashMap<&str, u32>, type_info: &HashMap<&str, ValType>, debug: bool) -> String {
+        if debug {
+            let offset = offsets.get(id).unwrap();
+            let t = type_info.get(id).unwrap();
+            dbg!(id);
+            dbg!(offset);
+            dbg!(t);
+            // stack_frames[*sfp - 1] start of stack frame
+            match t {
+                wast::ValType::I32 => {
+                    format!("\t{}\n",
+                            format!("*(uint *)(stack_u32 + stack_frames[*sfp - 1] + {}) = stack_u32[*sp - 1];", offset))
+                },
+                wast::ValType::I64 => {
+                    format!("\t{}\n",
+                            format!("*(ulong *)(stack_u32 + stack_frames[*sfp - 1] + {}) = *(ulong *)stack_u32[*sp - 2];", offset))
+                },
+                wast::ValType::F32 => {
+                    format!("\t{}\n",
+                            format!("*(uint *)(stack_u32 + stack_frames[*sfp - 1] + {}) = stack_u32[*sp - 1];", offset))
+                },
+                wast::ValType::F64 => {
+                    format!("\t{}\n",
+                            format!("*(ulong *)(stack_u32 + stack_frames[*sfp - 1] + {}) = *(ulong *)stack_u32[*sp - 2];", offset))
+                },
+                _ => panic!("emit_local_set type not handled")
+            }
+        } else {
+            format!("\t{};\n\t*sp += 2;\n",
+                    "*(ulong *)(stack_u32+*sp) = (ulong)")
+        }
+    }
+
     // TODO: this code will be called right before "calling" a function
     fn function_prelude(&self, debug: bool) -> String {
         if debug {
@@ -151,12 +244,32 @@ impl<'a> OpenCLCWriter<'_> {
                     wast::ValType::I64 => {
                         // compute the offset to read from the bottom of the stack
                         if sp_counter > 0 {
-                            offset = format!("stack_u64[stack_frames[*sfp - 1]] = stack_u64[*sp - {} - 1];", sp_counter);
+                            offset = format!("stack_u64[stack_frames[*sfp - 1]] = stack_u64[*sp - {} - 2];", sp_counter);
                         } else {
-                            offset = String::from("stack_u64[stack_frames[*sfp - 1]] = *(ulong *)(stack_u32 + *sp - 1);");
+                            offset = String::from("stack_u64[stack_frames[*sfp - 1]] = *(ulong *)(stack_u32 + *sp - 2);");
+                        }
+                        final_str += &format!("\t{}\n", offset);
+                        sp_counter += 2;
+                    },
+                    wast::ValType::F32 => {
+                        // compute the offset to read from the bottom of the stack
+                        if sp_counter > 0 {
+                            offset = format!("stack_u32[stack_frames[*sfp - 1]] = stack_u32[*sp - {} - 1];", sp_counter);
+                        } else {
+                            offset = String::from("stack_u32[stack_frames[*sfp - 1]] = stack_u32[*sp - 1];");
                         }
                         final_str += &format!("\t{}\n", offset);
                         sp_counter += 1;
+                    },
+                    wast::ValType::F64 => {
+                        // compute the offset to read from the bottom of the stack
+                        if sp_counter > 0 {
+                            offset = format!("stack_u64[stack_frames[*sfp - 1]] = stack_u64[*sp - {} - 2];", sp_counter);
+                        } else {
+                            offset = String::from("stack_u64[stack_frames[*sfp - 1]] = *(ulong *)(stack_u32 + *sp - 2);");
+                        }
+                        final_str += &format!("\t{}\n", offset);
+                        sp_counter += 2;
                     },
                     _ => panic!("Unimplemented function return type!!!"),
                 }
@@ -166,21 +279,46 @@ impl<'a> OpenCLCWriter<'_> {
                                   "*sp = stack_frames[*sfp - 1];",
                                   // now reset the stack frame pointer
                                   "*sfp -= 1;");
+            final_str += &format!("\t{}\n",
+                                  // check if we have reached the last function in the callstack
+                                  // if so - return to the host
+                                  "if (*sp == 0) return;");
         } else {
             final_str += &format!("");
         }
         final_str
     }
 
-    fn emit_instructions(&self, instr: &wast::Instruction, debug: bool) -> String {
+    fn emit_instructions(&self, instr: &wast::Instruction,
+                         offsets: &HashMap<&str, u32>,
+                         type_info: &HashMap<&str, ValType>,
+                         debug: bool) -> String {
         match instr {
             wast::Instruction::I32Const(val) => self.emit_i32_const(val, debug),
+            wast::Instruction::I64Const(val) => self.emit_i64_const(val, debug),
+            wast::Instruction::LocalGet(idx) => {
+                match idx {
+                    wast::Index::Id(id) => self.emit_local_get(id.name(), offsets, type_info, debug),
+                    wast::Index::Num(_, _) => panic!("no support for Num index references in local.get yet"),
+                }
+            },
+            wast::Instruction::LocalSet(idx) => {
+                match idx {
+                    wast::Index::Id(id) => self.emit_local_set(id.name(), offsets, type_info, debug),
+                    wast::Index::Num(_, _) => panic!("no support for Num index references in local.get yet"),
+                }
+            },
             _ => panic!("Instruction {:?} not yet implemented", instr)
         }
     }
 
     fn emit_function(&self, func: &wast::Func, debug: bool) -> String {
         let mut final_string = String::from("");
+
+        // store the stack offset for all parameters and locals
+        let mut local_parameter_stack_offset: HashMap<&str, u32> = HashMap::new();
+        let mut local_type_info: HashMap<&str, ValType> = HashMap::new();
+
         dbg!("{:?}", func);
         // Function header
         match (&func.kind, &func.id, &func.ty) {
@@ -195,7 +333,31 @@ impl<'a> OpenCLCWriter<'_> {
                 dbg!(id.name());
                 dbg!("{:?}", locals);
                 dbg!("{:?}", expression);
-                final_string += &format!("void {} (uint *stack_u32, ulong *stack_u64, uint *heap_u32, ulong *heap_u64, uint *stack_frames, ulong *sp, ulong *sfp) {{\n", id.name());
+
+                let mut offset = 0;
+                // get offsets for parameters, we record offsets from the start of the stack frame
+                for parameter in typeuse.clone().inline.unwrap().params.to_vec() {
+                    dbg!(parameter);
+                    match parameter {
+                        (Some(id), _, t) => {
+                            local_parameter_stack_offset.insert(id.name(), offset);
+                            local_type_info.insert(id.name(), t.clone());
+                            offset += self.get_size_valtype(&t);
+                        },
+                        _ => panic!("Unhandled parameter type")
+                    }
+                }
+
+                //stack_frames[*sfp - 1]; points to the head of the stack frame
+
+                // get offsets for locals
+                for local in locals {
+                    local_parameter_stack_offset.insert(local.id.unwrap().name(), offset);
+                    local_type_info.insert(local.id.unwrap().name(), local.ty.clone());
+                    offset += self.get_size_valtype(&local.ty);
+                }
+
+                final_string += &format!("{}:\n", id.name());
                 /*
                  * Stack setup for each function:
                  * parameters *then* locals onto the same stack
@@ -217,14 +379,15 @@ impl<'a> OpenCLCWriter<'_> {
 
                 // we are now ready to execute instructions!
                 for instruction in expression.instrs.iter() {
-                    final_string += &self.emit_instructions(instruction, debug);
+                    final_string += &self.emit_instructions(instruction,
+                                                            &local_parameter_stack_offset,
+                                                            &local_type_info,
+                                                            debug);
                 }
 
                 // to unwind from the function we unwind the call stack by moving the stack pointer
                 // and returning the last value on the stack 
                 final_string += &self.function_unwind(&typeuse.inline, debug);
-
-                final_string += "}\n\n";
             },
             (_, _, _) => panic!("Inline function must always have a valid identifier in wasm")
         };
@@ -232,11 +395,12 @@ impl<'a> OpenCLCWriter<'_> {
     }
 
     pub fn write_opencl_file(&self, filename: &str, debug: bool) -> () {
-
+        /*
         if Path::new(filename).exists() {
             // cannot proceed with file creation
-            panic!("path exists already!");
+            //panic!("path exists already!");
         }
+        */
 
         let mut output = File::create(filename).unwrap();
     
@@ -251,10 +415,38 @@ impl<'a> OpenCLCWriter<'_> {
         /*
          * Generate code for each function in the file first
          */
+        write!(output, "void wasm_entry(uint *stack_u32, ulong *stack_u64, uint *heap_u32, ulong *heap_u64, uint *stack_frames, ulong *sp, ulong *sfp, uint entry_point) {{\n");
+        
+        // for each function in the program, set up a table mapping function idx to the label
+        // this is needed for starting/resuming the application.
+        
+        // for each function, assign an ID -> index mapping
+        let mut function_idx_label: HashMap<&str, u32> = HashMap::new();
+
+        for function in &self.funcs {
+            match function.id {
+                Some(id) => {
+                    function_idx_label.insert(id.name(),0);
+                }
+                None => {
+                    println!("import function without ID -- cannot add label");
+                },
+            }
+        }
+
+        write!(output, "\t{}\n", "switch (entry_point) {");
+        for key in function_idx_label.keys() {
+            write!(output, "\t\tcase {}:\n", function_idx_label.get(key).unwrap());
+            write!(output, "\t\t\tgoto {};\n", key);
+            write!(output, "\t\t\tbreak;\n");
+        } 
+        write!(output, "\t}}\n");
+
         for function in &self.funcs {
             let func = self.emit_function(function, debug);
             write!(output, "{}", func);
         }
+        write!(output, "}}\n");
 
         if debug {
             write!(output, "{}", format!("int main(int argc, char *argv[]) {{\n"));
@@ -270,7 +462,7 @@ impl<'a> OpenCLCWriter<'_> {
             // demo: pass 42 as an argument
             //write!(output, "{}", format!("\tstack_u32[sp] = 42;\n"));
             //write!(output, "{}", format!("\tsp += 1;\n"));
-            write!(output, "{}", format!("\t_main(stack_u32, stack_u64, heap_u32, heap_u64, stack_frames, &sp, &sfp);\n"));
+            write!(output, "{}", format!("\twasm_entry(stack_u32, stack_u64, heap_u32, heap_u64, stack_frames, &sp, &sfp, 0);\n"));
             // now check the result
             write!(output, "{}", format!("\tprintf(\"%d\\n\", stack_u32[sp]);\n"));
 
