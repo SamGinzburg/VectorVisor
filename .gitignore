@@ -1,0 +1,5 @@
+/target
+*.c
+.vscode
+test
+test.*
