@@ -170,7 +170,7 @@ impl<'a> OpenCLCWriter<'_> {
                 },
                 wast::ValType::I64 => {
                     format!("\t{}\n\t{}\n",
-                            format!("*((ulong *)(stack_u32+*sp)) = *(uint *)(stack_u32 + stack_frames[*sfp - 1] + {});", offset),
+                            format!("*((ulong *)(stack_u32+*sp)) = *(ulong *)(stack_u32 + stack_frames[*sfp - 1] + {});", offset),
                             "*sp += 2;")
                 },
                 wast::ValType::F32 => {
@@ -179,7 +179,7 @@ impl<'a> OpenCLCWriter<'_> {
                 },
                 wast::ValType::F64 => {
                     format!("\t{}\n\t{}\n",
-                            format!("*((ulong *)(stack_u32+*sp)) = *(uint *)(stack_u32 + stack_frames[*sfp - 1] + {});", offset),
+                            format!("*((ulong *)(stack_u32+*sp)) = *(ulong *)(stack_u32 + stack_frames[*sfp - 1] + {});", offset),
                             "*sp += 2;")
                 },
                 _ => panic!("emit_local_set type not handled")
