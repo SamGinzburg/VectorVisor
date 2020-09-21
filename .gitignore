@@ -1,5 +1,6 @@
 /target
-*.c
 .vscode
 test
 test.*
+opencl_test_harness/opencl_launcher.dSYM/*
+opencl_test_harness/opencl_launcher
