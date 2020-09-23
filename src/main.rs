@@ -18,7 +18,7 @@ fn main() {
 
     println!("{:?}", result);
     match result {
-        Ok(_) => ast.write_opencl_file("test.cl", false),
+        Ok(_) => ast.write_opencl_file("test.c", true),
         Err(_) => println!("Unable to parse wat file"),
     }
 

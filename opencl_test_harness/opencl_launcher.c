@@ -79,7 +79,10 @@ cl_program build_program(cl_context ctx, cl_device_id dev, const char* filename)
     return program;
 }
 
-
+int test_fn() {
+    int test = 42;
+    return test;
+}
 
 int main(int argc, char** argv)
 {
@@ -298,12 +301,7 @@ int main(int argc, char** argv)
     //
     begin = clock();
     correct = 0;
-    for(uint i = 0; i < WARP_SIZE; i++)
-    {
-        //results[i] = data[i] * data[i];
-        //if(results[i] == data[i] * data[i])
-        //    correct++;
-    }
+    test_fn();
     end = clock();
     double time_spent_cpu = (double)(end - begin) / CLOCKS_PER_SEC;
     printf("CPU %f\n", time_spent_cpu);
@@ -322,8 +320,8 @@ int main(int argc, char** argv)
     
     // Shutdown and cleanup
     //
-    clReleaseMemObject(input);
-    clReleaseMemObject(output);
+    //clReleaseMemObject(input);
+    //clReleaseMemObject(output);
     clReleaseProgram(program);
     clReleaseKernel(kernel);
     clReleaseCommandQueue(commands);
