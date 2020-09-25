@@ -280,6 +280,7 @@ impl<'a> OpenCLCWriter<'_> {
         let result = if offset > 0 {
             format!("\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n{}\n\t{}\n",
             // move the stack pointer back by the offset required by calling parameters
+            // the sp should point at the start of the arguments for the function
             format!("*sp -= {};", offset),
             // increment stack frame pointer
             "*sfp += 1;",
@@ -290,6 +291,7 @@ impl<'a> OpenCLCWriter<'_> {
             // setup calling parameters for function
             format!("goto {};", id),
             format!("call_return_stub_{}:", *call_ret_idx),
+            // TODO: this depends on the size of the return parameter of fn
             "*sp += 2;")
         } else {
             format!("\t{}\n\t{}\n\t{}\n{}\n",
@@ -633,7 +635,9 @@ impl<'a> OpenCLCWriter<'_> {
 
             // TODO when calling the function get the entry_point for main
 
-            write!(output, "{}", format!("\twasm_entry(stack_u32, stack_u64, heap_u32, heap_u64, stack_frames, &sp, &sfp, call_stack, 0);\n"));
+            write!(output, "{}", format!("{}",
+                    format!("\twasm_entry(stack_u32, stack_u64, heap_u32, heap_u64, stack_frames, &sp, &sfp, call_stack, {});\n",
+                            function_idx_label.get("_main").unwrap())));
             // now check the result
             write!(output, "{}", format!("\tprintf(\"%d\\n\", stack_u32[sp]);\n"));
 

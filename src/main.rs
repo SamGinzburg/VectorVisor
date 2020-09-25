@@ -5,7 +5,7 @@ use wast::parser::{ParseBuffer};
 
 fn main() {
 
-    let file = fs::read_to_string("examples/simple.wat");
+    let file = fs::read_to_string("examples/call/call32.wat");
     let filedata = match file {
         Ok(text) => text,
         Err(e) => panic!(e),
