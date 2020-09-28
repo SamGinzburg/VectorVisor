@@ -238,14 +238,31 @@ impl<'a> OpenCLCWriter<'_> {
         }
     }
 
+    // binops have both values popped off the stack
     fn emit_i32_add(&self, debug: bool) -> String {
-        format!("\t{}\n",
-                "stack_u32[*sp-1] = stack_u32[*sp - 1] + stack_u32[*sp - 2];")
+        format!("\t{}\n\t{}\n",
+                "stack_u32[*sp-2] = stack_u32[*sp - 1] + stack_u32[*sp - 2];",
+                "*sp -= 1;")
     }
 
     fn emit_i64_add(&self, debug: bool) -> String {
-        format!("\t{}\n",
-                "*(ulong*)(stack_u32+*sp-2) = *(ulong*)(stack_u32+*sp-2) + *(ulong*)(stack_u32+*sp-4);")
+        format!("\t{}\n\t{}\n",
+                "*(ulong*)(stack_u32+*sp-4) = *(ulong*)(stack_u32+*sp-2) + *(ulong*)(stack_u32+*sp-4);",
+                "*sp -= 2")
+    }
+
+    fn emit_i32_lt_s(&self, debug: bool) -> String {
+        format!("\t{}\n\t{}\n",
+                "stack_u32[*sp-1] = (uint)((int)stack_u32[*sp - 1]) < ((int)stack_u32[*sp - 2]);",
+                // move sp back by 1
+                "*sp -= 1;")
+    }
+
+    fn emit_i64_lt_s(&self, debug: bool) -> String {
+        format!("\t{}\n\t{}\n",
+                "stack_u32[*sp-1] = stack_u32[*sp - 2] < stack_u32[*sp - 2];",
+                // move sp back by 1
+                "*sp -= 1;")
     }
 
     fn emit_fn_call(&self, idx: wast::Index, call_ret_map: &mut HashMap<&str, u32>, call_ret_idx: &mut u32, debug: bool) -> String {
@@ -277,6 +294,9 @@ impl<'a> OpenCLCWriter<'_> {
         let ret_label: &'static str = Box::leak(format!("ret_from_{}_{}", id, call_ret_idx).into_boxed_str());
         call_ret_map.insert(ret_label, *call_ret_idx);
 
+        // get the return type of the function
+        let return_size = self.get_size_valtype(&func_type_signature.clone().inline.unwrap().results[0]);
+
         let result = if offset > 0 {
             format!("\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n{}\n\t{}\n",
             // move the stack pointer back by the offset required by calling parameters
@@ -291,8 +311,7 @@ impl<'a> OpenCLCWriter<'_> {
             // setup calling parameters for function
             format!("goto {};", id),
             format!("call_return_stub_{}:", *call_ret_idx),
-            // TODO: this depends on the size of the return parameter of fn
-            "*sp += 2;")
+            format!("*sp += {};", return_size))
         } else {
             format!("\t{}\n\t{}\n\t{}\n{}\n",
                     // increment stack frame pointer
@@ -418,7 +437,8 @@ impl<'a> OpenCLCWriter<'_> {
             },
             wast::Instruction::Call(idx) => {
                 self.emit_fn_call(*idx, call_ret_map, call_ret_idx, debug)
-            }
+            },
+            wast::Instruction::I32LtS => self.emit_i32_lt_s(debug),
             _ => panic!("Instruction {:?} not yet implemented", instr)
         }
     }
