@@ -488,7 +488,7 @@ impl<'a> OpenCLCWriter<'_> {
         let mut ret_str = String::from("");
 
         // br_if is just an if statement, if cond is true => br l else continue
-        ret_str += &format!("\tif ({}) {{\n", "stack_u32[*sp - 1]");
+        ret_str += &format!("\tif ({} != 0) {{\n", "stack_u32[*sp - 1]");
         ret_str += &self.emit_br(idx, fn_name, prev_stack_size, debug);
         ret_str += &format!("\t}}");
 

@@ -8,7 +8,7 @@
 
   (func $_main (param $p0 i32) (result i32)
     (local $l2 i64)
-    (i32.const 11)
+    
     (i32.const 5)
     (call $_lt)
     (local.set $l2)
