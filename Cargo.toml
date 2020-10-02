@@ -8,3 +8,4 @@ edition = "2018"
 
 [dependencies]
 wast = "24.0.0"
+regex = "1"

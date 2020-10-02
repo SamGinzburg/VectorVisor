@@ -3,6 +3,7 @@ use wast::parser::{self, ParseBuffer};
 use wast::ModuleKind::{Text, Binary};
 use wast::ValType;
 use wast::Instruction;
+use regex::Regex;
 
 use std::path::Path;
 use std::fmt;
@@ -245,12 +246,18 @@ impl<'a> OpenCLCWriter<'_> {
                 "*sp -= 1;")
     }
 
+    /*
+     * addition is a binop - pops 2 values off the stack and pushes one back on
+     */
     fn emit_i64_add(&self, debug: bool) -> String {
         format!("\t{}\n\t{}\n",
                 "*(ulong*)(stack_u32+*sp-4) = *(ulong*)(stack_u32+*sp-2) + *(ulong*)(stack_u32+*sp-4);",
                 "*sp -= 2")
     }
 
+    /*
+     * <, >, = are relops which also pop 2 values and push one back on
+     */
     fn emit_i32_lt_s(&self, debug: bool) -> String {
         format!("\t{}\n\t{}\n",
                 "stack_u32[*sp-1] = (uint)((int)stack_u32[*sp - 1]) < ((int)stack_u32[*sp - 2]);",
@@ -258,11 +265,42 @@ impl<'a> OpenCLCWriter<'_> {
                 "*sp -= 1;")
     }
 
-    fn emit_i64_lt_s(&self, debug: bool) -> String {
+    fn emit_i32_eq(&self, debug: bool) -> String {
         format!("\t{}\n\t{}\n",
-                "stack_u32[*sp-1] = stack_u32[*sp - 2] < stack_u32[*sp - 2];",
+                "stack_u32[*sp-1] = (uint)((int)stack_u32[*sp - 1]) = ((int)stack_u32[*sp - 2]);",
                 // move sp back by 1
                 "*sp -= 1;")
+    }
+
+    fn emit_block(&self, block: &wast::BlockType, debug: bool) -> String {
+        let mut result: String = String::from("");
+        let label = block.label.unwrap().name();
+
+        // first we have to save the current stack pointer
+        // to reset the stack if we jump to this label
+        dbg!(label);
+        let re = Regex::new(r"\d+").unwrap();
+        // we can use the branch index to save to global state
+        let branch_idx: &str = re.captures(label).unwrap().get(0).map_or("", |m| m.as_str());
+        dbg!(branch_idx);
+        let branch_idx_u32 = branch_idx.parse::<u32>().unwrap();
+        if branch_idx_u32 > 1024 {
+            panic!("Only up to 1024 branches per function are supported");
+        }
+        result += &format!("\t{}\n",
+                           format!("branch_value_stack_state[{}] = *sp;", branch_idx_u32));
+        // emit the label
+        result += &format!("{}:\n",
+                           block.label.unwrap().name());
+        // we don't need to modify the sp here, we will do all stack unwinding in the br instr
+        result
+    }
+
+    // semantically, the end statement pops from the control stack,
+    // in our compiler, this is a no-op
+    fn emit_end(&self, id: &Option<wast::Id<'a>>, debug: bool) -> String {
+        dbg!(id);
+        String::from("")
     }
 
     fn emit_fn_call(&self, idx: wast::Index, call_ret_map: &mut HashMap<&str, u32>, call_ret_idx: &mut u32, debug: bool) -> String {
@@ -329,7 +367,7 @@ impl<'a> OpenCLCWriter<'_> {
     }
 
     // TODO: this needs to take the function type into account
-    fn function_unwind(&self, func_ret_info: &Option<wast::FunctionType>, debug: bool) -> String {
+    fn function_unwind(&self, fn_name: &str, func_ret_info: &Option<wast::FunctionType>, debug: bool) -> String {
         let mut final_str = String::from("");
 
         let results: Vec<wast::ValType> = match func_ret_info {
@@ -338,6 +376,7 @@ impl<'a> OpenCLCWriter<'_> {
         };
         
         final_str += &format!("\t{}\n", "/* function unwind */");
+        final_str += &format!("{}_return:\n", fn_name);
         // for each value returned by the function, return it on the stack
         // keep track of the change to stack ptr from previous returns
         let mut sp_counter = 0;
@@ -402,15 +441,78 @@ impl<'a> OpenCLCWriter<'_> {
         final_str
     }
 
+    // this function is semantically equivalent to function_unwind
+    fn emit_return(&self, fn_name: &str, debug: bool) -> String {
+        format!("\tgoto {}_return;\n", fn_name)
+    }
+
+    // this function is semantically equivalent to function_unwind
+    fn emit_br(&self, idx: wast::Index, fn_name: &str, prev_stack_size: u32, debug: bool) -> String {
+        let mut ret_str = String::from("");
+
+        let branch_id = match idx {
+            wast::Index::Id(id) => id.name(),
+            _ => panic!("Branch specified in terms of numerical index instead of Id"),
+        };
+
+        let re = Regex::new(r"\d+").unwrap();
+        // we can use the branch index to save to global state
+        let branch_idx: &str = re.captures(branch_id).unwrap().get(0).map_or("", |m| m.as_str());
+
+        // debug comment
+        ret_str += &format!("\t{}\n", format!("/* br {} */", branch_id));
+
+        // first we want to pop the result value off of the stack, and push it
+        dbg!(prev_stack_size);
+        match prev_stack_size {
+            1 => {
+                // first push the value back
+                // next, move the stack pointer
+                ret_str += &format!("\t{}\n\t{}\n",
+                                    format!("stack_u32[branch_value_stack_state[{}]] = stack_u32[*sp - 1];", branch_idx),
+                                    format!("*sp = stack_u32[branch_value_stack_state[{}] + 1];", branch_idx));
+            },
+            2 => {
+                panic!("u64 br l not yet implemented");
+                ret_str += &format!("\t{}\n",
+                                    "*(ulong*)(stack_u32+*sp-4) = *(ulong*)(stack_u32+*sp-2) + *(ulong*)(stack_u32+*sp-4);");
+            },
+            _ => panic!("Unable to determine size of the previous item on stack"),
+        };
+        ret_str += &format!("\t{}\n", format!("goto {};", branch_id));
+
+        ret_str
+    }
+
+    fn emit_br_if(&self, idx: wast::Index, fn_name: &str, prev_stack_size: u32, debug: bool) -> String {
+        let mut ret_str = String::from("");
+
+        // br_if is just an if statement, if cond is true => br l else continue
+        ret_str += &format!("\tif ({}) {{\n", "stack_u32[*sp - 1]");
+        ret_str += &self.emit_br(idx, fn_name, prev_stack_size, debug);
+        ret_str += &format!("\t}}");
+
+        ret_str
+    }
+
     fn emit_instructions(&self, instr: &wast::Instruction,
                          offsets: &HashMap<&str, u32>,
                          type_info: &HashMap<&str, ValType>,
                          call_ret_map: &mut HashMap<&str, u32>,
                          call_ret_idx: &mut u32,
+                         fn_name: &str,
+                         previous_stack_size: &mut u32,
                          debug: bool) -> String {
+
         match instr {
-            wast::Instruction::I32Const(val) => self.emit_i32_const(val, debug),
-            wast::Instruction::I64Const(val) => self.emit_i64_const(val, debug),
+            wast::Instruction::I32Const(val) => {
+                *previous_stack_size = 1;
+                self.emit_i32_const(val, debug)
+            },
+            wast::Instruction::I64Const(val) => {
+                *previous_stack_size = 2;
+                self.emit_i64_const(val, debug)
+            },
             wast::Instruction::LocalGet(idx) => {
                 match idx {
                     wast::Index::Id(id) => self.emit_local_get(id.name(), offsets, type_info, debug),
@@ -430,15 +532,37 @@ impl<'a> OpenCLCWriter<'_> {
                 }
             },
             wast::Instruction::I32Add => {
+                *previous_stack_size = 1;
                 self.emit_i32_add(debug)
             },
             wast::Instruction::I64Add => {
+                *previous_stack_size = 2;
                 self.emit_i64_add(debug)
             },
             wast::Instruction::Call(idx) => {
+                let id = match idx {
+                    wast::Index::Id(id) => id.name(),
+                    _ => panic!("Unable to get Id for function call!"),
+                };
+                let func_type_signature = &self.func_map.get(id).unwrap().ty;
+                let fn_result_type = &(*func_type_signature.clone().inline.unwrap().results)[0];
+                *previous_stack_size = self.get_size_valtype(fn_result_type);
                 self.emit_fn_call(*idx, call_ret_map, call_ret_idx, debug)
             },
-            wast::Instruction::I32LtS => self.emit_i32_lt_s(debug),
+            wast::Instruction::I32LtS => {
+                *previous_stack_size = 1;
+                self.emit_i32_lt_s(debug)
+            }
+            wast::Instruction::I32Eq => {
+                *previous_stack_size = 1;
+                self.emit_i32_eq(debug)
+            },
+            // control flow instructions
+            wast::Instruction::Block(b) => self.emit_block(b, debug),
+            wast::Instruction::End(id) => self.emit_end(id, debug),
+            wast::Instruction::Return => self.emit_return(fn_name, debug),
+            wast::Instruction::Br(idx) => self.emit_br(*idx, fn_name, *previous_stack_size, debug),
+            wast::Instruction::BrIf(idx) => self.emit_br_if(*idx, fn_name, *previous_stack_size, debug),
             _ => panic!("Instruction {:?} not yet implemented", instr)
         }
     }
@@ -511,18 +635,21 @@ impl<'a> OpenCLCWriter<'_> {
                 }
 
                 // we are now ready to execute instructions!
+                let mut previous_stack_size: &mut u32 = &mut 0;
                 for instruction in expression.instrs.iter() {
                     final_string += &self.emit_instructions(instruction,
                                                             &local_parameter_stack_offset,
                                                             &local_type_info,
                                                             call_ret_map,
                                                             call_ret_idx,
+                                                            id.name(),
+                                                            previous_stack_size,
                                                             debug);
                 }
 
                 // to unwind from the function we unwind the call stack by moving the stack pointer
                 // and returning the last value on the stack 
-                final_string += &self.function_unwind(&typeuse.inline, debug);
+                final_string += &self.function_unwind(id.name(), &typeuse.inline, debug);
             },
             (_, _, _) => panic!("Inline function must always have a valid identifier in wasm")
         };
@@ -551,6 +678,9 @@ impl<'a> OpenCLCWriter<'_> {
          * Generate code for each function in the file first
          */
         if debug {
+            // write thread-local private variables before header
+            // store branch stack pointers for branch value stack unwinding
+            write!(output, "uint branch_value_stack_state[1024];\n\n");
             write!(output, "void wasm_entry(uint *stack_u32,
                                             ulong *stack_u64,
                                             uint *heap_u32,
@@ -571,7 +701,9 @@ impl<'a> OpenCLCWriter<'_> {
                                     "ulong *sfp_global,",
                                     "ulong *call_stack,",
                                     "uint  *entry_point_global");
-
+            // write thread-local private variables before header
+            // store branch stack pointers for branch value stack unwinding
+            write!(output, "uint branch_value_stack_state[1024];\n\n");
             write!(output, "{}", header);
             // TODO: for the openCL launcher, pass the memory stride as a function parameter
             write!(output, "\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n",
@@ -590,9 +722,8 @@ impl<'a> OpenCLCWriter<'_> {
                            "uint  entry_point   = entry_point_global[get_global_id(0)];");
         }
         
-        // for each function in the program, set up a table mapping function idx to the label
-        // this is needed for starting/resuming the application.
-        
+        // 
+
         // for each function, assign an ID -> index mapping
         let mut function_idx_label: HashMap<&str, u32> = HashMap::new();
         let mut count = 0;
