@@ -6,8 +6,8 @@ use wast::parser::{ParseBuffer};
 fn main() {
 
     //let file = fs::read_to_string("examples/arithmetic/lt.wat");
+    //let file = fs::read_to_string("examples/branches/loop.wat");
     let file = fs::read_to_string("examples/branches/count_to_ten.wat");
-    //let file = fs::read_to_string("examples/call/factorial.wat");
     
     let filedata = match file {
         Ok(text) => text,

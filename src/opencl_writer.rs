@@ -289,18 +289,83 @@ impl<'a> OpenCLCWriter<'_> {
         }
         result += &format!("\t{}\n",
                            format!("branch_value_stack_state[{}] = *sp;", branch_idx_u32));
-        // emit the label
+        // we don't emit a label for block statements here, any br's goto the END of the block
+        // we must emit a label here for loops
+        /*
         result += &format!("{}:\n",
                            block.label.unwrap().name());
+        */
         // we don't need to modify the sp here, we will do all stack unwinding in the br instr
         result
     }
 
+    // basically the same as emit_block, except we have to reset the stack pointer
+    // at the *top* of the block, since we are doing a backwards jump not a forward jump
+    fn emit_loop(&self, block: &wast::BlockType, debug: bool) -> String {
+        let mut result: String = String::from("");
+        let label = block.label.unwrap().name();
+
+        // first we have to save the current stack pointer
+        // to reset the stack if we jump to this label
+        dbg!(label);
+        let re = Regex::new(r"\d+").unwrap();
+        // we can use the branch index to save to global state
+        let branch_idx: &str = re.captures(label).unwrap().get(0).map_or("", |m| m.as_str());
+        dbg!(branch_idx);
+        let branch_idx_u32 = branch_idx.parse::<u32>().unwrap();
+        if branch_idx_u32 > 1024 {
+            panic!("Only up to 1024 branches per function are supported");
+        }
+        result += &format!("\t{}\n",
+                           format!("branch_value_stack_state[{}] = *sp;", branch_idx_u32));
+        // we don't emit a label for block statements here, any br's goto the END of the block
+        // we must emit a label here for loops
+        /*
+        result += &format!("{}:\n",
+                           block.label.unwrap().name());
+        */
+        // we don't need to modify the sp here, we will do all stack unwinding in the br instr
+        result
+    }
+
+
+
+
     // semantically, the end statement pops from the control stack,
     // in our compiler, this is a no-op
-    fn emit_end(&self, id: &Option<wast::Id<'a>>, debug: bool) -> String {
+    fn emit_end(&self, id: &Option<wast::Id<'a>>, label: &str, block_type: u32, debug: bool) -> String {
         dbg!(id);
-        String::from("")
+        dbg!(label);
+        dbg!(block_type);
+        println!("emit end!");
+        // if the end statement corresponds to a block -> we want to put the label *here* and not at the top
+        // of the block, otherwise for loops we jump back to the start of the loop!
+        // 0 -> block (label goes here, at the end statement)
+        // 1-> loop (label was already inserted at the top, this is a no-op here)
+        if block_type == 0 {
+            //format!("{}:\n", label)
+            // after a block ends, we need to unwind the stack!
+            let re = Regex::new(r"\d+").unwrap();
+            // we can use the branch index to save to global state
+            let branch_idx: &str = re.captures(label).unwrap().get(0).map_or("", |m| m.as_str());
+            dbg!(branch_idx);
+            let branch_idx_u32 = branch_idx.parse::<u32>().unwrap();
+            if branch_idx_u32 > 1024 {
+                panic!("Only up to 1024 branches per function are supported");
+            }
+            format!("{}:\n\t{}\n", label,
+                    format!("*sp = branch_value_stack_state[{}];", branch_idx_u32))
+        } else {
+            format!("/* END (loop: {}) */", label)
+            /*
+             * There are two cases for the loop construct
+             * 1) The loop is broken using an if statement (emscripten outputs this using blocks)
+             *    In this case, we wouldn't have to emit any code at the end statement
+             * 
+             * 2) The loop is an infinite, unbroken loop, in which case the stack is unwinded at the top
+             *    of the loop (after the loop label), in which case we also don't need to do anything
+             */
+        }
     }
 
     fn emit_fn_call(&self, idx: wast::Index, call_ret_map: &mut HashMap<&str, u32>, call_ret_idx: &mut u32, debug: bool) -> String {
@@ -441,7 +506,7 @@ impl<'a> OpenCLCWriter<'_> {
         final_str
     }
 
-    // this function is semantically equivalent to function_unwind
+    // TODO: double check the semantics of this? 
     fn emit_return(&self, fn_name: &str, debug: bool) -> String {
         format!("\tgoto {}_return;\n", fn_name)
     }
@@ -464,13 +529,14 @@ impl<'a> OpenCLCWriter<'_> {
 
         // first we want to pop the result value off of the stack, and push it
         dbg!(prev_stack_size);
+        /*
         match prev_stack_size {
             1 => {
                 // first push the value back
                 // next, move the stack pointer
                 ret_str += &format!("\t{}\n\t{}\n",
                                     format!("stack_u32[branch_value_stack_state[{}]] = stack_u32[*sp - 1];", branch_idx),
-                                    format!("*sp = stack_u32[branch_value_stack_state[{}] + 1];", branch_idx));
+                                    format!("*sp = stack_u32[branch_value_stack_state[{}]];", branch_idx));
             },
             2 => {
                 panic!("u64 br l not yet implemented");
@@ -479,6 +545,8 @@ impl<'a> OpenCLCWriter<'_> {
             },
             _ => panic!("Unable to determine size of the previous item on stack"),
         };
+        */
+
         ret_str += &format!("\t{}\n", format!("goto {};", branch_id));
 
         ret_str
@@ -490,18 +558,20 @@ impl<'a> OpenCLCWriter<'_> {
         // br_if is just an if statement, if cond is true => br l else continue
         ret_str += &format!("\tif ({} != 0) {{\n", "stack_u32[*sp - 1]");
         ret_str += &self.emit_br(idx, fn_name, prev_stack_size, debug);
-        ret_str += &format!("\t}}");
+        ret_str += &format!("\t}}\n");
 
         ret_str
     }
 
-    fn emit_instructions(&self, instr: &wast::Instruction,
+    fn emit_instructions(&self,
+                         instr: &wast::Instruction,
                          offsets: &HashMap<&str, u32>,
                          type_info: &HashMap<&str, ValType>,
                          call_ret_map: &mut HashMap<&str, u32>,
                          call_ret_idx: &mut u32,
                          fn_name: &str,
                          previous_stack_size: &mut u32,
+                         control_stack: &mut Vec<(String, u32)>,
                          debug: bool) -> String {
 
         match instr {
@@ -558,8 +628,22 @@ impl<'a> OpenCLCWriter<'_> {
                 self.emit_i32_eq(debug)
             },
             // control flow instructions
-            wast::Instruction::Block(b) => self.emit_block(b, debug),
-            wast::Instruction::End(id) => self.emit_end(id, debug),
+            wast::Instruction::Block(b) => {
+                let label = b.label.unwrap().name().clone();
+                control_stack.push((label.to_string(), 0));
+                self.emit_block(b, debug)
+            },
+            wast::Instruction::Loop(b) => {
+                let label = b.label.unwrap().name().clone();
+                control_stack.push((label.to_string(), 1));
+                String::from("")
+            }
+            // if control_stack.pop() panics, that means we were parsing an incorrectly defined
+            // wasm file, each block/loop must have a matching end!
+            wast::Instruction::End(id) => {
+                let (label, t) = control_stack.pop().unwrap();
+                self.emit_end(id, &label, t, debug)
+            },
             wast::Instruction::Return => self.emit_return(fn_name, debug),
             wast::Instruction::Br(idx) => self.emit_br(*idx, fn_name, *previous_stack_size, debug),
             wast::Instruction::BrIf(idx) => self.emit_br_if(*idx, fn_name, *previous_stack_size, debug),
@@ -589,19 +673,41 @@ impl<'a> OpenCLCWriter<'_> {
                 dbg!("{:?}", locals);
                 dbg!("{:?}", expression);
 
+                /*
+                 * __wasm_call_ctors is added by the wasm-linker:
+                 * see: https://github.com/emscripten-core/emscripten/issues/10742#issuecomment-602068989
+                 * and also see: https://iandouglasscott.com/2019/07/18/experimenting-with-webassembly-dynamic-linking-with-clang/
+                 * This function is called externally from JS to perform dynamic linking of WASM modules
+                 * It internally calls "__wasm_apply_relocs", which relocates imports specified within the module so
+                 * that they can be called.
+                 * 
+                 * 
+                 *  We have a more complex situation, since we can't actually modify the GPU kernel after it is created,
+                 *  So instead we have to statically link the functions.
+                 */
+                if id.name() == "__wasm_call_ctors" {
+                    return "".to_string()
+                }
+
                 let mut offset = 0;
                 // get offsets for parameters, we record offsets from the start of the stack frame
-                for parameter in typeuse.clone().inline.unwrap().params.to_vec() {
-                    dbg!(parameter);
-                    match parameter {
-                        (Some(id), _, t) => {
-                            dbg!(id);
-                            local_parameter_stack_offset.insert(id.name(), offset);
-                            local_type_info.insert(id.name(), t.clone());
-                            offset += self.get_size_valtype(&t);
-                        },
-                        _ => panic!("Unhandled parameter type")
-                    }
+                match typeuse.clone().inline {
+                    Some(params) => {
+                        for parameter in params.params.to_vec() {
+                            dbg!(parameter);
+                            match parameter {
+                                (Some(id), _, t) => {
+                                    dbg!(id);
+                                    local_parameter_stack_offset.insert(id.name(), offset);
+                                    local_type_info.insert(id.name(), t.clone());
+                                    offset += self.get_size_valtype(&t);
+                                },
+                                _ => panic!("Unhandled parameter type")
+                            }
+                        }
+        
+                    },
+                    None => (),
                 }
 
                 //stack_frames[*sfp - 1]; points to the head of the stack frame
@@ -634,8 +740,15 @@ impl<'a> OpenCLCWriter<'_> {
                     final_string += &self.emit_local(local.clone(), &local_parameter_stack_offset, debug);
                 }
 
+                // keep a stack of control-flow labels
+                // for blocks we need to put the label at the "end" statement, while loops always jump back
+                let mut control_stack: Vec<(String, u32)> = vec![];
+
                 // we are now ready to execute instructions!
                 let mut previous_stack_size: &mut u32 = &mut 0;
+                
+                // get the list of instructions first, to solve a lifetime mismatch error
+                // (we can't just iterate because the control stack would have a different lifetime)
                 for instruction in expression.instrs.iter() {
                     final_string += &self.emit_instructions(instruction,
                                                             &local_parameter_stack_offset,
@@ -644,6 +757,7 @@ impl<'a> OpenCLCWriter<'_> {
                                                             call_ret_idx,
                                                             id.name(),
                                                             previous_stack_size,
+                                                            &mut control_stack,
                                                             debug);
                 }
 
