@@ -291,7 +291,7 @@ impl<'a> OpenCLCWriter<'_> {
         // create a new stack frame for the block, store stack frame pointer in local
         // function private data
         result += &format!("\t{}\n",
-                           format!("{}_branch_value_stack_state[{}] = *sp;", fn_name, branch_idx_u32));
+                           format!("{}_branch_value_stack_state[*sfp][{}] = *sp;", fn_name, branch_idx_u32));
         // we don't emit a label for block statements here, any br's goto the END of the block
         // we don't need to modify the sp here, we will do all stack unwinding in the br instr
         result
@@ -352,7 +352,7 @@ impl<'a> OpenCLCWriter<'_> {
                 panic!("Only up to 1024 branches per function are supported");
             }
             format!("{}:\n\t{}\n", label,
-                    format!("*sp = {}_branch_value_stack_state[{}];", fn_name, branch_idx_u32))
+                    format!("*sp = {}_branch_value_stack_state[*sfp][{}];", fn_name, branch_idx_u32))
         } else {
             format!("/* END (loop: {}) */", label)
             /*
@@ -842,9 +842,13 @@ impl<'a> OpenCLCWriter<'_> {
         let funcs = self.func_map.values();
         for function in funcs.clone() {
             // store branch stack pointers for branch value stack unwinding
+            // the 2-d array is [stack frame ptr][branch id]
             let name = function.id.unwrap().name();
-            write!(output, "{}", format!("\tuint {}_branch_value_stack_state[1024];\n", name));
-
+            write!(output, "{}", format!("\tuint {}_branch_value_stack_state[64][64];\n", name));
+            // also create a similar array for loops
+            write!(output, "{}", format!("\tuint {}_loop_value_stack_state[64][64];\n", name));
+            // TODO: in the future try to do some static analysis to determine max # of loops/branches in a function
+            // we can't predict max depth (sfp), but we can know the second dimension statically
             match function.id {
                 Some(id) => {
                     function_idx_label.insert(id.name(), count);
