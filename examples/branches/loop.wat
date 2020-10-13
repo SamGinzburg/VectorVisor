@@ -13,6 +13,7 @@
       (i32.const 10)
       (i32.eq)
       (br_if $B0)
-      (br $L0))))
+      (br $L0)))
+    return)
   (export "_main" (func $_main))
 )

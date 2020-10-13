@@ -270,18 +270,23 @@ int main(int argc, char** argv)
     //
     global = 16;
     local = 1;
-    clock_t begin = clock();
-    err = clEnqueueNDRangeKernel(commands, kernel, 1, NULL, &global, &local, 0, NULL, NULL);
-    if (err)
-    {
-        printf("test Error: Failed to execute kernel!: %d\n", err);
-        return EXIT_FAILURE;
+    for (int test = 0; test < 10; test++) {
+        clock_t begin = clock();
+        err = clEnqueueNDRangeKernel(commands, kernel, 1, NULL, &global, &local, 0, NULL, NULL);
+        if (err)
+        {
+            printf("test Error: Failed to execute kernel!: %d\n", err);
+            return EXIT_FAILURE;
+        }
+        printf("launch kernel\n");
+        // Wait for the command commands to get serviced before reading back results
+        //
+        clFinish(commands);
+        printf("kernel finish\n");
+        clock_t end = clock();
+        double time_spent_gpu = (double)(end - begin) / CLOCKS_PER_SEC;
+        printf("GPU: %f\n", time_spent_gpu);
     }
-    printf("launch kernel\n");
-    // Wait for the command commands to get serviced before reading back results
-    //
-    clFinish(commands);
-    printf("kernel finish\n");
 
     // Read back the results from the device to verify the output
     //
@@ -291,32 +296,6 @@ int main(int argc, char** argv)
         printf("Error: Failed to read output array! %d\n", err);
         exit(1);
     }
-    
-    clock_t end = clock();
-    double time_spent_gpu = (double)(end - begin) / CLOCKS_PER_SEC;
-    printf("GPU: %f\n", time_spent_gpu);
-    
-    
-    // Validate our results
-    //
-    begin = clock();
-    correct = 0;
-    test_fn();
-    end = clock();
-    double time_spent_cpu = (double)(end - begin) / CLOCKS_PER_SEC;
-    printf("CPU %f\n", time_spent_cpu);
-    printf("RATIO %f\n", time_spent_gpu / time_spent_cpu);
-
-    // Print a brief summary detailing the results
-    //
-    
-    for(uint i = 0; i < count; i++)
-    {
-        if(results[i] == data[i] * data[i])
-            correct++;
-    }
-    
-    printf("Computed '%d/%d' correct values!\n", correct, count);
     
     // Shutdown and cleanup
     //

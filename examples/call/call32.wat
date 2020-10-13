@@ -6,7 +6,7 @@
     (i32.add)
   )
   (func $_main (param $p0 i32) (result i32)
-    (local $l2 i64)
+    (local $l2 i32)
     (i32.const 11)
     (i32.const 5)
     (call $_add2)

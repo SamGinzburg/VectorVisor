@@ -1,5 +1,5 @@
 (module
-  (func $_main (export "_main") (type $t1) (result i32)
+  (func $_main (export "_main") (result i32)
     (i32.const 100)
     block $B0
         (i32.const 0)

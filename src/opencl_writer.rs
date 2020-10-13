@@ -251,7 +251,7 @@ impl<'a> OpenCLCWriter<'_> {
      */
     fn emit_i64_add(&self, debug: bool) -> String {
         format!("\t{}\n\t{}\n",
-                "*(ulong*)(stack_u32+*sp-4) = *(ulong*)(stack_u32+*sp-2) + *(ulong*)(stack_u32+*sp-4);",
+                "*(long*)(stack_u32+*sp-4) = *(long*)(stack_u32+*sp-2) + *(long*)(stack_u32+*sp-4);",
                 "*sp -= 2")
     }
 
@@ -266,13 +266,11 @@ impl<'a> OpenCLCWriter<'_> {
     }
 
     fn emit_i32_eq(&self, debug: bool) -> String {
-        format!("\t{}\n\t{}\n",
-                "stack_u32[*sp-1] = (uint)((int)stack_u32[*sp - 1]) = ((int)stack_u32[*sp - 2]);",
-                // move sp back by 1
-                "*sp -= 1;")
+        format!("\t{}\n",
+                "stack_u32[*sp-1] = (int)((int)stack_u32[*sp - 1]) == ((int)stack_u32[*sp - 2]);")
     }
 
-    fn emit_block(&self, block: &wast::BlockType, fn_name: &str, debug: bool) -> String {
+    fn emit_block(&self, block: &wast::BlockType, fn_name: &str, function_id_map: HashMap<&str, u32>, debug: bool) -> String {
         let mut result: String = String::from("");
         let label = block.label.unwrap().name();
 
@@ -290,8 +288,17 @@ impl<'a> OpenCLCWriter<'_> {
 
         // create a new stack frame for the block, store stack frame pointer in local
         // function private data
+
+
+        // we have to emulate a 2-D array, since openCL does not support double pts in v1.2
+        // the format is (64 x 64 * number of functions),
+        // so [..........] 4096 entries per function consecutively
+        // lookups are done as: branch_value_stack_state[(*sfp * 64) + idx + (func_id * 4096)]
+        // sfp = stack frame ptr, idx = branch ID, func_id = the numerical id of the function
+
         result += &format!("\t{}\n",
-                           format!("{}_branch_value_stack_state[*sfp][{}] = *sp;", fn_name, branch_idx_u32));
+                           format!("branch_value_stack_state[(*sfp * 64) + {} + ({} * 4096)] = *sp;",
+                           branch_idx_u32, function_id_map.get(fn_name).unwrap()));
         // we don't emit a label for block statements here, any br's goto the END of the block
         // we don't need to modify the sp here, we will do all stack unwinding in the br instr
         result
@@ -299,7 +306,7 @@ impl<'a> OpenCLCWriter<'_> {
 
     // basically the same as emit_block, except we have to reset the stack pointer
     // at the *top* of the block, since we are doing a backwards jump not a forward jump
-    fn emit_loop(&self, block: &wast::BlockType, debug: bool) -> String {
+    fn emit_loop(&self, block: &wast::BlockType, fn_name: &str, function_id_map: HashMap<&str, u32>, debug: bool) -> String {
         let mut result: String = String::from("");
         let label = block.label.unwrap().name();
 
@@ -314,15 +321,24 @@ impl<'a> OpenCLCWriter<'_> {
         if branch_idx_u32 > 1024 {
             panic!("Only up to 1024 branches per function are supported");
         }
+
+        // create a new stack frame for the block, store stack frame pointer in local
+        // function private data
+
+        // we have to emulate a 2-D array, since openCL does not support double pts in v1.2
+        // the format is (64 x 64 * number of functions),
+        // so [..........] 4096 entries per function consecutively
+        // lookups are done as: branch_value_stack_state[(*sfp * 64) + idx + (func_id * 4096)]
+        // sfp = stack frame ptr, idx = branch ID, func_id = the numerical id of the function
+
         result += &format!("\t{}\n",
-                           format!("branch_value_stack_state[{}] = *sp;", branch_idx_u32));
-        // we don't emit a label for block statements here, any br's goto the END of the block
-        // we must emit a label here for loops
-        /*
-        result += &format!("{}:\n",
-                           block.label.unwrap().name());
-        */
-        // we don't need to modify the sp here, we will do all stack unwinding in the br instr
+                           format!("loop_value_stack_state[(*sfp * 64) + {} + ({} * 4096)] = *sp;",
+                           branch_idx_u32, function_id_map.get(fn_name).unwrap()));
+
+        // emit a label here for the END instruction to jump back here to restart the loop
+        result += &format!("{}:\n", label);
+        // the stack pointer should be reset by the BR/BR_IF instruction, so no need to touch it here
+
         result
     }
 
@@ -331,38 +347,38 @@ impl<'a> OpenCLCWriter<'_> {
 
     // semantically, the end statement pops from the control stack,
     // in our compiler, this is a no-op
-    fn emit_end(&self, id: &Option<wast::Id<'a>>, label: &str, block_type: u32, fn_name: &str, debug: bool) -> String {
+    fn emit_end(&self, id: &Option<wast::Id<'a>>, label: &str, block_type: u32, fn_name: &str, function_id_map: HashMap<&str, u32>, debug: bool) -> String {
         dbg!(id);
         dbg!(label);
         dbg!(block_type);
         println!("emit end!");
+        // after a block ends, we need to unwind the stack!
+        let re = Regex::new(r"\d+").unwrap();
+        // we can use the branch index to save to global state
+        let branch_idx: &str = re.captures(label).unwrap().get(0).map_or("", |m| m.as_str());
+        dbg!(branch_idx);
+        let branch_idx_u32 = branch_idx.parse::<u32>().unwrap();
+        if branch_idx_u32 > 1024 {
+            panic!("Only up to 1024 branches per function are supported");
+        }
+
         // if the end statement corresponds to a block -> we want to put the label *here* and not at the top
         // of the block, otherwise for loops we jump back to the start of the loop!
         // 0 -> block (label goes here, at the end statement)
         // 1-> loop (label was already inserted at the top, this is a no-op here)
         if block_type == 0 {
-            //format!("{}:\n", label)
-            // after a block ends, we need to unwind the stack!
-            let re = Regex::new(r"\d+").unwrap();
-            // we can use the branch index to save to global state
-            let branch_idx: &str = re.captures(label).unwrap().get(0).map_or("", |m| m.as_str());
-            dbg!(branch_idx);
-            let branch_idx_u32 = branch_idx.parse::<u32>().unwrap();
-            if branch_idx_u32 > 1024 {
-                panic!("Only up to 1024 branches per function are supported");
-            }
-            format!("{}:\n\t{}\n", label,
-                    format!("*sp = {}_branch_value_stack_state[*sfp][{}];", fn_name, branch_idx_u32))
+            format!("\n{}:\n\t{}\n", label,
+                    format!("*sp = branch_value_stack_state[(*sfp * 64) + {} + ({} * 4096)];",
+                            branch_idx_u32, function_id_map.get(fn_name).unwrap()))
         } else {
-            format!("/* END (loop: {}) */", label)
-            /*
-             * There are two cases for the loop construct
-             * 1) The loop is broken using an if statement (emscripten outputs this using blocks)
-             *    In this case, we wouldn't have to emit any code at the end statement
-             * 
-             * 2) The loop is an infinite, unbroken loop, in which case the stack is unwinded at the top
-             *    of the loop (after the loop label), in which case we also don't need to do anything
-             */
+            let mut result = String::from("");
+            result += &format!("\t/* END (loop: {}) */\n", label);
+            
+            // pop the control flow stack entry (reset the stack to the state it was in before the loop)
+            result += &format!("\t*sp = loop_value_stack_state[(*sfp * 64) + {} + ({} * 4096)];\n",
+                                branch_idx_u32, function_id_map.get(fn_name).unwrap());
+
+            result
         }
     }
 
@@ -570,6 +586,7 @@ impl<'a> OpenCLCWriter<'_> {
                          fn_name: &str,
                          previous_stack_size: &mut u32,
                          control_stack: &mut Vec<(String, u32)>,
+                         function_id_map: HashMap<&str, u32>,
                          debug: bool) -> String {
 
         match instr {
@@ -612,10 +629,21 @@ impl<'a> OpenCLCWriter<'_> {
                     wast::Index::Id(id) => id.name(),
                     _ => panic!("Unable to get Id for function call!"),
                 };
-                let func_type_signature = &self.func_map.get(id).unwrap().ty;
-                let fn_result_type = &(*func_type_signature.clone().inline.unwrap().results)[0];
-                *previous_stack_size = self.get_size_valtype(fn_result_type);
-                self.emit_fn_call(*idx, call_ret_map, call_ret_idx, debug)
+                dbg!(id);
+                dbg!(idx);
+                dbg!(self.func_map.get(id));
+                // if self.func_map.get(id) is none, we have an import
+                // right now we only support WASI imports
+                match self.func_map.get(id) {
+                    Some(_) => {
+                        let func_type_signature = &self.func_map.get(id).unwrap().ty;
+                        let fn_result_type = &(*func_type_signature.clone().inline.unwrap().results)[0];
+                        *previous_stack_size = self.get_size_valtype(fn_result_type);
+                        self.emit_fn_call(*idx, call_ret_map, call_ret_idx, debug)
+                    },
+                    // we have an import...
+                    None => String::from("")
+                }
             },
             wast::Instruction::I32LtS => {
                 *previous_stack_size = 1;
@@ -629,18 +657,18 @@ impl<'a> OpenCLCWriter<'_> {
             wast::Instruction::Block(b) => {
                 let label = b.label.unwrap().name().clone();
                 control_stack.push((label.to_string(), 0));
-                self.emit_block(b, fn_name, debug)
+                self.emit_block(b, fn_name, function_id_map, debug)
             },
             wast::Instruction::Loop(b) => {
                 let label = b.label.unwrap().name().clone();
                 control_stack.push((label.to_string(), 1));
-                String::from("")
+                self.emit_loop(b, fn_name, function_id_map, debug)
             }
             // if control_stack.pop() panics, that means we were parsing an incorrectly defined
             // wasm file, each block/loop must have a matching end!
             wast::Instruction::End(id) => {
                 let (label, t) = control_stack.pop().unwrap();
-                self.emit_end(id, &label, t, fn_name, debug)
+                self.emit_end(id, &label, t, fn_name, function_id_map, debug)
             },
             wast::Instruction::Return => self.emit_return(fn_name, debug),
             wast::Instruction::Br(idx) => self.emit_br(*idx, fn_name, *previous_stack_size, debug),
@@ -649,7 +677,7 @@ impl<'a> OpenCLCWriter<'_> {
         }
     }
 
-    fn emit_function(&self, func: &wast::Func, call_ret_map: &mut HashMap<&str, u32>, call_ret_idx: &mut u32, debug: bool) -> String {
+    fn emit_function(&self, func: &wast::Func, call_ret_map: &mut HashMap<&str, u32>, call_ret_idx: &mut u32, function_id_map: HashMap<&str, u32>, debug: bool) -> String {
         let mut final_string = String::from("");
 
         // store the stack offset for all parameters and locals
@@ -758,6 +786,7 @@ impl<'a> OpenCLCWriter<'_> {
                                                             id.name(),
                                                             previous_stack_size,
                                                             &mut control_stack,
+                                                            function_id_map.clone(),
                                                             debug);
                 }
 
@@ -802,9 +831,11 @@ impl<'a> OpenCLCWriter<'_> {
                                             ulong *sp,
                                             ulong *sfp,
                                             ulong *call_stack,
+                                            uchar *branch_value_stack_state,
+                                            uchar *loop_value_stack_state,
                                             uint entry_point) {{\n");
         } else {
-            let header = format!("__kernel void wasm_entry(__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}) {{\n",
+            let header = format!("__kernel void wasm_entry(__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}n\t__global {}\n\t__global {}\n\t__global {}) {{\n",
                                     "uint  *stack_u32_global,",
                                     "ulong *stack_u64_global,",
                                     "uint  *heap_u32_global,",
@@ -813,12 +844,14 @@ impl<'a> OpenCLCWriter<'_> {
                                     "ulong *sp_global,",
                                     "ulong *sfp_global,",
                                     "ulong *call_stack,",
+                                    "uchar *branch_value_stack_state,",
+                                    "uchar *loop_value_stack_state,",
                                     "uint  *entry_point_global");
             // write thread-local private variables before header
 
             write!(output, "{}", header);
             // TODO: for the openCL launcher, pass the memory stride as a function parameter
-            write!(output, "\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n",
+            write!(output, "\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n",
                            "uint  *stack_u32    = (uint*)stack_u32_global+(get_global_id(0) * 1024 * 16);",
                            "ulong *stack_u64    = (ulong*)stack_u32;",
                            "uint  *heap_u32     = (uint *)heap_u32_global+(get_global_id(0) * 1024 * 16);",
@@ -831,6 +864,7 @@ impl<'a> OpenCLCWriter<'_> {
                            "ulong *sfp          = (ulong*)sfp_global+(get_global_id(0) * 1024 * 16);",
                            // holds the numeric index of the return label for where to jump after a function call
                            "ulong *call_stack   = (ulong*)call_stack+(get_global_id(0) * 1024 * 16);",
+                           "ulong *branch_value_stack_state   = (ulong*)branch_value_stack_state+(get_global_id(0) * 1024 * 16);",
                            "uint  entry_point   = entry_point_global[get_global_id(0)];");
         }
         
@@ -841,14 +875,6 @@ impl<'a> OpenCLCWriter<'_> {
         let mut count = 0;
         let funcs = self.func_map.values();
         for function in funcs.clone() {
-            // store branch stack pointers for branch value stack unwinding
-            // the 2-d array is [stack frame ptr][branch id]
-            let name = function.id.unwrap().name();
-            write!(output, "{}", format!("\tuint {}_branch_value_stack_state[64][64];\n", name));
-            // also create a similar array for loops
-            write!(output, "{}", format!("\tuint {}_loop_value_stack_state[64][64];\n", name));
-            // TODO: in the future try to do some static analysis to determine max # of loops/branches in a function
-            // we can't predict max depth (sfp), but we can know the second dimension statically
             match function.id {
                 Some(id) => {
                     function_idx_label.insert(id.name(), count);
@@ -866,13 +892,13 @@ impl<'a> OpenCLCWriter<'_> {
             write!(output, "\t\tcase {}:\n", function_idx_label.get(key).unwrap());
             write!(output, "\t\t\tgoto {};\n", key);
             write!(output, "\t\t\tbreak;\n");
-        } 
+        }
         write!(output, "\t}}\n");
 
         let mut call_ret_map: &mut HashMap<&str, u32> = &mut HashMap::new();
         let mut call_ret_idx: &mut u32 = &mut 0;
-        for function in funcs {
-            let func = self.emit_function(function, call_ret_map, call_ret_idx, debug);
+        for function in funcs.clone() {
+            let func = self.emit_function(function, call_ret_map, call_ret_idx, function_idx_label.clone(), debug);
             write!(output, "{}", func);
         }
 
@@ -899,6 +925,11 @@ impl<'a> OpenCLCWriter<'_> {
             write!(output, "{}", format!("\tulong *heap_u64 = (ulong *)calloc(1024, sizeof(uint));\n"));
             write!(output, "{}", format!("\tuint *stack_frames = calloc(1024, sizeof(uint));\n"));
             write!(output, "{}", format!("\tuint *call_stack = calloc(1024, sizeof(uint));\n"));
+            // the size of this structure is proportional to how many functions there are
+            // size = function count * 4096 bytes (64 x 64)
+            write!(output, "{}", format!("\tuchar *branch_value_stack_state = calloc({}, sizeof(uchar));\n", funcs.len() * 4096));
+            write!(output, "{}", format!("\tuchar *loop_value_stack_state = calloc({}, sizeof(uchar));\n", funcs.len() * 4096));
+
             write!(output, "{}", format!("\tulong sp = 0;\n"));
             write!(output, "{}", format!("\tulong sfp = 0;\n"));
             write!(output, "{}", format!("\tstack_frames[sfp] = sp;\n"));
@@ -908,7 +939,7 @@ impl<'a> OpenCLCWriter<'_> {
             // TODO when calling the function get the entry_point for main
 
             write!(output, "{}", format!("{}",
-                    format!("\twasm_entry(stack_u32, stack_u64, heap_u32, heap_u64, stack_frames, &sp, &sfp, call_stack, {});\n",
+                    format!("\twasm_entry(stack_u32, stack_u64, heap_u32, heap_u64, stack_frames, &sp, &sfp, call_stack, branch_value_stack_state, loop_value_stack_state, {});\n",
                             function_idx_label.get("_main").unwrap())));
             // now check the result
             write!(output, "{}", format!("\tprintf(\"%d\\n\", stack_u32[sp]);\n"));
