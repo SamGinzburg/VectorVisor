@@ -1,0 +1,3 @@
+[submodule "uvwasi"]
+	path = uvwasi
+	url = git@github.com:cjihrig/uvwasi.git
