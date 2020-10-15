@@ -118,6 +118,9 @@ int main(int argc, char** argv)
 	cl_mem stack_frames;
     cl_mem sp;
 	cl_mem sfp;
+    cl_mem call_stack;
+    cl_mem branch_value_stack_state;
+    cl_mem loop_value_stack_state;
     cl_mem entry;
 
     // the setup data
@@ -201,10 +204,13 @@ int main(int argc, char** argv)
     stack_frames = clCreateBuffer(context,  CL_MEM_READ_WRITE,  STACK_SIZE_BYTES * WARP_SIZE, NULL, NULL);
     sp = clCreateBuffer(context,  CL_MEM_READ_WRITE, sizeof(unsigned long) * WARP_SIZE, NULL, NULL);
     sfp = clCreateBuffer(context,  CL_MEM_READ_WRITE,  STACK_SIZE_BYTES * WARP_SIZE, NULL, NULL);
+    call_stack = clCreateBuffer(context,  CL_MEM_READ_WRITE,  1024 * WARP_SIZE, NULL, NULL);
+    branch_value_stack_state = clCreateBuffer(context,  CL_MEM_READ_WRITE,  4096 * WARP_SIZE, NULL, NULL);
+    loop_value_stack_state = clCreateBuffer(context,  CL_MEM_READ_WRITE,  4096 * WARP_SIZE, NULL, NULL);
     entry = clCreateBuffer(context,  CL_MEM_READ_ONLY,  sizeof(ulong) * WARP_SIZE, NULL, NULL);
 
     if (!stack_u32 || !heap_u32 || !stack_frames || 
-        !sp || !sfp || !entry) {
+        !sp || !sfp || !call_stack || !loop_value_stack_state || !branch_value_stack_state || !entry) {
         printf("Error: Failed to allocate device memory!\n");
         exit(1);
     }
@@ -247,7 +253,10 @@ int main(int argc, char** argv)
     err  = clSetKernelArg(kernel, 4, sizeof(cl_mem), &stack_frames);
     err |= clSetKernelArg(kernel, 5, sizeof(cl_mem), &sp);
     err |= clSetKernelArg(kernel, 6, sizeof(cl_mem), &sfp);
-    err |= clSetKernelArg(kernel, 7, sizeof(cl_mem), &entry);
+    err |= clSetKernelArg(kernel, 7, sizeof(cl_mem), &call_stack);
+    err |= clSetKernelArg(kernel, 8, sizeof(cl_mem), &branch_value_stack_state);
+    err |= clSetKernelArg(kernel, 9, sizeof(cl_mem), &loop_value_stack_state);
+    err |= clSetKernelArg(kernel, 10, sizeof(cl_mem), &entry);
     if (err != CL_SUCCESS)
     {
         printf("Error: Failed to set kernel arguments! %d\n", err);

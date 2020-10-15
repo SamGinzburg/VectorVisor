@@ -835,7 +835,7 @@ impl<'a> OpenCLCWriter<'_> {
                                             uchar *loop_value_stack_state,
                                             uint entry_point) {{\n");
         } else {
-            let header = format!("__kernel void wasm_entry(__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}n\t__global {}\n\t__global {}\n\t__global {}) {{\n",
+            let header = format!("__kernel void wasm_entry(__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}) {{\n",
                                     "uint  *stack_u32_global,",
                                     "ulong *stack_u64_global,",
                                     "uint  *heap_u32_global,",
@@ -843,15 +843,15 @@ impl<'a> OpenCLCWriter<'_> {
                                     "uint  *stack_frames_global,",
                                     "ulong *sp_global,",
                                     "ulong *sfp_global,",
-                                    "ulong *call_stack,",
-                                    "uchar *branch_value_stack_state,",
-                                    "uchar *loop_value_stack_state,",
+                                    "ulong *call_stack_global,",
+                                    "uchar *branch_value_stack_state_global,",
+                                    "uchar *loop_value_stack_state_global,",
                                     "uint  *entry_point_global");
             // write thread-local private variables before header
 
             write!(output, "{}", header);
             // TODO: for the openCL launcher, pass the memory stride as a function parameter
-            write!(output, "\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n",
+            write!(output, "\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\n\t{}\n",
                            "uint  *stack_u32    = (uint*)stack_u32_global+(get_global_id(0) * 1024 * 16);",
                            "ulong *stack_u64    = (ulong*)stack_u32;",
                            "uint  *heap_u32     = (uint *)heap_u32_global+(get_global_id(0) * 1024 * 16);",
@@ -863,8 +863,9 @@ impl<'a> OpenCLCWriter<'_> {
                            // essentially the same structure, except they hold different values
                            "ulong *sfp          = (ulong*)sfp_global+(get_global_id(0) * 1024 * 16);",
                            // holds the numeric index of the return label for where to jump after a function call
-                           "ulong *call_stack   = (ulong*)call_stack+(get_global_id(0) * 1024 * 16);",
-                           "ulong *branch_value_stack_state   = (ulong*)branch_value_stack_state+(get_global_id(0) * 1024 * 16);",
+                           "ulong *call_stack   = (ulong*)call_stack_global+(get_global_id(0) * 1024 * 16);",
+                           "ulong *branch_value_stack_state   = (ulong*)branch_value_stack_state_global+(get_global_id(0) * 1024 * 16);",
+                           "ulong *loop_value_stack_state   = (ulong*)loop_value_stack_state_global+(get_global_id(0) * 1024 * 16);",
                            "uint  entry_point   = entry_point_global[get_global_id(0)];");
         }
         
