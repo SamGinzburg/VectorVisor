@@ -8,6 +8,7 @@
 #include <sys/stat.h>
 #include <OpenCL/opencl.h>
 #include <time.h>
+#include "../includes/wasm_hypercall.h"
 
 #define DATA_SIZE (1024 * 100)
 
@@ -100,10 +101,11 @@ int main(int argc, char** argv)
     cl_command_queue commands;          // compute command queue
     cl_program program;                 // compute program
     cl_kernel kernel;                   // compute kernel
-    
+    cl_kernel data_kernel;              // data kernel
+
     cl_mem input;                       // device memory used for the input array
     cl_mem output;                      // device memory used for the output array
-    cl_mem test_buffer;                      // device memory used for the output array
+    cl_mem test_buffer;                 // device memory used for the output array
     uint temp[102400];
 
     /*
@@ -121,6 +123,8 @@ int main(int argc, char** argv)
     cl_mem call_stack;
     cl_mem branch_value_stack_state;
     cl_mem loop_value_stack_state;
+    cl_mem hypercall_num;
+    cl_mem hypercall_continuation;
     cl_mem entry;
 
     // the setup data
@@ -128,8 +132,18 @@ int main(int argc, char** argv)
 	ulong sp_setup = 0;
 	ulong sfp_setup = 1;
     ulong entry_setup = 0;
-	stack_frames_setup[sfp_setup - 1] = sp_setup;
+    long hypercall_num_setup = -2;
 
+    // The WASI sandbox, 1 instance per thread
+	uvwasi_t uvwasi[WARP_SIZE];
+	uvwasi_options_t init_options[WARP_SIZE];
+
+    for (uint warp_idx = 0; warp_idx < WARP_SIZE; warp_idx++) {
+        uvwasi_options_init(&init_options[warp_idx]);
+        uvwasi_init(&uvwasi, &init_options[warp_idx]);
+    }
+
+	stack_frames_setup[sfp_setup - 1] = sp_setup;
 
     // Connect to a compute device
     //
@@ -140,7 +154,7 @@ int main(int argc, char** argv)
         printf("Error: Failed to create a device group!\n");
         return EXIT_FAILURE;
     }
-  
+    
     // Create a compute context 
     //
     context = clCreateContext(0, 1, &device_id, NULL, NULL, &err);
@@ -161,6 +175,7 @@ int main(int argc, char** argv)
 
     // Create the compute program from the source buffer
     //
+
     program = build_program(context, device_id, "test.cl");
     if (!program)
     {
@@ -195,8 +210,14 @@ int main(int argc, char** argv)
         exit(1);
     }
 
-    // Alloc buffers for all 16 programs
+    data_kernel = clCreateKernel(program, "data_init", &err);
+    if (!data_kernel || err != CL_SUCCESS)
+    {
+        printf("Error: Failed to create data kernel!\n");
+        exit(1);
+    }
 
+    // Alloc buffers for all 16 programs
     stack_u32 = clCreateBuffer(context,  CL_MEM_READ_WRITE,  STACK_SIZE_BYTES * WARP_SIZE, NULL, NULL);
     stack_u64 = stack_u32;
     heap_u32 = clCreateBuffer(context,  CL_MEM_READ_WRITE, HEAP_SIZE_BYTES * WARP_SIZE, NULL, NULL);
@@ -207,33 +228,41 @@ int main(int argc, char** argv)
     call_stack = clCreateBuffer(context,  CL_MEM_READ_WRITE,  1024 * WARP_SIZE, NULL, NULL);
     branch_value_stack_state = clCreateBuffer(context,  CL_MEM_READ_WRITE,  4096 * WARP_SIZE, NULL, NULL);
     loop_value_stack_state = clCreateBuffer(context,  CL_MEM_READ_WRITE,  4096 * WARP_SIZE, NULL, NULL);
-    entry = clCreateBuffer(context,  CL_MEM_READ_ONLY,  sizeof(ulong) * WARP_SIZE, NULL, NULL);
+
+    hypercall_num = clCreateBuffer(context,  CL_MEM_READ_WRITE,  sizeof(ulong) * WARP_SIZE, NULL, NULL);
+    hypercall_continuation = clCreateBuffer(context,  CL_MEM_READ_WRITE,  sizeof(ulong) * WARP_SIZE, NULL, NULL);
+
+    entry = clCreateBuffer(context,  CL_MEM_READ_WRITE,  sizeof(ulong) * WARP_SIZE, NULL, NULL);
 
     if (!stack_u32 || !heap_u32 || !stack_frames || 
-        !sp || !sfp || !call_stack || !loop_value_stack_state || !branch_value_stack_state || !entry) {
+        !sp || !sfp || !call_stack || !loop_value_stack_state 
+        || !branch_value_stack_state || !entry || !hypercall_num || !hypercall_continuation) {
         printf("Error: Failed to allocate device memory!\n");
         exit(1);
     }
 
 
     // Write our data set into the input array in device memory 
-    for (uint count = 0; count < 16; count++) {
+    for (uint count = 0; count < WARP_SIZE; count++) {
         printf("test\n");
 
         // for each VM we have to prepare it for launch by setting up the stack frame
         // In the future: if we want to pass parameters it has to be done on the stack
 
         // set the stack pointer: sp = 0
-        err = clEnqueueWriteBuffer(commands, sp, CL_TRUE, count, sizeof(ulong), &sp_setup, 0, NULL, NULL);
+        err = clEnqueueWriteBuffer(commands, sp, CL_TRUE, count * sizeof(ulong), sizeof(ulong), &sp_setup, 0, NULL, NULL);
         printf("err:%d\n", err);
         // set the stack frame pointer: sfp = 1
-        err |= clEnqueueWriteBuffer(commands, sfp, CL_TRUE, count * 1024 * 16, sizeof(ulong), &sfp_setup, 0, NULL, NULL);
+        err |= clEnqueueWriteBuffer(commands, sfp, CL_TRUE, count * STACK_SIZE_BYTES, sizeof(ulong), &sfp_setup, 0, NULL, NULL);
         printf("err:%d\n", err);
         // set the stack frame: stack_frames[sfp - 1] = sp;
-        err |= clEnqueueWriteBuffer(commands, stack_frames, CL_TRUE, count * 1024 * 16, STACK_SIZE_BYTES, stack_frames_setup, 0, NULL, NULL);
-        // set the wasm function entry point
+        err |= clEnqueueWriteBuffer(commands, stack_frames, CL_TRUE, count * STACK_SIZE_BYTES, STACK_SIZE_BYTES, stack_frames_setup, 0, NULL, NULL);
         printf("err:%d\n", err);
-        err |= clEnqueueWriteBuffer(commands, entry, CL_TRUE, count, sizeof(ulong), &entry_setup, 0, NULL, NULL);
+        // set the wasm function entry point
+        err |= clEnqueueWriteBuffer(commands, entry, CL_TRUE, count * sizeof(uint), sizeof(uint), &entry_setup, 0, NULL, NULL);
+        printf("err:%d\n", err);
+        // set the default hypercall_number to -2
+        err |= clEnqueueWriteBuffer(commands, hypercall_num, CL_TRUE, count * sizeof(ulong), sizeof(ulong), &hypercall_num_setup, 0, NULL, NULL);
         printf("err:%d\n", err);
 
         if (err != CL_SUCCESS)
@@ -256,7 +285,14 @@ int main(int argc, char** argv)
     err |= clSetKernelArg(kernel, 7, sizeof(cl_mem), &call_stack);
     err |= clSetKernelArg(kernel, 8, sizeof(cl_mem), &branch_value_stack_state);
     err |= clSetKernelArg(kernel, 9, sizeof(cl_mem), &loop_value_stack_state);
-    err |= clSetKernelArg(kernel, 10, sizeof(cl_mem), &entry);
+    err |= clSetKernelArg(kernel, 10, sizeof(cl_mem), &hypercall_num);
+    err |= clSetKernelArg(kernel, 11, sizeof(cl_mem), &hypercall_continuation);
+    err |= clSetKernelArg(kernel, 12, sizeof(cl_mem), &entry);
+
+    // set up the arg for our data kernel
+    
+    err |= clSetKernelArg(data_kernel, 0, sizeof(cl_mem), &heap_u32);
+
     if (err != CL_SUCCESS)
     {
         printf("Error: Failed to set kernel arguments! %d\n", err);
@@ -272,40 +308,146 @@ int main(int argc, char** argv)
         exit(1);
     }
 
-    printf("local: %d\n", local);
+    global = WARP_SIZE;
+    local = 16;
 
-    // Execute the kernel over the entire range of our 1d input data set
-    // using the maximum number of work group items for this device
-    //
-    global = 16;
-    local = 1;
-    for (int test = 0; test < 10; test++) {
+    ulong temp_sp[WARP_SIZE];
+    ulong temp_hypercall_num[WARP_SIZE];
+    ulong temp_entry_point[WARP_SIZE];
+    ulong entry_point_exited = -1;
+
+    cl_event event_timer;
+    ulong starttime;
+    ulong endtime;
+
+
+    // TODO: for each kernel, launch a secondary setup kernel that initializes all 
+    // of the (data ...) sections (much better to do this on the GPU than on the CPU)
+    err = clEnqueueNDRangeKernel(commands, data_kernel, 1, NULL, &global, &local, 0, NULL, NULL);
+    if (err) {
+        printf("Error: Failed to execute kernel!: %d\n", err);
+        return EXIT_FAILURE;
+    }
+    clFinish(commands);
+    printf("data init complete\n");
+
+    for (int test = 0; test < 1; test++) {
         clock_t begin = clock();
-        err = clEnqueueNDRangeKernel(commands, kernel, 1, NULL, &global, &local, 0, NULL, NULL);
-        if (err)
-        {
-            printf("test Error: Failed to execute kernel!: %d\n", err);
-            return EXIT_FAILURE;
+        while (1) {
+            printf("launching kernel\n");
+            err = clEnqueueNDRangeKernel(commands, kernel, 1, NULL, &global, &local, 0, NULL, &event_timer);
+            if (err) {
+                printf("Error: Failed to execute kernel!: %d\n", err);
+                return EXIT_FAILURE;
+            }
+            // Wait for the command commands to get serviced before reading back results
+            clFinish(commands);
+            clGetEventProfilingInfo(event_timer, CL_PROFILING_COMMAND_START, sizeof(ulong), &starttime, NULL);
+            clGetEventProfilingInfo(event_timer, CL_PROFILING_COMMAND_END, sizeof(ulong), &endtime, NULL);
+            printf("kernel finished\n");
+            printf("elapsed time: %f\n", (float)(endtime - starttime));
+
+            // read SP to see if kernel is done
+            err = clEnqueueReadBuffer(commands, sp, CL_TRUE, 0, sizeof(ulong) * WARP_SIZE, &temp_sp, 0, NULL, NULL);  
+            if (err != CL_SUCCESS) {
+                printf("Unable to read stack pointer from GPU kernels...\n");
+                exit(-1);
+            }
+
+            for (uint warp_idx = 0; warp_idx < WARP_SIZE; warp_idx++) {
+                //printf("warp_idx: %d\tsp: %d\n", warp_idx, temp_sp[warp_idx]);
+            }
+
+            // if all (sp) == 0, exit
+            bool exit = true;
+            for (uint warp_idx = 0; warp_idx < WARP_SIZE; warp_idx++) {
+                exit = ((temp_sp[warp_idx] == 0) & exit);
+            }
+
+            // if all entry_point == -1, also exit
+
+            printf("exit: %d\n", exit);
+            if (exit) {
+                printf("all procs exited\n");
+                break;
+            }
+
+            printf("we have procs left to run...\n");
+            // else, block off the threads that are done (sp == 0)
+            ulong entry_point_blocked_off = -1;
+            for (uint warp_idx = 0; warp_idx < WARP_SIZE; warp_idx++) {
+                if (temp_sp[warp_idx] == 0) {
+                    // block off the thread by setting the entry_point to -1
+                    err = clEnqueueWriteBuffer(commands, entry, CL_TRUE, warp_idx * sizeof(ulong), sizeof(ulong), &entry_point_blocked_off, 0, NULL, NULL);
+                }
+            }
+
+            // now for the remaining threads, dispatch appropriate hypercalls
+            // first read back all the hypercall nums
+            err = clEnqueueReadBuffer(commands, hypercall_num, CL_TRUE, 0, sizeof(ulong) * WARP_SIZE, &temp_hypercall_num, 0, NULL, NULL);  
+            if (err != CL_SUCCESS) {
+                printf("Unable to read stack pointer from GPU kernels...\n");
+                return -1;
+            }
+
+            for (uint warp_idx = 0; warp_idx < WARP_SIZE; warp_idx++) {
+                switch (temp_hypercall_num[warp_idx])
+                {
+                    case 0:
+                        printf("fd_write\n");
+                        vmm_fd_write(&uvwasi[warp_idx], stack_u32, temp_sp[warp_idx], heap_u32,
+                                     warp_idx, commands, STACK_SIZE_BYTES, HEAP_SIZE_BYTES);
+                        break;
+                    case 1:
+                        // TODO, set entry_point to -1
+                        printf("proc_exit\n");
+                        err = clEnqueueWriteBuffer(commands, entry, CL_TRUE,
+                                                   warp_idx * sizeof(ulong), sizeof(ulong),
+                                                   &entry_point_blocked_off, 0, NULL, NULL);
+                        break;
+                }
+            }
+
+            // okay, now do a second check to see if all the procs have exited,
+            // this is to handle the proc_exit hypercall
+            err = clEnqueueReadBuffer(commands, entry, CL_TRUE, 0, sizeof(ulong) * WARP_SIZE, &temp_entry_point, 0, NULL, NULL);  
+            if (err != CL_SUCCESS) {
+                printf("Unable to read entry point from GPU kernels...\n");
+                return -1;
+            }
+
+            for (uint warp_idx = 0; warp_idx < WARP_SIZE; warp_idx++) {
+                //printf("warp_idx: %d\tentry_point: %d\n", warp_idx, temp_entry_point[warp_idx]);
+            }
+
+            // if all (entry_point) == -1, exit
+            bool entry_point_exit = true;
+            for (uint warp_idx = 0; warp_idx < WARP_SIZE; warp_idx++) {
+                entry_point_exit = ((temp_entry_point[warp_idx] == -1) & entry_point_exit);
+            }
+
+            printf("entry pt exit: %d\n", entry_point_exit);
+            if (entry_point_exit) {
+                break;
+            }
+
+            // after handling the hypercalls, reset hypercall_number = -1;
+            // we can just blindly write to all threads, since they would all be done at this point
+            long hypercall_num_reentry = - 1;
+            for (uint warp_idx = 0; warp_idx < WARP_SIZE; warp_idx++) {
+                if (temp_sp[warp_idx] != 0) {
+                    // block off the thread by setting the hypercall_num to -1
+                    err = clEnqueueWriteBuffer(commands, hypercall_num, CL_TRUE, warp_idx * sizeof(ulong), sizeof(ulong), &hypercall_num_reentry, 0, NULL, NULL);
+                }
+            }
+
+            // now continue and resume the continuation...
         }
-        printf("launch kernel\n");
-        // Wait for the command commands to get serviced before reading back results
-        //
-        clFinish(commands);
-        printf("kernel finish\n");
         clock_t end = clock();
         double time_spent_gpu = (double)(end - begin) / CLOCKS_PER_SEC;
         printf("GPU: %f\n", time_spent_gpu);
     }
 
-    // Read back the results from the device to verify the output
-    //
-    err = clEnqueueReadBuffer(commands, stack_u32, CL_TRUE, 0, sizeof(temp), temp, 0, NULL, NULL );  
-    if (err != CL_SUCCESS)
-    {
-        printf("Error: Failed to read output array! %d\n", err);
-        exit(1);
-    }
-    
     // Shutdown and cleanup
     //
     //clReleaseMemObject(input);

@@ -2,9 +2,11 @@ PROJ=opencl_launcher
 
 CC=gcc
 
-CFLAGS=-std=c99 -Wall -DUNIX -g -DDEBUG
+CFLAGS=-std=c99 -Wall -DUNIX -g
 # No OpenCL
-CFLAGSS=-std=c99 -Wall -DUNIX -g -DDEBUG 
+CFLAGSS=-std=c99 -Wall -DUNIX -g
+
+CFLAGS +=-I ../uvwasi/include/ -L../uvwasi/ -L../uvwasi/_deps/libuv-build/ -luvwasi_a -luv_a
 
 # Check for 32-bit vs 64-bit
 PROC_TYPE = $(strip $(shell uname -m | grep 64))

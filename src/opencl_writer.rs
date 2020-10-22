@@ -2,18 +2,32 @@ use wast::Wat;
 use wast::parser::{self, ParseBuffer};
 use wast::ModuleKind::{Text, Binary};
 use wast::ValType;
-use wast::Instruction;
 use regex::Regex;
 
-use std::path::Path;
 use std::fmt;
 use std::fs::File;
-use std::io::{Write, BufReader, BufRead, Error};
+use std::io::Write;
 use std::collections::HashMap;
+
+use lazy_static::lazy_static;
+
+/*
+ * This hashmap contains the WASI calls that have already been implemented!
+ */
+lazy_static! {
+    static ref wasi_snapshot_preview1: HashMap<&'static str, bool> = {
+        let mut m = HashMap::new();
+        m.insert("fd_write", true);
+        m.insert("proc_exit", true);
+        m
+    };
+}
+
 
 pub struct OpenCLCWriter<'a> {
     types: Vec<wast::Type<'a>>,
-    imports: Vec<wast::Import<'a>>,
+    imports_map: HashMap<&'a str, (&'a str, Option<&'a str>, wast::ItemSig<'a>)>,
+    // map of item.id -> (module, field)
     func_map: HashMap<&'a str, wast::Func<'a>>,
     tables: Vec<wast::Table<'a>>,
     memory: Vec<wast::Memory<'a>>,
@@ -29,7 +43,7 @@ impl<'a> OpenCLCWriter<'_> {
     pub fn new(pb: &'a ParseBuffer) -> OpenCLCWriter<'a> {
         OpenCLCWriter {
             types: vec!(),
-            imports: vec!(),
+            imports_map: HashMap::new(),
             func_map: HashMap::new(),
             tables: vec!(),
             memory: vec!(),
@@ -50,7 +64,13 @@ impl<'a> OpenCLCWriter<'_> {
                 for item in t {
                     match item {
                         wast::ModuleField::Type(t) => self.types.push(t),
-                        wast::ModuleField::Import(i) => self.imports.push(i),
+                        wast::ModuleField::Import(i) => {
+                            dbg!(i.clone());
+                            match i.clone().item.id {
+                                Some(id) => self.imports_map.insert(id.name(), (i.module, i.field, i.item)),
+                                None => continue,
+                            };
+                        },
                         wast::ModuleField::Func(f) => {
                             match f.id {
                                 Some(f_id) => self.func_map.insert(f_id.name(), f),
@@ -577,6 +597,21 @@ impl<'a> OpenCLCWriter<'_> {
         ret_str
     }
 
+    fn emit_hypercall(&self, hypercall_id: u32, hypercall_id_count: &mut u32, debug: bool) -> String {
+        let mut ret_str = String::from("");
+        // set the hypercall ret flag flag + r
+        ret_str += &format!("\t{}\n", format!("*hypercall_number = {};", hypercall_id));
+        // insert return (we exit back to the VMM)
+        ret_str += &format!("\t{}\n\t{}\n",
+                            format!("*hypercall_continuation = {};", hypercall_id_count),
+                            "return;");
+        // insert return label, the VMM will return to right after the return
+        ret_str += &format!("hypercall_return_stub_{}:\n", hypercall_id_count);
+        // increment hypercall_id_count
+        *hypercall_id_count += 1;
+        ret_str
+    }
+
     fn emit_instructions(&self,
                          instr: &wast::Instruction,
                          offsets: &HashMap<&str, u32>,
@@ -587,6 +622,7 @@ impl<'a> OpenCLCWriter<'_> {
                          previous_stack_size: &mut u32,
                          control_stack: &mut Vec<(String, u32)>,
                          function_id_map: HashMap<&str, u32>,
+                         hypercall_id_count: &mut u32,
                          debug: bool) -> String {
 
         match instr {
@@ -629,20 +665,50 @@ impl<'a> OpenCLCWriter<'_> {
                     wast::Index::Id(id) => id.name(),
                     _ => panic!("Unable to get Id for function call!"),
                 };
-                dbg!(id);
-                dbg!(idx);
-                dbg!(self.func_map.get(id));
-                // if self.func_map.get(id) is none, we have an import
-                // right now we only support WASI imports
-                match self.func_map.get(id) {
-                    Some(_) => {
-                        let func_type_signature = &self.func_map.get(id).unwrap().ty;
-                        let fn_result_type = &(*func_type_signature.clone().inline.unwrap().results)[0];
-                        *previous_stack_size = self.get_size_valtype(fn_result_type);
-                        self.emit_fn_call(*idx, call_ret_map, call_ret_idx, debug)
-                    },
-                    // we have an import...
-                    None => String::from("")
+
+                // check function to see if it is imported
+                // if the function is imported - AND it is a WASI function,
+                // emit the special call stub
+                if self.imports_map.contains_key(id) {
+                    match self.imports_map.get(id) {
+                        Some((wasi_api, Some(wasi_fn_name), item)) => {
+                            dbg!(item);
+                            dbg!(wasi_fn_name);
+                            dbg!(wasi_api);
+                            // okay, now we check to see if the WASI call is supported by the compiler
+                            // if not -> panic, else, emit the call
+                            match (wasi_api, wasi_snapshot_preview1.get(wasi_fn_name)) {
+                                // ignore WASI API scoping for now
+                                (_, Some(true)) => {
+                                    dbg!(wasi_fn_name);
+                                    match wasi_fn_name {
+                                        &"fd_write" => self.emit_hypercall(0, hypercall_id_count, debug),
+                                        &"proc_exit" => self.emit_hypercall(1, hypercall_id_count, debug),
+                                        _ => panic!("Unidentified WASI fn name: {:?}", wasi_fn_name),
+                                    }
+                                },
+                                _ => panic!("WASI import not found, this probably means the system call is not yet implemented: {:?}", wasi_fn_name)
+                            }
+                        },
+                        _ => panic!("Unsupported system call found {:?}", self.imports_map.get(id))
+                    }
+                } else {
+                    // else, this is a normal function call
+                    dbg!(id);
+                    dbg!(idx);
+                    dbg!(self.func_map.get(id));
+                    // if self.func_map.get(id) is none, we have an import
+                    // right now we only support WASI imports
+                    match self.func_map.get(id) {
+                        Some(_) => {
+                            let func_type_signature = &self.func_map.get(id).unwrap().ty;
+                            let fn_result_type = &(*func_type_signature.clone().inline.unwrap().results)[0];
+                            *previous_stack_size = self.get_size_valtype(fn_result_type);
+                            self.emit_fn_call(*idx, call_ret_map, call_ret_idx, debug)
+                        },
+                        // we have an import that isn't a system call...
+                        None => String::from("")
+                    }
                 }
             },
             wast::Instruction::I32LtS => {
@@ -677,7 +743,9 @@ impl<'a> OpenCLCWriter<'_> {
         }
     }
 
-    fn emit_function(&self, func: &wast::Func, call_ret_map: &mut HashMap<&str, u32>, call_ret_idx: &mut u32, function_id_map: HashMap<&str, u32>, debug: bool) -> String {
+    fn emit_function(&self, func: &wast::Func, call_ret_map: &mut HashMap<&str, u32>,
+                     call_ret_idx: &mut u32, function_id_map: HashMap<&str, u32>,
+                     hypercall_id_count: &mut u32, debug: bool) -> String {
         let mut final_string = String::from("");
 
         // store the stack offset for all parameters and locals
@@ -695,7 +763,6 @@ impl<'a> OpenCLCWriter<'_> {
             },
             (wast::FuncKind::Inline{locals, expression}, Some(id), typeuse) => {
                 dbg!("InlineImport function");
-                dbg!(id.name());
                 dbg!("{:?}", locals);
                 dbg!("{:?}", expression);
 
@@ -787,6 +854,7 @@ impl<'a> OpenCLCWriter<'_> {
                                                             previous_stack_size,
                                                             &mut control_stack,
                                                             function_id_map.clone(),
+                                                            hypercall_id_count,
                                                             debug);
                 }
 
@@ -798,6 +866,70 @@ impl<'a> OpenCLCWriter<'_> {
         };
         final_string
     }
+
+    fn emit_memcpy_arr(&self) -> String {
+        let mut result = String::from("");
+        let mut counter = 0;
+        let mut offset_val = 0;
+        let mut arr_len = 0;
+        for temp in &self.data {
+            result += &format!("\t{}{}[] = {{\n", "uchar data_segment_data_", counter);
+            match temp {
+                wast::Data {span, id, kind, data} => {
+                    match kind {
+                        wast::DataKind::Active{memory, offset} => {
+                            match offset.instrs[0] {
+                                wast::Instruction::I32Const(val) => {
+                                    offset_val = val;
+                                    result += &String::from("\t\t");
+                                    for element in data.concat() {
+                                        result += &format!("{},", element);
+                                        arr_len += 1;
+                                    }
+                                },
+                                _ => panic!("Unknown data offset value"),
+                            }
+                        },
+                        wast::DataKind::Passive => panic!("wast::Passive datatype kind found"),
+                    }
+                },
+                _ => panic!("Unknown data type"),
+            };
+            result += &format!("\n\t{}\n", "};");
+            // now emit the memcpy instructions to copy to the heap
+
+            result += &format!("\t{}\n", format!("for(uint idx = 0; idx < {}; idx++) {{", arr_len));
+            result += &format!("\t\t{}\n", format!("((char*)heap_u32)[{} + idx] = data_segment_data_{}[idx];", offset_val, counter));
+            result += &String::from("\t}\n");
+
+            arr_len = 0;
+            counter += 1;
+        }
+
+        result
+    }
+
+    // This function generates the helper kernel that loads the data sections
+    // of a program into memory, it is basically just a memcpy
+    fn generate_data_section(&self, debug: bool) -> String {
+        let mut result = String::from("");
+
+        if debug {
+            result += &String::from("\nvoid data_init(uint *heap_u32) {\n");
+
+            result += &self.emit_memcpy_arr();
+
+            result += &String::from("}\n\n");
+        } else {
+            result += &String::from("\n__kernel void data_init(__global uint *heap_u32) {\n");
+
+            result += &self.emit_memcpy_arr();
+
+            result += &String::from("}\n\n");
+        }
+        result
+    }
+
 
     pub fn write_opencl_file(&self, filename: &str, debug: bool) -> () {
         /*
@@ -811,11 +943,17 @@ impl<'a> OpenCLCWriter<'_> {
 
         // if we are running in debug C-mode, we must define the openCL types
         if debug {
+            
             write!(output, "{}", format!("#include <stdlib.h>\n"));
+            write!(output, "{}", format!("#include \"../includes/wasm_hypercall.h\"\n"));
+
             write!(output, "{}", format!("#define uchar unsigned char\n"));
             write!(output, "{}", format!("#define ulong unsigned long\n"));
             write!(output, "{}", format!("#define uint unsigned int\n"));
         }
+
+        // generate the data loading function
+        write!(output, "{}", self.generate_data_section(debug));
 
         /*
          * Generate code for each function in the file first
@@ -833,9 +971,11 @@ impl<'a> OpenCLCWriter<'_> {
                                             ulong *call_stack,
                                             uchar *branch_value_stack_state,
                                             uchar *loop_value_stack_state,
+                                            int *hypercall_number,
+                                            uint *hypercall_continuation,
                                             uint entry_point) {{\n");
         } else {
-            let header = format!("__kernel void wasm_entry(__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}) {{\n",
+            let header = format!("__kernel void wasm_entry(__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}) {{\n",
                                     "uint  *stack_u32_global,",
                                     "ulong *stack_u64_global,",
                                     "uint  *heap_u32_global,",
@@ -846,12 +986,14 @@ impl<'a> OpenCLCWriter<'_> {
                                     "ulong *call_stack_global,",
                                     "uchar *branch_value_stack_state_global,",
                                     "uchar *loop_value_stack_state_global,",
+                                    "int *hypercall_number_global,",
+                                    "uint *hypercall_continuation_global,",
                                     "uint  *entry_point_global");
             // write thread-local private variables before header
 
             write!(output, "{}", header);
             // TODO: for the openCL launcher, pass the memory stride as a function parameter
-            write!(output, "\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\n\t{}\n",
+            write!(output, "\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\n\t{}\n",
                            "uint  *stack_u32    = (uint*)stack_u32_global+(get_global_id(0) * 1024 * 16);",
                            "ulong *stack_u64    = (ulong*)stack_u32;",
                            "uint  *heap_u32     = (uint *)heap_u32_global+(get_global_id(0) * 1024 * 16);",
@@ -866,6 +1008,8 @@ impl<'a> OpenCLCWriter<'_> {
                            "ulong *call_stack   = (ulong*)call_stack_global+(get_global_id(0) * 1024 * 16);",
                            "ulong *branch_value_stack_state   = (ulong*)branch_value_stack_state_global+(get_global_id(0) * 1024 * 16);",
                            "ulong *loop_value_stack_state   = (ulong*)loop_value_stack_state_global+(get_global_id(0) * 1024 * 16);",
+                           "int *hypercall_number = (int *)hypercall_number_global+(get_global_id(0));",
+                           "uint *hypercall_continuation = (uint *)hypercall_continuation_global+(get_global_id(0));",
                            "uint  entry_point   = entry_point_global[get_global_id(0)];");
         }
         
@@ -887,6 +1031,16 @@ impl<'a> OpenCLCWriter<'_> {
             count += 1;
         }
 
+        // upon entry, first check to see if we are returning from a hypercall
+        // hypercall_number is set to -1 after completing the hypercall
+        write!(output, "\t{}\n", "if (*hypercall_number == -1) {");
+        // if we are returning from the hypercall, goto hypercall_return_table
+        write!(output, "{}", format!("\t\t{}\n", "goto hypercall_return_table;"));
+        write!(output, "\t}}\n");
+
+
+        // function entry point
+
         write!(output, "\t{}\n", "uint caller;");
         write!(output, "\t{}\n", "switch (entry_point) {");
         for key in function_idx_label.keys() {
@@ -894,12 +1048,19 @@ impl<'a> OpenCLCWriter<'_> {
             write!(output, "\t\t\tgoto {};\n", key);
             write!(output, "\t\t\tbreak;\n");
         }
+        write!(output, "\t\tdefault:\n");
+            write!(output, "\t\t\treturn;\n");
         write!(output, "\t}}\n");
 
-        let mut call_ret_map: &mut HashMap<&str, u32> = &mut HashMap::new();
-        let mut call_ret_idx: &mut u32 = &mut 0;
+        // hypercall ID tracker count, we use this number to auto-insert
+        // the return stub later
+        let hypercall_id_count: &mut u32 = &mut 0;
+
+        let call_ret_map: &mut HashMap<&str, u32> = &mut HashMap::new();
+        let call_ret_idx: &mut u32 = &mut 0;
         for function in funcs.clone() {
-            let func = self.emit_function(function, call_ret_map, call_ret_idx, function_idx_label.clone(), debug);
+            let func = self.emit_function(function, call_ret_map, call_ret_idx,
+                                          function_idx_label.clone(), hypercall_id_count, debug);
             write!(output, "{}", func);
         }
 
@@ -915,11 +1076,27 @@ impl<'a> OpenCLCWriter<'_> {
         } 
         write!(output, "\t}}\n");
 
+        // generate the hypercall return table
+
+        write!(output, "{}\n", "hypercall_return_table:");
+        write!(output, "\t{}\n", "switch (*hypercall_continuation) {");
+        for count in 0..*hypercall_id_count {
+            write!(output, "\t\tcase {}:\n", count);
+            write!(output, "\t\t\tgoto hypercall_return_stub_{};\n", count);
+            write!(output, "\t\t\tbreak;\n");
+        } 
+        write!(output, "\t}}\n");
 
         write!(output, "}}\n");
 
         if debug {
             write!(output, "{}", format!("int main(int argc, char *argv[]) {{\n"));
+            
+            write!(output, "{}", format!("\t{}\n", "uvwasi_t uvwasi;"));
+            write!(output, "{}", format!("\t{}\n", "uvwasi_options_t init_options;"));
+            write!(output, "{}", format!("\t{}\n", "uvwasi_options_init(&init_options);"));
+            write!(output, "{}", format!("\t{}\n", "uvwasi_init(&uvwasi, &init_options);"));
+
             write!(output, "{}", format!("\tuint *stack_u32 = calloc(1024, sizeof(uint));\n"));
             write!(output, "{}", format!("\tulong *stack_u64 = (ulong *)stack_u32;\n"));
             write!(output, "{}", format!("\tuint *heap_u32 = (uint *)calloc(1024, sizeof(uint));\n"));
@@ -933,15 +1110,50 @@ impl<'a> OpenCLCWriter<'_> {
 
             write!(output, "{}", format!("\tulong sp = 0;\n"));
             write!(output, "{}", format!("\tulong sfp = 0;\n"));
+            write!(output, "{}", format!("\tint hypercall_number = -2;\n"));
+            write!(output, "{}", format!("\tuint hypercall_continuation = 0;\n"));
             write!(output, "{}", format!("\tstack_frames[sfp] = sp;\n"));
             write!(output, "{}", format!("\tstack_u64[0] = 0x1;\n"));
             write!(output, "{}", format!("\tsp += 2;\n"));
-
+            write!(output, "{}", format!("\tdata_init(heap_u32);\n"));
             // TODO when calling the function get the entry_point for main
 
+
+            // now we are entering the main execution loop, continue until *sp == 0
+            write!(output, "{}", format!("\twhile(1) {{\n"));
+
             write!(output, "{}", format!("{}",
-                    format!("\twasm_entry(stack_u32, stack_u64, heap_u32, heap_u64, stack_frames, &sp, &sfp, call_stack, branch_value_stack_state, loop_value_stack_state, {});\n",
-                            function_idx_label.get("_main").unwrap())));
+                    format!("\t\twasm_entry(stack_u32, stack_u64, heap_u32, heap_u64, stack_frames,
+                                            &sp, &sfp, call_stack, branch_value_stack_state,
+                                            loop_value_stack_state, &hypercall_number, &hypercall_continuation, {});\n",
+                            function_idx_label.get("_start").unwrap())));
+
+                    // if *sp == 0, break
+                    write!(output, "{}", format!("\t\tif (sp == 0) {{\n"));
+                    write!(output, "{}", format!("\t\t\tbreak;\n"));
+
+                    // elif hypercall waiting -> dispatch hypercall
+                    write!(output, "{}", format!("\t\t}} else {{\n"));
+                    // process the hypercall
+                    write!(output, "{}", format!("\t\t\t{}\n", "printf(\"hypercall: %d\\n\", hypercall_number);"));
+                    // hypercall_number == 1, corresponds to proc_exit
+                    write!(output, "{}", format!("\t\t\t{}\n", "switch (hypercall_number) {"));
+                    write!(output, "{}", format!("\t\t\t\t{}\n", "case 0:"));
+                    write!(output, "{}", format!("\t\t\t\t\t{}\n", "vmm_fd_write(&uvwasi, stack_u32, &sp, heap_u32);"));
+                    write!(output, "{}", format!("\t\t\t\t\t{}\n", "break;"));
+                    write!(output, "{}", format!("\t\t\t\t{}\n", "case 1:"));
+                    write!(output, "{}", format!("\t\t\t\t\t{}\n", "goto exit;"));
+                    write!(output, "{}", format!("\t\t\t\t\t{}\n", "break;"));
+                    write!(output, "{}", format!("\t\t\t{}\n", "}"));
+                    // after processing, reset hypercall_number to -1 to reenter the continuation
+                    write!(output, "{}", format!("\t\t\t{}\n", "hypercall_number = -1;"));
+                    write!(output, "{}", format!("\t\t}}\n"));
+
+           
+            write!(output, "{}", format!("\t}}\n"));
+
+            write!(output, "{}", format!("exit:\n"));
+
             // now check the result
             write!(output, "{}", format!("\tprintf(\"%d\\n\", stack_u32[sp]);\n"));
 
@@ -955,7 +1167,7 @@ impl fmt::Debug for OpenCLCWriter<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("OpenCLCWriter")
         .field("types", &self.types)
-        .field("imports", &self.imports)
+        .field("imports", &self.imports_map)
         .field("func_map", &self.func_map)
         .field("tables", &self.tables)
         .field("memory", &self.memory)
