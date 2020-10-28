@@ -1,5 +1,11 @@
 use crate::opencl_writer;
 use crate::opencl_writer::ValType;
+use crate::opencl_writer::mem_interleave::emit_read_u32;
+use crate::opencl_writer::mem_interleave::emit_write_u32;
+use crate::opencl_writer::mem_interleave::emit_read_u64;
+use crate::opencl_writer::mem_interleave::emit_write_u64;
+
+
 use std::collections::HashMap;
 
 pub fn emit_local_get(writer: &opencl_writer::OpenCLCWriter, id: &str, offsets: &HashMap<&str, u32>, type_info: &HashMap<&str, ValType>, debug: bool) -> String {
@@ -9,24 +15,52 @@ pub fn emit_local_get(writer: &opencl_writer::OpenCLCWriter, id: &str, offsets: 
     // stack_frames[*sfp - 1] start of stack frame
     match t {
         wast::ValType::I32 => {
-            format!("\t{}\n\t{}\n",
-                    format!("write_u32((ulong)(stack_u32+*sp), read_u32((ulong)(stack_u32+{}+read_u32((ulong)(stack_frames+*sfp), warp_idx)), warp_idx), warp_idx);", offset),
-                    "*sp += 1;")
+            format!("\t{};\n\t{}\n",
+            &emit_write_u32("(ulong)(stack_u32+*sp)",
+                            "(ulong)stack_u32",
+                            &emit_read_u32(&format!("(ulong)(stack_u32+{}+{})",
+                                                    offset, 
+                                                    &emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx")),
+                                            "(ulong)stack_u32",
+                                            "warp_idx"),
+                            "warp_idx"),
+            "*sp += 1;")
         },
         wast::ValType::I64 => {
-            format!("\t{}\n\t{}\n",
-                    format!("write_u64((ulong)(stack_u32+*sp), read_u64((ulong)(stack_u32+{}+read_u64((ulong)(stack_frames+*sfp), warp_idx)), warp_idx), warp_idx);", offset),
-                    "*sp += 2;")
+            format!("\t{};\n\t{}\n",
+            &emit_write_u64("(ulong)(stack_u32+*sp)",
+                           "(ulong)stack_u32",
+                           &emit_read_u64(&format!("(ulong)(stack_u32+{}+{})",
+                                                  offset, 
+                                                  &emit_read_u64("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx")),
+                                         "(ulong)stack_u32",
+                                         "warp_idx"),
+                           "warp_idx"),
+            "*sp += 2;")
         },
         wast::ValType::F32 => {
-            format!("\t{}\n\t{}\n",
-                    format!("write_u32((ulong)(stack_u32+*sp), read_u32((ulong)(stack_u32+{}+read_u32((ulong)(stack_frames+*sfp), warp_idx)), warp_idx), warp_idx);", offset),
-                    "*sp += 1;")
+            format!("\t{};\n\t{}\n",
+            &emit_write_u32("(ulong)(stack_u32+*sp)",
+                           "(ulong)stack_u32",
+                           &emit_read_u32(&format!("(ulong)(stack_u32+{}+{})",
+                                                  offset, 
+                                                  &emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx")),
+                                         "(ulong)stack_u32",
+                                         "warp_idx"),
+                           "warp_idx"),
+            "*sp += 1;")
         },
         wast::ValType::F64 => {
-            format!("\t{}\n\t{}\n",
-                    format!("write_u64((ulong)(stack_u32+*sp), read_u64((ulong)(stack_u32+{}+read_u64((ulong)(stack_frames+*sfp), warp_idx)), warp_idx), warp_idx);", offset),
-                    "*sp += 2;")
+                format!("\t{};\n\t{}\n",
+                &emit_write_u64("(ulong)(stack_u32+*sp)",
+                               "(ulong)stack_u32",
+                               &emit_read_u64(&format!("(ulong)(stack_u32+{}+{})",
+                                                      offset, 
+                                                      &emit_read_u64("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx")),
+                                             "(ulong)stack_u32",
+                                             "warp_idx"),
+                               "warp_idx"),
+                "*sp += 2;")
         },
         _ => panic!("emit_local_set type not handled")
     }
@@ -40,28 +74,32 @@ pub fn emit_local_set(writer: &opencl_writer::OpenCLCWriter, id: &str, offsets: 
     dbg!(t);
     match t {
         wast::ValType::I32 => {
-            format!("\t{}\n",
-                    format!("write_u32((ulong)(stack_u32+{}+read_u32((ulong)(stack_frames+*sfp), warp_idx)),
-                                       read_u32((ulong)(stack_u32+*sp-1), warp_idx), warp_idx);",
-                            offset))
+            format!("\t{};\n",
+                    emit_write_u32(&format!("(ulong)(stack_u32+{}+{})", offset, &emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx")),
+                                   "(ulong)stack_u32",
+                                   &emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)stack_u32", "warp_idx"),
+                                   "warp_idx"))
         },
         wast::ValType::I64 => {
-            format!("\t{}\n",
-                    format!("write_u64((ulong)(stack_u32+{}+read_u32((ulong)(stack_frames+*sfp), warp_idx)),
-                                    read_u64((ulong)(stack_u32+*sp-2), warp_idx), warp_idx);",
-                            offset))
+            format!("\t{};\n",
+                    emit_write_u64(&format!("(ulong)(stack_u32+{}+{})", offset, &emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx")),
+                                   "(ulong)stack_u32",
+                                   &emit_read_u64("(ulong)(stack_u32+*sp-2)", "(ulong)stack_u32", "warp_idx"),
+                                   "warp_idx"))
         },
         wast::ValType::F32 => {
-            format!("\t{}\n",
-                    format!("write_u32((ulong)(stack_u32+{}+read_u32((ulong)(stack_frames+*sfp), warp_idx)),
-                                       read_u32((ulong)(stack_u32+*sp-1), warp_idx), warp_idx);",
-                            offset))
+            format!("\t{};\n",
+                    emit_write_u32(&format!("(ulong)(stack_u32+{}+{})", offset, &emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx")),
+                                   "(ulong)stack_u32",
+                                   &emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)stack_u32", "warp_idx"),
+                                   "warp_idx"))
         },
         wast::ValType::F64 => {
-            format!("\t{}\n",
-                    format!("write_u64((ulong)(stack_u32+{}+read_u32((ulong)(stack_frames+*sfp), warp_idx)),
-                                    read_u64((ulong)(stack_u32+*sp-2), warp_idx), warp_idx);",
-                            offset))
+            format!("\t{};\n",
+                    emit_write_u64(&format!("(ulong)(stack_u32+{}+{})", offset, &emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx")),
+                                   "(ulong)stack_u32",
+                                   &emit_read_u64("(ulong)(stack_u32+*sp-2)", "(ulong)stack_u32", "warp_idx"),
+                                   "warp_idx"))
         },
         _ => panic!("emit_local_set type not handled")
     }
@@ -80,28 +118,38 @@ pub fn emit_local_tee(writer: &opencl_writer::OpenCLCWriter, id: &str, offsets: 
     match t {
         wast::ValType::I32 => {
             format!("\t{}\n\t{}\n{}",
-                    "write_u32((ulong)(stack_u32+*sp), read_u32((ulong)(stack_u32+*sp-1), warp_idx), warp_idx);",
+                    &emit_write_u32("(ulong)(stack_u32+*sp)",
+                                    "(ulong)(stack_u32)",
+                                    &emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx"),
+                                    "warp_idx"),
                     "*sp += 1;",
                     format!("{}", emit_local_set(writer, id, offsets, type_info, debug)))
         },
         wast::ValType::I64 => {
-            format!("\t{}\n{}",
-                    format!("{}\n\t{}",
-                            "write_u64((ulong)(stack_u32+*sp), read_u64((ulong)(stack_u32+*sp-2), warp_idx), warp_idx);",
-                            "*sp += 2;"),
+            format!("\t{}\n\t{}\n{}",
+                    &emit_write_u64("(ulong)(stack_u32+*sp)",
+                                    "(ulong)(stack_u32)",
+                                    &emit_read_u64("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx"),
+                                    "warp_idx"),
+                    "*sp += 2;",
                     format!("{}", emit_local_set(writer, id, offsets, type_info, debug)))
         },
         wast::ValType::F32 => {
             format!("\t{}\n\t{}\n{}",
-                    "write_u32((ulong)(stack_u32+*sp), read_u32((ulong)(stack_u32+*sp-1), warp_idx), warp_idx);",
+                    &emit_write_u32("(ulong)(stack_u32+*sp)",
+                                    "(ulong)(stack_u32)",
+                                    &emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx"),
+                                    "warp_idx"),
                     "*sp += 1;",
                     format!("{}", emit_local_set(writer, id, offsets, type_info, debug)))
         },
         wast::ValType::F64 => {
-            format!("\t{}\n{}",
-                    format!("{}\n\t{}",
-                            "write_u64((ulong)(stack_u32+*sp), read_u64((ulong)(stack_u32+*sp-2), warp_idx), warp_idx);",
-                            "*sp += 2;"),
+            format!("\t{}\n\t{}\n{}",
+                    &emit_write_u64("(ulong)(stack_u32+*sp)",
+                                    "(ulong)(stack_u32)",
+                                    &emit_read_u64("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx"),
+                                    "warp_idx"),
+                    "*sp += 2;",
                     format!("{}", emit_local_set(writer, id, offsets, type_info, debug)))
         },
         _ => panic!("emit_local_tee type not handled")
@@ -120,9 +168,12 @@ pub fn emit_local(writer: &opencl_writer::OpenCLCWriter, local: &wast::Local, of
                 Some(id) => id.name(),
                 None => panic!("Unexpected local without identifier"),
             };
-            String::from(format!("\t{}\n\t{}\n\t{}\n",
+            String::from(format!("\t{}\n\t{};\n\t{}\n",
                             format!("/* local id: {} */", local_id),
-                            "write_u32((ulong)(stack_u32+*sp), (uint)0, warp_idx);",
+                            &emit_write_u32("(ulong)(stack_u32+*sp)",
+                                            "(ulong)(stack_u32)",
+                                            "(uint)0",
+                                            "warp_idx"),
                             "*sp += 1;"))
         },
         wast::ValType::I64 => {
@@ -130,9 +181,12 @@ pub fn emit_local(writer: &opencl_writer::OpenCLCWriter, local: &wast::Local, of
                 Some(id) => id.name(),
                 None => panic!("Unexpected local without identifier"),
             };
-            String::from(format!("\t{}\n\t{}\n\t{}\n",
+            String::from(format!("\t{}\n\t{};\n\t{}\n",
                             format!("/* local id: {} */", local_id),
-                            "write_u64((ulong)(stack_u32+*sp), (ulong)0, warp_idx);",
+                            &emit_write_u64("(ulong)(stack_u32+*sp)",
+                                            "(ulong)(stack_u32)",
+                                            "(ulong)0",
+                                            "warp_idx"),
                             "*sp += 2;"))
         },
         wast::ValType::F32 => {
@@ -140,9 +194,12 @@ pub fn emit_local(writer: &opencl_writer::OpenCLCWriter, local: &wast::Local, of
                 Some(id) => id.name(),
                 None => panic!("Unexpected local without identifier"),
             };
-            String::from(format!("\t{}\n\t{}\n\t{}\n",
+            String::from(format!("\t{}\n\t{};\n\t{}\n",
                             format!("/* local id: {} */", local_id),
-                            "write_u32((ulong)(stack_u32+*sp), (uint)0, warp_idx);",
+                            &emit_write_u32("(ulong)(stack_u32+*sp)",
+                                            "(ulong)(stack_u32)",
+                                            "(uint)0",
+                                            "warp_idx"),
                             "*sp += 1;"))
         },
         wast::ValType::F64 => {
@@ -150,9 +207,12 @@ pub fn emit_local(writer: &opencl_writer::OpenCLCWriter, local: &wast::Local, of
                 Some(id) => id.name(),
                 None => panic!("Unexpected local without identifier"),
             };
-            String::from(format!("\t{}\n\t{}\n\t{}\n",
+            String::from(format!("\t{}\n\t{};\n\t{}\n",
                             format!("/* local id: {} */", local_id),
-                            "write_u64((ulong)(stack_u32+*sp), (ulong)0, warp_idx);",
+                            &emit_write_u64("(ulong)(stack_u32+*sp)",
+                                            "(ulong)(stack_u32)",
+                                            "(ulong)0",
+                                            "warp_idx"),
                             "*sp += 2;"))
         },
         _ => panic!(),
@@ -160,15 +220,19 @@ pub fn emit_local(writer: &opencl_writer::OpenCLCWriter, local: &wast::Local, of
 }
 
 pub fn emit_i32_const(writer: &opencl_writer::OpenCLCWriter, val: &i32, debug: bool) -> String {
-    format!("\t{}{}, warp_idx);\n\t{}\n",
-            "write_u32((ulong)(stack_u32+*sp), (uint)",
-            val,
+    format!("\t{};\n\t{}\n",
+            &emit_write_u32("(ulong)(stack_u32+*sp)",
+                            "(ulong)(stack_u32)",
+                            &format!("{}", val),
+                            "warp_idx"),
             "*sp += 1;")
 }
 
 pub fn emit_i64_const(writer: &opencl_writer::OpenCLCWriter, val: &i64, debug: bool) -> String {
-    format!("\t{}{}, warp_idx);\n\t{}\n",
-            "write_u64((ulong)(stack_u32+*sp), (ulong)",
-            val,
+    format!("\t{};\n\t{}\n",
+            &emit_write_u64("(ulong)(stack_u32+*sp)",
+                            "(ulong)(stack_u32)",
+                            &format!("{}", val),
+                            "warp_idx"),
             "*sp += 2;")
 }

@@ -455,12 +455,10 @@ int main(int argc, char** argv)
 
     // debug, read the function return values onto the stack
 
-
-
     uchar *stack_debug = malloc(STACK_SIZE_BYTES * WARP_SIZE);
     clEnqueueReadBuffer(commands, stack_u32, CL_TRUE, 0, STACK_SIZE_BYTES * WARP_SIZE, stack_debug, 0, NULL, NULL);  
-    
     // no interleave
+
     /*
     for (uint idx = 0; idx < WARP_SIZE; idx++) {
         printf("%x, ", stack_debug[(1024 * 16 * idx) * 4]);
@@ -470,10 +468,9 @@ int main(int argc, char** argv)
 
     // for printing w/interleave
     for (uint idx = 0; idx < WARP_SIZE; idx++) {
-        printf("%x, ", stack_debug[idx * WARP_SIZE]);
+        printf("%x, ", stack_debug[idx]);
     }
     printf("\n");
-
     // Shutdown and cleanup
     //
     //clReleaseMemObject(input);

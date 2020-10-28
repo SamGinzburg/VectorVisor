@@ -85,10 +85,12 @@ pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, fn_name: &str, fun
                 // compute the offset to read from the bottom of the stack
                 if sp_counter > 0 {
                     offset = format!("write_u32((ulong)(stack_u32+read_u32((ulong)(stack_frames+*sfp), warp_idx)),
-                                                read_u32((ulong)(stack_u32+*sp-{}-1), warp_idx),
+                                                (ulong)stack_u32,
+                                                read_u32((ulong)(stack_u32+*sp-{}-1), (ulong)stack_u32, warp_idx),
                                                 warp_idx);", sp_counter);
                 } else {
-                    offset = format!("write_u32((ulong)(stack_u32+read_u32((ulong)(stack_frames+*sfp), warp_idx)),
+                    offset = format!("write_u32((ulong)(stack_u32+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_u32, warp_idx)),
+                                                (ulong)stack_u32,
                                                 read_u32((ulong)(stack_u32+*sp-1), warp_idx),
                                                 warp_idx);");
                 }
@@ -98,12 +100,14 @@ pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, fn_name: &str, fun
             wast::ValType::I64 => {
                 // compute the offset to read from the bottom of the stack
                 if sp_counter > 0 {
-                    offset = format!("write_u64((ulong)(stack_u32+read_u32((ulong)(stack_frames+*sfp), warp_idx)),
-                                                read_u64((ulong)(stack_u32+*sp-{}-2), warp_idx),
+                    offset = format!("write_u64((ulong)(stack_u32+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_u32, warp_idx)),
+                                                (ulong)stack_u32,
+                                                read_u64((ulong)(stack_u32+*sp-{}-2), (ulong)stack_u32, warp_idx),
                                                 warp_idx);", sp_counter);
                 } else {
-                    offset = format!("write_u64((ulong)(stack_u32+read_u32((ulong)(stack_frames+*sfp), warp_idx)),
-                                                read_u64((ulong)(stack_u32+*sp-2), warp_idx),
+                    offset = format!("write_u64((ulong)(stack_u32+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_u32, warp_idx)),
+                                                (ulong)stack_u32,
+                                                read_u64((ulong)(stack_u32+*sp-2), (ulong)stack_u32, warp_idx),
                                                 warp_idx);");
                 }
                 final_str += &format!("\t{}\n", offset);
@@ -113,10 +117,12 @@ pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, fn_name: &str, fun
                 // compute the offset to read from the bottom of the stack
                 if sp_counter > 0 {
                     offset = format!("write_u32((ulong)(stack_u32+read_u32((ulong)(stack_frames+*sfp), warp_idx)),
-                                                read_u32((ulong)(stack_u32+*sp-{}-1), warp_idx),
+                                                (ulong)stack_u32,
+                                                read_u32((ulong)(stack_u32+*sp-{}-1), (ulong)stack_u32, warp_idx),
                                                 warp_idx);", sp_counter);
                 } else {
-                    offset = format!("write_u32((ulong)(stack_u32+read_u32((ulong)(stack_frames+*sfp), warp_idx)),
+                    offset = format!("write_u32((ulong)(stack_u32+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_u32, warp_idx)),
+                                                (ulong)stack_u32,
                                                 read_u32((ulong)(stack_u32+*sp-1), warp_idx),
                                                 warp_idx);");
                 }
@@ -126,11 +132,15 @@ pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, fn_name: &str, fun
             wast::ValType::F64 => {
                 // compute the offset to read from the bottom of the stack
                 if sp_counter > 0 {
-                    offset = format!("write_u64((ulong)(stack_u32+read_u32((ulong)(stack_frames+*sfp), warp_idx)),
-                                                read_u64((ulong)(stack_u32+*sp-{}-2), warp_idx),
+                    offset = format!("write_u64((ulong)(stack_u32+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_u32, warp_idx)),
+                                                (ulong)stack_u32,
+                                                read_u64((ulong)(stack_u32+*sp-{}-2), (ulong)stack_u32, warp_idx),
                                                 warp_idx);", sp_counter);
                 } else {
-                    offset = String::from("*(ulong *)(stack_u32+stack_frames[*sfp]) = *(ulong *)(stack_u32 + *sp - 2);");
+                    offset = format!("write_u64((ulong)(stack_u32+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_u32, warp_idx)),
+                                                (ulong)stack_u32,
+                                                read_u64((ulong)(stack_u32+*sp-2), (ulong)stack_u32, warp_idx),
+                                                warp_idx);");
                 }
                 final_str += &format!("\t{}\n", offset);
                 sp_counter += 2;

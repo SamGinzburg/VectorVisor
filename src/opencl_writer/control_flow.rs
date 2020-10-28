@@ -52,7 +52,7 @@ pub fn emit_br_if(writer: &opencl_writer::OpenCLCWriter, idx: wast::Index, fn_na
     let mut ret_str = String::from("");
 
     // br_if is just an if statement, if cond is true => br l else continue
-    ret_str += &format!("\tif ({} != 0) {{\n", "read_u32((ulong)(stack_u32+*sp-1), warp_idx)");
+    ret_str += &format!("\tif ({} != 0) {{\n", "read_u32((ulong)(stack_u32+*sp-1), (ulong)(stack_u32), warp_idx)");
     ret_str += &emit_br(writer, idx, fn_name, prev_stack_size, debug);
     ret_str += &format!("\t}}\n");
 
@@ -82,14 +82,14 @@ pub fn emit_end<'a>(writer: &opencl_writer::OpenCLCWriter<'a>, id: &Option<wast:
     // 1-> loop (label was already inserted at the top, this is a no-op here)
     if block_type == 0 {
         format!("\n{}:\n\t{}\n", label,
-                format!("*sp = read_u16((ulong)(branch_value_stack_state+(*sfp*64)+{}+({}*4096)), warp_idx);",
+                format!("*sp = read_u16((ulong)(branch_value_stack_state+(*sfp*64)+{}+({}*4096)), (ulong)(branch_value_stack_state), warp_idx);",
                         branch_idx_u32, function_id_map.get(fn_name).unwrap()))
     } else {
         let mut result = String::from("");
         result += &format!("\t/* END (loop: {}) */\n", label);
         
         // pop the control flow stack entry (reset the stack to the state it was in before the loop)
-        result += &format!("\t*sp = read_u16((ulong)(branch_value_stack_state+(*sfp*64)+{}+({}*4096)), warp_idx);\n",
+        result += &format!("\t*sp = read_u16((ulong)(branch_value_stack_state+(*sfp*64)+{}+({}*4096)), (ulong)(branch_value_stack_state), warp_idx);\n",
                             branch_idx_u32, function_id_map.get(fn_name).unwrap());
 
         result
@@ -124,7 +124,7 @@ pub fn emit_loop(writer: &opencl_writer::OpenCLCWriter, block: &wast::BlockType,
     // sfp = stack frame ptr, idx = branch ID, func_id = the numerical id of the function
 
     result += &format!("\t{}\n",
-                        format!("write_u16((ulong)(loop_value_stack_state+(*sfp*64)+{}+({} *4096)), (ushort)*sp, warp_idx);",
+                        format!("write_u16((ulong)(loop_value_stack_state+(*sfp*64)+{}+({} *4096)), (ulong)(branch_value_stack_state), (ushort)*sp, warp_idx);",
                         branch_idx_u32, function_id_map.get(fn_name).unwrap()));
 
     // emit a label here for the END instruction to jump back here to restart the loop
@@ -154,7 +154,7 @@ pub fn emit_block(writer: &opencl_writer::OpenCLCWriter, block: &wast::BlockType
     // function private data
 
 
-    // we have to emulate a 2-D array, since openCL does not support double pts in v1.2
+    // we have to emulate a 2-D array, since openCL does not support double ptrs in v1.2
     // the format is (64 x 64 * number of functions),
     // so [..........] 4096 entries per function consecutively
     // lookups are done as: branch_value_stack_state[(*sfp * 64) + idx + (func_id * 4096)]
@@ -162,7 +162,7 @@ pub fn emit_block(writer: &opencl_writer::OpenCLCWriter, block: &wast::BlockType
 
     result += &format!("\t{}\n",
                         // write_
-                       format!("branch_value_stack_state[(*sfp * 64) + {} + ({} * 4096)] = *sp;",
+                       format!("write_u16((ulong)(loop_value_stack_state+(*sfp*64)+{}+({} *4096)), (ulong)(branch_value_stack_state), (ushort)*sp, warp_idx);",
                        branch_idx_u32, function_id_map.get(fn_name).unwrap()));
     // we don't emit a label for block statements here, any br's goto the END of the block
     // we don't need to modify the sp here, we will do all stack unwinding in the br instr
