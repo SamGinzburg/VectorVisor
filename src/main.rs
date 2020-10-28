@@ -6,8 +6,9 @@ use wast::parser::{ParseBuffer};
 fn main() {
 
     //let file = fs::read_to_string("examples/arithmetic/lt.wat");
-    //let file = fs::read_to_string("examples/branches/loop.wat");
-    let file = fs::read_to_string("examples/wasi_examples/fd_write.wat");
+    //let file = fs::read_to_string("examples/call/call64.wat");
+    let file = fs::read_to_string("examples/branches/loop.wat");
+    //let file = fs::read_to_string("examples/wasi_examples/fd_write.wat");
     
     let filedata = match file {
         Ok(text) => text,
@@ -21,7 +22,7 @@ fn main() {
 
     println!("{:?}", result);
     match result {
-        Ok(_) => ast.write_opencl_file("test.c", false),
+        Ok(_) => ast.write_opencl_file("test.cl", 1, false),
         Err(_) => println!("Unable to parse wat file"),
     }
 

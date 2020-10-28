@@ -1,5 +1,5 @@
 (module
- (func $_main (local $x i32)
+ (func $_start (local $x i32)
   ;; x = 0
   (i32.const 0)
   (set_local $x)
@@ -15,5 +15,5 @@
       (br_if $B0)
       (br $L0)))
     return)
-  (export "_main" (func $_main))
+  (export "_start" (func $_start))
 )

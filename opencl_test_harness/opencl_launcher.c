@@ -63,7 +63,7 @@ cl_program build_program(cl_context ctx, cl_device_id dev, const char* filename)
     define a macro with the option -DMACRO=VALUE and turn off optimization 
     with -cl-opt-disable.
     */
-    err = clBuildProgram(program, 0, NULL, NULL, NULL, NULL);
+    err = clBuildProgram(program, 0, NULL, "-DNUM_THREADS=16", NULL, NULL);
     if(err < 0) {
         /* Find size of log and print to std output */
         clGetProgramBuildInfo(program, dev, CL_PROGRAM_BUILD_LOG, 
@@ -125,6 +125,7 @@ int main(int argc, char** argv)
     cl_mem loop_value_stack_state;
     cl_mem hypercall_num;
     cl_mem hypercall_continuation;
+    cl_mem thread_ids;
     cl_mem entry;
 
     // the setup data
@@ -140,7 +141,7 @@ int main(int argc, char** argv)
 
     for (uint warp_idx = 0; warp_idx < WARP_SIZE; warp_idx++) {
         uvwasi_options_init(&init_options[warp_idx]);
-        uvwasi_init(&uvwasi, &init_options[warp_idx]);
+        uvwasi_init(&uvwasi[warp_idx], &init_options[warp_idx]);
     }
 
 	stack_frames_setup[sfp_setup - 1] = sp_setup;
@@ -233,10 +234,12 @@ int main(int argc, char** argv)
     hypercall_continuation = clCreateBuffer(context,  CL_MEM_READ_WRITE,  sizeof(ulong) * WARP_SIZE, NULL, NULL);
 
     entry = clCreateBuffer(context,  CL_MEM_READ_WRITE,  sizeof(ulong) * WARP_SIZE, NULL, NULL);
+    
+    thread_ids = clCreateBuffer(context,  CL_MEM_READ_WRITE,  sizeof(ushort) * WARP_SIZE, NULL, NULL);
 
     if (!stack_u32 || !heap_u32 || !stack_frames || 
         !sp || !sfp || !call_stack || !loop_value_stack_state 
-        || !branch_value_stack_state || !entry || !hypercall_num || !hypercall_continuation) {
+        || !branch_value_stack_state || !entry || !hypercall_num || !hypercall_continuation || !thread_ids) {
         printf("Error: Failed to allocate device memory!\n");
         exit(1);
     }
@@ -262,7 +265,7 @@ int main(int argc, char** argv)
         err |= clEnqueueWriteBuffer(commands, entry, CL_TRUE, count * sizeof(uint), sizeof(uint), &entry_setup, 0, NULL, NULL);
         printf("err:%d\n", err);
         // set the default hypercall_number to -2
-        err |= clEnqueueWriteBuffer(commands, hypercall_num, CL_TRUE, count * sizeof(ulong), sizeof(ulong), &hypercall_num_setup, 0, NULL, NULL);
+        err |= clEnqueueWriteBuffer(commands, hypercall_num, CL_TRUE, count * sizeof(uint), sizeof(uint), &hypercall_num_setup, 0, NULL, NULL);
         printf("err:%d\n", err);
 
         if (err != CL_SUCCESS)
@@ -293,6 +296,7 @@ int main(int argc, char** argv)
     
     err |= clSetKernelArg(data_kernel, 0, sizeof(cl_mem), &heap_u32);
 
+
     if (err != CL_SUCCESS)
     {
         printf("Error: Failed to set kernel arguments! %d\n", err);
@@ -319,7 +323,7 @@ int main(int argc, char** argv)
     cl_event event_timer;
     ulong starttime;
     ulong endtime;
-
+    clFinish(commands);
 
     // TODO: for each kernel, launch a secondary setup kernel that initializes all 
     // of the (data ...) sections (much better to do this on the GPU than on the CPU)
@@ -335,6 +339,9 @@ int main(int argc, char** argv)
         clock_t begin = clock();
         while (1) {
             printf("launching kernel\n");
+            clGetEventProfilingInfo(event_timer, CL_PROFILING_COMMAND_START, sizeof(ulong), &starttime, NULL);
+            clGetEventProfilingInfo(event_timer, CL_PROFILING_COMMAND_END, sizeof(ulong), &endtime, NULL);
+
             err = clEnqueueNDRangeKernel(commands, kernel, 1, NULL, &global, &local, 0, NULL, &event_timer);
             if (err) {
                 printf("Error: Failed to execute kernel!: %d\n", err);
@@ -342,8 +349,6 @@ int main(int argc, char** argv)
             }
             // Wait for the command commands to get serviced before reading back results
             clFinish(commands);
-            clGetEventProfilingInfo(event_timer, CL_PROFILING_COMMAND_START, sizeof(ulong), &starttime, NULL);
-            clGetEventProfilingInfo(event_timer, CL_PROFILING_COMMAND_END, sizeof(ulong), &endtime, NULL);
             printf("kernel finished\n");
             printf("elapsed time: %f\n", (float)(endtime - starttime));
 

@@ -98,8 +98,6 @@ impl<'a> OpenCLCWriter<'_> {
          * When emitting locals we know we have access to the global stack.
          * We zero-init all values.
          * 
-         * We have an inefficient stack layout right now... we will fix later if it is needed
-         * 
          */
         match local.ty {
             wast::ValType::I32 => {
@@ -109,7 +107,7 @@ impl<'a> OpenCLCWriter<'_> {
                 };
                 String::from(format!("\t{}\n\t{}\n\t{}\n",
                                 format!("/* local id: {} */", local_id),
-                                "stack_u32[*sp] = 0;",
+                                "write_u32((ulong)(stack_u32+*sp), (uint)0, warp_idx);",
                                 "*sp += 1;"))
             },
             wast::ValType::I64 => {
@@ -119,7 +117,7 @@ impl<'a> OpenCLCWriter<'_> {
                 };
                 String::from(format!("\t{}\n\t{}\n\t{}\n",
                                 format!("/* local id: {} */", local_id),
-                                "*((ulong *)stack_u32+*sp) = 0;",
+                                "write_u64((ulong)(stack_u32+*sp), (ulong)0, warp_idx);",
                                 "*sp += 2;"))
             },
             wast::ValType::F32 => {
@@ -129,7 +127,7 @@ impl<'a> OpenCLCWriter<'_> {
                 };
                 String::from(format!("\t{}\n\t{}\n\t{}\n",
                                 format!("/* local id: {} */", local_id),
-                                "stack_u32[*sp] = 0;",
+                                "write_u32((ulong)(stack_u32+*sp), (uint)0, warp_idx);",
                                 "*sp += 1;"))
             },
             wast::ValType::F64 => {
@@ -139,7 +137,7 @@ impl<'a> OpenCLCWriter<'_> {
                 };
                 String::from(format!("\t{}\n\t{}\n\t{}\n",
                                 format!("/* local id: {} */", local_id),
-                                "*((ulong *)stack_u32+*sp) = 0;",
+                                "write_u64((ulong)(stack_u32+*sp), (ulong)0, warp_idx);",
                                 "*sp += 2;"))
             },
             _ => panic!(),
@@ -147,13 +145,17 @@ impl<'a> OpenCLCWriter<'_> {
     }
 
     fn emit_i32_const(&self, val: &i32, debug: bool) -> String {
-        format!("\tstack_u32[*sp] = (uint){};\n\t*sp += 1;\n", val)
+        format!("\t{}{}, warp_idx);\n\t{}\n",
+                "write_u32((ulong)(stack_u32+*sp), (uint)",
+                val,
+                "*sp += 1;")
     }
 
     fn emit_i64_const(&self, val: &i64, debug: bool) -> String {
-        format!("\t{}{};\n\t*sp += 2;\n",
-                "*(ulong *)(stack_u32+*sp) = (ulong)",
-                val)
+        format!("\t{}{}, warp_idx);\n\t{}\n",
+                "write_u64((ulong)(stack_u32+*sp), (ulong)",
+                val,
+                "*sp += 2;")
     }
 
     fn get_size_valtype(&self, t: &ValType) -> u32 {
@@ -174,21 +176,22 @@ impl<'a> OpenCLCWriter<'_> {
         match t {
             wast::ValType::I32 => {
                 format!("\t{}\n\t{}\n",
-                        format!("stack_u32[*sp] = *(uint *)(stack_u32 + stack_frames[*sfp] + {});", offset),
+                        format!("write_u32((ulong)(stack_u32+*sp), read_u32((ulong)(stack_u32+{}+read_u32((ulong)(stack_frames+*sfp), warp_idx)), warp_idx), warp_idx);", offset),
                         "*sp += 1;")
             },
             wast::ValType::I64 => {
                 format!("\t{}\n\t{}\n",
-                        format!("*((ulong *)(stack_u32+*sp)) = *(ulong *)(stack_u32 + stack_frames[*sfp] + {});", offset),
+                        format!("write_u64((ulong)(stack_u32+*sp), read_u64((ulong)(stack_u32+{}+read_u64((ulong)(stack_frames+*sfp), warp_idx)), warp_idx), warp_idx);", offset),
                         "*sp += 2;")
             },
             wast::ValType::F32 => {
-                format!("\t{}\n",
-                        format!("stack_u32[*sp] = *(uint *)(stack_u32 + stack_frames[*sfp] + {});", offset))
+                format!("\t{}\n\t{}\n",
+                        format!("write_u32((ulong)(stack_u32+*sp), read_u32((ulong)(stack_u32+{}+read_u32((ulong)(stack_frames+*sfp), warp_idx)), warp_idx), warp_idx);", offset),
+                        "*sp += 1;")
             },
             wast::ValType::F64 => {
                 format!("\t{}\n\t{}\n",
-                        format!("*((ulong *)(stack_u32+*sp)) = *(ulong *)(stack_u32 + stack_frames[*sfp] + {});", offset),
+                        format!("write_u64((ulong)(stack_u32+*sp), read_u64((ulong)(stack_u32+{}+read_u64((ulong)(stack_frames+*sfp), warp_idx)), warp_idx), warp_idx);", offset),
                         "*sp += 2;")
             },
             _ => panic!("emit_local_set type not handled")
@@ -204,19 +207,27 @@ impl<'a> OpenCLCWriter<'_> {
         match t {
             wast::ValType::I32 => {
                 format!("\t{}\n",
-                        format!("*(uint *)(stack_u32 + stack_frames[*sfp] + {}) = stack_u32[*sp - 1];", offset))
+                        format!("write_u32((ulong)(stack_u32+{}+read_u32((ulong)(stack_frames+*sfp), warp_idx)),
+                                           read_u32((ulong)(stack_u32+*sp-1), warp_idx), warp_idx);",
+                                offset))
             },
             wast::ValType::I64 => {
                 format!("\t{}\n",
-                        format!("*(ulong *)(stack_u32 + stack_frames[*sfp] + {}) = *(ulong *)(stack_u32+*sp-2);", offset))
+                        format!("write_u64((ulong)(stack_u32+{}+read_u32((ulong)(stack_frames+*sfp), warp_idx)),
+                                        read_u64((ulong)(stack_u32+*sp-2), warp_idx), warp_idx);",
+                                offset))
             },
             wast::ValType::F32 => {
                 format!("\t{}\n",
-                        format!("*(uint *)(stack_u32 + stack_frames[*sfp] + {}) = stack_u32[*sp - 1];", offset))
+                        format!("write_u32((ulong)(stack_u32+{}+read_u32((ulong)(stack_frames+*sfp), warp_idx)),
+                                           read_u32((ulong)(stack_u32+*sp-1), warp_idx), warp_idx);",
+                                offset))
             },
             wast::ValType::F64 => {
                 format!("\t{}\n",
-                        format!("*(ulong *)(stack_u32 + stack_frames[*sfp] + {}) = *(ulong *)(stack_u32+*sp-2);", offset))
+                        format!("write_u64((ulong)(stack_u32+{}+read_u32((ulong)(stack_frames+*sfp), warp_idx)),
+                                        read_u64((ulong)(stack_u32+*sp-2), warp_idx), warp_idx);",
+                                offset))
             },
             _ => panic!("emit_local_set type not handled")
         }
@@ -235,24 +246,28 @@ impl<'a> OpenCLCWriter<'_> {
         match t {
             wast::ValType::I32 => {
                 format!("\t{}\n\t{}\n{}",
-                        "stack_u32[*sp] = stack_u32[*sp - 1];",
+                        "write_u32((ulong)(stack_u32+*sp), read_u32((ulong)(stack_u32+*sp-1), warp_idx), warp_idx);",
                         "*sp += 1;",
                         format!("{}", self.emit_local_set(id, offsets, type_info, debug)))
             },
             wast::ValType::I64 => {
                 format!("\t{}\n{}",
-                        format!("{};\n\t{}", "*(ulong *)(stack_u32+*sp) = *(ulong *)(stack_u32+*sp-2)", "*sp += 2;"),
+                        format!("{}\n\t{}",
+                                "write_u64((ulong)(stack_u32+*sp), read_u64((ulong)(stack_u32+*sp-2), warp_idx), warp_idx);",
+                                "*sp += 2;"),
                         format!("{}", self.emit_local_set(id, offsets, type_info, debug)))
             },
             wast::ValType::F32 => {
                 format!("\t{}\n\t{}\n{}",
-                        "stack_u32[*sp] = stack_u32[*sp - 1];",
+                        "write_u32((ulong)(stack_u32+*sp), read_u32((ulong)(stack_u32+*sp-1), warp_idx), warp_idx);",
                         "*sp += 1;",
                         format!("{}", self.emit_local_set(id, offsets, type_info, debug)))
             },
             wast::ValType::F64 => {
                 format!("\t{}\n{}",
-                        format!("{};\n\t{}", "*(ulong *)(stack_u32+*sp) = *(ulong *)(stack_u32+*sp-2)", "*sp += 2;"),
+                        format!("{}\n\t{}",
+                                "write_u64((ulong)(stack_u32+*sp), read_u64((ulong)(stack_u32+*sp-2), warp_idx), warp_idx);",
+                                "*sp += 2;"),
                         format!("{}", self.emit_local_set(id, offsets, type_info, debug)))
             },
             _ => panic!("emit_local_tee type not handled")
@@ -262,7 +277,9 @@ impl<'a> OpenCLCWriter<'_> {
     // binops have both values popped off the stack
     fn emit_i32_add(&self, debug: bool) -> String {
         format!("\t{}\n\t{}\n",
-                "stack_u32[*sp-2] = stack_u32[*sp - 1] + stack_u32[*sp - 2];",
+                "write_u32((ulong)(stack_u32+*sp-2),
+                           (int)read_u32((ulong)(stack_u32+*sp-1), warp_idx) + (int)read_u32((ulong)(stack_u32+*sp-2), warp_idx),
+                           warp_idx);",
                 "*sp -= 1;")
     }
 
@@ -271,8 +288,10 @@ impl<'a> OpenCLCWriter<'_> {
      */
     fn emit_i64_add(&self, debug: bool) -> String {
         format!("\t{}\n\t{}\n",
-                "*(long*)(stack_u32+*sp-4) = *(long*)(stack_u32+*sp-2) + *(long*)(stack_u32+*sp-4);",
-                "*sp -= 2")
+                "write_u64((ulong)(stack_u32+*sp-4),
+                           (long)read_u64((ulong)(stack_u32+*sp-2), warp_idx) + (long)read_u64((ulong)(stack_u32+*sp-4), warp_idx),
+                           warp_idx);",
+                "*sp -= 2;")
     }
 
     /*
@@ -280,14 +299,17 @@ impl<'a> OpenCLCWriter<'_> {
      */
     fn emit_i32_lt_s(&self, debug: bool) -> String {
         format!("\t{}\n\t{}\n",
-                "stack_u32[*sp-1] = (uint)((int)stack_u32[*sp - 1]) < ((int)stack_u32[*sp - 2]);",
-                // move sp back by 1
+                "write_u32((ulong)(stack_u32+*sp-2),
+                           (int)read_u32((ulong)(stack_u32+*sp-1), warp_idx) < (int)read_u32((ulong)(stack_u32+*sp-2), warp_idx),
+                           warp_idx);",
                 "*sp -= 1;")
     }
 
     fn emit_i32_eq(&self, debug: bool) -> String {
         format!("\t{}\n",
-                "stack_u32[*sp-1] = (int)((int)stack_u32[*sp - 1]) == ((int)stack_u32[*sp - 2]);")
+                "write_u32((ulong)(stack_u32+*sp-1),
+                           (int)(read_u32((ulong)(stack_u32+*sp-1), warp_idx)) == (int)(read_u32((ulong)(stack_u32+*sp-2), warp_idx)),
+                           warp_idx);")
     }
 
     fn emit_block(&self, block: &wast::BlockType, fn_name: &str, function_id_map: HashMap<&str, u32>, debug: bool) -> String {
@@ -317,6 +339,7 @@ impl<'a> OpenCLCWriter<'_> {
         // sfp = stack frame ptr, idx = branch ID, func_id = the numerical id of the function
 
         result += &format!("\t{}\n",
+                            // write_
                            format!("branch_value_stack_state[(*sfp * 64) + {} + ({} * 4096)] = *sp;",
                            branch_idx_u32, function_id_map.get(fn_name).unwrap()));
         // we don't emit a label for block statements here, any br's goto the END of the block
@@ -352,7 +375,7 @@ impl<'a> OpenCLCWriter<'_> {
         // sfp = stack frame ptr, idx = branch ID, func_id = the numerical id of the function
 
         result += &format!("\t{}\n",
-                           format!("loop_value_stack_state[(*sfp * 64) + {} + ({} * 4096)] = *sp;",
+                           format!("write_u16((ulong)(loop_value_stack_state+(*sfp*64)+{}+({} *4096)), (ushort)*sp, warp_idx);",
                            branch_idx_u32, function_id_map.get(fn_name).unwrap()));
 
         // emit a label here for the END instruction to jump back here to restart the loop
@@ -388,14 +411,14 @@ impl<'a> OpenCLCWriter<'_> {
         // 1-> loop (label was already inserted at the top, this is a no-op here)
         if block_type == 0 {
             format!("\n{}:\n\t{}\n", label,
-                    format!("*sp = branch_value_stack_state[(*sfp * 64) + {} + ({} * 4096)];",
+                    format!("*sp = read_u16((ulong)(branch_value_stack_state+(*sfp*64)+{}+({}*4096)), warp_idx);",
                             branch_idx_u32, function_id_map.get(fn_name).unwrap()))
         } else {
             let mut result = String::from("");
             result += &format!("\t/* END (loop: {}) */\n", label);
             
             // pop the control flow stack entry (reset the stack to the state it was in before the loop)
-            result += &format!("\t*sp = loop_value_stack_state[(*sfp * 64) + {} + ({} * 4096)];\n",
+            result += &format!("\t*sp = read_u16((ulong)(branch_value_stack_state+(*sfp*64)+{}+({}*4096)), warp_idx);\n",
                                 branch_idx_u32, function_id_map.get(fn_name).unwrap());
 
             result
@@ -433,7 +456,7 @@ impl<'a> OpenCLCWriter<'_> {
 
         // get the return type of the function
         let return_size = self.get_size_valtype(&func_type_signature.clone().inline.unwrap().results[0]);
-
+        println!("return size: {}", return_size);
         let result = if offset > 0 {
             format!("\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n{}\n\t{}\n",
             // move the stack pointer back by the offset required by calling parameters
@@ -485,9 +508,13 @@ impl<'a> OpenCLCWriter<'_> {
                 wast::ValType::I32 => {
                     // compute the offset to read from the bottom of the stack
                     if sp_counter > 0 {
-                        offset = format!("stack_u32[stack_frames[*sfp]] = stack_u32[*sp - {} - 1];", sp_counter);
+                        offset = format!("write_u32((ulong)(stack_u32+read_u32((ulong)(stack_frames+*sfp), warp_idx)),
+                                                    read_u32((ulong)(stack_u32+*sp-{}-1), warp_idx),
+                                                    warp_idx);", sp_counter);
                     } else {
-                        offset = String::from("stack_u32[stack_frames[*sfp]] = stack_u32[*sp - 1];");
+                        offset = format!("write_u32((ulong)(stack_u32+read_u32((ulong)(stack_frames+*sfp), warp_idx)),
+                                                    read_u32((ulong)(stack_u32+*sp-1), warp_idx),
+                                                    warp_idx);");
                     }
                     final_str += &format!("\t{}\n", offset);
                     sp_counter += 1;
@@ -495,9 +522,13 @@ impl<'a> OpenCLCWriter<'_> {
                 wast::ValType::I64 => {
                     // compute the offset to read from the bottom of the stack
                     if sp_counter > 0 {
-                        offset = format!("*(ulong *)(stack_u32+stack_frames[*sfp]]) = *(ulong *)(stack_u32+*sp-{}-2);", sp_counter);
+                        offset = format!("write_u64((ulong)(stack_u32+read_u32((ulong)(stack_frames+*sfp), warp_idx)),
+                                                    read_u64((ulong)(stack_u32+*sp-{}-2), warp_idx),
+                                                    warp_idx);", sp_counter);
                     } else {
-                        offset = String::from("*(ulong *)(stack_u32+stack_frames[*sfp]) = *(ulong *)(stack_u32 + *sp - 2);");
+                        offset = format!("write_u64((ulong)(stack_u32+read_u32((ulong)(stack_frames+*sfp), warp_idx)),
+                                                    read_u64((ulong)(stack_u32+*sp-2), warp_idx),
+                                                    warp_idx);");
                     }
                     final_str += &format!("\t{}\n", offset);
                     sp_counter += 2;
@@ -505,9 +536,13 @@ impl<'a> OpenCLCWriter<'_> {
                 wast::ValType::F32 => {
                     // compute the offset to read from the bottom of the stack
                     if sp_counter > 0 {
-                        offset = format!("stack_u32[stack_frames[*sfp]] = stack_u32[*sp - {} - 1];", sp_counter);
+                        offset = format!("write_u32((ulong)(stack_u32+read_u32((ulong)(stack_frames+*sfp), warp_idx)),
+                                                    read_u32((ulong)(stack_u32+*sp-{}-1), warp_idx),
+                                                    warp_idx);", sp_counter);
                     } else {
-                        offset = String::from("stack_u32[stack_frames[*sfp]] = stack_u32[*sp - 1];");
+                        offset = format!("write_u32((ulong)(stack_u32+read_u32((ulong)(stack_frames+*sfp), warp_idx)),
+                                                    read_u32((ulong)(stack_u32+*sp-1), warp_idx),
+                                                    warp_idx);");
                     }
                     final_str += &format!("\t{}\n", offset);
                     sp_counter += 1;
@@ -515,9 +550,11 @@ impl<'a> OpenCLCWriter<'_> {
                 wast::ValType::F64 => {
                     // compute the offset to read from the bottom of the stack
                     if sp_counter > 0 {
-                        offset = format!("*(ulong *)(stack_u32+stack_frames[*sfp - 1]]) = *(ulong *)(stack_u32+*sp-{}-2);", sp_counter);
+                        offset = format!("write_u64((ulong)(stack_u32+read_u32((ulong)(stack_frames+*sfp), warp_idx)),
+                                                    read_u64((ulong)(stack_u32+*sp-{}-2), warp_idx),
+                                                    warp_idx);", sp_counter);
                     } else {
-                        offset = String::from("*(ulong *)(stack_u32+stack_frames[*sfp - 1]) = *(ulong *)(stack_u32 + *sp - 2);");
+                        offset = String::from("*(ulong *)(stack_u32+stack_frames[*sfp]) = *(ulong *)(stack_u32 + *sp - 2);");
                     }
                     final_str += &format!("\t{}\n", offset);
                     sp_counter += 2;
@@ -590,7 +627,7 @@ impl<'a> OpenCLCWriter<'_> {
         let mut ret_str = String::from("");
 
         // br_if is just an if statement, if cond is true => br l else continue
-        ret_str += &format!("\tif ({} != 0) {{\n", "stack_u32[*sp - 1]");
+        ret_str += &format!("\tif ({} != 0) {{\n", "read_u32((ulong)(stack_u32+*sp-1), warp_idx)");
         ret_str += &self.emit_br(idx, fn_name, prev_stack_size, debug);
         ret_str += &format!("\t}}\n");
 
@@ -899,7 +936,10 @@ impl<'a> OpenCLCWriter<'_> {
             // now emit the memcpy instructions to copy to the heap
 
             result += &format!("\t{}\n", format!("for(uint idx = 0; idx < {}; idx++) {{", arr_len));
-            result += &format!("\t\t{}\n", format!("((char*)heap_u32)[{} + idx] = data_segment_data_{}[idx];", offset_val, counter));
+            result += &format!("\t\t{}\n",
+                       format!("write_u8((ulong)((char*)heap_u32 + {} + idx), data_segment_data_{}[idx], warp_idx);",
+                               offset_val,
+                               counter));
             result += &String::from("\t}\n");
 
             arr_len = 0;
@@ -916,7 +956,7 @@ impl<'a> OpenCLCWriter<'_> {
 
         if debug {
             result += &String::from("\nvoid data_init(uint *heap_u32) {\n");
-
+            result += &String::from("\tulong warp_idx = 0;\n");
             result += &self.emit_memcpy_arr();
 
             result += &String::from("}\n\n");
@@ -930,8 +970,218 @@ impl<'a> OpenCLCWriter<'_> {
         result
     }
 
+    /*
+     * All reads and writes are abstracted through these calls
+     * We want to support no interleave, as well as 1 byte, 4 byte, and 8 byte interleaves
+     * 
+     * Addressing model:
+     *  For no interleave, the linear memory is divided into N regions, where N=NUM_THREADS
+     * 
+     *  Virtual Address = address, this calc is easy because we simply set the heap/stack pointers
+     *  at the start of the kernel call, so no pointer math has to be done!
+     * 
+     *  For a 1 byte interleave, the linear memory is interleaved, with corresponding offsets
+     *  mapped to adjacent bytes. For example: if you had 4 threads, that each write 0x1 to
+     *  to an address of 0, the corresponding memory would look like:
+     *
+     *  [0x1, 0x1, 0x1, 0x1], with each of the writes sharing an offset of 0
+     *  [T0 (byte 0), T1 (byte 0), T2 (byte 0), T3 (byte 0), T0 (byte 1), ...]
+     * 
+     * 
+     *  The offset calc is:
+     * 
+     *  Virtual Address = address + (warp_idx * NUM_THREADS)
+     *  
+     *  ex: if you are in thread 0, and you write to 0, and then 1
+     *  the physical addresses are first 0, and then address+NUM_THREADS, with each
+     *  subsequent byte being 1 stride of NUM_THREADS away
+     * 
+     *  We expect NUM_THREADS to be defined at compile time with the macro NUM_THREADS
+     * 
+     *  We also have to split multi-byte reads into multiple calls, in little-endian format
+     * 
+     */
+    fn generate_read_write_calls(&self, interleave: u32, debug: bool) -> String {
+        let mut result = String::from("");
 
-    pub fn write_opencl_file(&self, filename: &str, debug: bool) -> () {
+        // we need the warp id to generate the interleave
+        // the write functions
+        result += &format!("\n{}\n",
+                           "void write_u8(ulong addr, uchar value, uint warp_id) {");
+
+        match interleave {
+            0 => {
+                result += &format!("\t{}",
+                                   "*((uchar*)addr) = value;");
+            },
+            1 => {
+                result += &format!("\t{}",
+                                   "*((uchar*)addr + (warp_id * NUM_THREADS)) = value;")
+            }
+            _ => panic!("Unsupported read/write interleave"),
+        }
+
+        result += &format!("\n{}\n",
+                           "}");
+        result += &format!("\n{}\n",
+                           "void write_u16(ulong addr, ushort value, uint warp_id) {");
+        match interleave {
+            0 => {
+                result += &format!("\t{}",
+                                   "*((ushort*)addr) = value;");
+            },
+            1 => {
+                // write the lower byte first
+                result += &format!("\t{}\n",
+                                   "write_u8(addr, value & 0xFF, warp_id);");
+                // now write the upper byte
+                result += &format!("\t{}",
+                                   "write_u8((ulong)(((char*)addr)+1), (value >> 8) & 0xFF, warp_id);");
+            }
+            _ => panic!("Unsupported read/write interleave"),
+        }
+        result += &format!("\n{}\n",
+                           "}");
+        result += &format!("\n{}\n",
+                           "void write_u32(ulong addr, uint value, uint warp_id) {");
+        match interleave {
+            0 => {
+                result += &format!("\t{}",
+                                   "*((uint*)addr) = value;");
+            },
+            1 => {
+                // write the lower byte first
+                result += &format!("\t{}\n",
+                                   "write_u16(addr, value & 0xFFFF, warp_id);");
+                // now write the upper byte
+                result += &format!("\t{}",
+                                   "write_u16((ulong)(((char*)addr)+2), (value >> 16) & 0xFFFF, warp_id);");
+            }
+            _ => panic!("Unsupported read/write interleave"),
+        }
+        result += &format!("\n{}\n",
+                           "}");
+
+        result += &format!("\n{}\n",
+                           "void write_u64(ulong addr, ulong value, uint warp_id) {");
+        match interleave {
+            0 => {
+                result += &format!("\t{}",
+                                   "*((ulong*)addr) = value;");
+            },
+            1 => {
+                // write the lower byte first
+                result += &format!("\t{}\n",
+                                    "write_u32(addr, value & 0xFFFFFFFF, warp_id);");
+                // now write the upper byte
+                result += &format!("\t{}",
+                                    "write_u32((ulong)(((char*)addr)+4), (value >> 32) & 0xFFFFFFFF, warp_id);");
+            }
+            _ => panic!("Unsupported read/write interleave"),
+        }
+        result += &format!("\n{}\n",
+                           "}");
+
+        // the read functions
+        result += &format!("\n{}\n",
+                           "uchar read_u8(ulong addr, uint warp_id) {");
+        match interleave {
+            0 => {
+                result += &format!("\t{}",
+                                   "return *((uchar*)addr);");
+            },
+            1 => {
+                result += &format!("\t{}",
+                                   "return *(((uchar*)addr)+ (warp_id * NUM_THREADS));");
+            }
+            _ => panic!("Unsupported read/write interleave"),
+        }
+        result += &format!("\n{}\n",
+                           "}");
+
+        result += &format!("\n{}\n",
+                           "ushort read_u16(ulong addr, uint warp_id) {");
+        match interleave {
+            0 => {
+                result += &format!("\t{}",
+                                   "return *((ushort*)addr);");
+            },
+            1 => {
+                // use a local variable to store the result as we perform the reads
+                // we have to read in the reverse order!!! (high bits then low bits)
+                result += &format!("\t{}\n",
+                                   "ushort temp = 0;");
+                result += &format!("\t{}\n",
+                                   "temp += read_u8((ulong)(((char*)addr)+1), warp_id);");
+                // bitshift over to make room for the next byte
+                result += &format!("\t{}\n",
+                                   "temp = temp << 8;");
+                result += &format!("\t{}\n",
+                                   "temp += read_u8(addr, warp_id);");
+                result += &format!("\t{}",
+                                   "return temp;");
+            }
+            _ => panic!("Unsupported read/write interleave"),
+        }
+        result += &format!("\n{}",
+                           "}");
+
+        result += &format!("\n{}\n",
+                           "uint read_u32(ulong addr, uint warp_id) {");
+        match interleave {
+            0 => {
+                result += &format!("\t{}",
+                                   "return *((uint*)addr);");
+            },
+            1 => {
+                // use a local variable to store the result as we perform the reads
+                result += &format!("\t{}\n",
+                                    "uint temp = 0;");
+                result += &format!("\t{}\n",
+                                    "temp += read_u16((ulong)(((char*)addr)+2), warp_id);");
+                // bitshift over to make room for the next byte
+                result += &format!("\t{}\n",
+                                    "temp = temp << 16;");
+                result += &format!("\t{}\n",
+                                    "temp += read_u16(addr, warp_id);");
+                result += &format!("\t{}",
+                                    "return temp;");
+            }
+            _ => panic!("Unsupported read/write interleave"),
+        }
+        result += &format!("\n{}",
+                           "}");
+
+        result += &format!("\n{}\n",
+                           "ulong read_u64(ulong addr, uint warp_id) {");
+        match interleave {
+            0 => {
+                result += &format!("\t{}",
+                                   "return *((ulong*)addr);");
+            },
+            1 => {
+                // use a local variable to store the result as we perform the reads
+                result += &format!("\t{}\n",
+                                    "ulong temp = 0;");
+                result += &format!("\t{}\n",
+                                    "temp += read_u32((ulong)(((char*)addr)+4), warp_id);");
+                // bitshift over to make room for the next byte
+                result += &format!("\t{}\n",
+                                    "temp = temp << 32;");
+                result += &format!("\t{}\n",
+                                    "temp += read_u32(addr, warp_id);");
+                result += &format!("\t{}",
+                                    "return temp;");
+            }
+            _ => panic!("Unsupported read/write interleave"),
+        }
+        result += &format!("\n{}\n",
+                           "}");
+        result
+    }
+
+
+    pub fn write_opencl_file(&self, filename: &str, interleave: u32, debug: bool) -> () {
         /*
         if Path::new(filename).exists() {
             // cannot proceed with file creation
@@ -950,7 +1200,13 @@ impl<'a> OpenCLCWriter<'_> {
             write!(output, "{}", format!("#define uchar unsigned char\n"));
             write!(output, "{}", format!("#define ulong unsigned long\n"));
             write!(output, "{}", format!("#define uint unsigned int\n"));
+            write!(output, "{}", format!("#define ushort unsigned short\n"));
         }
+
+        // generate the read/write functions
+        // we support 0, 1, 4, 8 byte interleaves
+        // 0 = no interleave
+        write!(output, "{}", self.generate_read_write_calls(interleave, debug));
 
         // generate the data loading function
         write!(output, "{}", self.generate_data_section(debug));
@@ -969,11 +1225,13 @@ impl<'a> OpenCLCWriter<'_> {
                                             ulong *sp,
                                             ulong *sfp,
                                             ulong *call_stack,
-                                            uchar *branch_value_stack_state,
-                                            uchar *loop_value_stack_state,
+                                            ushort *branch_value_stack_state,
+                                            ushort *loop_value_stack_state,
                                             int *hypercall_number,
                                             uint *hypercall_continuation,
                                             uint entry_point) {{\n");
+            // for debugging hardcode the warp_idx to 0
+            write!(output, "\tulong warp_idx = 0;\n");
         } else {
             let header = format!("__kernel void wasm_entry(__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}) {{\n",
                                     "uint  *stack_u32_global,",
@@ -984,8 +1242,8 @@ impl<'a> OpenCLCWriter<'_> {
                                     "ulong *sp_global,",
                                     "ulong *sfp_global,",
                                     "ulong *call_stack_global,",
-                                    "uchar *branch_value_stack_state_global,",
-                                    "uchar *loop_value_stack_state_global,",
+                                    "ushort *branch_value_stack_state_global,",
+                                    "ushort *loop_value_stack_state_global,",
                                     "int *hypercall_number_global,",
                                     "uint *hypercall_continuation_global,",
                                     "uint  *entry_point_global");
@@ -993,24 +1251,47 @@ impl<'a> OpenCLCWriter<'_> {
 
             write!(output, "{}", header);
             // TODO: for the openCL launcher, pass the memory stride as a function parameter
-            write!(output, "\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\n\t{}\n",
-                           "uint  *stack_u32    = (uint*)stack_u32_global+(get_global_id(0) * 1024 * 16);",
-                           "ulong *stack_u64    = (ulong*)stack_u32;",
-                           "uint  *heap_u32     = (uint *)heap_u32_global+(get_global_id(0) * 1024 * 16);",
-                           "ulong *heap_u64     = (ulong *)heap_u32;",
-                           "uint  *stack_frames = (uint*)stack_frames_global+(get_global_id(0) * 1024 * 16);",
-                           // only an array of N elements, where N=warp size
-                           "ulong *sp           = (ulong *)sp_global+(get_global_id(0));",
-                           // the stack frame pointer is used for both the stack frame, and call stack as they are
-                           // essentially the same structure, except they hold different values
-                           "ulong *sfp          = (ulong*)sfp_global+(get_global_id(0) * 1024 * 16);",
-                           // holds the numeric index of the return label for where to jump after a function call
-                           "ulong *call_stack   = (ulong*)call_stack_global+(get_global_id(0) * 1024 * 16);",
-                           "ulong *branch_value_stack_state   = (ulong*)branch_value_stack_state_global+(get_global_id(0) * 1024 * 16);",
-                           "ulong *loop_value_stack_state   = (ulong*)loop_value_stack_state_global+(get_global_id(0) * 1024 * 16);",
-                           "int *hypercall_number = (int *)hypercall_number_global+(get_global_id(0));",
-                           "uint *hypercall_continuation = (uint *)hypercall_continuation_global+(get_global_id(0));",
-                           "uint  entry_point   = entry_point_global[get_global_id(0)];");
+            if interleave > 0 {
+                write!(output, "\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\n\t{}\n",
+                "uint  *stack_u32    = (uint*)stack_u32_global;",
+                "ulong *stack_u64    = (ulong*)stack_u32;",
+                "uint  *heap_u32     = (uint *)heap_u32_global;",
+                "ulong *heap_u64     = (ulong *)heap_u32;",
+                "uint  *stack_frames = (uint*)stack_frames_global;",
+                // only an array of N elements, where N=warp size
+                "ulong *sp           = (ulong *)sp_global+(get_global_id(0));",
+                // the stack frame pointer is used for both the stack frame, and call stack as they are
+                // essentially the same structure, except they hold different values
+                "ulong *sfp          = (ulong*)sfp_global+(get_global_id(0) * 1024 * 16);",
+                // holds the numeric index of the return label for where to jump after a function call
+                "ulong *call_stack   = (ulong*)call_stack_global+(get_global_id(0) * 1024 * 16);",
+                "ushort *branch_value_stack_state   = (ushort*)branch_value_stack_state_global;",
+                "ushort *loop_value_stack_state   = (ushort*)loop_value_stack_state_global;",
+                "int *hypercall_number = (int *)hypercall_number_global+(get_global_id(0));",
+                "uint *hypercall_continuation = (uint *)hypercall_continuation_global+(get_global_id(0));",
+                "uint  entry_point   = entry_point_global[get_global_id(0)];",
+                "ulong warp_idx = get_global_id(0);");
+            } else {
+                write!(output, "\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\n\t{}\n",
+                "uint  *stack_u32    = (uint*)stack_u32_global+(get_global_id(0) * 1024 * 16);",
+                "ulong *stack_u64    = (ulong*)stack_u32;",
+                "uint  *heap_u32     = (uint *)heap_u32_global+(get_global_id(0) * 1024 * 16);",
+                "ulong *heap_u64     = (ulong *)heap_u32;",
+                "uint  *stack_frames = (uint*)stack_frames_global+(get_global_id(0) * 1024 * 16);",
+                // only an array of N elements, where N=warp size
+                "ulong *sp           = (ulong *)sp_global+(get_global_id(0));",
+                // the stack frame pointer is used for both the stack frame, and call stack as they are
+                // essentially the same structure, except they hold different values
+                "ulong *sfp          = (ulong*)sfp_global+(get_global_id(0) * 1024 * 16);",
+                // holds the numeric index of the return label for where to jump after a function call
+                "ulong *call_stack   = (ulong*)call_stack_global+(get_global_id(0) * 1024 * 16);",
+                "ulong *branch_value_stack_state   = (ulong*)branch_value_stack_state_global+(get_global_id(0) * 1024 * 16);",
+                "ulong *loop_value_stack_state   = (ulong*)loop_value_stack_state_global+(get_global_id(0) * 1024 * 16);",
+                "int *hypercall_number = (int *)hypercall_number_global+(get_global_id(0));",
+                "uint *hypercall_continuation = (uint *)hypercall_continuation_global+(get_global_id(0));",
+                "uint  entry_point   = entry_point_global[get_global_id(0)];",
+                "ulong warp_idx = get_global_id(0);");
+            }
         }
         
         // 

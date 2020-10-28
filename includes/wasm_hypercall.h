@@ -55,8 +55,8 @@ uint vmm_fd_write(uvwasi_t *wasi_instance, uint *stack_u32, ulong *sp, uint *hea
         // on the GPU we have to copy from the GPU buffer to the CPU
         uint *heap_addr = heap_u32 + (stack_u32[*sp-3]/4 + (sizeof(*ciovec) * idx));
         uint buf_len   = heap_u32[stack_u32[*sp-3]/4 + 1 + (sizeof(*ciovec) * idx)];
-        ciovec[0].buf = malloc(buf_len);
-        ciovec[0].buf_len = buf_len;
+        ciovec[idx].buf = malloc(buf_len);
+        ciovec[idx].buf_len = buf_len;
         memcpy(ciovec[0].buf, heap_u32+(*heap_addr/4), buf_len);
     }
 
@@ -84,9 +84,11 @@ uint vmm_fd_write(uvwasi_t *wasi_instance, cl_mem stack,
     uvwasi_ciovec_t *ciovec;
     uvwasi_size_t iovs_len;
     uvwasi_fd_t fd;
+    uvwasi_errno_t err;
+
     // wtf why does this have to be 5????
     uint temp_stack_vals[5];
-    uint ciovec_temp[100];
+    uint ciovec_temp[2];
     ulong heap_offset;
 
     printf ("offset = %p\n", (stack_size * warp_id * sizeof(uint)) + stack_ptr - 4);
@@ -94,11 +96,13 @@ uint vmm_fd_write(uvwasi_t *wasi_instance, cl_mem stack,
     // read the last 4 32 bit values off of the stack
     clEnqueueReadBuffer(commands, stack, CL_TRUE, (stack_size * warp_id * sizeof(uint)) + stack_ptr - 4,
                         sizeof(uint) * 4, &temp_stack_vals, 0, NULL, NULL);  
-    
+
+    /*
     printf("temp_stack_vals[0] = %d\n", temp_stack_vals[0]);
     printf("temp_stack_vals[1] = %d\n", temp_stack_vals[1]);
     printf("temp_stack_vals[2] = %d\n", temp_stack_vals[2]);
     printf("temp_stack_vals[3] = %d\n", temp_stack_vals[3]);
+    */
     /*
      * (i32.const 1)   ;; fd 1 (stdout)
      * (i32.const 8)   ;; (iovec*)8
@@ -120,27 +124,33 @@ uint vmm_fd_write(uvwasi_t *wasi_instance, cl_mem stack,
     ciovec = calloc(iovs_len, sizeof(*ciovec));
     for (uint idx = 0; idx < iovs_len; idx++) {
         // for each ciovec, we need to copy the structure from the heap
-        heap_offset = (heap_size * warp_id) + (temp_stack_vals[1] + (sizeof(*ciovec) * idx));
-        printf("heap offset: %p\n", heap_offset);
-        clEnqueueReadBuffer(commands, heap, CL_TRUE, 0,
-                            sizeof(uint) * 100, &ciovec_temp, 0, NULL, NULL);  
+        heap_offset = (heap_size * warp_id * 4) + (temp_stack_vals[1] + (sizeof(*ciovec) * idx));
+        //printf("heap offset: %p\n", heap_offset);
+        clEnqueueReadBuffer(commands, heap, CL_TRUE, heap_offset,
+                            sizeof(uint) * 2, &ciovec_temp, 0, NULL, NULL);  
 
-        printf("ciovec_temp[0] = %d\n", ciovec_temp[0]);
-        printf("ciovec_temp[1] = %d\n", ciovec_temp[1]);
-
-        /*
-        uint *heap_addr = heap_u32 + (stack_u32[*sp-3]/4 + (sizeof(*ciovec) * idx));
-        uint buf_len   = heap_u32[stack_u32[*sp-3]/4 + 1 + (sizeof(*ciovec) * idx)];
-        
-        ciovec[0].buf = malloc(buf_len);
-        ciovec[0].buf_len = buf_len;
+        //printf("ciovec_temp[0] = %p\n", ciovec_temp[0]);
+        //printf("ciovec_temp[1] = %p\n", ciovec_temp[1]);
+        // ciovec_temp[0] = ptr to buffer
+        // ciovec_temp[1] = buf_len
+        // now that we have the ciovec, we can read 
+        ciovec[idx].buf = calloc(ciovec_temp[1], sizeof(char));
+        ciovec[idx].buf_len = ciovec_temp[1];
         // copy from the heap
+        heap_offset = (heap_size * warp_id * 4) + ciovec_temp[0];
+
+        //printf("heap offset: %p\n", heap_offset);
+        clEnqueueReadBuffer(commands, heap, CL_TRUE, heap_offset,
+                            ciovec[idx].buf_len, ciovec[idx].buf, 0, NULL, NULL);  
+        //printf("read complete: %p\n", ciovec[idx].buf);
+        /*
         memcpy(ciovec[0].buf, heap_u32+(*heap_addr/4), buf_len);
+        clEnqueueReadBuffer(commands, heap, CL_TRUE, heap_offset,
+                            sizeof(uint) * 2, &ciovec_temp, 0, NULL, NULL);  
         */
     }
 
-    /*
-    uvwasi_fd_write(wasi_instance, fd, ciovec, iovs_len, &bytes_written);
+    err = uvwasi_fd_write(wasi_instance, fd, ciovec, iovs_len, &bytes_written);
 
     // before returning, we must write the result of the call back to the stack
     //stack_u32[*sp] = (uint)bytes_written;
@@ -148,10 +158,9 @@ uint vmm_fd_write(uvwasi_t *wasi_instance, cl_mem stack,
 
     // free the allocated temp buffers
     for (uint idx = 0; idx < iovs_len; idx++) {
-        free(ciovec[0].buf);
+        free(ciovec[idx].buf);
     }
     free(ciovec);
-    */
     return (uint) bytes_written;
 }
 #endif
