@@ -1,3 +1,17 @@
+mod binops;
+mod stackops;
+mod control_flow;
+mod functions;
+mod mem_interleave;
+mod relops;
+
+use relops::*;
+use mem_interleave::*;
+use functions::*;
+use stackops::*;
+use binops::*;
+use control_flow::*;
+
 use wast::Wat;
 use wast::parser::{self, ParseBuffer};
 use wast::ModuleKind::{Text, Binary};
@@ -93,71 +107,6 @@ impl<'a> OpenCLCWriter<'_> {
         Ok(true)
     }
 
-    fn emit_local(&self, local: &wast::Local, offsets: &HashMap<&str, u32>, debug: bool) -> String {
-        /*
-         * When emitting locals we know we have access to the global stack.
-         * We zero-init all values.
-         * 
-         */
-        match local.ty {
-            wast::ValType::I32 => {
-                let local_id = match local.id {
-                    Some(id) => id.name(),
-                    None => panic!("Unexpected local without identifier"),
-                };
-                String::from(format!("\t{}\n\t{}\n\t{}\n",
-                                format!("/* local id: {} */", local_id),
-                                "write_u32((ulong)(stack_u32+*sp), (uint)0, warp_idx);",
-                                "*sp += 1;"))
-            },
-            wast::ValType::I64 => {
-                let local_id = match local.id {
-                    Some(id) => id.name(),
-                    None => panic!("Unexpected local without identifier"),
-                };
-                String::from(format!("\t{}\n\t{}\n\t{}\n",
-                                format!("/* local id: {} */", local_id),
-                                "write_u64((ulong)(stack_u32+*sp), (ulong)0, warp_idx);",
-                                "*sp += 2;"))
-            },
-            wast::ValType::F32 => {
-                let local_id = match local.id {
-                    Some(id) => id.name(),
-                    None => panic!("Unexpected local without identifier"),
-                };
-                String::from(format!("\t{}\n\t{}\n\t{}\n",
-                                format!("/* local id: {} */", local_id),
-                                "write_u32((ulong)(stack_u32+*sp), (uint)0, warp_idx);",
-                                "*sp += 1;"))
-            },
-            wast::ValType::F64 => {
-                let local_id = match local.id {
-                    Some(id) => id.name(),
-                    None => panic!("Unexpected local without identifier"),
-                };
-                String::from(format!("\t{}\n\t{}\n\t{}\n",
-                                format!("/* local id: {} */", local_id),
-                                "write_u64((ulong)(stack_u32+*sp), (ulong)0, warp_idx);",
-                                "*sp += 2;"))
-            },
-            _ => panic!(),
-        }
-    }
-
-    fn emit_i32_const(&self, val: &i32, debug: bool) -> String {
-        format!("\t{}{}, warp_idx);\n\t{}\n",
-                "write_u32((ulong)(stack_u32+*sp), (uint)",
-                val,
-                "*sp += 1;")
-    }
-
-    fn emit_i64_const(&self, val: &i64, debug: bool) -> String {
-        format!("\t{}{}, warp_idx);\n\t{}\n",
-                "write_u64((ulong)(stack_u32+*sp), (ulong)",
-                val,
-                "*sp += 2;")
-    }
-
     fn get_size_valtype(&self, t: &ValType) -> u32 {
         match t {
             wast::ValType::I32 => 1,
@@ -166,472 +115,6 @@ impl<'a> OpenCLCWriter<'_> {
             wast::ValType::F64 => 2,
             _ => panic!("Unknown local size found"),
         }
-    }
-
-    fn emit_local_get(&self, id: &str, offsets: &HashMap<&str, u32>, type_info: &HashMap<&str, ValType>, debug: bool) -> String {
-        let offset = offsets.get(id).unwrap();
-        let t = type_info.get(id).unwrap();
-
-        // stack_frames[*sfp - 1] start of stack frame
-        match t {
-            wast::ValType::I32 => {
-                format!("\t{}\n\t{}\n",
-                        format!("write_u32((ulong)(stack_u32+*sp), read_u32((ulong)(stack_u32+{}+read_u32((ulong)(stack_frames+*sfp), warp_idx)), warp_idx), warp_idx);", offset),
-                        "*sp += 1;")
-            },
-            wast::ValType::I64 => {
-                format!("\t{}\n\t{}\n",
-                        format!("write_u64((ulong)(stack_u32+*sp), read_u64((ulong)(stack_u32+{}+read_u64((ulong)(stack_frames+*sfp), warp_idx)), warp_idx), warp_idx);", offset),
-                        "*sp += 2;")
-            },
-            wast::ValType::F32 => {
-                format!("\t{}\n\t{}\n",
-                        format!("write_u32((ulong)(stack_u32+*sp), read_u32((ulong)(stack_u32+{}+read_u32((ulong)(stack_frames+*sfp), warp_idx)), warp_idx), warp_idx);", offset),
-                        "*sp += 1;")
-            },
-            wast::ValType::F64 => {
-                format!("\t{}\n\t{}\n",
-                        format!("write_u64((ulong)(stack_u32+*sp), read_u64((ulong)(stack_u32+{}+read_u64((ulong)(stack_frames+*sfp), warp_idx)), warp_idx), warp_idx);", offset),
-                        "*sp += 2;")
-            },
-            _ => panic!("emit_local_set type not handled")
-        }
-    }
-
-    fn emit_local_set(&self, id: &str, offsets: &HashMap<&str, u32>, type_info: &HashMap<&str, ValType>, debug: bool) -> String {
-        let offset = offsets.get(id).unwrap();
-        let t = type_info.get(id).unwrap();
-        dbg!(id);
-        dbg!(offset);
-        dbg!(t);
-        match t {
-            wast::ValType::I32 => {
-                format!("\t{}\n",
-                        format!("write_u32((ulong)(stack_u32+{}+read_u32((ulong)(stack_frames+*sfp), warp_idx)),
-                                           read_u32((ulong)(stack_u32+*sp-1), warp_idx), warp_idx);",
-                                offset))
-            },
-            wast::ValType::I64 => {
-                format!("\t{}\n",
-                        format!("write_u64((ulong)(stack_u32+{}+read_u32((ulong)(stack_frames+*sfp), warp_idx)),
-                                        read_u64((ulong)(stack_u32+*sp-2), warp_idx), warp_idx);",
-                                offset))
-            },
-            wast::ValType::F32 => {
-                format!("\t{}\n",
-                        format!("write_u32((ulong)(stack_u32+{}+read_u32((ulong)(stack_frames+*sfp), warp_idx)),
-                                           read_u32((ulong)(stack_u32+*sp-1), warp_idx), warp_idx);",
-                                offset))
-            },
-            wast::ValType::F64 => {
-                format!("\t{}\n",
-                        format!("write_u64((ulong)(stack_u32+{}+read_u32((ulong)(stack_frames+*sfp), warp_idx)),
-                                        read_u64((ulong)(stack_u32+*sp-2), warp_idx), warp_idx);",
-                                offset))
-            },
-            _ => panic!("emit_local_set type not handled")
-        }
-    }
-
-    fn emit_local_tee(&self, id: &str, offsets: &HashMap<&str, u32>, type_info: &HashMap<&str, ValType>, debug: bool) -> String {
-        /*
-         * peak the top of the stack, push the most recent value again
-         * call local.set [x]
-         */
-        let offset = offsets.get(id).unwrap();
-        let t = type_info.get(id).unwrap();
-        dbg!(id);
-        dbg!(offset);
-        dbg!(t);
-        match t {
-            wast::ValType::I32 => {
-                format!("\t{}\n\t{}\n{}",
-                        "write_u32((ulong)(stack_u32+*sp), read_u32((ulong)(stack_u32+*sp-1), warp_idx), warp_idx);",
-                        "*sp += 1;",
-                        format!("{}", self.emit_local_set(id, offsets, type_info, debug)))
-            },
-            wast::ValType::I64 => {
-                format!("\t{}\n{}",
-                        format!("{}\n\t{}",
-                                "write_u64((ulong)(stack_u32+*sp), read_u64((ulong)(stack_u32+*sp-2), warp_idx), warp_idx);",
-                                "*sp += 2;"),
-                        format!("{}", self.emit_local_set(id, offsets, type_info, debug)))
-            },
-            wast::ValType::F32 => {
-                format!("\t{}\n\t{}\n{}",
-                        "write_u32((ulong)(stack_u32+*sp), read_u32((ulong)(stack_u32+*sp-1), warp_idx), warp_idx);",
-                        "*sp += 1;",
-                        format!("{}", self.emit_local_set(id, offsets, type_info, debug)))
-            },
-            wast::ValType::F64 => {
-                format!("\t{}\n{}",
-                        format!("{}\n\t{}",
-                                "write_u64((ulong)(stack_u32+*sp), read_u64((ulong)(stack_u32+*sp-2), warp_idx), warp_idx);",
-                                "*sp += 2;"),
-                        format!("{}", self.emit_local_set(id, offsets, type_info, debug)))
-            },
-            _ => panic!("emit_local_tee type not handled")
-        }
-    }
-
-    // binops have both values popped off the stack
-    fn emit_i32_add(&self, debug: bool) -> String {
-        format!("\t{}\n\t{}\n",
-                "write_u32((ulong)(stack_u32+*sp-2),
-                           (int)read_u32((ulong)(stack_u32+*sp-1), warp_idx) + (int)read_u32((ulong)(stack_u32+*sp-2), warp_idx),
-                           warp_idx);",
-                "*sp -= 1;")
-    }
-
-    /*
-     * addition is a binop - pops 2 values off the stack and pushes one back on
-     */
-    fn emit_i64_add(&self, debug: bool) -> String {
-        format!("\t{}\n\t{}\n",
-                "write_u64((ulong)(stack_u32+*sp-4),
-                           (long)read_u64((ulong)(stack_u32+*sp-2), warp_idx) + (long)read_u64((ulong)(stack_u32+*sp-4), warp_idx),
-                           warp_idx);",
-                "*sp -= 2;")
-    }
-
-    /*
-     * <, >, = are relops which also pop 2 values and push one back on
-     */
-    fn emit_i32_lt_s(&self, debug: bool) -> String {
-        format!("\t{}\n\t{}\n",
-                "write_u32((ulong)(stack_u32+*sp-2),
-                           (int)read_u32((ulong)(stack_u32+*sp-1), warp_idx) < (int)read_u32((ulong)(stack_u32+*sp-2), warp_idx),
-                           warp_idx);",
-                "*sp -= 1;")
-    }
-
-    fn emit_i32_eq(&self, debug: bool) -> String {
-        format!("\t{}\n",
-                "write_u32((ulong)(stack_u32+*sp-1),
-                           (int)(read_u32((ulong)(stack_u32+*sp-1), warp_idx)) == (int)(read_u32((ulong)(stack_u32+*sp-2), warp_idx)),
-                           warp_idx);")
-    }
-
-    fn emit_block(&self, block: &wast::BlockType, fn_name: &str, function_id_map: HashMap<&str, u32>, debug: bool) -> String {
-        let mut result: String = String::from("");
-        let label = block.label.unwrap().name();
-
-        // first we have to save the current stack pointer
-        // to reset the stack if we jump to this label
-        dbg!(label);
-        let re = Regex::new(r"\d+").unwrap();
-        // we can use the branch index to save to global state
-        let branch_idx: &str = re.captures(label).unwrap().get(0).map_or("", |m| m.as_str());
-        dbg!(branch_idx);
-        let branch_idx_u32 = branch_idx.parse::<u32>().unwrap();
-        if branch_idx_u32 > 1024 {
-            panic!("Only up to 1024 branches per function are supported");
-        }
-
-        // create a new stack frame for the block, store stack frame pointer in local
-        // function private data
-
-
-        // we have to emulate a 2-D array, since openCL does not support double pts in v1.2
-        // the format is (64 x 64 * number of functions),
-        // so [..........] 4096 entries per function consecutively
-        // lookups are done as: branch_value_stack_state[(*sfp * 64) + idx + (func_id * 4096)]
-        // sfp = stack frame ptr, idx = branch ID, func_id = the numerical id of the function
-
-        result += &format!("\t{}\n",
-                            // write_
-                           format!("branch_value_stack_state[(*sfp * 64) + {} + ({} * 4096)] = *sp;",
-                           branch_idx_u32, function_id_map.get(fn_name).unwrap()));
-        // we don't emit a label for block statements here, any br's goto the END of the block
-        // we don't need to modify the sp here, we will do all stack unwinding in the br instr
-        result
-    }
-
-    // basically the same as emit_block, except we have to reset the stack pointer
-    // at the *top* of the block, since we are doing a backwards jump not a forward jump
-    fn emit_loop(&self, block: &wast::BlockType, fn_name: &str, function_id_map: HashMap<&str, u32>, debug: bool) -> String {
-        let mut result: String = String::from("");
-        let label = block.label.unwrap().name();
-
-        // first we have to save the current stack pointer
-        // to reset the stack if we jump to this label
-        dbg!(label);
-        let re = Regex::new(r"\d+").unwrap();
-        // we can use the branch index to save to global state
-        let branch_idx: &str = re.captures(label).unwrap().get(0).map_or("", |m| m.as_str());
-        dbg!(branch_idx);
-        let branch_idx_u32 = branch_idx.parse::<u32>().unwrap();
-        if branch_idx_u32 > 1024 {
-            panic!("Only up to 1024 branches per function are supported");
-        }
-
-        // create a new stack frame for the block, store stack frame pointer in local
-        // function private data
-
-        // we have to emulate a 2-D array, since openCL does not support double pts in v1.2
-        // the format is (64 x 64 * number of functions),
-        // so [..........] 4096 entries per function consecutively
-        // lookups are done as: branch_value_stack_state[(*sfp * 64) + idx + (func_id * 4096)]
-        // sfp = stack frame ptr, idx = branch ID, func_id = the numerical id of the function
-
-        result += &format!("\t{}\n",
-                           format!("write_u16((ulong)(loop_value_stack_state+(*sfp*64)+{}+({} *4096)), (ushort)*sp, warp_idx);",
-                           branch_idx_u32, function_id_map.get(fn_name).unwrap()));
-
-        // emit a label here for the END instruction to jump back here to restart the loop
-        result += &format!("{}:\n", label);
-        // the stack pointer should be reset by the BR/BR_IF instruction, so no need to touch it here
-
-        result
-    }
-
-
-
-
-    // semantically, the end statement pops from the control stack,
-    // in our compiler, this is a no-op
-    fn emit_end(&self, id: &Option<wast::Id<'a>>, label: &str, block_type: u32, fn_name: &str, function_id_map: HashMap<&str, u32>, debug: bool) -> String {
-        dbg!(id);
-        dbg!(label);
-        dbg!(block_type);
-        println!("emit end!");
-        // after a block ends, we need to unwind the stack!
-        let re = Regex::new(r"\d+").unwrap();
-        // we can use the branch index to save to global state
-        let branch_idx: &str = re.captures(label).unwrap().get(0).map_or("", |m| m.as_str());
-        dbg!(branch_idx);
-        let branch_idx_u32 = branch_idx.parse::<u32>().unwrap();
-        if branch_idx_u32 > 1024 {
-            panic!("Only up to 1024 branches per function are supported");
-        }
-
-        // if the end statement corresponds to a block -> we want to put the label *here* and not at the top
-        // of the block, otherwise for loops we jump back to the start of the loop!
-        // 0 -> block (label goes here, at the end statement)
-        // 1-> loop (label was already inserted at the top, this is a no-op here)
-        if block_type == 0 {
-            format!("\n{}:\n\t{}\n", label,
-                    format!("*sp = read_u16((ulong)(branch_value_stack_state+(*sfp*64)+{}+({}*4096)), warp_idx);",
-                            branch_idx_u32, function_id_map.get(fn_name).unwrap()))
-        } else {
-            let mut result = String::from("");
-            result += &format!("\t/* END (loop: {}) */\n", label);
-            
-            // pop the control flow stack entry (reset the stack to the state it was in before the loop)
-            result += &format!("\t*sp = read_u16((ulong)(branch_value_stack_state+(*sfp*64)+{}+({}*4096)), warp_idx);\n",
-                                branch_idx_u32, function_id_map.get(fn_name).unwrap());
-
-            result
-        }
-    }
-
-    fn emit_fn_call(&self, idx: wast::Index, call_ret_map: &mut HashMap<&str, u32>, call_ret_idx: &mut u32, debug: bool) -> String {
-        let id = match idx {
-            wast::Index::Id(id) => id.name(),
-            _ => panic!("Unable to get Id for function call!"),
-        };
-
-        dbg!(&self.func_map);
-        // if the func has calling parameters, set those up
-        // on the newly formed stack as well
-        let func_type_signature = &self.func_map.get(id).unwrap().ty;
-        let mut offset = 0;
-        for parameter in func_type_signature.clone().inline.unwrap().params.to_vec() {
-            dbg!(parameter);
-            match parameter {
-                (Some(id), _, t) => {
-                    dbg!(id);
-                    dbg!(t);
-                    offset += self.get_size_valtype(&t);
-                },
-                _ => panic!("Unhandled parameter type")
-            }
-        }
-
-        // for each function call, map the call to an index
-        // we use this index later on to return back to the instruction after the call
-        
-        let ret_label: &'static str = Box::leak(format!("ret_from_{}_{}", id, call_ret_idx).into_boxed_str());
-        call_ret_map.insert(ret_label, *call_ret_idx);
-
-        // get the return type of the function
-        let return_size = self.get_size_valtype(&func_type_signature.clone().inline.unwrap().results[0]);
-        println!("return size: {}", return_size);
-        let result = if offset > 0 {
-            format!("\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n{}\n\t{}\n",
-            // move the stack pointer back by the offset required by calling parameters
-            // the sp should point at the start of the arguments for the function
-            format!("*sp -= {};", offset),
-            // increment stack frame pointer
-            "*sfp += 1;",
-            // save the current stack pointer for unwinding later
-            "stack_frames[*sfp] = *sp;",
-            // save the callee return stub number
-            format!("call_stack[*sfp] = {};", *call_ret_idx),
-            // setup calling parameters for function
-            format!("goto {};", id),
-            format!("call_return_stub_{}:", *call_ret_idx),
-            format!("*sp += {};", return_size))
-        } else {
-            format!("\t{}\n\t{}\n\t{}\n{}\n",
-                    // increment stack frame pointer
-                    "*sfp += 1;",
-                    // save the current stack pointer for unwinding later
-                    "stack_frames[*sfp] = *sp;",
-                    // save the callee return stub number
-                    // setup calling parameters for function
-                    format!("goto {};", id),
-                    format!("call_return_stub_{}:", 0))
-        };
-        *call_ret_idx += 1;
-
-        result
-    }
-
-    // TODO: this needs to take the function type into account
-    fn function_unwind(&self, fn_name: &str, func_ret_info: &Option<wast::FunctionType>, debug: bool) -> String {
-        let mut final_str = String::from("");
-
-        let results: Vec<wast::ValType> = match func_ret_info {
-            Some(s) => (*s.results).to_vec(),
-            None => vec![]
-        };
-        
-        final_str += &format!("\t{}\n", "/* function unwind */");
-        final_str += &format!("{}_return:\n", fn_name);
-        // for each value returned by the function, return it on the stack
-        // keep track of the change to stack ptr from previous returns
-        let mut sp_counter = 0;
-        let mut offset = String::from("");
-        for value in results {
-            match value {
-                wast::ValType::I32 => {
-                    // compute the offset to read from the bottom of the stack
-                    if sp_counter > 0 {
-                        offset = format!("write_u32((ulong)(stack_u32+read_u32((ulong)(stack_frames+*sfp), warp_idx)),
-                                                    read_u32((ulong)(stack_u32+*sp-{}-1), warp_idx),
-                                                    warp_idx);", sp_counter);
-                    } else {
-                        offset = format!("write_u32((ulong)(stack_u32+read_u32((ulong)(stack_frames+*sfp), warp_idx)),
-                                                    read_u32((ulong)(stack_u32+*sp-1), warp_idx),
-                                                    warp_idx);");
-                    }
-                    final_str += &format!("\t{}\n", offset);
-                    sp_counter += 1;
-                },
-                wast::ValType::I64 => {
-                    // compute the offset to read from the bottom of the stack
-                    if sp_counter > 0 {
-                        offset = format!("write_u64((ulong)(stack_u32+read_u32((ulong)(stack_frames+*sfp), warp_idx)),
-                                                    read_u64((ulong)(stack_u32+*sp-{}-2), warp_idx),
-                                                    warp_idx);", sp_counter);
-                    } else {
-                        offset = format!("write_u64((ulong)(stack_u32+read_u32((ulong)(stack_frames+*sfp), warp_idx)),
-                                                    read_u64((ulong)(stack_u32+*sp-2), warp_idx),
-                                                    warp_idx);");
-                    }
-                    final_str += &format!("\t{}\n", offset);
-                    sp_counter += 2;
-                },
-                wast::ValType::F32 => {
-                    // compute the offset to read from the bottom of the stack
-                    if sp_counter > 0 {
-                        offset = format!("write_u32((ulong)(stack_u32+read_u32((ulong)(stack_frames+*sfp), warp_idx)),
-                                                    read_u32((ulong)(stack_u32+*sp-{}-1), warp_idx),
-                                                    warp_idx);", sp_counter);
-                    } else {
-                        offset = format!("write_u32((ulong)(stack_u32+read_u32((ulong)(stack_frames+*sfp), warp_idx)),
-                                                    read_u32((ulong)(stack_u32+*sp-1), warp_idx),
-                                                    warp_idx);");
-                    }
-                    final_str += &format!("\t{}\n", offset);
-                    sp_counter += 1;
-                },
-                wast::ValType::F64 => {
-                    // compute the offset to read from the bottom of the stack
-                    if sp_counter > 0 {
-                        offset = format!("write_u64((ulong)(stack_u32+read_u32((ulong)(stack_frames+*sfp), warp_idx)),
-                                                    read_u64((ulong)(stack_u32+*sp-{}-2), warp_idx),
-                                                    warp_idx);", sp_counter);
-                    } else {
-                        offset = String::from("*(ulong *)(stack_u32+stack_frames[*sfp]) = *(ulong *)(stack_u32 + *sp - 2);");
-                    }
-                    final_str += &format!("\t{}\n", offset);
-                    sp_counter += 2;
-                },
-                _ => panic!("Unimplemented function return type!!!"),
-            }
-        }
-        final_str += &format!("\t{}\n",
-                                // reset the stack pointer to point at the end of the previous frame
-                                "*sp = stack_frames[*sfp];");
-        final_str += &format!("\t{}\n\t\t{}\n\t{}\n\t\t{}\n\t{}\n",
-                                // check if *sfp == 0
-                                "if (*sfp != 0) {",
-                                // if *sfp != 0, that means we have to return to the previous stack frame
-                                    "goto function_return_stub;",
-                                "} else {",
-                                // we are the top-level stack frame, and can now exit the program
-                                    "return;",
-                                "}");
-        final_str
-    }
-
-    // TODO: double check the semantics of this? 
-    fn emit_return(&self, fn_name: &str, debug: bool) -> String {
-        format!("\tgoto {}_return;\n", fn_name)
-    }
-
-    // this function is semantically equivalent to function_unwind
-    fn emit_br(&self, idx: wast::Index, fn_name: &str, prev_stack_size: u32, debug: bool) -> String {
-        let mut ret_str = String::from("");
-
-        let branch_id = match idx {
-            wast::Index::Id(id) => id.name(),
-            _ => panic!("Branch specified in terms of numerical index instead of Id"),
-        };
-
-        let re = Regex::new(r"\d+").unwrap();
-        // we can use the branch index to save to global state
-        let branch_idx: &str = re.captures(branch_id).unwrap().get(0).map_or("", |m| m.as_str());
-
-        // debug comment
-        ret_str += &format!("\t{}\n", format!("/* br {} */", branch_id));
-
-        // first we want to pop the result value off of the stack, and push it
-        dbg!(prev_stack_size);
-        /*
-        match prev_stack_size {
-            1 => {
-                // first push the value back
-                // next, move the stack pointer
-                ret_str += &format!("\t{}\n\t{}\n",
-                                    format!("stack_u32[branch_value_stack_state[{}]] = stack_u32[*sp - 1];", branch_idx),
-                                    format!("*sp = stack_u32[branch_value_stack_state[{}]];", branch_idx));
-            },
-            2 => {
-                panic!("u64 br l not yet implemented");
-                ret_str += &format!("\t{}\n",
-                                    "*(ulong*)(stack_u32+*sp-4) = *(ulong*)(stack_u32+*sp-2) + *(ulong*)(stack_u32+*sp-4);");
-            },
-            _ => panic!("Unable to determine size of the previous item on stack"),
-        };
-        */
-
-        ret_str += &format!("\t{}\n", format!("goto {};", branch_id));
-
-        ret_str
-    }
-
-    fn emit_br_if(&self, idx: wast::Index, fn_name: &str, prev_stack_size: u32, debug: bool) -> String {
-        let mut ret_str = String::from("");
-
-        // br_if is just an if statement, if cond is true => br l else continue
-        ret_str += &format!("\tif ({} != 0) {{\n", "read_u32((ulong)(stack_u32+*sp-1), warp_idx)");
-        ret_str += &self.emit_br(idx, fn_name, prev_stack_size, debug);
-        ret_str += &format!("\t}}\n");
-
-        ret_str
     }
 
     fn emit_hypercall(&self, hypercall_id: u32, hypercall_id_count: &mut u32, debug: bool) -> String {
@@ -665,37 +148,37 @@ impl<'a> OpenCLCWriter<'_> {
         match instr {
             wast::Instruction::I32Const(val) => {
                 *previous_stack_size = 1;
-                self.emit_i32_const(val, debug)
+                emit_i32_const(&self, val, debug)
             },
             wast::Instruction::I64Const(val) => {
                 *previous_stack_size = 2;
-                self.emit_i64_const(val, debug)
+                emit_i64_const(&self, val, debug)
             },
             wast::Instruction::LocalGet(idx) => {
                 match idx {
-                    wast::Index::Id(id) => self.emit_local_get(id.name(), offsets, type_info, debug),
+                    wast::Index::Id(id) => emit_local_get(&self, id.name(), offsets, type_info, debug),
                     wast::Index::Num(_, _) => panic!("no support for Num index references in local.get yet"),
                 }
             },
             wast::Instruction::LocalSet(idx) => {
                 match idx {
-                    wast::Index::Id(id) => self.emit_local_set(id.name(), offsets, type_info, debug),
+                    wast::Index::Id(id) => emit_local_set(&self, id.name(), offsets, type_info, debug),
                     wast::Index::Num(_, _) => panic!("no support for Num index references in local.get yet"),
                 }
             },
             wast::Instruction::LocalTee(idx) => {
                 match idx {
-                    wast::Index::Id(id) => self.emit_local_tee(id.name(), offsets, type_info, debug),
+                    wast::Index::Id(id) => emit_local_tee(&self, id.name(), offsets, type_info, debug),
                     wast::Index::Num(_, _) => panic!("no support for Num index references in local.get yet"),
                 }
             },
             wast::Instruction::I32Add => {
                 *previous_stack_size = 1;
-                self.emit_i32_add(debug)
+                emit_i32_add(&self, debug)
             },
             wast::Instruction::I64Add => {
                 *previous_stack_size = 2;
-                self.emit_i64_add(debug)
+                emit_i64_add(&self, debug)
             },
             wast::Instruction::Call(idx) => {
                 let id = match idx {
@@ -741,7 +224,7 @@ impl<'a> OpenCLCWriter<'_> {
                             let func_type_signature = &self.func_map.get(id).unwrap().ty;
                             let fn_result_type = &(*func_type_signature.clone().inline.unwrap().results)[0];
                             *previous_stack_size = self.get_size_valtype(fn_result_type);
-                            self.emit_fn_call(*idx, call_ret_map, call_ret_idx, debug)
+                            emit_fn_call(&self, *idx, call_ret_map, call_ret_idx, debug)
                         },
                         // we have an import that isn't a system call...
                         None => String::from("")
@@ -750,32 +233,32 @@ impl<'a> OpenCLCWriter<'_> {
             },
             wast::Instruction::I32LtS => {
                 *previous_stack_size = 1;
-                self.emit_i32_lt_s(debug)
+                emit_i32_lt_s(&self, debug)
             }
             wast::Instruction::I32Eq => {
                 *previous_stack_size = 1;
-                self.emit_i32_eq(debug)
+                emit_i32_eq(&self, debug)
             },
             // control flow instructions
             wast::Instruction::Block(b) => {
                 let label = b.label.unwrap().name().clone();
                 control_stack.push((label.to_string(), 0));
-                self.emit_block(b, fn_name, function_id_map, debug)
+                emit_block(&self, b, fn_name, function_id_map, debug)
             },
             wast::Instruction::Loop(b) => {
                 let label = b.label.unwrap().name().clone();
                 control_stack.push((label.to_string(), 1));
-                self.emit_loop(b, fn_name, function_id_map, debug)
+                emit_loop(&self, b, fn_name, function_id_map, debug)
             }
             // if control_stack.pop() panics, that means we were parsing an incorrectly defined
             // wasm file, each block/loop must have a matching end!
             wast::Instruction::End(id) => {
                 let (label, t) = control_stack.pop().unwrap();
-                self.emit_end(id, &label, t, fn_name, function_id_map, debug)
+                emit_end(&self, id, &label, t, fn_name, function_id_map, debug)
             },
-            wast::Instruction::Return => self.emit_return(fn_name, debug),
-            wast::Instruction::Br(idx) => self.emit_br(*idx, fn_name, *previous_stack_size, debug),
-            wast::Instruction::BrIf(idx) => self.emit_br_if(*idx, fn_name, *previous_stack_size, debug),
+            wast::Instruction::Return => emit_return(&self, fn_name, debug),
+            wast::Instruction::Br(idx) => emit_br(&self, *idx, fn_name, *previous_stack_size, debug),
+            wast::Instruction::BrIf(idx) => emit_br_if(&self, *idx, fn_name, *previous_stack_size, debug),
             _ => panic!("Instruction {:?} not yet implemented", instr)
         }
     }
@@ -869,7 +352,7 @@ impl<'a> OpenCLCWriter<'_> {
                 // for each local, push them onto the stack
 
                 for local in locals {
-                    final_string += &self.emit_local(local.clone(), &local_parameter_stack_offset, debug);
+                    final_string += &emit_local(&self, local.clone(), &local_parameter_stack_offset, debug);
                 }
 
                 // keep a stack of control-flow labels
@@ -897,7 +380,7 @@ impl<'a> OpenCLCWriter<'_> {
 
                 // to unwind from the function we unwind the call stack by moving the stack pointer
                 // and returning the last value on the stack 
-                final_string += &self.function_unwind(id.name(), &typeuse.inline, debug);
+                final_string += &function_unwind(&self, id.name(), &typeuse.inline, debug);
             },
             (_, _, _) => panic!("Inline function must always have a valid identifier in wasm")
         };
@@ -970,217 +453,6 @@ impl<'a> OpenCLCWriter<'_> {
         result
     }
 
-    /*
-     * All reads and writes are abstracted through these calls
-     * We want to support no interleave, as well as 1 byte, 4 byte, and 8 byte interleaves
-     * 
-     * Addressing model:
-     *  For no interleave, the linear memory is divided into N regions, where N=NUM_THREADS
-     * 
-     *  Virtual Address = address, this calc is easy because we simply set the heap/stack pointers
-     *  at the start of the kernel call, so no pointer math has to be done!
-     * 
-     *  For a 1 byte interleave, the linear memory is interleaved, with corresponding offsets
-     *  mapped to adjacent bytes. For example: if you had 4 threads, that each write 0x1 to
-     *  to an address of 0, the corresponding memory would look like:
-     *
-     *  [0x1, 0x1, 0x1, 0x1], with each of the writes sharing an offset of 0
-     *  [T0 (byte 0), T1 (byte 0), T2 (byte 0), T3 (byte 0), T0 (byte 1), ...]
-     * 
-     * 
-     *  The offset calc is:
-     * 
-     *  Virtual Address = address + (warp_idx * NUM_THREADS)
-     *  
-     *  ex: if you are in thread 0, and you write to 0, and then 1
-     *  the physical addresses are first 0, and then address+NUM_THREADS, with each
-     *  subsequent byte being 1 stride of NUM_THREADS away
-     * 
-     *  We expect NUM_THREADS to be defined at compile time with the macro NUM_THREADS
-     * 
-     *  We also have to split multi-byte reads into multiple calls, in little-endian format
-     * 
-     */
-    fn generate_read_write_calls(&self, interleave: u32, debug: bool) -> String {
-        let mut result = String::from("");
-
-        // we need the warp id to generate the interleave
-        // the write functions
-        result += &format!("\n{}\n",
-                           "void write_u8(ulong addr, uchar value, uint warp_id) {");
-
-        match interleave {
-            0 => {
-                result += &format!("\t{}",
-                                   "*((uchar*)addr) = value;");
-            },
-            1 => {
-                result += &format!("\t{}",
-                                   "*((uchar*)addr + (warp_id * NUM_THREADS)) = value;")
-            }
-            _ => panic!("Unsupported read/write interleave"),
-        }
-
-        result += &format!("\n{}\n",
-                           "}");
-        result += &format!("\n{}\n",
-                           "void write_u16(ulong addr, ushort value, uint warp_id) {");
-        match interleave {
-            0 => {
-                result += &format!("\t{}",
-                                   "*((ushort*)addr) = value;");
-            },
-            1 => {
-                // write the lower byte first
-                result += &format!("\t{}\n",
-                                   "write_u8(addr, value & 0xFF, warp_id);");
-                // now write the upper byte
-                result += &format!("\t{}",
-                                   "write_u8((ulong)(((char*)addr)+1), (value >> 8) & 0xFF, warp_id);");
-            }
-            _ => panic!("Unsupported read/write interleave"),
-        }
-        result += &format!("\n{}\n",
-                           "}");
-        result += &format!("\n{}\n",
-                           "void write_u32(ulong addr, uint value, uint warp_id) {");
-        match interleave {
-            0 => {
-                result += &format!("\t{}",
-                                   "*((uint*)addr) = value;");
-            },
-            1 => {
-                // write the lower byte first
-                result += &format!("\t{}\n",
-                                   "write_u16(addr, value & 0xFFFF, warp_id);");
-                // now write the upper byte
-                result += &format!("\t{}",
-                                   "write_u16((ulong)(((char*)addr)+2), (value >> 16) & 0xFFFF, warp_id);");
-            }
-            _ => panic!("Unsupported read/write interleave"),
-        }
-        result += &format!("\n{}\n",
-                           "}");
-
-        result += &format!("\n{}\n",
-                           "void write_u64(ulong addr, ulong value, uint warp_id) {");
-        match interleave {
-            0 => {
-                result += &format!("\t{}",
-                                   "*((ulong*)addr) = value;");
-            },
-            1 => {
-                // write the lower byte first
-                result += &format!("\t{}\n",
-                                    "write_u32(addr, value & 0xFFFFFFFF, warp_id);");
-                // now write the upper byte
-                result += &format!("\t{}",
-                                    "write_u32((ulong)(((char*)addr)+4), (value >> 32) & 0xFFFFFFFF, warp_id);");
-            }
-            _ => panic!("Unsupported read/write interleave"),
-        }
-        result += &format!("\n{}\n",
-                           "}");
-
-        // the read functions
-        result += &format!("\n{}\n",
-                           "uchar read_u8(ulong addr, uint warp_id) {");
-        match interleave {
-            0 => {
-                result += &format!("\t{}",
-                                   "return *((uchar*)addr);");
-            },
-            1 => {
-                result += &format!("\t{}",
-                                   "return *(((uchar*)addr)+ (warp_id * NUM_THREADS));");
-            }
-            _ => panic!("Unsupported read/write interleave"),
-        }
-        result += &format!("\n{}\n",
-                           "}");
-
-        result += &format!("\n{}\n",
-                           "ushort read_u16(ulong addr, uint warp_id) {");
-        match interleave {
-            0 => {
-                result += &format!("\t{}",
-                                   "return *((ushort*)addr);");
-            },
-            1 => {
-                // use a local variable to store the result as we perform the reads
-                // we have to read in the reverse order!!! (high bits then low bits)
-                result += &format!("\t{}\n",
-                                   "ushort temp = 0;");
-                result += &format!("\t{}\n",
-                                   "temp += read_u8((ulong)(((char*)addr)+1), warp_id);");
-                // bitshift over to make room for the next byte
-                result += &format!("\t{}\n",
-                                   "temp = temp << 8;");
-                result += &format!("\t{}\n",
-                                   "temp += read_u8(addr, warp_id);");
-                result += &format!("\t{}",
-                                   "return temp;");
-            }
-            _ => panic!("Unsupported read/write interleave"),
-        }
-        result += &format!("\n{}",
-                           "}");
-
-        result += &format!("\n{}\n",
-                           "uint read_u32(ulong addr, uint warp_id) {");
-        match interleave {
-            0 => {
-                result += &format!("\t{}",
-                                   "return *((uint*)addr);");
-            },
-            1 => {
-                // use a local variable to store the result as we perform the reads
-                result += &format!("\t{}\n",
-                                    "uint temp = 0;");
-                result += &format!("\t{}\n",
-                                    "temp += read_u16((ulong)(((char*)addr)+2), warp_id);");
-                // bitshift over to make room for the next byte
-                result += &format!("\t{}\n",
-                                    "temp = temp << 16;");
-                result += &format!("\t{}\n",
-                                    "temp += read_u16(addr, warp_id);");
-                result += &format!("\t{}",
-                                    "return temp;");
-            }
-            _ => panic!("Unsupported read/write interleave"),
-        }
-        result += &format!("\n{}",
-                           "}");
-
-        result += &format!("\n{}\n",
-                           "ulong read_u64(ulong addr, uint warp_id) {");
-        match interleave {
-            0 => {
-                result += &format!("\t{}",
-                                   "return *((ulong*)addr);");
-            },
-            1 => {
-                // use a local variable to store the result as we perform the reads
-                result += &format!("\t{}\n",
-                                    "ulong temp = 0;");
-                result += &format!("\t{}\n",
-                                    "temp += read_u32((ulong)(((char*)addr)+4), warp_id);");
-                // bitshift over to make room for the next byte
-                result += &format!("\t{}\n",
-                                    "temp = temp << 32;");
-                result += &format!("\t{}\n",
-                                    "temp += read_u32(addr, warp_id);");
-                result += &format!("\t{}",
-                                    "return temp;");
-            }
-            _ => panic!("Unsupported read/write interleave"),
-        }
-        result += &format!("\n{}\n",
-                           "}");
-        result
-    }
-
-
     pub fn write_opencl_file(&self, filename: &str, interleave: u32, debug: bool) -> () {
         /*
         if Path::new(filename).exists() {
@@ -1206,7 +478,7 @@ impl<'a> OpenCLCWriter<'_> {
         // generate the read/write functions
         // we support 0, 1, 4, 8 byte interleaves
         // 0 = no interleave
-        write!(output, "{}", self.generate_read_write_calls(interleave, debug));
+        write!(output, "{}", generate_read_write_calls(&self, interleave, debug));
 
         // generate the data loading function
         write!(output, "{}", self.generate_data_section(debug));
@@ -1459,45 +731,3 @@ impl fmt::Debug for OpenCLCWriter<'_> {
         .finish()
     }
 }
-
-
-/*
-reference from wasm2c: 
-
-void CWriter::WriteCHeader() {
-  stream_ = h_stream_;
-  std::string guard = GenerateHeaderGuard();
-  Write("#ifndef ", guard, Newline());
-  Write("#define ", guard, Newline());
-  Write(s_header_top);
-  WriteImports();
-  WriteExports(WriteExportsKind::Declarations);
-  Write(s_header_bottom);
-  Write(Newline(), "#endif  /* ", guard, " */", Newline());
-}
-
-void CWriter::WriteCSource() {
-  stream_ = c_stream_;
-  WriteSourceTop();
-  WriteFuncTypes();
-  WriteFuncDeclarations();
-  WriteGlobals();
-  WriteMemories();
-  WriteTables();
-  WriteFuncs();
-  WriteDataInitializers();
-  WriteElemInitializers();
-  WriteExports(WriteExportsKind::Definitions);
-  WriteInitExports();
-  WriteInit();
-}
-
-Result CWriter::WriteModule(const Module& module) {
-  WABT_USE(options_);
-  module_ = &module;
-  WriteCHeader();
-  WriteCSource();
-  return result_;
-}
-
-*/
