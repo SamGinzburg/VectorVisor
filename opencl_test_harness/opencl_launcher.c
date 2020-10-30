@@ -17,6 +17,8 @@
 #define STACK_SIZE_BYTES 1024 * 1024
 #define HEAP_SIZE_BYTES  1024 * 1024
 
+#define WARP_STRIDE 1024 * 16
+
 #define uchar unsigned char
 #define ulong unsigned long
 #define uint unsigned int
@@ -256,7 +258,7 @@ int main(int argc, char** argv)
         err = clEnqueueWriteBuffer(commands, sp, CL_TRUE, count * sizeof(ulong), sizeof(ulong), &sp_setup, 0, NULL, NULL);
         printf("err:%d\n", err);
         // set the stack frame pointer: sfp = 1
-        err |= clEnqueueWriteBuffer(commands, sfp, CL_TRUE, count * STACK_SIZE_BYTES, sizeof(ulong), &sfp_setup, 0, NULL, NULL);
+        // err |= clEnqueueWriteBuffer(commands, sfp, CL_TRUE, count * 1024*16, sizeof(ulong), &sfp_setup, 0, NULL, NULL);
         printf("err:%d\n", err);
         // set the stack frame: stack_frames[sfp - 1] = sp;
         err |= clEnqueueWriteBuffer(commands, stack_frames, CL_TRUE, count * STACK_SIZE_BYTES, STACK_SIZE_BYTES, stack_frames_setup, 0, NULL, NULL);
@@ -458,13 +460,13 @@ int main(int argc, char** argv)
     uchar *stack_debug = malloc(STACK_SIZE_BYTES * WARP_SIZE);
     clEnqueueReadBuffer(commands, stack_u32, CL_TRUE, 0, STACK_SIZE_BYTES * WARP_SIZE, stack_debug, 0, NULL, NULL);  
     // no interleave
+    printf("%x, \n", ((uint*)stack_debug)[0]);
 
-    /*
+
     for (uint idx = 0; idx < WARP_SIZE; idx++) {
         printf("%x, ", stack_debug[(1024 * 16 * idx) * 4]);
     }
     printf("\n");
-    */
 
     // for printing w/interleave
     for (uint idx = 0; idx < WARP_SIZE; idx++) {

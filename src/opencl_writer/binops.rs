@@ -20,9 +20,12 @@ pub fn emit_i32_add(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> Strin
     * addition is a binop - pops 2 values off the stack and pushes one back on
     */
 pub fn emit_i64_add(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> String {
-    format!("\t{}\n\t{}\n",
-            "write_u64((ulong)(stack_u32+*sp-4), (ulong)(stack_u32),
-                        (long)read_u64((ulong)(stack_u32+*sp-2), warp_idx) + (long)read_u64((ulong)(stack_u32+*sp-4), warp_idx),
-                        warp_idx);",
+    format!("\t{};\n\t{}\n",
+            &emit_write_u64("(ulong)(stack_u32+*sp-4)",
+                            "(ulong)(stack_u32)",
+                            &format!("(long){} + (long){}",
+                                     &emit_read_u64("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx"),
+                                     &emit_read_u64("(ulong)(stack_u32+*sp-4)", "(ulong)(stack_u32)", "warp_idx")),
+                            "warp_idx"),
             "*sp -= 2;")
 }

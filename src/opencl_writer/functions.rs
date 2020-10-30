@@ -1,5 +1,9 @@
 use crate::opencl_writer;
 use std::collections::HashMap;
+use crate::opencl_writer::mem_interleave::emit_read_u32;
+use crate::opencl_writer::mem_interleave::emit_write_u32;
+use crate::opencl_writer::mem_interleave::emit_read_u64;
+use crate::opencl_writer::mem_interleave::emit_write_u64;
 
 pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, idx: wast::Index, call_ret_map: &mut HashMap<&str, u32>, call_ret_idx: &mut u32, debug: bool) -> String {
     let id = match idx {
@@ -41,9 +45,14 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, idx: wast::Index, cal
         // increment stack frame pointer
         "*sfp += 1;",
         // save the current stack pointer for unwinding later
-        "stack_frames[*sfp] = *sp;",
+        //"stack_frames[*sfp] = *sp;",
+        format!("{};", emit_write_u32("(ulong)(stack_frames+*sfp)", "(ulong)(stack_frames)", "*sp", "warp_idx")),
         // save the callee return stub number
-        format!("call_stack[*sfp] = {};", *call_ret_idx),
+        //format!("call_stack[*sfp] = {};", *call_ret_idx),
+        format!("{}", &format!("{};",
+                      emit_write_u64("(ulong)(call_stack+*sfp)",
+                                     "(ulong)(call_stack)",
+                                     &format!("{}", *call_ret_idx), "warp_idx"))),
         // setup calling parameters for function
         format!("goto {};", id),
         format!("call_return_stub_{}:", *call_ret_idx),
@@ -91,7 +100,7 @@ pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, fn_name: &str, fun
                 } else {
                     offset = format!("write_u32((ulong)(stack_u32+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_u32, warp_idx)),
                                                 (ulong)stack_u32,
-                                                read_u32((ulong)(stack_u32+*sp-1), warp_idx),
+                                                read_u32((ulong)(stack_u32+*sp-1), (ulong)stack_u32, warp_idx),
                                                 warp_idx);");
                 }
                 final_str += &format!("\t{}\n", offset);
@@ -123,7 +132,7 @@ pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, fn_name: &str, fun
                 } else {
                     offset = format!("write_u32((ulong)(stack_u32+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_u32, warp_idx)),
                                                 (ulong)stack_u32,
-                                                read_u32((ulong)(stack_u32+*sp-1), warp_idx),
+                                                read_u32((ulong)(stack_u32+*sp-1), (ulong)stack_u32, warp_idx),
                                                 warp_idx);");
                 }
                 final_str += &format!("\t{}\n", offset);
@@ -150,7 +159,8 @@ pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, fn_name: &str, fun
     }
     final_str += &format!("\t{}\n",
                             // reset the stack pointer to point at the end of the previous frame
-                            "*sp = stack_frames[*sfp];");
+                            &format!("*sp = {};", emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)(stack_frames)", "warp_idx")));
+                            //"*sp = stack_frames[*sfp];");
     final_str += &format!("\t{}\n\t\t{}\n\t{}\n\t\t{}\n\t{}\n",
                             // check if *sfp == 0
                             "if (*sfp != 0) {",
@@ -161,4 +171,45 @@ pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, fn_name: &str, fun
                                 "return;",
                             "}");
     final_str
+}
+
+/*
+ * NOTE: In the current version of WebAssembly, at most one table may be defined or
+ *  imported in a single module, and all constructs implicitly reference this table 0.
+ *  This restriction may be lifted in future versions.
+ * 
+ *  This means we can afford to hardcode table "$T0" for now. In the future we may have to 
+ *  generate multiple tables or deal with the tables as a global structure instead of evaluating
+ *  them at compile time.
+ *  
+ *  We can have multiple elements initializing the table in sequence, and they can overwrite
+ *  each other, so we must process them sequentially.
+ * 
+ */
+pub fn emit_call_indirect(writer: &opencl_writer::OpenCLCWriter, table: &HashMap<u32, &wast::Index>, call_ret_map: &mut HashMap<&str, u32>, call_ret_idx: &mut u32, debug: bool) -> String {
+    dbg!(table);
+    let mut result = String::from("");
+    // set up a switch case statement, we read the last value on the stack and determine what function we are going to call
+    // this adds code bloat, but it reduces the complexity of the compiler.
+    // It is worth revisiting this later, but not urgent. 
+
+    result += &format!("\t{}\n",
+                       // the most recent item on the stack is 
+                       &format!("switch({}) {{", emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx")));
+    // generate all of the cases in the table, all uninitialized values will trap to the default case
+    for (key, value) in table {
+        result += &format!("\t\t{}\n", format!("case {}:", key));
+        // now that we have found the appropriate call, we can pop the value off of the stack
+        result += &format!("\t\t\t{}\n", format!("*sp -= 1;"));
+        // emit the function call here!
+        result += &format!("{}", emit_fn_call(writer, **value, call_ret_map, call_ret_idx, debug));
+        result += &format!("\t\t\t{}\n", format!("break;"));
+    }
+
+    // emit a default case, to handle lookups to invalid indicies!
+    result += &format!("\t\t{}\n", "default:");
+    result += &format!("\t\t\t{}\n", "return;");
+    result += &format!("\t}}\n");
+
+    result
 }

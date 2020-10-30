@@ -143,6 +143,7 @@ impl<'a> OpenCLCWriter<'_> {
                          control_stack: &mut Vec<(String, u32)>,
                          function_id_map: HashMap<&str, u32>,
                          hypercall_id_count: &mut u32,
+                         indirect_call_mapping: &HashMap<u32, &wast::Index>,
                          debug: bool) -> String {
 
         match instr {
@@ -231,6 +232,13 @@ impl<'a> OpenCLCWriter<'_> {
                     }
                 }
             },
+            wast::Instruction::CallIndirect(call_indirect) => {
+                let table: &str = match call_indirect.table {
+                    wast::Index::Id(id) => id.name(),
+                    wast::Index::Num(_, _) => panic!(""),
+                };
+                emit_call_indirect(&self, indirect_call_mapping, call_ret_map, call_ret_idx, debug)
+            }
             wast::Instruction::I32LtS => {
                 *previous_stack_size = 1;
                 emit_i32_lt_s(&self, debug)
@@ -265,7 +273,7 @@ impl<'a> OpenCLCWriter<'_> {
 
     fn emit_function(&self, func: &wast::Func, call_ret_map: &mut HashMap<&str, u32>,
                      call_ret_idx: &mut u32, function_id_map: HashMap<&str, u32>,
-                     hypercall_id_count: &mut u32, debug: bool) -> String {
+                     hypercall_id_count: &mut u32, indirect_call_mapping: &HashMap<u32, &wast::Index>, debug: bool) -> String {
         let mut final_string = String::from("");
 
         // store the stack offset for all parameters and locals
@@ -375,6 +383,7 @@ impl<'a> OpenCLCWriter<'_> {
                                                             &mut control_stack,
                                                             function_id_map.clone(),
                                                             hypercall_id_count,
+                                                            indirect_call_mapping,
                                                             debug);
                 }
 
@@ -430,6 +439,42 @@ impl<'a> OpenCLCWriter<'_> {
         }
 
         result
+    }
+
+    /*
+     * There can be multiple elements in a WASM module, so we must enumerate all of them
+     * to provide a mapping of table indicies to function names
+     */
+    fn process_elements(&self, debug: bool) -> HashMap<u32, &wast::Index> {
+        let elements_vec = &self.elements;
+        let mut table_mapping: HashMap<u32, &wast::Index> = HashMap::new();
+        for element in elements_vec {
+            match &element.payload {
+                wast::ElemPayload::Indices(index_vec) => {
+                    dbg!(&element.kind);
+                    let offset: u32 = match &element.kind {
+                        wast::ElemKind::Active{table, offset} => {
+                            match &offset.instrs[0] {
+                                wast::Instruction::I32Const(val) => *val as u32,
+                                _ => panic!("Unable to extract offset from WASM module element - unknown offset"),
+                            }
+                        },
+                        _ => panic!("Unable to extract offset from WASM module element!"),
+                    };
+                    // we now have the element offset, and the index_vec, so we can init the table_mapping
+                    dbg!(offset);
+                    dbg!(index_vec);
+                    let mut starting_offset = offset;
+                    for item in index_vec {
+                        table_mapping.insert(starting_offset, item);
+                        starting_offset += 1;
+                    }
+                },
+                _ => panic!(""),
+            }
+        }
+
+        table_mapping
     }
 
     // This function generates the helper kernel that loads the data sections
@@ -536,7 +581,7 @@ impl<'a> OpenCLCWriter<'_> {
                 // essentially the same structure, except they hold different values
                 "ulong *sfp          = (ulong*)sfp_global+(get_global_id(0) * 1024 * 16);",
                 // holds the numeric index of the return label for where to jump after a function call
-                "ulong *call_stack   = (ulong*)call_stack_global+(get_global_id(0) * 1024 * 16);",
+                "ulong *call_stack   = (ulong*)call_stack_global;",
                 "ushort *branch_value_stack_state   = (ushort*)branch_value_stack_state_global;",
                 "ushort *loop_value_stack_state   = (ushort*)loop_value_stack_state_global;",
                 "int *hypercall_number = (int *)hypercall_number_global+(get_global_id(0));",
@@ -611,16 +656,22 @@ impl<'a> OpenCLCWriter<'_> {
 
         let call_ret_map: &mut HashMap<&str, u32> = &mut HashMap::new();
         let call_ret_idx: &mut u32 = &mut 0;
+
+        // generate the indirect call mapping T0, refer to openclwriter/functions.rs:emit_call_indirect
+        // for notes on why we are doing this statically at compile time
+        let indirect_call_mapping: &HashMap<u32, &wast::Index> = &self.process_elements(debug);
+
         for function in funcs.clone() {
             let func = self.emit_function(function, call_ret_map, call_ret_idx,
-                                          function_idx_label.clone(), hypercall_id_count, debug);
+                                          function_idx_label.clone(), hypercall_id_count, indirect_call_mapping, debug);
             write!(output, "{}", func);
         }
 
         // generate the function call return table
         
         write!(output, "{}\n", "function_return_stub:");
-        write!(output, "\t{}\n", "switch (call_stack[*sfp]) {");
+        write!(output, "\t{}\n", format!("switch ({}) {{",
+                                 emit_read_u32("(ulong)(call_stack+*sfp)", "(ulong)(call_stack)", "warp_idx")));
         for count in 0..*call_ret_idx {
             write!(output, "\t\tcase {}:\n", count);
             write!(output, "\t\t\t*sfp -= 1;\n");
@@ -639,7 +690,6 @@ impl<'a> OpenCLCWriter<'_> {
             write!(output, "\t\t\tbreak;\n");
         } 
         write!(output, "\t}}\n");
-
         write!(output, "}}\n");
 
         if debug {
