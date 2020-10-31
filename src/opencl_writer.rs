@@ -19,8 +19,9 @@ use wast::ValType;
 use regex::Regex;
 
 use std::fmt;
-use std::fs::File;
-use std::io::Write;
+//use std::fs::File;
+//use std::io::Write;
+use std::fmt::Write;
 use std::collections::HashMap;
 
 use lazy_static::lazy_static;
@@ -429,7 +430,7 @@ impl<'a> OpenCLCWriter<'_> {
 
             result += &format!("\t{}\n", format!("for(uint idx = 0; idx < {}; idx++) {{", arr_len));
             result += &format!("\t\t{}\n",
-                       format!("write_u8((ulong)((char*)heap_u32 + {} + idx), data_segment_data_{}[idx], warp_idx);",
+                       format!("write_u8((ulong)((char*)heap_u32 + {} + idx), (ulong)(heap_u32), data_segment_data_{}[idx], warp_idx);",
                                offset_val,
                                counter));
             result += &String::from("\t}\n");
@@ -490,7 +491,7 @@ impl<'a> OpenCLCWriter<'_> {
             result += &String::from("}\n\n");
         } else {
             result += &String::from("\n__kernel void data_init(__global uint *heap_u32) {\n");
-
+            result += &String::from("\tulong warp_idx = get_global_id(0);\n");
             result += &self.emit_memcpy_arr();
 
             result += &String::from("}\n\n");
@@ -498,19 +499,21 @@ impl<'a> OpenCLCWriter<'_> {
         result
     }
 
-    pub fn write_opencl_file(&self, filename: &str, interleave: u32, debug: bool) -> () {
-        /*
-        if Path::new(filename).exists() {
-            // cannot proceed with file creation
-            //panic!("path exists already!");
-        }
-        */
+    pub fn write_opencl_file(&self,
+                             interleave: u32,
+                             stack_size_bytes: u32,
+                             heap_size_bytes: u32,
+                             call_stack_size_bytes: u32,
+                             stack_frames_size_bytes: u32,
+                             stack_frame_ptr_size_bytes: u32, 
+                             predictor_size_bytes: u32,
+                             debug: bool) -> (String, u32) {
+        let mut output = String::new();
 
-        let mut output = File::create(filename).unwrap();
+        //let mut output = File::create(filename).unwrap();
 
         // if we are running in debug C-mode, we must define the openCL types
         if debug {
-            
             write!(output, "{}", format!("#include <stdlib.h>\n"));
             write!(output, "{}", format!("#include \"../includes/wasm_hypercall.h\"\n"));
 
@@ -579,7 +582,7 @@ impl<'a> OpenCLCWriter<'_> {
                 "ulong *sp           = (ulong *)sp_global+(get_global_id(0));",
                 // the stack frame pointer is used for both the stack frame, and call stack as they are
                 // essentially the same structure, except they hold different values
-                "ulong *sfp          = (ulong*)sfp_global+(get_global_id(0) * 1024 * 16);",
+                "ulong *sfp          = (ulong*)(sfp_global+(get_global_id(0)));",
                 // holds the numeric index of the return label for where to jump after a function call
                 "ulong *call_stack   = (ulong*)call_stack_global;",
                 "ushort *branch_value_stack_state   = (ushort*)branch_value_stack_state_global;",
@@ -589,21 +592,22 @@ impl<'a> OpenCLCWriter<'_> {
                 "uint  entry_point   = entry_point_global[get_global_id(0)];",
                 "ulong warp_idx = get_global_id(0);");
             } else {
+                // The pointer math must be calculated in terms of bytes, which is why we cast to (char*) first
                 write!(output, "\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\n\t{}\n",
-                "uint  *stack_u32    = (uint*)stack_u32_global+(get_global_id(0) * 1024 * 16);",
+                format!("uint  *stack_u32    = (uint*)((char*)stack_u32_global+(get_global_id(0) * {}));", stack_size_bytes),
                 "ulong *stack_u64    = (ulong*)stack_u32;",
-                "uint  *heap_u32     = (uint *)heap_u32_global+(get_global_id(0) * 1024 * 16);",
+                format!("uint  *heap_u32     = (uint *)((char*)heap_u32_global+(get_global_id(0) * {}));", heap_size_bytes),
                 "ulong *heap_u64     = (ulong *)heap_u32;",
-                "uint  *stack_frames = (uint*)stack_frames_global+(get_global_id(0) * 1024 * 16);",
+                format!("uint  *stack_frames = (uint*)((char*)stack_frames_global+(get_global_id(0) * {}));", stack_frames_size_bytes),
                 // only an array of N elements, where N=warp size
                 "ulong *sp           = (ulong *)sp_global+(get_global_id(0));",
                 // the stack frame pointer is used for both the stack frame, and call stack as they are
                 // essentially the same structure, except they hold different values
-                "ulong *sfp          = (ulong*)sfp_global+(get_global_id(0) * 1024 * 16);",
+                format!("ulong *sfp          = (ulong*)((char*)sfp_global+(get_global_id(0) * {}));", stack_frame_ptr_size_bytes),
                 // holds the numeric index of the return label for where to jump after a function call
-                "ulong *call_stack   = (ulong*)call_stack_global+(get_global_id(0) * 1024 * 16);",
-                "ulong *branch_value_stack_state   = (ulong*)branch_value_stack_state_global+(get_global_id(0) * 1024 * 16);",
-                "ulong *loop_value_stack_state   = (ulong*)loop_value_stack_state_global+(get_global_id(0) * 1024 * 16);",
+                format!("ulong *call_stack   = (ulong*)((char*)call_stack_global+(get_global_id(0) * {}));", call_stack_size_bytes),
+                format!("ulong *branch_value_stack_state   = (ulong*)((char*)branch_value_stack_state_global+(get_global_id(0) * {}));", predictor_size_bytes),
+                format!("ulong *loop_value_stack_state   = (ulong*)((char*)loop_value_stack_state_global+(get_global_id(0) * {}));", predictor_size_bytes),
                 "int *hypercall_number = (int *)hypercall_number_global+(get_global_id(0));",
                 "uint *hypercall_continuation = (uint *)hypercall_continuation_global+(get_global_id(0));",
                 "uint  entry_point   = entry_point_global[get_global_id(0)];",
@@ -628,6 +632,8 @@ impl<'a> OpenCLCWriter<'_> {
             }
             count += 1;
         }
+
+        write!(output, "\t{}\n", "printf(\"entry_point: %lu\\n\", entry_point);");
 
         // upon entry, first check to see if we are returning from a hypercall
         // hypercall_number is set to -1 after completing the hypercall
@@ -762,7 +768,7 @@ impl<'a> OpenCLCWriter<'_> {
 
             write!(output, "}}\n\n");
         }
-
+        (output, *function_idx_label.get("_start").unwrap())
     }
 }
 

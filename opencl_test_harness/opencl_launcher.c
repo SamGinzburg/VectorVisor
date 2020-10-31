@@ -134,7 +134,7 @@ int main(int argc, char** argv)
 	uint *stack_frames_setup = calloc(STACK_SIZE_BYTES, sizeof(uint));
 	ulong sp_setup = 0;
 	ulong sfp_setup = 1;
-    ulong entry_setup = 0;
+    ulong entry_setup = 1;
     long hypercall_num_setup = -2;
 
     // The WASI sandbox, 1 instance per thread
@@ -228,9 +228,9 @@ int main(int argc, char** argv)
     stack_frames = clCreateBuffer(context,  CL_MEM_READ_WRITE,  STACK_SIZE_BYTES * WARP_SIZE, NULL, NULL);
     sp = clCreateBuffer(context,  CL_MEM_READ_WRITE, sizeof(unsigned long) * WARP_SIZE, NULL, NULL);
     sfp = clCreateBuffer(context,  CL_MEM_READ_WRITE,  STACK_SIZE_BYTES * WARP_SIZE, NULL, NULL);
-    call_stack = clCreateBuffer(context,  CL_MEM_READ_WRITE,  1024 * WARP_SIZE, NULL, NULL);
-    branch_value_stack_state = clCreateBuffer(context,  CL_MEM_READ_WRITE,  4096 * WARP_SIZE, NULL, NULL);
-    loop_value_stack_state = clCreateBuffer(context,  CL_MEM_READ_WRITE,  4096 * WARP_SIZE, NULL, NULL);
+    call_stack = clCreateBuffer(context,  CL_MEM_READ_WRITE,  STACK_SIZE_BYTES * WARP_SIZE, NULL, NULL);
+    branch_value_stack_state = clCreateBuffer(context,  CL_MEM_READ_WRITE,  STACK_SIZE_BYTES * WARP_SIZE, NULL, NULL);
+    loop_value_stack_state = clCreateBuffer(context,  CL_MEM_READ_WRITE,  STACK_SIZE_BYTES * WARP_SIZE, NULL, NULL);
 
     hypercall_num = clCreateBuffer(context,  CL_MEM_READ_WRITE,  sizeof(ulong) * WARP_SIZE, NULL, NULL);
     hypercall_continuation = clCreateBuffer(context,  CL_MEM_READ_WRITE,  sizeof(ulong) * WARP_SIZE, NULL, NULL);
@@ -261,7 +261,7 @@ int main(int argc, char** argv)
         // err |= clEnqueueWriteBuffer(commands, sfp, CL_TRUE, count * 1024*16, sizeof(ulong), &sfp_setup, 0, NULL, NULL);
         printf("err:%d\n", err);
         // set the stack frame: stack_frames[sfp - 1] = sp;
-        err |= clEnqueueWriteBuffer(commands, stack_frames, CL_TRUE, count * STACK_SIZE_BYTES, STACK_SIZE_BYTES, stack_frames_setup, 0, NULL, NULL);
+        err |= clEnqueueWriteBuffer(commands, stack_frames, CL_TRUE, count * 1024, STACK_SIZE_BYTES, stack_frames_setup, 0, NULL, NULL);
         printf("err:%d\n", err);
         // set the wasm function entry point
         err |= clEnqueueWriteBuffer(commands, entry, CL_TRUE, count * sizeof(uint), sizeof(uint), &entry_setup, 0, NULL, NULL);
