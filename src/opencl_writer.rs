@@ -633,8 +633,6 @@ impl<'a> OpenCLCWriter<'_> {
             count += 1;
         }
 
-        write!(output, "\t{}\n", "printf(\"entry_point: %lu\\n\", entry_point);");
-
         // upon entry, first check to see if we are returning from a hypercall
         // hypercall_number is set to -1 after completing the hypercall
         write!(output, "\t{}\n", "if (*hypercall_number == -1) {");
