@@ -614,8 +614,6 @@ impl<'a> OpenCLCWriter<'_> {
                 "ulong warp_idx = get_global_id(0);");
             }
         }
-        
-        // 
 
         // for each function, assign an ID -> index mapping
         let mut function_idx_label: HashMap<&str, u32> = HashMap::new();

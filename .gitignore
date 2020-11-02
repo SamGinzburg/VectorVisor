@@ -5,3 +5,6 @@ test.*
 opencl_test_harness/opencl_launcher.dSYM/*
 opencl_test_harness/opencl_launcher
 .DS_Store
+wasm-parser
+wasm-parser.d
+*.c

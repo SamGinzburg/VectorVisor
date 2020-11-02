@@ -1,17 +1,36 @@
 mod vectorized_vm;
+mod wasi_fd;
 
+use wasi_fd::WasiFd;
 use vectorized_vm::VectorizedVM;
+use vectorized_vm::HyperCall;
+use vectorized_vm::HyperCallResult;
+
+use vectorized_vm::WasiSyscalls;
+
 use std::ffi::CString;
 
 use ocl::core::Event;
 use ocl::core::ContextProperties;
 use ocl::core::ArgVal;
 
+use std::thread;
+use crossbeam::channel::unbounded;
+use crossbeam::channel::bounded;
+
+use rayon::prelude::*;
+use ocl::core::CommandQueue;
+
+use crossbeam::channel::Sender;
+use crossbeam::channel::Receiver;
+
+
 pub enum VMMRuntimeStatus {
-    STATUS_OKAY,
-    STATUS_UNKNOWN_ERROR,
+    StatusOkay,
+    StatusUnknownError,
 }
 
+#[derive(Clone)]
 pub struct OpenCLBuffers {
     stack_buffer: ocl::core::Mem,
     heap_buffer: ocl::core::Mem,
@@ -52,23 +71,40 @@ impl OpenCLBuffers {
                     entry: entry,
                 }
     }
+
+    pub fn copy(&self) -> OpenCLBuffers {
+        OpenCLBuffers {
+            stack_buffer: self.stack_buffer.clone(),
+            heap_buffer: self.heap_buffer.clone(),
+            stack_frames: self.stack_frames.clone(),
+            sp: self.sp.clone(),
+            sfp: self.sfp.clone(),
+            call_stack: self.call_stack.clone(),
+            branch_value_stack_state: self.branch_value_stack_state.clone(),
+            loop_value_stack_state: self.loop_value_stack_state.clone(),
+            hypercall_num: self.hypercall_num.clone(),
+            hypercall_continuation: self.hypercall_continuation.clone(),
+            entry: self.entry.clone(),
+        }
+
+    }
 }
 
-pub struct OpenCLRunner<'a> {
+
+
+pub struct OpenCLRunner {
     num_vms: u32,
-    vms: Vec<VectorizedVM<'a>>,
     program_source: String,
     is_gpu_backend: bool,
     is_memory_interleaved: bool,
     entry_point: u32,
-    buffers: Option<OpenCLBuffers>,
+    buffers: Option<OpenCLBuffers>
 }
 
-impl<'a> OpenCLRunner<'a> {
-    pub fn new(num_vms: u32, mem_interleave: bool, running_on_gpu: bool, entry_point: u32, program: String) -> OpenCLRunner<'a> {
+impl OpenCLRunner {
+    pub fn new(num_vms: u32, mem_interleave: bool, running_on_gpu: bool, entry_point: u32, program: String) -> OpenCLRunner {
         OpenCLRunner {
             num_vms: num_vms,
-            vms: vec!(),
             program_source: program,
             is_gpu_backend: running_on_gpu,
             is_memory_interleaved: mem_interleave,
@@ -89,7 +125,7 @@ impl<'a> OpenCLRunner<'a> {
                           stack_frame_ptr_size: u32,
                           call_stack_size: u32,
                           predictor_size: u32,
-                          context: ocl::core::Context) -> (OpenCLRunner<'a>, ocl::core::Context) {
+                          context: ocl::core::Context) -> (OpenCLRunner, ocl::core::Context) {
         let stack_buffer = unsafe {
             ocl::core::create_buffer::<_, u8>(&context,
                                               ocl::core::MEM_READ_WRITE,
@@ -238,18 +274,67 @@ impl<'a> OpenCLRunner<'a> {
      * sits inside of a while loop, waiting for input to be sent to it on a channel.
      * 
      */
-    pub fn run_vector_vms(&self, per_vm_stack_frames_size: u32, program: ocl::core::Program, context: ocl::core::Context, device_id: ocl::core::DeviceId) -> (VMMRuntimeStatus) {
+    pub fn run_vector_vms(self: &'static OpenCLRunner, per_vm_stack_frames_size: u32, program: ocl::core::Program, context: ocl::core::Context, device_id: ocl::core::DeviceId, queue: &'static CommandQueue) -> (VMMRuntimeStatus) {
         // we have the compiled program & context, we now can set up the kernels...
         let data_kernel = ocl::core::create_kernel(&program, "data_init").unwrap();
         let start_kernel = ocl::core::create_kernel(&program, "wasm_entry").unwrap();
-        let queue = ocl::core::create_command_queue(&context, &device_id, None).unwrap();
+
         let mut stack_pointer_temp = vec![0u64; self.num_vms as usize];
         let mut entry_point_temp = vec![0u32; self.num_vms as usize];
-        let mut hypercall_num_temp = vec![0u64; self.num_vms as usize];
+        let mut hypercall_num_temp = vec![0i32; self.num_vms as usize];
         // this is for debugging only...
         let mut check_results_debug = vec![0u8; 100 as usize];
         let mut sp_exit_flag;
         let mut entry_point_exit_flag;
+        let vm_slice: Vec<u32> = std::ops::Range { start: 0, end: (self.num_vms) }.collect();
+        let mut hypercall_sender = vec![];
+
+        /* 
+         * Start up N threads to serve WASI hypercalls
+         * 
+         * The WASI contexts are not thread safe, so we partition the VMs evenly across each
+         * thread, to ensure an even workload. Thread 0 = (0...N/4) VMs, where N = total number of VMs
+         * 
+         * The indexing is as follows:
+         * 
+         * vm_id % N => This gets the index in hypercall_sender to send to
+         * 
+         * Then, inside of each thread, the vm_id % (N/4) gets the WASI context
+         * 
+         */
+        let number_vms = self.num_vms.clone();
+        let num_threads = 4;
+        let (result_sender, result_receiver): (Sender<HyperCallResult>, Receiver<HyperCallResult>) = bounded(0);
+        for _idx in 0..num_threads {
+            let (sender, recv): (Sender<HyperCall>, Receiver<HyperCall>) = unbounded();
+            let sender_copy = result_sender.clone();
+            hypercall_sender.push(sender.clone());
+            thread::spawn(move || {
+                let receiver = recv.clone();
+                // create the WASI contexts for this thread
+                let mut wasi_ctxs = vec![];
+                for vm in 0..number_vms/num_threads {
+                    wasi_ctxs.push(VectorizedVM::new(vm));
+                }
+
+                loop {
+                    // in the primary loop, we will block until someone sends us a hypercall
+                    // to dispatch...
+                    let incoming_msg = match receiver.recv() {
+                        Ok(m) => m,
+                        _ => {
+                            // if the main sending thread is closed, we will get an error
+                            // we are handling that error elsewhere, so we can just exit the thread in that case
+                            break;
+                        },
+                    };
+                    // get the WASI context
+                    let wasi_context = &wasi_ctxs[(incoming_msg.vm_id % (num_threads/4)) as usize];
+
+                    wasi_context.dispatch_hypercall(&incoming_msg, &sender_copy.clone());
+                }
+            });    
+        }
 
         let buffers = match &self.buffers {
             Some(b) => b,
@@ -359,7 +444,6 @@ impl<'a> OpenCLRunner<'a> {
 
             sp_exit_flag = true;
             for sp in &stack_pointer_temp {
-                println!("sp: {}", sp);
                 sp_exit_flag = (*sp == (0 as u64)) & sp_exit_flag;
             }
 
@@ -371,7 +455,6 @@ impl<'a> OpenCLRunner<'a> {
             // if all entry_point == -1, also exit
             entry_point_exit_flag = true;
             for e in &entry_point_temp {
-                println!("entry: {}", *e as i32);
                 entry_point_exit_flag = (*e as i32 == (-1)) & entry_point_exit_flag;
             }
 
@@ -380,8 +463,40 @@ impl<'a> OpenCLRunner<'a> {
             }
 
             // now it is time to dispatch hypercalls
-            for hc in &hypercall_num_temp {
-                println!("hypercall_num: {}", hc);
+            vm_slice.as_slice().par_iter().for_each(|vm_id| {
+                let hypercall_id = match hypercall_num_temp[*vm_id as usize] as i64 {
+                    0 => WasiSyscalls::FdWrite,
+                    1 => WasiSyscalls::ProcExit,
+                    _ => WasiSyscalls::InvalidHyperCallNum,
+                };
+
+                hypercall_sender[(vm_id % 4) as usize].send(
+                    HyperCall::new(*vm_id,
+                                   stack_pointer_temp[*vm_id as usize],
+                                   hypercall_id,
+                                   self.is_memory_interleaved.clone(),
+                                   &buffers,
+                                   None,
+                                   None,
+                                   queue)
+                ).unwrap();
+            });
+
+            // now block until all of the hypercalls have been successfully dispatched
+            for _ in 0..self.num_vms {
+                let result = result_receiver.recv().unwrap();
+                // we want to special case proc_exit to exit the VM
+                match result.get_type() {
+                    WasiSyscalls::ProcExit => entry_point_temp[result.get_vm_id() as usize] = ((-1) as i32) as u32,
+                    _ => (),
+                }
+            }
+
+            // after all of the hypercalls are finished, we should update all of the stack pointers
+            // also we need to set the hypercall num to -1 to indicate we are resuming the continuation
+            for idx in 0..self.num_vms {
+                stack_pointer_temp[idx as usize] += 1;
+                hypercall_num_temp[idx as usize] = -1;
             }
 
             // check again for threads that may be done - this is because
@@ -389,7 +504,6 @@ impl<'a> OpenCLRunner<'a> {
             // we don't have to read again, we can have proc_exit write directly to entry_point_temp
             entry_point_exit_flag = true;
             for e in &entry_point_temp {
-                println!("entry: {}", *e as i32);
                 entry_point_exit_flag = (*e as i32 == (-1)) & entry_point_exit_flag;
             }
 
@@ -405,21 +519,37 @@ impl<'a> OpenCLRunner<'a> {
                 }
             }
 
+            // update the entry point to resume execution
+            // update all of the stack pointers
+            // update the hypercall numbers to -1 to indicate that we are now returning from the hypercall
+
             unsafe {
-                ocl::core::enqueue_write_buffer(&queue, &buffers.entry, true, 0, &mut entry_point_temp, None::<Event>, None::<&mut Event>).unwrap();
+                ocl::core::enqueue_write_buffer(&queue, &buffers.entry, false, 0, &mut entry_point_temp, None::<Event>, None::<&mut Event>).unwrap();
+                ocl::core::enqueue_write_buffer(&queue, &buffers.sp, false, 0, &mut stack_pointer_temp, None::<Event>, None::<&mut Event>).unwrap();
+                ocl::core::enqueue_write_buffer(&queue, &buffers.hypercall_num, false, 0, &mut hypercall_num_temp, None::<Event>, None::<&mut Event>).unwrap();
+                match ocl::core::finish(&queue) {
+                    Err(e) => {
+                        panic!("Unable to finish waiting on queue for write_buffer cmds\n\n{}", e);
+                    },
+                    Ok(_) => (),
+                }
             }
+
         }
 
+        /*
+        // To get final results back from the stack if we want for debugging stuff
         unsafe {
             ocl::core::enqueue_read_buffer(&queue, &buffers.stack_buffer, true, 0, &mut check_results_debug, None::<Event>, None::<&mut Event>).unwrap();
         }
 
         for item in check_results_debug {
-            println!("{}", item);
+            println!("END LOOP: {}", item);
         }
+        */
 
 
-        return VMMRuntimeStatus::STATUS_OKAY;
+        return VMMRuntimeStatus::StatusOkay;
     }
 
 }
