@@ -68,7 +68,7 @@ impl WasiFd {
 
             let fd = stack_bytes[0];
             let num_iovecs = stack_bytes[2] as usize;
-            let nbytes = stack_bytes[3];
+            let _nbytes = stack_bytes[3];
             let heap_offset = stack_bytes[1];
 
             /*
@@ -78,7 +78,15 @@ impl WasiFd {
             dbg!(heap_offset);
             */
 
-            // TODO: We should be reusing this for maximum efficiency
+            /*
+             * It may seem inefficient to recreate this for every hypercall, but it is actually far more efficient!
+             * This is because we only have N active threads at a time, so we only have N 64KiB pages allocated at a time!
+             * 
+             * Preallocating these structures adds *massive* overhead - 64KiB * (1024 * 16) = 1GiB!!!
+             * 
+             * The compute tradeoff is definately worth it, as we are far more memory-bound than anything else in this system
+             * 
+             */
             let engine = Engine::default();
             let store = Store::new(&engine);
             let memory_ty = MemoryType::new(Limits::new(1, None));
