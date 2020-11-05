@@ -46,7 +46,7 @@ pub fn generate_read_write_calls(writer: &opencl_writer::OpenCLCWriter, interlea
         },
         1 => {
             result += &format!("\t{}",
-                                "*((uchar*)((addr-mem_start)*NUM_THREADS) + warp_id + mem_start) = value;")
+                                "*((uchar*)((addr-mem_start)*(NUM_THREADS) + warp_id + mem_start)) = value;")
         }
         _ => panic!("Unsupported read/write interleave"),
     }
@@ -122,7 +122,7 @@ pub fn generate_read_write_calls(writer: &opencl_writer::OpenCLCWriter, interlea
         },
         1 => {
             result += &format!("\t{}",
-                                "return *((uchar*)((addr-mem_start)*NUM_THREADS) + warp_id + mem_start);");
+                                "return *((uchar*)((addr-mem_start)*NUM_THREADS + warp_id + mem_start));");
         }
         _ => panic!("Unsupported read/write interleave"),
     }
@@ -207,12 +207,37 @@ pub fn generate_read_write_calls(writer: &opencl_writer::OpenCLCWriter, interlea
     }
     result += &format!("\n{}\n",
                         "}");
+
+    // emit a memcpy function as well, for utility purposes
+    result += &format!("\n{}\n",
+                       "void memcpy(ulong src, ulong mem_start_src, ulong dst, ulong mem_start_dst, ulong buf_len_bytes, uint warp_id) {");
+    
+    result += &format!("\t{}\n",
+                       "for (uint idx = 0; idx < buf_len_bytes; idx++) {");
+
+    result += &format!("\t{};\n",
+                       emit_write_u8("(ulong)(dst+idx)", "(ulong)(mem_start_dst)",
+                       &emit_read_u8("(ulong)(src+idx)", "(ulong)(mem_start_src)", "warp_id"), "warp_id"));
+
+    result += &format!("\t{}\n",
+                       "}");
+    
+    result += &format!("\n{}\n",
+                       "}");
     result
 }
 
 /*
  * These are compiler-internal utility functions for emitting code
  */
+pub fn emit_read_u8(addr: &str , mem_start: &str, warp_id: &str) -> String {
+    format!("read_u8({}, {}, {})", addr, mem_start, warp_id)
+}
+
+pub fn emit_write_u8(addr: &str , mem_start: &str, value: &str, warp_id: &str) -> String {
+    format!("write_u8({}, {}, {}, {})", addr, mem_start, value, warp_id)
+}
+
 pub fn emit_read_u32(addr: &str , mem_start: &str, warp_id: &str) -> String {
     format!("read_u32({}, {}, {})", addr, mem_start, warp_id)
 }

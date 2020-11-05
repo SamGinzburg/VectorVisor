@@ -1,5 +1,4 @@
-#![feature(fn_traits)]
-
+#![feature(get_mut_unchecked)]
 extern crate ocl;
 
 mod opencl_writer;
@@ -45,6 +44,7 @@ fn main() {
     let stack_frames_size = 1024;
     let sfp_size = 1024;
     let predictor_size = 4096;
+    let num_vms = 1024 * 16;
 
     match (result, result_debug) {
         (true, true) => {
@@ -65,13 +65,13 @@ fn main() {
                                                                          stack_frames_size, 
                                                                          sfp_size, 
                                                                          predictor_size, 
-                                                                         true);
-                                                                
+                                                                         false);
+
             std::fs::write("test.c", compiled_debug_kernel).expect("Unable to write file");
 
 
             // 16KB stack/heap by default - TODO: change these values after done testing
-            let runner = opencl_runner::OpenCLRunner::new(1024 * 16, false, true, entry_point, compiled_kernel);
+            let runner = opencl_runner::OpenCLRunner::new(num_vms, false, true, entry_point, compiled_kernel);
 
 
             let (program, context, device_id) = runner.setup_kernel();
@@ -97,8 +97,9 @@ fn main() {
                 // These values really do last for the entire program, so it is fine to make them static
                 let final_runner = Box::leak(Box::new(new_runner));
                 let leaked_command_queue: &'static CommandQueue = Box::leak(Box::new(command_queue));
+                let hypercall_buffer_read_buffer: &'static mut [u8] = Box::leak(vec![0u8; 16 * 1024 * num_vms as usize].into_boxed_slice());
 
-                let status = final_runner.run_vector_vms(stack_frames_size, program, context, device_id, &leaked_command_queue);
+                let status = final_runner.run_vector_vms(stack_frames_size, program, &leaked_command_queue, hypercall_buffer_read_buffer, 1024*16, context);
                 // this line should never be reached, reaching it signifies that either
                 // 1) The VMM has exited normally
                 // 2) The VMM has exited prematurely due to a crash

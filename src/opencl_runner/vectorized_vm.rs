@@ -8,6 +8,9 @@ use ocl::core::CommandQueue;
 
 use crossbeam::channel::Sender;
 
+use std::sync::Arc;
+use std::cell::RefCell;
+
 #[derive(Clone, Copy)]
 pub enum WasiSyscalls {
     FdWrite,
@@ -23,32 +26,32 @@ impl fmt::Debug for WasiSyscalls {
 
 pub struct HyperCall<'a> {
     pub vm_id: u32,
+    pub num_total_vms: u32,
     pub sp: u64,
     pub syscall: WasiSyscalls,
     pub is_interleaved_mem: bool,
     pub ocl_buffers: &'a OpenCLBuffers,
-    pub raw_mem_stack: Option<&'a [u8]>,
-    pub raw_mem_heap: Option<&'a [u8]>,
+    pub hypercall_buffer: Arc<&'a mut [u8]>,
     pub queue: &'a CommandQueue,
 }
 
 impl<'a> HyperCall<'a> {
     pub fn new(vm_id: u32,
+               num_total_vms: u32,
                sp: u64,
                syscall: WasiSyscalls,
                is_interleaved_mem: bool,
                ocl_buffers: &'a OpenCLBuffers,
-               raw_mem_stack: Option<&'a [u8]>,
-               raw_mem_heap: Option<&'a [u8]>,
+               hypercall_buffer: Arc<&'a mut [u8]>,
                queue: &'a CommandQueue) -> HyperCall<'a> {
         HyperCall {
             vm_id: vm_id,
+            num_total_vms: num_total_vms,
             sp: sp,
             syscall: syscall,
             is_interleaved_mem: is_interleaved_mem,
             ocl_buffers: ocl_buffers,
-            raw_mem_stack: raw_mem_stack,
-            raw_mem_heap: raw_mem_heap,
+            hypercall_buffer: hypercall_buffer,
             queue: queue,
         }
     }
@@ -114,7 +117,7 @@ impl VectorizedVM {
      * using the given buffers.
      */
     pub fn dispatch_hypercall(&self,
-                              hypercall: &HyperCall,
+                              hypercall: &mut HyperCall,
                               sender: &Sender<HyperCallResult>) -> () {
         match hypercall.syscall {
             WasiSyscalls::FdWrite => {

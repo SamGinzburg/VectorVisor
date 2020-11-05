@@ -1,5 +1,6 @@
 mod vectorized_vm;
 mod wasi_fd;
+mod interleave_offsets;
 
 use wasi_fd::WasiFd;
 use vectorized_vm::VectorizedVM;
@@ -24,6 +25,9 @@ use ocl::core::CommandQueue;
 use crossbeam::channel::Sender;
 use crossbeam::channel::Receiver;
 
+
+use std::sync::Arc;
+use std::cell::RefCell;
 
 pub enum VMMRuntimeStatus {
     StatusOkay,
@@ -71,23 +75,6 @@ impl OpenCLBuffers {
                     entry: entry,
                 }
     }
-
-    pub fn copy(&self) -> OpenCLBuffers {
-        OpenCLBuffers {
-            stack_buffer: self.stack_buffer.clone(),
-            heap_buffer: self.heap_buffer.clone(),
-            stack_frames: self.stack_frames.clone(),
-            sp: self.sp.clone(),
-            sfp: self.sfp.clone(),
-            call_stack: self.call_stack.clone(),
-            branch_value_stack_state: self.branch_value_stack_state.clone(),
-            loop_value_stack_state: self.loop_value_stack_state.clone(),
-            hypercall_num: self.hypercall_num.clone(),
-            hypercall_continuation: self.hypercall_continuation.clone(),
-            entry: self.entry.clone(),
-        }
-
-    }
 }
 
 
@@ -111,10 +98,6 @@ impl OpenCLRunner {
             entry_point: entry_point,
             buffers: None,
         }
-    }
-
-    pub fn setup_vms(&self) -> () {
-        // TODO, initialize WASI stuff here
     }
 
     // All of the size parameters are *per-VM* sizes, not total
@@ -274,7 +257,13 @@ impl OpenCLRunner {
      * sits inside of a while loop, waiting for input to be sent to it on a channel.
      * 
      */
-    pub fn run_vector_vms(self: &'static OpenCLRunner, per_vm_stack_frames_size: u32, program: ocl::core::Program, context: ocl::core::Context, device_id: ocl::core::DeviceId, queue: &'static CommandQueue) -> (VMMRuntimeStatus) {
+    pub fn run_vector_vms(self: &'static OpenCLRunner,
+                         per_vm_stack_frames_size: u32,
+                         program: ocl::core::Program,
+                         queue: &'static CommandQueue,
+                         hypercall_buffer_read_buffer: &'static mut [u8],
+                         hypercall_buffer_size: u32,
+                         ctx: ocl::core::Context) -> VMMRuntimeStatus {
         // we have the compiled program & context, we now can set up the kernels...
         let data_kernel = ocl::core::create_kernel(&program, "data_init").unwrap();
         let start_kernel = ocl::core::create_kernel(&program, "wasm_entry").unwrap();
@@ -288,6 +277,19 @@ impl OpenCLRunner {
         let mut entry_point_exit_flag;
         let vm_slice: Vec<u32> = std::ops::Range { start: 0, end: (self.num_vms) }.collect();
         let mut hypercall_sender = vec![];
+        let mut hcall_read_buffer = Arc::new(hypercall_buffer_read_buffer);
+
+        /*
+         * Allocate the hypercall_buffer at the last minute, 16KiB per VM
+         *
+         */
+        let hypercall_buffer = unsafe {
+            ocl::core::create_buffer::<_, u8>(&ctx,
+                                              ocl::core::MEM_READ_WRITE,
+                                              (hypercall_buffer_size * self.num_vms) as usize,
+                                              None).unwrap()
+        };
+
 
         /* 
          * Start up N threads to serve WASI hypercalls
@@ -320,7 +322,7 @@ impl OpenCLRunner {
                 loop {
                     // in the primary loop, we will block until someone sends us a hypercall
                     // to dispatch...
-                    let incoming_msg = match receiver.recv() {
+                    let mut incoming_msg = match receiver.recv() {
                         Ok(m) => m,
                         _ => {
                             // if the main sending thread is closed, we will get an error
@@ -331,7 +333,7 @@ impl OpenCLRunner {
                     // get the WASI context
                     let wasi_context = &wasi_ctxs[(incoming_msg.vm_id % (num_threads/4)) as usize];
 
-                    wasi_context.dispatch_hypercall(&incoming_msg, &sender_copy.clone());
+                    wasi_context.dispatch_hypercall(&mut incoming_msg, &sender_copy.clone());
                 }
             });    
         }
@@ -403,21 +405,22 @@ impl OpenCLRunner {
                 Ok(_) => (),
             }
         }
-
+        
         // set up the clArgs for the wasm_entry kernel
         ocl::core::set_kernel_arg(&start_kernel, 0, ArgVal::mem(&buffers.stack_buffer)).unwrap();
         ocl::core::set_kernel_arg(&start_kernel, 1, ArgVal::mem(&buffers.stack_buffer)).unwrap();
         ocl::core::set_kernel_arg(&start_kernel, 2, ArgVal::mem(&buffers.heap_buffer)).unwrap();
         ocl::core::set_kernel_arg(&start_kernel, 3, ArgVal::mem(&buffers.heap_buffer)).unwrap();
-        ocl::core::set_kernel_arg(&start_kernel, 4, ArgVal::mem(&buffers.stack_frames)).unwrap();
-        ocl::core::set_kernel_arg(&start_kernel, 5, ArgVal::mem(&buffers.sp)).unwrap();
-        ocl::core::set_kernel_arg(&start_kernel, 6, ArgVal::mem(&buffers.sfp)).unwrap();
-        ocl::core::set_kernel_arg(&start_kernel, 7, ArgVal::mem(&buffers.call_stack)).unwrap();
-        ocl::core::set_kernel_arg(&start_kernel, 8, ArgVal::mem(&buffers.branch_value_stack_state)).unwrap();
-        ocl::core::set_kernel_arg(&start_kernel, 9, ArgVal::mem(&buffers.loop_value_stack_state)).unwrap();
-        ocl::core::set_kernel_arg(&start_kernel, 10, ArgVal::mem(&buffers.hypercall_num)).unwrap();
-        ocl::core::set_kernel_arg(&start_kernel, 11, ArgVal::mem(&buffers.hypercall_continuation)).unwrap();
-        ocl::core::set_kernel_arg(&start_kernel, 12, ArgVal::mem(&buffers.entry)).unwrap();
+        ocl::core::set_kernel_arg(&start_kernel, 4, ArgVal::mem(&hypercall_buffer)).unwrap();
+        ocl::core::set_kernel_arg(&start_kernel, 5, ArgVal::mem(&buffers.stack_frames)).unwrap();
+        ocl::core::set_kernel_arg(&start_kernel, 6, ArgVal::mem(&buffers.sp)).unwrap();
+        ocl::core::set_kernel_arg(&start_kernel, 7, ArgVal::mem(&buffers.sfp)).unwrap();
+        ocl::core::set_kernel_arg(&start_kernel, 8, ArgVal::mem(&buffers.call_stack)).unwrap();
+        ocl::core::set_kernel_arg(&start_kernel, 9, ArgVal::mem(&buffers.branch_value_stack_state)).unwrap();
+        ocl::core::set_kernel_arg(&start_kernel, 10, ArgVal::mem(&buffers.loop_value_stack_state)).unwrap();
+        ocl::core::set_kernel_arg(&start_kernel, 11, ArgVal::mem(&buffers.hypercall_num)).unwrap();
+        ocl::core::set_kernel_arg(&start_kernel, 12, ArgVal::mem(&buffers.hypercall_continuation)).unwrap();
+        ocl::core::set_kernel_arg(&start_kernel, 13, ArgVal::mem(&buffers.entry)).unwrap();
 
         // now the data in the program has been initialized, we can run the main loop
         loop {
@@ -462,6 +465,12 @@ impl OpenCLRunner {
                 break;
             }
 
+            // read the hypercall_buffer
+            unsafe {
+                let buf: &mut [u8] = *Arc::get_mut(&mut hcall_read_buffer).unwrap();
+                ocl::core::enqueue_read_buffer(&queue, &hypercall_buffer, true, 0, buf, None::<Event>, None::<&mut Event>).unwrap();
+            }
+
             // now it is time to dispatch hypercalls
             vm_slice.as_slice().par_iter().for_each(|vm_id| {
                 let hypercall_id = match hypercall_num_temp[*vm_id as usize] as i64 {
@@ -472,12 +481,12 @@ impl OpenCLRunner {
 
                 hypercall_sender[(vm_id % 4) as usize].send(
                     HyperCall::new(*vm_id,
+                                   number_vms,
                                    stack_pointer_temp[*vm_id as usize],
                                    hypercall_id,
                                    self.is_memory_interleaved.clone(),
                                    &buffers,
-                                   None,
-                                   None,
+                                   hcall_read_buffer.clone(),
                                    queue)
                 ).unwrap();
             });
@@ -547,7 +556,6 @@ impl OpenCLRunner {
             println!("END LOOP: {}", item);
         }
         */
-
 
         return VMMRuntimeStatus::StatusOkay;
     }

@@ -4,6 +4,7 @@ mod control_flow;
 mod functions;
 mod mem_interleave;
 mod relops;
+mod wasi_helpers;
 
 use relops::*;
 use mem_interleave::*;
@@ -11,6 +12,7 @@ use functions::*;
 use stackops::*;
 use binops::*;
 use control_flow::*;
+use wasi_helpers::*;
 
 use wast::Wat;
 use wast::parser::{self, ParseBuffer};
@@ -122,6 +124,13 @@ impl<'a> OpenCLCWriter<'_> {
         let mut ret_str = String::from("");
         // set the hypercall ret flag flag + r
         ret_str += &format!("\t{}\n", format!("*hypercall_number = {};", hypercall_id));
+
+        // run the hypercall setup code - to marshall data for the VMM to read
+        match hypercall_id {
+            0 => ret_str += &emit_fd_write_call_helper(self, debug),
+            _ => (),
+        }
+
         // insert return (we exit back to the VMM)
         ret_str += &format!("\t{}\n\t{}\n",
                             format!("*hypercall_continuation = {};", hypercall_id_count),
@@ -499,6 +508,21 @@ impl<'a> OpenCLCWriter<'_> {
         result
     }
 
+    // This function generates helper functions for performing reads/writes to the stack/heap
+    // we call these functions right before returning back to the VMM, and on re-entry
+    fn generate_hypercall_helpers(&self, debug: bool) -> String {
+        let mut result = String::from("");
+
+        // for each hypercall that we can identify in the import section, generate the read_helper
+        for (_, value) in &self.imports_map {
+            match value {
+                (_, hypercall_name, _) => result += &emit_hypercall_helpers(self, *hypercall_name, debug),
+                _ => (),
+            }
+        }
+        result
+    }
+
     pub fn write_opencl_file(&self,
                              interleave: u32,
                              stack_size_bytes: u32,
@@ -528,6 +552,9 @@ impl<'a> OpenCLCWriter<'_> {
         // 0 = no interleave
         write!(output, "{}", generate_read_write_calls(&self, interleave, debug));
 
+        // generate the hypercall helper section
+        write!(output, "{}", self.generate_hypercall_helpers(debug));
+
         // generate the data loading function
         write!(output, "{}", self.generate_data_section(debug));
 
@@ -537,27 +564,29 @@ impl<'a> OpenCLCWriter<'_> {
         if debug {
             // write thread-local private variables before header
             // store branch stack pointers for branch value stack unwinding
-            write!(output, "void wasm_entry(uint *stack_u32,
-                                            ulong *stack_u64,
-                                            uint *heap_u32,
-                                            ulong *heap_u64,
-                                            uint *stack_frames,
-                                            ulong *sp,
-                                            ulong *sfp,
-                                            ulong *call_stack,
+            write!(output, "void wasm_entry(uint   *stack_u32,
+                                            ulong  *stack_u64,
+                                            uint   *heap_u32,
+                                            ulong  *heap_u64,
+                                            uint   *hypercall_buffer,
+                                            uint   *stack_frames,
+                                            ulong  *sp,
+                                            ulong  *sfp,
+                                            ulong  *call_stack,
                                             ushort *branch_value_stack_state,
                                             ushort *loop_value_stack_state,
-                                            int *hypercall_number,
-                                            uint *hypercall_continuation,
-                                            uint entry_point) {{\n");
+                                            int    *hypercall_number,
+                                            uint   *hypercall_continuation,
+                                            uint   entry_point) {{\n");
             // for debugging hardcode the warp_idx to 0
             write!(output, "\tulong warp_idx = 0;\n");
         } else {
-            let header = format!("__kernel void wasm_entry(__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}) {{\n",
+            let header = format!("__kernel void wasm_entry(__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}) {{\n",
                                     "uint  *stack_u32_global,",
                                     "ulong *stack_u64_global,",
                                     "uint  *heap_u32_global,",
                                     "ulong *heap_u64_global,",
+                                    "uint  *hypercall_buffer_global,",
                                     "uint  *stack_frames_global,",
                                     "ulong *sp_global,",
                                     "ulong *sfp_global,",
@@ -572,11 +601,12 @@ impl<'a> OpenCLCWriter<'_> {
             write!(output, "{}", header);
             // TODO: for the openCL launcher, pass the memory stride as a function parameter
             if interleave > 0 {
-                write!(output, "\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\n\t{}\n",
+                write!(output, "\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\n\t{}\n",
                 "uint  *stack_u32    = (uint*)stack_u32_global;",
                 "ulong *stack_u64    = (ulong*)stack_u32;",
                 "uint  *heap_u32     = (uint *)heap_u32_global;",
                 "ulong *heap_u64     = (ulong *)heap_u32;",
+                "uint  *hypercall_buffer = (uint *)hypercall_buffer_global;",
                 "uint  *stack_frames = (uint*)stack_frames_global;",
                 // only an array of N elements, where N=warp size
                 "ulong *sp           = (ulong *)sp_global+(get_global_id(0));",
@@ -593,11 +623,13 @@ impl<'a> OpenCLCWriter<'_> {
                 "ulong warp_idx = get_global_id(0);");
             } else {
                 // The pointer math must be calculated in terms of bytes, which is why we cast to (char*) first
-                write!(output, "\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\n\t{}\n",
+                write!(output, "\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\n\t{}\n",
                 format!("uint  *stack_u32    = (uint*)((char*)stack_u32_global+(get_global_id(0) * {}));", stack_size_bytes),
                 "ulong *stack_u64    = (ulong*)stack_u32;",
                 format!("uint  *heap_u32     = (uint *)((char*)heap_u32_global+(get_global_id(0) * {}));", heap_size_bytes),
                 "ulong *heap_u64     = (ulong *)heap_u32;",
+                // the hypercall_buffer is hardcoded to always be 16KiB - we can change this later if needed possibly
+                "uint  *hypercall_buffer = (uint *)((char*)hypercall_buffer_global+(get_global_id(0) * 1024*16));",
                 format!("uint  *stack_frames = (uint*)((char*)stack_frames_global+(get_global_id(0) * {}));", stack_frames_size_bytes),
                 // only an array of N elements, where N=warp size
                 "ulong *sp           = (ulong *)sp_global+(get_global_id(0));",
