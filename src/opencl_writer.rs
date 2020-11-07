@@ -489,18 +489,37 @@ impl<'a> OpenCLCWriter<'_> {
 
     // This function generates the helper kernel that loads the data sections
     // of a program into memory, it is basically just a memcpy
-    fn generate_data_section(&self, debug: bool) -> String {
+    fn generate_data_section(&self, interleave: u32, heap_size: u32, debug: bool) -> String {
         let mut result = String::from("");
 
         if debug {
-            result += &String::from("\nvoid data_init(uint *heap_u32) {\n");
+            result += &String::from("\nvoid data_init(uint *heap_u32_global) {\n");
             result += &String::from("\tulong warp_idx = 0;\n");
+
+            // if no interleave, set the appropriate heap offset
+            if interleave == 0 {
+                result += &format!("\t{}\n",
+                                   format!("uint *heap_u32 = (uint *)((char*)heap_u32_global+(get_global_id(0) * {}));", heap_size));
+            } else {
+                result += &format!("\t{}\n",
+                                    format!("uint *heap_u32 = (uint *)((char*)heap_u32_global);"));
+            }
+
             result += &self.emit_memcpy_arr();
 
             result += &String::from("}\n\n");
         } else {
-            result += &String::from("\n__kernel void data_init(__global uint *heap_u32) {\n");
+            result += &String::from("\n__kernel void data_init(__global uint *heap_u32_global) {\n");
             result += &String::from("\tulong warp_idx = get_global_id(0);\n");
+
+            if interleave == 0 {
+                result += &format!("\t{}\n",
+                                   format!("uint *heap_u32 = (uint *)((char*)heap_u32_global+(get_global_id(0) * {}));", heap_size));
+            } else {
+                result += &format!("\t{}\n",
+                                    format!("uint *heap_u32 = (uint *)((char*)heap_u32_global);"));
+            }
+
             result += &self.emit_memcpy_arr();
 
             result += &String::from("}\n\n");
@@ -556,7 +575,7 @@ impl<'a> OpenCLCWriter<'_> {
         write!(output, "{}", self.generate_hypercall_helpers(debug));
 
         // generate the data loading function
-        write!(output, "{}", self.generate_data_section(debug));
+        write!(output, "{}", self.generate_data_section(interleave, heap_size_bytes, debug));
 
         /*
          * Generate code for each function in the file first

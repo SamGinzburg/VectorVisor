@@ -73,8 +73,7 @@ pub fn emit_fd_write_helpers(writer: &opencl_writer::OpenCLCWriter, debug: bool)
     result += &format!("\tuint buf_len = 0;\n");
     // the next location in the hypercall_buffer where we will write our buffer
     // it starts off pointing at the end of the iovec arr
-    result += &format!("\tuint next_buffer_start = iovec_loop_ctr * 2 + 16;\n");
-
+    result += &format!("\tuint next_buffer_start = iovec_loop_ctr*8;\n");
 
     result += &format!("\t{}\n",
                        format!("for(uint idx = 0; idx < {}; idx ++) {{", "iovec_loop_ctr"));

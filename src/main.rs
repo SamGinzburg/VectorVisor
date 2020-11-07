@@ -37,19 +37,20 @@ fn main() {
     let result = ast.parse_file().unwrap();
     let result_debug = ast_debug.parse_file().unwrap();
 
-    // per-VM parameters
+    // per-VM parameters (all in bytes)
     let stack_size = 1024 * 16;
     let heap_size = 1024 * 16;
     let call_stack_size = 1024;
     let stack_frames_size = 1024;
     let sfp_size = 1024;
     let predictor_size = 4096;
-    let num_vms = 1024 * 16;
+    let num_vms = 16384;
+    let interleaved = false;
 
     match (result, result_debug) {
         (true, true) => {
             // apply our compilation pass to the source WASM 
-            let (compiled_kernel, entry_point) = ast.write_opencl_file(0,
+            let (compiled_kernel, entry_point) = ast.write_opencl_file(interleaved as u32,
                                                                        stack_size,
                                                                        heap_size, 
                                                                        call_stack_size, 
@@ -58,7 +59,7 @@ fn main() {
                                                                        predictor_size, 
                                                                        false);
 
-            let (compiled_debug_kernel, _) = ast_debug.write_opencl_file(0,
+            let (compiled_debug_kernel, _) = ast_debug.write_opencl_file(interleaved as u32,
                                                                          stack_size,
                                                                          heap_size, 
                                                                          call_stack_size, 
@@ -71,7 +72,7 @@ fn main() {
 
 
             // 16KB stack/heap by default - TODO: change these values after done testing
-            let runner = opencl_runner::OpenCLRunner::new(num_vms, false, true, entry_point, compiled_kernel);
+            let runner = opencl_runner::OpenCLRunner::new(num_vms, interleaved, true, entry_point, compiled_kernel);
 
 
             let (program, context, device_id) = runner.setup_kernel();

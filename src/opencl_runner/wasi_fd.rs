@@ -30,84 +30,81 @@ pub struct WasiFd {}
 
 impl WasiFd {
     pub fn hypercall_fd_write(ctx: &WasiCtx, hypercall: &mut HyperCall, sender: &Sender<HyperCallResult>) -> () {
-        /*
-            pub vm_id: u32,
-            syscall: WasiSyscalls,
-            is_interleaved_mem: bool,
-            ocl_buffers: &'a OpenCLBuffers,
-            raw_mem_stack: Option<&'a [u8]>,
-            raw_mem_heap: Option<&'a [u8]>
-        */
+
+        let mut hcall_buf: &mut [u8] = unsafe { *Arc::get_mut_unchecked(&mut hypercall.hypercall_buffer) };
 
         /*
-         * Our VMM supports two distinct memory models, standard and interleaved. 
-         *  In the interleaved memory model all offsets of the same value are adjacent to each other,
-         *  so we can coalesce reads/writes to memory for maximum efficiency. 
+         * It may seem inefficient to recreate this for every hypercall, but it is actually far more efficient!
+         * This is because we only have N active threads at a time, so we only have N 64KiB pages allocated at a time!
          * 
-         * For the standard memory model we will do all reads/writes to GPU memory right here
+         * Preallocating these structures adds *massive* overhead - 64KiB * (1024 * 16) = 1GiB!!!
+         * 
+         * The compute tradeoff is definately worth it, as we are far more memory-bound than anything else in this system
+         * 
          */
+        let engine = Engine::default();
+        let store = Store::new(&engine);
+        let memory_ty = MemoryType::new(Limits::new(1, None));
+        let memory = Memory::new(&store, memory_ty);
+
+        let fd: u32;
+        let num_iovecs: u32;
+        let mut bytes_to_copy: u32 = 0;
+        let raw_mem: &mut [u8] = unsafe { memory.data_unchecked_mut() };
+
+        // copy the hypercall buffer over to the memory object
+        // TODO: we can optimize this later, to read minimal amounts of memory
+        // Further TODO: we also need to create a generic interleaved read/write function for this
         if hypercall.is_interleaved_mem {
-            // we need 4*4*hypercall.number_vms because of the interleaved memory model
-            let mut stack_bytes: &mut [u8] = &mut vec![0; 4*4*hypercall.num_total_vms as usize].into_boxed_slice();
-            // read the last 4 32 bit values off of the stack
-            let num_vms = hypercall.num_total_vms as u64;
-            let stack_read_offset = hypercall.sp*num_vms-(4*num_vms);
-            println!("{}", stack_read_offset);
-            unsafe {
-                ocl::core::enqueue_read_buffer(&hypercall.queue, &hypercall.ocl_buffers.stack_buffer, true, stack_read_offset as usize, &mut stack_bytes, None::<Event>, None::<&mut Event>).unwrap();
+            fd = Interleave::read_u32(hcall_buf, 0, hypercall.num_total_vms, hypercall.vm_id);
+            num_iovecs = Interleave::read_u32(hcall_buf, 8, hypercall.num_total_vms, hypercall.vm_id);
+
+            // for each iovec, read the buf_len to determine how many bytes to actually copy over
+            for idx in 0..num_iovecs {
+                bytes_to_copy += Interleave::read_u32(hcall_buf, 16 + 8 * idx + 4, hypercall.num_total_vms, hypercall.vm_id);
             }
 
-            println!("{:?}", stack_bytes);
-
-            let fd = stack_bytes[0];
-            let num_iovecs = stack_bytes[2] as usize;
-            let _nbytes = stack_bytes[3];
-            let heap_offset = stack_bytes[1];
-
-
-            sender.send({
-                HyperCallResult::new(0 as i32, hypercall.vm_id, WasiSyscalls::FdWrite)
-            }).unwrap();
-
+            // the amount of bytes to copy is the sum of all buf_lens + size of the iovec_arr
+            // we account for the 16 byte header too
+            bytes_to_copy += 8 * num_iovecs;
+            for idx in 16..(16 + bytes_to_copy) as usize {
+                raw_mem[idx - 16] = Interleave::read_u8(hcall_buf,
+                                                        idx as u32,
+                                                        hypercall.num_total_vms,
+                                                        hypercall.vm_id);
+            }
         } else {
+            // set the buffer to the scratch space for the appropriate VM
+            // we don't have to do this for the interleave
+            hcall_buf = &mut hcall_buf[(hypercall.vm_id * 16384) as usize..((hypercall.vm_id+1) * 16384) as usize];
+            fd = LittleEndian::read_u32(&hcall_buf[0..4]);
+            num_iovecs = LittleEndian::read_u32(&hcall_buf[8..12]);
 
-            let hcall_buf: &mut [u8] = unsafe { *Arc::get_mut_unchecked(&mut hypercall.hypercall_buffer) };
+            // for each iovec, read the buf_len to determine how many bytes to actually copy over
+            for idx in 0..num_iovecs {
+                let offset: usize = (16 + 8 * idx + 4) as usize;
+                bytes_to_copy += LittleEndian::read_u32(&hcall_buf[offset..offset+4]);
+            }
 
-            /*
-             * It may seem inefficient to recreate this for every hypercall, but it is actually far more efficient!
-             * This is because we only have N active threads at a time, so we only have N 64KiB pages allocated at a time!
-             * 
-             * Preallocating these structures adds *massive* overhead - 64KiB * (1024 * 16) = 1GiB!!!
-             * 
-             * The compute tradeoff is definately worth it, as we are far more memory-bound than anything else in this system
-             * 
-             */
-            let engine = Engine::default();
-            let store = Store::new(&engine);
-            let memory_ty = MemoryType::new(Limits::new(1, None));
-            let memory = Memory::new(&store, memory_ty);
+            // the amount of bytes to copy is the sum of all buf_lens + size of the iovec_arr
+            // we account for the 16 byte header too
+            bytes_to_copy += 8 * num_iovecs;
 
-            let raw_mem: &mut [u8] = unsafe { memory.data_unchecked_mut() };
-
-            // copy the hypercall buffer over to the memory object
-            // TODO: we can optimize this later, to read minimal amounts of memory
-            // Further TODO: we also need to create a generic interleaved read/write function for this
-            for idx in 16..16384 {
+            for idx in 16..(16 + bytes_to_copy) as usize {
                 raw_mem[idx - 16] = hcall_buf[idx];
             }
-
-            // after all reads/writes are done, wrap the memory with the GuestMemory trait
-            let wasm_mem = WasmtimeGuestMemory::new(memory);
-
-            // we hardcode the ciovec array to start at offset 0
-            let ciovec_ptr: &CiovecArray = &GuestPtr::new(&wasm_mem, (0 as u32, 1 as u32));
-
-            let result = ctx.fd_write(Fd::from(1), &ciovec_ptr);
-
-            sender.send({
-                HyperCallResult::new(result.unwrap() as i32, hypercall.vm_id, WasiSyscalls::FdWrite)
-            }).unwrap();
-
         }
+
+        // after all reads/writes are done, wrap the memory with the GuestMemory trait
+        let wasm_mem = WasmtimeGuestMemory::new(memory);
+
+        // we hardcode the ciovec array to start at offset 0
+        let ciovec_ptr: &CiovecArray = &GuestPtr::new(&wasm_mem, (0 as u32, 1 as u32));
+
+        let result = ctx.fd_write(Fd::from(fd), &ciovec_ptr);
+
+        sender.send({
+            HyperCallResult::new(result.unwrap() as i32, hypercall.vm_id, WasiSyscalls::FdWrite)
+        }).unwrap();
     }
 }
