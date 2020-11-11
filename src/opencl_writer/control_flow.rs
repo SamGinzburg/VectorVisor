@@ -24,7 +24,6 @@ pub fn emit_br(writer: &opencl_writer::OpenCLCWriter, idx: wast::Index, fn_name:
     ret_str += &format!("\t{}\n", format!("/* br {} */", branch_id));
 
     // first we want to pop the result value off of the stack, and push it
-    dbg!(prev_stack_size);
     /*
     match prev_stack_size {
         1 => {
@@ -62,15 +61,11 @@ pub fn emit_br_if(writer: &opencl_writer::OpenCLCWriter, idx: wast::Index, fn_na
 // semantically, the end statement pops from the control stack,
 // in our compiler, this is a no-op
 pub fn emit_end<'a>(writer: &opencl_writer::OpenCLCWriter<'a>, id: &Option<wast::Id<'a>>, label: &str, block_type: u32, fn_name: &str, function_id_map: HashMap<&str, u32>, debug: bool) -> String {
-    dbg!(id);
-    dbg!(label);
-    dbg!(block_type);
     println!("emit end!");
     // after a block ends, we need to unwind the stack!
     let re = Regex::new(r"\d+").unwrap();
     // we can use the branch index to save to global state
     let branch_idx: &str = re.captures(label).unwrap().get(0).map_or("", |m| m.as_str());
-    dbg!(branch_idx);
     let branch_idx_u32 = branch_idx.parse::<u32>().unwrap();
     if branch_idx_u32 > 1024 {
         panic!("Only up to 1024 branches per function are supported");
@@ -104,11 +99,9 @@ pub fn emit_loop(writer: &opencl_writer::OpenCLCWriter, block: &wast::BlockType,
 
     // first we have to save the current stack pointer
     // to reset the stack if we jump to this label
-    dbg!(label);
     let re = Regex::new(r"\d+").unwrap();
     // we can use the branch index to save to global state
     let branch_idx: &str = re.captures(label).unwrap().get(0).map_or("", |m| m.as_str());
-    dbg!(branch_idx);
     let branch_idx_u32 = branch_idx.parse::<u32>().unwrap();
     if branch_idx_u32 > 1024 {
         panic!("Only up to 1024 branches per function are supported");
@@ -140,11 +133,9 @@ pub fn emit_block(writer: &opencl_writer::OpenCLCWriter, block: &wast::BlockType
 
     // first we have to save the current stack pointer
     // to reset the stack if we jump to this label
-    dbg!(label);
     let re = Regex::new(r"\d+").unwrap();
     // we can use the branch index to save to global state
     let branch_idx: &str = re.captures(label).unwrap().get(0).map_or("", |m| m.as_str());
-    dbg!(branch_idx);
     let branch_idx_u32 = branch_idx.parse::<u32>().unwrap();
     if branch_idx_u32 > 1024 {
         panic!("Only up to 1024 branches per function are supported");

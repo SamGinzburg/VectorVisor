@@ -6,8 +6,9 @@ use wasi_fd::WasiFd;
 use vectorized_vm::VectorizedVM;
 use vectorized_vm::HyperCall;
 use vectorized_vm::HyperCallResult;
-
 use vectorized_vm::WasiSyscalls;
+
+use interleave_offsets::Interleave;
 
 use std::ffi::CString;
 
@@ -39,6 +40,7 @@ pub struct OpenCLBuffers {
     stack_buffer: ocl::core::Mem,
     heap_buffer: ocl::core::Mem,
     stack_frames: ocl::core::Mem,
+    globals_buffer: ocl::core::Mem,
     sp: ocl::core::Mem,
     sfp: ocl::core::Mem,
     call_stack: ocl::core::Mem,
@@ -53,6 +55,7 @@ impl OpenCLBuffers {
     pub fn new(stack_buffer: ocl::core::Mem,
                heap_buffer: ocl::core::Mem,
                stack_frames: ocl::core::Mem,
+               globals_buffer: ocl::core::Mem,
                sp: ocl::core::Mem,
                sfp: ocl::core::Mem,
                call_stack: ocl::core::Mem,
@@ -65,6 +68,7 @@ impl OpenCLBuffers {
                     stack_buffer: stack_buffer,
                     heap_buffer: heap_buffer,
                     stack_frames: stack_frames,
+                    globals_buffer: globals_buffer,
                     sp: sp,
                     sfp: sfp,
                     call_stack: call_stack,
@@ -108,6 +112,7 @@ impl OpenCLRunner {
                           stack_frame_ptr_size: u32,
                           call_stack_size: u32,
                           predictor_size: u32,
+                          global_buffers_size: u32,
                           context: ocl::core::Context) -> (OpenCLRunner, ocl::core::Context) {
         let stack_buffer = unsafe {
             ocl::core::create_buffer::<_, u8>(&context,
@@ -121,6 +126,24 @@ impl OpenCLRunner {
                                               ocl::core::MEM_READ_WRITE,
                                               (heap_size * self.num_vms) as usize,
                                               None).unwrap()
+        };
+
+
+        let globals_buffer = unsafe {
+            if global_buffers_size > 0 {
+                ocl::core::create_buffer::<_, u8>(&context,
+                    ocl::core::MEM_READ_WRITE,
+                    // global_buffers_size is in increments of 4 bytes
+                    (global_buffers_size * 4 * self.num_vms) as usize,
+                    None).unwrap()
+            } else {
+                // just to get by, create a buffer of size 1 that we will never use
+                ocl::core::create_buffer::<_, u8>(&context,
+                    ocl::core::MEM_READ_WRITE,
+                    // global_buffers_size is in increments of 4 bytes
+                    1,
+                    None).unwrap()
+            }
         };
 
         /*
@@ -197,6 +220,7 @@ impl OpenCLRunner {
         self.buffers = Some(OpenCLBuffers::new(stack_buffer,
                                                heap_buffer,
                                                stack_frames,
+                                               globals_buffer,
                                                sp,
                                                sfp,
                                                call_stack,
@@ -272,7 +296,7 @@ impl OpenCLRunner {
         let mut entry_point_temp = vec![0u32; self.num_vms as usize];
         let mut hypercall_num_temp = vec![0i32; self.num_vms as usize];
         // this is for debugging only...
-        let mut check_results_debug = vec![0u8; 100 as usize];
+        let mut check_results_debug = vec![0u8; 200 as usize];
         let mut sp_exit_flag;
         let mut entry_point_exit_flag;
         let vm_slice: Vec<u32> = std::ops::Range { start: 0, end: (self.num_vms) }.collect();
@@ -396,6 +420,8 @@ impl OpenCLRunner {
 
         // run the data kernel to init the memory
         ocl::core::set_kernel_arg(&data_kernel, 0, ArgVal::mem(&buffers.heap_buffer)).unwrap();
+        ocl::core::set_kernel_arg(&data_kernel, 1, ArgVal::mem(&buffers.globals_buffer)).unwrap();
+
         unsafe {
             ocl::core::enqueue_kernel(&queue, &data_kernel, 1, None, &[self.num_vms as usize, 1, 1], None, None::<Event>, None::<&mut Event>).unwrap();
             match ocl::core::finish(&queue) {
@@ -412,15 +438,16 @@ impl OpenCLRunner {
         ocl::core::set_kernel_arg(&start_kernel, 2, ArgVal::mem(&buffers.heap_buffer)).unwrap();
         ocl::core::set_kernel_arg(&start_kernel, 3, ArgVal::mem(&buffers.heap_buffer)).unwrap();
         ocl::core::set_kernel_arg(&start_kernel, 4, ArgVal::mem(&hypercall_buffer)).unwrap();
-        ocl::core::set_kernel_arg(&start_kernel, 5, ArgVal::mem(&buffers.stack_frames)).unwrap();
-        ocl::core::set_kernel_arg(&start_kernel, 6, ArgVal::mem(&buffers.sp)).unwrap();
-        ocl::core::set_kernel_arg(&start_kernel, 7, ArgVal::mem(&buffers.sfp)).unwrap();
-        ocl::core::set_kernel_arg(&start_kernel, 8, ArgVal::mem(&buffers.call_stack)).unwrap();
-        ocl::core::set_kernel_arg(&start_kernel, 9, ArgVal::mem(&buffers.branch_value_stack_state)).unwrap();
-        ocl::core::set_kernel_arg(&start_kernel, 10, ArgVal::mem(&buffers.loop_value_stack_state)).unwrap();
-        ocl::core::set_kernel_arg(&start_kernel, 11, ArgVal::mem(&buffers.hypercall_num)).unwrap();
-        ocl::core::set_kernel_arg(&start_kernel, 12, ArgVal::mem(&buffers.hypercall_continuation)).unwrap();
-        ocl::core::set_kernel_arg(&start_kernel, 13, ArgVal::mem(&buffers.entry)).unwrap();
+        ocl::core::set_kernel_arg(&start_kernel, 5, ArgVal::mem(&buffers.globals_buffer)).unwrap();
+        ocl::core::set_kernel_arg(&start_kernel, 6, ArgVal::mem(&buffers.stack_frames)).unwrap();
+        ocl::core::set_kernel_arg(&start_kernel, 7, ArgVal::mem(&buffers.sp)).unwrap();
+        ocl::core::set_kernel_arg(&start_kernel, 8, ArgVal::mem(&buffers.sfp)).unwrap();
+        ocl::core::set_kernel_arg(&start_kernel, 9, ArgVal::mem(&buffers.call_stack)).unwrap();
+        ocl::core::set_kernel_arg(&start_kernel, 10, ArgVal::mem(&buffers.branch_value_stack_state)).unwrap();
+        ocl::core::set_kernel_arg(&start_kernel, 11, ArgVal::mem(&buffers.loop_value_stack_state)).unwrap();
+        ocl::core::set_kernel_arg(&start_kernel, 12, ArgVal::mem(&buffers.hypercall_num)).unwrap();
+        ocl::core::set_kernel_arg(&start_kernel, 13, ArgVal::mem(&buffers.hypercall_continuation)).unwrap();
+        ocl::core::set_kernel_arg(&start_kernel, 14, ArgVal::mem(&buffers.entry)).unwrap();
 
         // now the data in the program has been initialized, we can run the main loop
         loop {
@@ -543,17 +570,25 @@ impl OpenCLRunner {
                     Ok(_) => (),
                 }
             }
-
         }
 
-        /*
         // To get final results back from the stack if we want for debugging stuff
+        // only uncomment this out if you need to debug stuff, it will panic if you have too many VMs and too small of a buffer
+        /*
         unsafe {
             ocl::core::enqueue_read_buffer(&queue, &buffers.stack_buffer, true, 0, &mut check_results_debug, None::<Event>, None::<&mut Event>).unwrap();
         }
 
-        for item in check_results_debug {
-            println!("END LOOP: {}", item);
+        if self.is_memory_interleaved {
+            for idx in 0..self.num_vms {
+                let result = Interleave::read_u32(&mut check_results_debug, 0, self.num_vms, idx);
+                dbg!(result);
+            }
+        } else {
+            use byteorder::LittleEndian;
+            use byteorder::ByteOrder;
+            let result = LittleEndian::read_u32(&check_results_debug[0..4]);
+            dbg!(result);
         }
         */
 

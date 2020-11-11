@@ -119,6 +119,8 @@ int main(int argc, char** argv)
 	cl_mem stack_u64;
 	cl_mem heap_u32;
 	cl_mem heap_u64;
+    cl_mem globals;
+    cl_mem hcall_buf;
 	cl_mem stack_frames;
     cl_mem sp;
 	cl_mem sfp;
@@ -224,6 +226,10 @@ int main(int argc, char** argv)
     stack_u32 = clCreateBuffer(context,  CL_MEM_READ_WRITE,  STACK_SIZE_BYTES * WARP_SIZE, NULL, NULL);
     stack_u64 = stack_u32;
     heap_u32 = clCreateBuffer(context,  CL_MEM_READ_WRITE, HEAP_SIZE_BYTES * WARP_SIZE, NULL, NULL);
+    
+    globals = clCreateBuffer(context,  CL_MEM_READ_WRITE, HEAP_SIZE_BYTES * WARP_SIZE, NULL, NULL);
+    hcall_buf = clCreateBuffer(context,  CL_MEM_READ_WRITE, HEAP_SIZE_BYTES * WARP_SIZE, NULL, NULL);
+
     heap_u64 = heap_u32;
     stack_frames = clCreateBuffer(context,  CL_MEM_READ_WRITE,  STACK_SIZE_BYTES * WARP_SIZE, NULL, NULL);
     sp = clCreateBuffer(context,  CL_MEM_READ_WRITE, sizeof(unsigned long) * WARP_SIZE, NULL, NULL);
@@ -284,19 +290,22 @@ int main(int argc, char** argv)
     err |= clSetKernelArg(kernel, 1, sizeof(cl_mem), &stack_u64);
     err |= clSetKernelArg(kernel, 2, sizeof(cl_mem), &heap_u32);
     err |= clSetKernelArg(kernel, 3, sizeof(cl_mem), &heap_u64);
-    err  = clSetKernelArg(kernel, 4, sizeof(cl_mem), &stack_frames);
-    err |= clSetKernelArg(kernel, 5, sizeof(cl_mem), &sp);
-    err |= clSetKernelArg(kernel, 6, sizeof(cl_mem), &sfp);
-    err |= clSetKernelArg(kernel, 7, sizeof(cl_mem), &call_stack);
-    err |= clSetKernelArg(kernel, 8, sizeof(cl_mem), &branch_value_stack_state);
-    err |= clSetKernelArg(kernel, 9, sizeof(cl_mem), &loop_value_stack_state);
-    err |= clSetKernelArg(kernel, 10, sizeof(cl_mem), &hypercall_num);
-    err |= clSetKernelArg(kernel, 11, sizeof(cl_mem), &hypercall_continuation);
-    err |= clSetKernelArg(kernel, 12, sizeof(cl_mem), &entry);
+    err |= clSetKernelArg(kernel, 4, sizeof(cl_mem), &hcall_buf);
+    err |= clSetKernelArg(kernel, 5, sizeof(cl_mem), &globals);
+    err  = clSetKernelArg(kernel, 6, sizeof(cl_mem), &stack_frames);
+    err |= clSetKernelArg(kernel, 7, sizeof(cl_mem), &sp);
+    err |= clSetKernelArg(kernel, 8, sizeof(cl_mem), &sfp);
+    err |= clSetKernelArg(kernel, 9, sizeof(cl_mem), &call_stack);
+    err |= clSetKernelArg(kernel, 10, sizeof(cl_mem), &branch_value_stack_state);
+    err |= clSetKernelArg(kernel, 11, sizeof(cl_mem), &loop_value_stack_state);
+    err |= clSetKernelArg(kernel, 12, sizeof(cl_mem), &hypercall_num);
+    err |= clSetKernelArg(kernel, 13, sizeof(cl_mem), &hypercall_continuation);
+    err |= clSetKernelArg(kernel, 14, sizeof(cl_mem), &entry);
 
     // set up the arg for our data kernel
     
     err |= clSetKernelArg(data_kernel, 0, sizeof(cl_mem), &heap_u32);
+    err |= clSetKernelArg(data_kernel, 1, sizeof(cl_mem), &globals);
 
 
     if (err != CL_SUCCESS)
