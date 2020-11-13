@@ -6,6 +6,10 @@ mod mem_interleave;
 mod relops;
 mod wasi_helpers;
 mod globals;
+mod memargs;
+mod testops;
+mod convops;
+mod parametric;
 
 use relops::*;
 use mem_interleave::*;
@@ -15,6 +19,10 @@ use binops::*;
 use control_flow::*;
 use wasi_helpers::*;
 use globals::*;
+use memargs::*;
+use testops::*;
+use convops::*;
+use parametric::*;
 
 use wast::Wat;
 use wast::parser::{self, ParseBuffer};
@@ -145,19 +153,57 @@ impl<'a> OpenCLCWriter<'_> {
 
     fn emit_instructions(&self,
                          instr: &wast::Instruction,
+                         stack_sizes: &mut Vec<u32>,
                          offsets: &HashMap<&str, u32>,
                          type_info: &HashMap<&str, ValType>,
                          call_ret_map: &mut HashMap<&str, u32>,
                          call_ret_idx: &mut u32,
                          fn_name: &str,
-                         previous_stack_size: &mut u32,
                          control_stack: &mut Vec<(String, u32)>,
                          function_id_map: HashMap<&str, u32>,
                          hypercall_id_count: &mut u32,
                          indirect_call_mapping: &HashMap<u32, &wast::Index>,
                          global_mappings: &HashMap<&str, (u32, u32)>,
+                         func: &wast::Func,
                          debug: bool) -> String {
         match instr {
+            wast::Instruction::Drop => {
+                // based on the previous stack size, decrement sp
+                // we don't need to handle all cases, only the common case provided by LLVM output
+                // which is when drop follows a function call
+
+                format!("\t{}{};\n",
+                        "*sp -=", stack_sizes.pop().unwrap())
+            }
+            wast::Instruction::I32Store(memarg) => {
+                emit_memstore_i32(self, memarg, debug)
+            },
+            wast::Instruction::I32Store8(memarg) => {
+                emit_memstore8_i32(self, memarg, debug)
+            },
+            wast::Instruction::I32Load(memarg) => {
+                stack_sizes.push(1);
+                emit_memload_i32(self, memarg, debug)
+            },
+            wast::Instruction::I32Load8u(memarg) => {
+                stack_sizes.push(1);
+                emit_memload_i32_8u(self, memarg, debug)
+            },
+            wast::Instruction::I32Load16u(memarg) => {
+                stack_sizes.push(1);
+                emit_memload_i32_16u(self, memarg, debug)
+            },
+            wast::Instruction::I32Load8s(memarg) => {
+                stack_sizes.push(1);
+                emit_memload_i32_8s(self, memarg, debug)
+            },
+            wast::Instruction::I64Load(memarg) => {
+                stack_sizes.push(2);
+                emit_memload_i64(self, memarg, debug)
+            },
+            wast::Instruction::I64Store(memarg) => {
+                emit_memstore_i64(self, memarg, debug)
+            },
             wast::Instruction::GlobalGet(idx) => {
                 match idx {
                     wast::Index::Id(id) => emit_global_get(self, id.name(), global_mappings, debug),
@@ -171,39 +217,153 @@ impl<'a> OpenCLCWriter<'_> {
                 }
             },
             wast::Instruction::I32Const(val) => {
-                *previous_stack_size = 1;
-                emit_i32_const(&self, val, debug)
+                stack_sizes.push(1);
+                emit_i32_const(self, val, debug)
             },
             wast::Instruction::I64Const(val) => {
-                *previous_stack_size = 2;
-                emit_i64_const(&self, val, debug)
+                stack_sizes.push(2);
+                emit_i64_const(self, val, debug)
             },
             wast::Instruction::LocalGet(idx) => {
                 match idx {
-                    wast::Index::Id(id) => emit_local_get(&self, id.name(), offsets, type_info, debug),
+                    wast::Index::Id(id) => emit_local_get(self, id.name(), offsets, type_info, stack_sizes, debug),
                     wast::Index::Num(_, _) => panic!("no support for Num index references in local.get yet"),
                 }
             },
             wast::Instruction::LocalSet(idx) => {
                 match idx {
-                    wast::Index::Id(id) => emit_local_set(&self, id.name(), offsets, type_info, debug),
+                    wast::Index::Id(id) => emit_local_set(self, id.name(), offsets, type_info, debug),
                     wast::Index::Num(_, _) => panic!("no support for Num index references in local.get yet"),
                 }
             },
             wast::Instruction::LocalTee(idx) => {
                 match idx {
-                    wast::Index::Id(id) => emit_local_tee(&self, id.name(), offsets, type_info, debug),
+                    wast::Index::Id(id) => emit_local_tee(self, id.name(), offsets, type_info, stack_sizes, debug),
                     wast::Index::Num(_, _) => panic!("no support for Num index references in local.get yet"),
                 }
             },
+            /*
+             * Binops pop 2 vals and push 1 back on, so we need to pop twice
+             */
             wast::Instruction::I32Add => {
-                *previous_stack_size = 1;
-                emit_i32_add(&self, debug)
+                stack_sizes.pop();
+                stack_sizes.pop();
+                stack_sizes.push(1);
+                emit_i32_add(self, debug)
+            },
+            wast::Instruction::I32Mul => {
+                stack_sizes.pop();
+                stack_sizes.pop();
+                stack_sizes.push(1);
+                emit_i32_mul(self, debug)
+            },
+            wast::Instruction::I32Sub => {
+                stack_sizes.pop();
+                stack_sizes.pop();
+                stack_sizes.push(1);
+                emit_i32_sub(self, debug)
             },
             wast::Instruction::I64Add => {
-                *previous_stack_size = 2;
-                emit_i64_add(&self, debug)
+                stack_sizes.pop();
+                stack_sizes.pop();
+                stack_sizes.push(2);
+                emit_i64_add(self, debug)
             },
+            wast::Instruction::I64DivU => {
+                stack_sizes.pop();
+                stack_sizes.pop();
+                stack_sizes.push(2);
+                emit_i64_div_u(self, debug)
+            },
+            wast::Instruction::I32Eqz => {
+                stack_sizes.pop();
+                stack_sizes.pop();
+                stack_sizes.push(1);
+                emit_i32_eqz(self, debug)
+            },
+            wast::Instruction::I32And => {
+                stack_sizes.pop();
+                stack_sizes.pop();
+                stack_sizes.push(1);
+                emit_i32_and(self, debug)
+            },
+            wast::Instruction::I32Ne => {
+                stack_sizes.pop();
+                stack_sizes.pop();
+                stack_sizes.push(1);
+                emit_i32_ne(self, debug)
+            },
+            wast::Instruction::I32LtU => {
+                stack_sizes.pop();
+                stack_sizes.pop();
+                stack_sizes.push(1);
+                emit_i32_lt_u(self, debug)
+            },
+            wast::Instruction::I32LtS => {
+                stack_sizes.pop();
+                stack_sizes.pop();
+                stack_sizes.push(1);
+                emit_i32_lt_s(self, debug)
+            },
+            wast::Instruction::I32GtU => {
+                stack_sizes.pop();
+                stack_sizes.pop();
+                stack_sizes.push(1);
+                emit_i32_gt_u(self, debug)
+            },
+            wast::Instruction::I32GtS => {
+                stack_sizes.pop();
+                stack_sizes.pop();
+                stack_sizes.push(1);
+                emit_i32_gt_s(self, debug)
+            },
+            wast::Instruction::I32LeU => {
+                stack_sizes.pop();
+                stack_sizes.pop();
+                stack_sizes.push(1);
+                emit_i32_le_u(self, debug)
+            },
+            wast::Instruction::I32LeS => {
+                stack_sizes.pop();
+                stack_sizes.pop();
+                stack_sizes.push(1);
+                emit_i32_le_s(self, debug)
+            },
+            wast::Instruction::I32GeU => {
+                stack_sizes.pop();
+                stack_sizes.pop();
+                stack_sizes.push(1);
+                emit_i32_ge_u(self, debug)
+            },
+            wast::Instruction::I32GeS => {
+                stack_sizes.pop();
+                stack_sizes.pop();
+                stack_sizes.push(1);
+                emit_i32_ge_s(self, debug)
+            },
+            wast::Instruction::I64GeU => {
+                stack_sizes.pop();
+                stack_sizes.pop();
+                stack_sizes.push(2);
+                emit_i64_ge_u(self, debug)
+            },
+            wast::Instruction::I64GeS => {
+                stack_sizes.pop();
+                stack_sizes.pop();
+                stack_sizes.push(2);
+                emit_i64_ge_s(self, debug)
+            },
+            wast::Instruction::I32Xor => {
+                stack_sizes.pop();
+                stack_sizes.pop();
+                stack_sizes.push(1);
+                emit_i32_xor(self, debug)
+            },
+            wast::Instruction::I32WrapI64 => {
+                stack_sizes.pop();
+                stack_sizes.push(1);
+                emit_i32_wrap_i64(self, debug)
+            }
             wast::Instruction::Call(idx) => {
                 let id = match idx {
                     wast::Index::Id(id) => id.name(),
@@ -236,11 +396,12 @@ impl<'a> OpenCLCWriter<'_> {
                     // else, this is a normal function call
                     // if self.func_map.get(id) is none, we have an import
                     // right now we only support WASI imports
+                    dbg!(id);
                     match self.func_map.get(id) {
                         Some(_) => {
                             let func_type_signature = &self.func_map.get(id).unwrap().ty;
-                            let fn_result_type = &(*func_type_signature.clone().inline.unwrap().results)[0];
-                            *previous_stack_size = self.get_size_valtype(fn_result_type);
+                            let return_size = get_return_size(self, &func_type_signature.clone());
+                            stack_sizes.push(return_size);
                             emit_fn_call(&self, *idx, call_ret_map, call_ret_idx, debug)
                         },
                         // we have an import that isn't a system call...
@@ -249,19 +410,44 @@ impl<'a> OpenCLCWriter<'_> {
                 }
             },
             wast::Instruction::CallIndirect(call_indirect) => {
+                // we don't need to do table lookups because we are assuming that there can be at most 1 table
+                /*
                 let table: &str = match call_indirect.table {
                     wast::Index::Id(id) => id.name(),
                     wast::Index::Num(_, _) => panic!(""),
                 };
+                */
                 emit_call_indirect(&self, indirect_call_mapping, call_ret_map, call_ret_idx, debug)
-            }
-            wast::Instruction::I32LtS => {
-                *previous_stack_size = 1;
-                emit_i32_lt_s(&self, debug)
-            }
+            },
             wast::Instruction::I32Eq => {
-                *previous_stack_size = 1;
-                emit_i32_eq(&self, debug)
+                stack_sizes.pop();
+                stack_sizes.pop();
+                stack_sizes.push(1);
+                emit_i32_eq(self, debug)
+            },
+            wast::Instruction::I32Or => {
+                stack_sizes.pop();
+                stack_sizes.pop();
+                stack_sizes.push(1);
+                emit_i32_or(self, debug)
+            },
+            wast::Instruction::I32ShrU => {
+                stack_sizes.pop();
+                stack_sizes.pop();
+                stack_sizes.push(1);
+                emit_i32_shr_u(self, debug)
+            },
+            wast::Instruction::I32ShrS => {
+                stack_sizes.pop();
+                stack_sizes.pop();
+                stack_sizes.push(1);
+                emit_i32_shr_s(self, debug)
+            },
+            wast::Instruction::I32Shl => {
+                stack_sizes.pop();
+                stack_sizes.pop();
+                stack_sizes.push(1);
+                emit_i32_shl(self, debug)
             },
             // control flow instructions
             wast::Instruction::Block(b) => {
@@ -280,10 +466,16 @@ impl<'a> OpenCLCWriter<'_> {
                 let (label, t) = control_stack.pop().unwrap();
                 emit_end(&self, id, &label, t, fn_name, function_id_map, debug)
             },
-            wast::Instruction::Return => emit_return(&self, fn_name, debug),
-            wast::Instruction::Br(idx) => emit_br(&self, *idx, fn_name, *previous_stack_size, debug),
-            wast::Instruction::BrIf(idx) => emit_br_if(&self, *idx, fn_name, *previous_stack_size, debug),
-            _ => panic!("Instruction {:?} not yet implemented", instr)
+            wast::Instruction::Select(_) => {
+                stack_sizes.pop();
+                emit_select(self, stack_sizes, debug)
+            },
+            wast::Instruction::Return => emit_return(self, fn_name, debug),
+            wast::Instruction::Br(idx) => emit_br(self, *idx, debug),
+            wast::Instruction::BrIf(idx) => emit_br_if(self, *idx, debug),
+            wast::Instruction::BrTable(table_idxs) => emit_br_table(self, table_idxs, debug),
+            wast::Instruction::Unreachable => self.emit_hypercall(1, hypercall_id_count, debug),
+            _ => panic!("Instruction {:?} not yet implemented, in func: {:?}", instr, func.id)
         }
     }
 
@@ -380,25 +572,27 @@ impl<'a> OpenCLCWriter<'_> {
                 // keep a stack of control-flow labels
                 // for blocks we need to put the label at the "end" statement, while loops always jump back
                 let mut control_stack: Vec<(String, u32)> = vec![];
-
-                // we are now ready to execute instructions!
-                let mut previous_stack_size: &mut u32 = &mut 0;
                 
+                // keep a stack of the size of previous stack operations
+                // this is needed to implement drop/select
+                let stack_sizes: &mut Vec<u32> = &mut vec![];
+
                 // get the list of instructions first, to solve a lifetime mismatch error
                 // (we can't just iterate because the control stack would have a different lifetime)
                 for instruction in expression.instrs.iter() {
                     final_string += &self.emit_instructions(instruction,
+                                                            stack_sizes,
                                                             &local_parameter_stack_offset,
                                                             &local_type_info,
                                                             call_ret_map,
                                                             call_ret_idx,
                                                             id.name(),
-                                                            previous_stack_size,
                                                             &mut control_stack,
                                                             function_id_map.clone(),
                                                             hypercall_id_count,
                                                             indirect_call_mapping,
                                                             global_mappings,
+                                                            func,
                                                             debug);
                 }
 
@@ -579,6 +773,7 @@ impl<'a> OpenCLCWriter<'_> {
         let mut result = String::from("");
 
         // for each hypercall that we can identify in the import section, generate the read_helper
+        // we have to special case proc_exit, since we also call proc_exit if we hit an unreachable statement
         for (_, value) in &self.imports_map {
             match value {
                 (_, hypercall_name, _) => result += &emit_hypercall_helpers(self, *hypercall_name, debug),

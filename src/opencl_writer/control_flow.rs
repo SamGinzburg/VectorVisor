@@ -1,5 +1,7 @@
 use crate::opencl_writer;
 use crate::opencl_writer::Regex;
+use crate::opencl_writer::mem_interleave::emit_read_u32;
+
 use std::collections::HashMap;
 
 // TODO: double check the semantics of this? 
@@ -8,7 +10,7 @@ pub fn emit_return(writer: &opencl_writer::OpenCLCWriter, fn_name: &str, debug: 
 }
 
 // this function is semantically equivalent to function_unwind
-pub fn emit_br(writer: &opencl_writer::OpenCLCWriter, idx: wast::Index, fn_name: &str, prev_stack_size: u32, debug: bool) -> String {
+pub fn emit_br(writer: &opencl_writer::OpenCLCWriter, idx: wast::Index, debug: bool) -> String {
     let mut ret_str = String::from("");
 
     let branch_id = match idx {
@@ -16,43 +18,20 @@ pub fn emit_br(writer: &opencl_writer::OpenCLCWriter, idx: wast::Index, fn_name:
         _ => panic!("Branch specified in terms of numerical index instead of Id"),
     };
 
-    let re = Regex::new(r"\d+").unwrap();
-    // we can use the branch index to save to global state
-    let branch_idx: &str = re.captures(branch_id).unwrap().get(0).map_or("", |m| m.as_str());
-
     // debug comment
     ret_str += &format!("\t{}\n", format!("/* br {} */", branch_id));
-
-    // first we want to pop the result value off of the stack, and push it
-    /*
-    match prev_stack_size {
-        1 => {
-            // first push the value back
-            // next, move the stack pointer
-            ret_str += &format!("\t{}\n\t{}\n",
-                                format!("stack_u32[branch_value_stack_state[{}]] = stack_u32[*sp - 1];", branch_idx),
-                                format!("*sp = stack_u32[branch_value_stack_state[{}]];", branch_idx));
-        },
-        2 => {
-            panic!("u64 br l not yet implemented");
-            ret_str += &format!("\t{}\n",
-                                "*(ulong*)(stack_u32+*sp-4) = *(ulong*)(stack_u32+*sp-2) + *(ulong*)(stack_u32+*sp-4);");
-        },
-        _ => panic!("Unable to determine size of the previous item on stack"),
-    };
-    */
 
     ret_str += &format!("\t{}\n", format!("goto {};", branch_id));
 
     ret_str
 }
 
-pub fn emit_br_if(writer: &opencl_writer::OpenCLCWriter, idx: wast::Index, fn_name: &str, prev_stack_size: u32, debug: bool) -> String {
+pub fn emit_br_if(writer: &opencl_writer::OpenCLCWriter, idx: wast::Index, debug: bool) -> String {
     let mut ret_str = String::from("");
 
     // br_if is just an if statement, if cond is true => br l else continue
     ret_str += &format!("\tif ({} != 0) {{\n", "read_u32((ulong)(stack_u32+*sp-1), (ulong)(stack_u32), warp_idx)");
-    ret_str += &emit_br(writer, idx, fn_name, prev_stack_size, debug);
+    ret_str += &emit_br(writer, idx, debug);
     ret_str += &format!("\t}}\n");
 
     ret_str
@@ -158,4 +137,38 @@ pub fn emit_block(writer: &opencl_writer::OpenCLCWriter, block: &wast::BlockType
     // we don't emit a label for block statements here, any br's goto the END of the block
     // we don't need to modify the sp here, we will do all stack unwinding in the br instr
     result
+}
+
+
+pub fn emit_br_table(writer: &opencl_writer::OpenCLCWriter, table_indicies: &wast::BrTableIndices, debug: bool) -> String {
+    let mut ret_str = String::from("");
+
+    let indicies = &table_indicies.labels;
+
+    // read the label_idx from stack, always i32
+    let label_idx = emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx");
+
+    // generate a switch case for each label index
+    ret_str += &format!("\tswitch({}) {{\n", label_idx);
+
+    for index in 0..indicies.len() {
+        ret_str += &format!("\t\tcase {}:\n", index);
+        // decrement the stack
+        ret_str += &format!("\t\t\t{}\n", "*sp -= 1;");
+        // emit br i
+        ret_str += &emit_br(writer, indicies[index], debug);
+        ret_str += &format!("\t\t\tbreak;\n");
+    }
+
+    // we add the default index, if label_idx > than length l*
+    ret_str += &format!("\t\tdefault:\n");
+    // decrement the stack
+    ret_str += &format!("\t\t\t{}\n", "*sp -= 1;");
+    // emit br i
+    ret_str += &emit_br(writer, table_indicies.default, debug);
+    ret_str += &format!("\t\t\tbreak;\n");
+
+    ret_str += &format!("\t}}\n");
+
+    ret_str
 }

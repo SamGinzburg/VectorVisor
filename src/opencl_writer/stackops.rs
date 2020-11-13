@@ -8,13 +8,16 @@ use crate::opencl_writer::mem_interleave::emit_write_u64;
 
 use std::collections::HashMap;
 
-pub fn emit_local_get(writer: &opencl_writer::OpenCLCWriter, id: &str, offsets: &HashMap<&str, u32>, type_info: &HashMap<&str, ValType>, debug: bool) -> String {
+pub fn emit_local_get(writer: &opencl_writer::OpenCLCWriter, id: &str, offsets: &HashMap<&str, u32>, type_info: &HashMap<&str, ValType>, stack_sizes: &mut Vec<u32>, debug: bool) -> String {
     let offset = offsets.get(id).unwrap();
     let t = type_info.get(id).unwrap();
 
     // stack_frames[*sfp - 1] start of stack frame
     match t {
         wast::ValType::I32 => {
+
+            stack_sizes.push(1);
+
             format!("\t{};\n\t{}\n",
             &emit_write_u32("(ulong)(stack_u32+*sp)",
                             "(ulong)stack_u32",
@@ -27,6 +30,9 @@ pub fn emit_local_get(writer: &opencl_writer::OpenCLCWriter, id: &str, offsets: 
             "*sp += 1;")
         },
         wast::ValType::I64 => {
+
+            stack_sizes.push(2);
+
             format!("\t{};\n\t{}\n",
             &emit_write_u64("(ulong)(stack_u32+*sp)",
                            "(ulong)stack_u32",
@@ -39,6 +45,9 @@ pub fn emit_local_get(writer: &opencl_writer::OpenCLCWriter, id: &str, offsets: 
             "*sp += 2;")
         },
         wast::ValType::F32 => {
+
+            stack_sizes.push(1);
+
             format!("\t{};\n\t{}\n",
             &emit_write_u32("(ulong)(stack_u32+*sp)",
                            "(ulong)stack_u32",
@@ -51,6 +60,9 @@ pub fn emit_local_get(writer: &opencl_writer::OpenCLCWriter, id: &str, offsets: 
             "*sp += 1;")
         },
         wast::ValType::F64 => {
+
+            stack_sizes.push(2);
+
                 format!("\t{};\n\t{}\n",
                 &emit_write_u64("(ulong)(stack_u32+*sp)",
                                "(ulong)stack_u32",
@@ -102,7 +114,7 @@ pub fn emit_local_set(writer: &opencl_writer::OpenCLCWriter, id: &str, offsets: 
     }
 }
 
-pub fn emit_local_tee(writer: &opencl_writer::OpenCLCWriter, id: &str, offsets: &HashMap<&str, u32>, type_info: &HashMap<&str, ValType>, debug: bool) -> String {
+pub fn emit_local_tee(writer: &opencl_writer::OpenCLCWriter, id: &str, offsets: &HashMap<&str, u32>, type_info: &HashMap<&str, ValType>, stack_sizes: &mut Vec<u32>, debug: bool) -> String {
     /*
      * peak the top of the stack, push the most recent value again
      * call local.set [x]
@@ -111,6 +123,9 @@ pub fn emit_local_tee(writer: &opencl_writer::OpenCLCWriter, id: &str, offsets: 
     let t = type_info.get(id).unwrap();
     match t {
         wast::ValType::I32 => {
+
+            stack_sizes.push(1);
+
             format!("\t{};\n\t{}\n{}",
                     &emit_write_u32("(ulong)(stack_u32+*sp)",
                                     "(ulong)(stack_u32)",
@@ -120,6 +135,9 @@ pub fn emit_local_tee(writer: &opencl_writer::OpenCLCWriter, id: &str, offsets: 
                     format!("{}", emit_local_set(writer, id, offsets, type_info, debug)))
         },
         wast::ValType::I64 => {
+
+            stack_sizes.push(2);
+
             format!("\t{};\n\t{}\n{}",
                     &emit_write_u64("(ulong)(stack_u32+*sp)",
                                     "(ulong)(stack_u32)",
@@ -129,6 +147,9 @@ pub fn emit_local_tee(writer: &opencl_writer::OpenCLCWriter, id: &str, offsets: 
                     format!("{}", emit_local_set(writer, id, offsets, type_info, debug)))
         },
         wast::ValType::F32 => {
+
+            stack_sizes.push(1);
+
             format!("\t{};\n\t{}\n{}",
                     &emit_write_u32("(ulong)(stack_u32+*sp)",
                                     "(ulong)(stack_u32)",
@@ -138,6 +159,9 @@ pub fn emit_local_tee(writer: &opencl_writer::OpenCLCWriter, id: &str, offsets: 
                     format!("{}", emit_local_set(writer, id, offsets, type_info, debug)))
         },
         wast::ValType::F64 => {
+
+            stack_sizes.push(2);
+
             format!("\t{}\n\t{}\n{}",
                     &emit_write_u64("(ulong)(stack_u32+*sp)",
                                     "(ulong)(stack_u32)",

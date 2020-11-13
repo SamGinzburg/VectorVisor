@@ -5,24 +5,49 @@ use crate::opencl_writer::mem_interleave::emit_write_u32;
 use crate::opencl_writer::mem_interleave::emit_read_u64;
 use crate::opencl_writer::mem_interleave::emit_write_u64;
 
+pub fn get_return_size(writer: &opencl_writer::OpenCLCWriter, ty: &wast::TypeUse<wast::FunctionType>) -> u32 {
+    match ty.clone().inline {
+        Some(r) => {
+            if r.results.len() > 0 {
+                writer.get_size_valtype(&r.results[0])
+            } else {
+                0
+            }
+        },
+        _ => 0,
+    }
+}
+
+
 pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, idx: wast::Index, call_ret_map: &mut HashMap<&str, u32>, call_ret_idx: &mut u32, debug: bool) -> String {
     let id = match idx {
         wast::Index::Id(id) => id.name(),
         _ => panic!("Unable to get Id for function call!"),
     };
 
+    dbg!(id);
+
     // if the func has calling parameters, set those up
     // on the newly formed stack as well
     let func_type_signature = &writer.func_map.get(id).unwrap().ty;
     let mut offset = 0;
-    for parameter in func_type_signature.clone().inline.unwrap().params.to_vec() {
-        match parameter {
-            (Some(id), _, t) => {
-                offset += writer.get_size_valtype(&t);
-            },
-            _ => panic!("Unhandled parameter type")
-        }
+    dbg!(func_type_signature);
+    match func_type_signature.inline {
+        // if we can find the type signature
+        Some(_) => {
+            for parameter in func_type_signature.clone().inline.unwrap().params.to_vec() {
+                match parameter {
+                    (Some(id), _, t) => {
+                        offset += writer.get_size_valtype(&t);
+                    },
+                    _ => panic!("Unhandled parameter type")
+                }
+            }
+        },
+        // if we cannot find the type signature
+        None => (),
     }
+
 
     // for each function call, map the call to an index
     // we use this index later on to return back to the instruction after the call
@@ -31,8 +56,8 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, idx: wast::Index, cal
     call_ret_map.insert(ret_label, *call_ret_idx);
 
     // get the return type of the function
-    let return_size = writer.get_size_valtype(&func_type_signature.clone().inline.unwrap().results[0]);
-    println!("return size: {}", return_size);
+    let return_size = get_return_size(writer, &func_type_signature.clone());
+
     let result = if offset > 0 {
         format!("\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n{}\n\t{}\n",
         // move the stack pointer back by the offset required by calling parameters
