@@ -8,6 +8,7 @@ use std::fs;
 use wast::parser::{ParseBuffer};
 use opencl_runner::VMMRuntimeStatus;
 use ocl::core::CommandQueue;
+use rayon::prelude::*;
 
 fn main() {
 
@@ -21,10 +22,10 @@ fn main() {
     //let file = fs::read_to_string("examples/call/call32.wat");
     //let file = fs::read_to_string("examples/call/call_indirect.wat");
     //let file = fs::read_to_string("examples/branches/loop.wat");
-    //let file = fs::read_to_string("examples/wasi_examples/fd_write.wat");
+    let file = fs::read_to_string("examples/wasi_examples/fd_write.wat");
     //let file = fs::read_to_string("examples/globals/simple_global.wat");
     //let file = fs::read_to_string("examples/globals/global_set.wat");
-    let file = fs::read_to_string("examples/rust_hello.wat");
+    //let file = fs::read_to_string("examples/rust_hello.wat");
 
 
     let filedata = match file {
@@ -49,7 +50,7 @@ fn main() {
     let stack_frames_size = 1024;
     let sfp_size = 1024;
     let predictor_size = 4096;
-    let num_vms = 16;
+    let num_vms = 16384;
     let interleaved = true;
 
     match (result, result_debug) {
@@ -77,48 +78,16 @@ fn main() {
 
 
             // 16KB stack/heap by default - TODO: change these values after done testing
-            let runner = opencl_runner::OpenCLRunner::new(num_vms, interleaved, true, entry_point, compiled_kernel);
-
-
-            let (program, context, device_id) = runner.setup_kernel();
-
-            // create the buffers
-            let (new_runner, context) = runner.create_buffers(stack_size,
-                                                              heap_size, 
-                                                              call_stack_size, 
-                                                              stack_frames_size, 
-                                                              sfp_size, 
-                                                              predictor_size,
-                                                              globals_buffer_size,
-                                                              context);
-
-            let handler = std::thread::spawn(move || {
-                // this function returns the channel that we will use to send it HTTP requests later
-
-
-                // each vector VMM group gets its own command queue - in the future we may have 1 queue per [Large N] number of VMs
-                let command_queue = ocl::core::create_command_queue(&context, &device_id, None).unwrap();
-
-                // We purposefully leak the runner into a static object to deal with the lifetimes of the
-                // hypercall dispatch thread pools, we will clean up the new_runner object if needed
-                // These values really do last for the entire program, so it is fine to make them static
-                let final_runner = Box::leak(Box::new(new_runner));
-                let leaked_command_queue: &'static CommandQueue = Box::leak(Box::new(command_queue));
-                let hypercall_buffer_read_buffer: &'static mut [u8] = Box::leak(vec![0u8; 16 * 1024 * num_vms as usize].into_boxed_slice());
-
-                let status = final_runner.run_vector_vms(stack_frames_size, program, &leaked_command_queue, hypercall_buffer_read_buffer, 1024*16, context);
-                // this line should never be reached, reaching it signifies that either
-                // 1) The VMM has exited normally
-                // 2) The VMM has exited prematurely due to a crash
-                match status {
-                    VMMRuntimeStatus::StatusUnknownError => panic!("Vector VMM has crashed!!!"),
-                    VMMRuntimeStatus::StatusOkay => (),
-                }
-
-                // In the future if we want to make this dynamic, we need to cleanup the leaked objects
-
+            (0..5).into_par_iter().for_each(|_idx| {
+                let runner = opencl_runner::OpenCLRunner::new(num_vms, interleaved, true, entry_point, compiled_kernel.clone());
+                runner.run(stack_size,
+                           heap_size, 
+                           call_stack_size, 
+                           stack_frames_size, 
+                           sfp_size, 
+                           predictor_size,
+                           globals_buffer_size);
             });
-            handler.join().unwrap();
         },
         (_, _) => panic!("Unable to parse wat file"),
     }

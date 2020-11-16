@@ -104,6 +104,56 @@ impl OpenCLRunner {
         }
     }
 
+    pub fn run(self,
+               stack_size: u32,
+               heap_size: u32,
+               call_stack_size: u32,
+               stack_frames_size: u32,
+               sfp_size: u32,
+               predictor_size: u32,
+               globals_buffer_size: u32) -> () {
+        let (program, context, device_id) = self.setup_kernel();
+        let num_vms = self.num_vms.clone();
+
+        // create the buffers
+        let (new_runner, context) = self.create_buffers(stack_size,
+                                                        heap_size, 
+                                                        call_stack_size, 
+                                                        stack_frames_size, 
+                                                        sfp_size, 
+                                                        predictor_size,
+                                                        globals_buffer_size,
+                                                        context);
+
+        let handler = std::thread::spawn(move || {
+            // this function returns the channel that we will use to send it HTTP requests later
+
+
+            // each vector VMM group gets its own command queue - in the future we may have 1 queue per [Large N] number of VMs
+            let command_queue = ocl::core::create_command_queue(&context, &device_id, None).unwrap();
+
+            // We purposefully leak the runner into a static object to deal with the lifetimes of the
+            // hypercall dispatch thread pools, we will clean up the new_runner object if needed
+            // These values really do last for the entire program, so it is fine to make them static
+            let final_runner = Box::leak(Box::new(new_runner));
+            let leaked_command_queue: &'static CommandQueue = Box::leak(Box::new(command_queue));
+            let hypercall_buffer_read_buffer: &'static mut [u8] = Box::leak(vec![0u8; 16 * 1024 * num_vms as usize].into_boxed_slice());
+
+            let status = final_runner.run_vector_vms(stack_frames_size, program, &leaked_command_queue, hypercall_buffer_read_buffer, 1024*16, context);
+            // this line should never be reached, reaching it signifies that either
+            // 1) The VMM has exited normally
+            // 2) The VMM has exited prematurely due to a crash
+            match status {
+                VMMRuntimeStatus::StatusUnknownError => panic!("Vector VMM has crashed!!!"),
+                VMMRuntimeStatus::StatusOkay => (),
+            }
+
+            // In the future if we want to make this dynamic, we need to cleanup the leaked objects
+
+        });
+        handler.join().unwrap();
+    }
+
     // All of the size parameters are *per-VM* sizes, not total
     pub fn create_buffers(mut self,
                           stack_size: u32,
@@ -574,6 +624,7 @@ impl OpenCLRunner {
 
         // To get final results back from the stack if we want for debugging stuff
         // only uncomment this out if you need to debug stuff, it will panic if you have too many VMs and too small of a buffer
+        /*
         unsafe {
             ocl::core::enqueue_read_buffer(&queue, &buffers.stack_buffer, true, 0, &mut check_results_debug, None::<Event>, None::<&mut Event>).unwrap();
         }
@@ -589,6 +640,7 @@ impl OpenCLRunner {
             let result = LittleEndian::read_u32(&check_results_debug[0..4]);
             dbg!(result as i32);
         }
+        */
 
         return VMMRuntimeStatus::StatusOkay;
     }
