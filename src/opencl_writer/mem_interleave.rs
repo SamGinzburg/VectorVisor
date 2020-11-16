@@ -242,6 +242,10 @@ pub fn emit_write_u8(addr: &str , mem_start: &str, value: &str, warp_id: &str) -
     format!("write_u8({}, {}, {}, {})", addr, mem_start, value, warp_id)
 }
 
+pub fn emit_write_u16(addr: &str , mem_start: &str, value: &str, warp_id: &str) -> String {
+    format!("write_u16({}, {}, {}, {})", addr, mem_start, value, warp_id)
+}
+
 pub fn emit_read_u32(addr: &str , mem_start: &str, warp_id: &str) -> String {
     format!("read_u32({}, {}, {})", addr, mem_start, warp_id)
 }

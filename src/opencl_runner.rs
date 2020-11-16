@@ -574,7 +574,6 @@ impl OpenCLRunner {
 
         // To get final results back from the stack if we want for debugging stuff
         // only uncomment this out if you need to debug stuff, it will panic if you have too many VMs and too small of a buffer
-        /*
         unsafe {
             ocl::core::enqueue_read_buffer(&queue, &buffers.stack_buffer, true, 0, &mut check_results_debug, None::<Event>, None::<&mut Event>).unwrap();
         }
@@ -582,15 +581,14 @@ impl OpenCLRunner {
         if self.is_memory_interleaved {
             for idx in 0..self.num_vms {
                 let result = Interleave::read_u32(&mut check_results_debug, 0, self.num_vms, idx);
-                dbg!(result);
+                dbg!(result as i32);
             }
         } else {
             use byteorder::LittleEndian;
             use byteorder::ByteOrder;
             let result = LittleEndian::read_u32(&check_results_debug[0..4]);
-            dbg!(result);
+            dbg!(result as i32);
         }
-        */
 
         return VMMRuntimeStatus::StatusOkay;
     }

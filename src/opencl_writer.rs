@@ -10,6 +10,7 @@ mod memargs;
 mod testops;
 mod convops;
 mod parametric;
+mod unops;
 
 use relops::*;
 use mem_interleave::*;
@@ -23,6 +24,7 @@ use memargs::*;
 use testops::*;
 use convops::*;
 use parametric::*;
+use unops::*;
 
 use wast::Wat;
 use wast::parser::{self, ParseBuffer};
@@ -176,32 +178,58 @@ impl<'a> OpenCLCWriter<'_> {
                         "*sp -=", stack_sizes.pop().unwrap())
             }
             wast::Instruction::I32Store(memarg) => {
+                stack_sizes.pop();
+                stack_sizes.pop();
                 emit_memstore_i32(self, memarg, debug)
             },
             wast::Instruction::I32Store8(memarg) => {
+                stack_sizes.pop();
+                stack_sizes.pop();
                 emit_memstore8_i32(self, memarg, debug)
             },
+            wast::Instruction::I32Store16(memarg) => {
+                stack_sizes.pop();
+                stack_sizes.pop();
+                emit_memstore16_i32(self, memarg, debug)
+            },
             wast::Instruction::I32Load(memarg) => {
+                stack_sizes.pop();
                 stack_sizes.push(1);
                 emit_memload_i32(self, memarg, debug)
             },
             wast::Instruction::I32Load8u(memarg) => {
+                stack_sizes.pop();
                 stack_sizes.push(1);
                 emit_memload_i32_8u(self, memarg, debug)
             },
             wast::Instruction::I32Load16u(memarg) => {
+                stack_sizes.pop();
                 stack_sizes.push(1);
                 emit_memload_i32_16u(self, memarg, debug)
             },
             wast::Instruction::I32Load8s(memarg) => {
+                stack_sizes.pop();
                 stack_sizes.push(1);
                 emit_memload_i32_8s(self, memarg, debug)
             },
-            wast::Instruction::I64Load(memarg) => {
+            wast::Instruction::I64Load8u(memarg) => {
+                stack_sizes.pop();
                 stack_sizes.push(2);
-                emit_memload_i64(self, memarg, debug)
+                emit_memload_i64_8u(self, memarg, debug)
+            },
+            wast::Instruction::I64Load32u(memarg) => {
+                stack_sizes.pop();
+                stack_sizes.push(2);
+                emit_memload_i64_32u(self, memarg, debug)
+            },
+            wast::Instruction::I64Load(memarg) => {
+                stack_sizes.pop();
+                stack_sizes.push(2);
+                emit_memload_i64_8u(self, memarg, debug)
             },
             wast::Instruction::I64Store(memarg) => {
+                stack_sizes.pop();
+                stack_sizes.pop();
                 emit_memstore_i64(self, memarg, debug)
             },
             wast::Instruction::GlobalGet(idx) => {
@@ -257,6 +285,12 @@ impl<'a> OpenCLCWriter<'_> {
                 stack_sizes.push(1);
                 emit_i32_mul(self, debug)
             },
+            wast::Instruction::I64Mul => {
+                stack_sizes.pop();
+                stack_sizes.pop();
+                stack_sizes.push(1);
+                emit_i64_mul(self, debug)
+            },
             wast::Instruction::I32Sub => {
                 stack_sizes.pop();
                 stack_sizes.pop();
@@ -268,6 +302,18 @@ impl<'a> OpenCLCWriter<'_> {
                 stack_sizes.pop();
                 stack_sizes.push(2);
                 emit_i64_add(self, debug)
+            },
+            wast::Instruction::I64Eq => {
+                stack_sizes.pop();
+                stack_sizes.pop();
+                stack_sizes.push(2);
+                emit_i64_eq(self, debug)
+            },
+            wast::Instruction::I64Ne => {
+                stack_sizes.pop();
+                stack_sizes.pop();
+                stack_sizes.push(2);
+                emit_i64_ne(self, debug)
             },
             wast::Instruction::I64DivU => {
                 stack_sizes.pop();
@@ -286,6 +332,12 @@ impl<'a> OpenCLCWriter<'_> {
                 stack_sizes.pop();
                 stack_sizes.push(1);
                 emit_i32_and(self, debug)
+            },
+            wast::Instruction::I64And => {
+                stack_sizes.pop();
+                stack_sizes.pop();
+                stack_sizes.push(2);
+                emit_i64_and(self, debug)
             },
             wast::Instruction::I32Ne => {
                 stack_sizes.pop();
@@ -310,6 +362,12 @@ impl<'a> OpenCLCWriter<'_> {
                 stack_sizes.pop();
                 stack_sizes.push(1);
                 emit_i32_gt_u(self, debug)
+            },
+            wast::Instruction::I64GtU => {
+                stack_sizes.pop();
+                stack_sizes.pop();
+                stack_sizes.push(2);
+                emit_i64_gt_u(self, debug)
             },
             wast::Instruction::I32GtS => {
                 stack_sizes.pop();
@@ -363,7 +421,17 @@ impl<'a> OpenCLCWriter<'_> {
                 stack_sizes.pop();
                 stack_sizes.push(1);
                 emit_i32_wrap_i64(self, debug)
-            }
+            },
+            wast::Instruction::I64ExtendI32S => {
+                stack_sizes.pop();
+                stack_sizes.push(2);
+                emit_i64_extend_i32_s(self, debug)
+            },
+            wast::Instruction::I64ExtendI32U => {
+                stack_sizes.pop();
+                stack_sizes.push(2);
+                emit_i64_extend_i32_u(self, debug)
+            },
             wast::Instruction::Call(idx) => {
                 let id = match idx {
                     wast::Index::Id(id) => id.name(),
@@ -437,6 +505,12 @@ impl<'a> OpenCLCWriter<'_> {
                 stack_sizes.push(1);
                 emit_i32_shr_u(self, debug)
             },
+            wast::Instruction::I64ShrU => {
+                stack_sizes.pop();
+                stack_sizes.pop();
+                stack_sizes.push(1);
+                emit_i64_shr_u(self, debug)
+            },
             wast::Instruction::I32ShrS => {
                 stack_sizes.pop();
                 stack_sizes.pop();
@@ -448,6 +522,68 @@ impl<'a> OpenCLCWriter<'_> {
                 stack_sizes.pop();
                 stack_sizes.push(1);
                 emit_i32_shl(self, debug)
+            },
+            wast::Instruction::I32DivU => {
+                stack_sizes.pop();
+                stack_sizes.pop();
+                stack_sizes.push(1);
+                emit_i32_div_u(self, debug)
+            },
+            wast::Instruction::I64ShrS => {
+                stack_sizes.pop();
+                stack_sizes.pop();
+                stack_sizes.push(2);
+                emit_i64_shr_s(self, debug)
+            },
+            wast::Instruction::I64Xor => {
+                stack_sizes.pop();
+                stack_sizes.pop();
+                stack_sizes.push(2);
+                emit_i64_xor(self, debug)
+            },
+            wast::Instruction::I64Or => {
+                stack_sizes.pop();
+                stack_sizes.pop();
+                stack_sizes.push(2);
+                emit_i64_or(self, debug)
+            },
+            wast::Instruction::I32Rotl => {
+                stack_sizes.pop();
+                stack_sizes.pop();
+                stack_sizes.push(1);
+                emit_i32_rotl(self, debug)
+            },
+            wast::Instruction::I64Rotl => {
+                stack_sizes.pop();
+                stack_sizes.pop();
+                stack_sizes.push(2);
+                emit_i64_rotl(self, debug)
+            },
+            wast::Instruction::I64Sub => {
+                stack_sizes.pop();
+                stack_sizes.pop();
+                stack_sizes.push(2);
+                emit_i64_sub(self, debug)
+            },
+            wast::Instruction::I32Clz => {
+                stack_sizes.pop();
+                stack_sizes.push(1);
+                emit_i32_clz(self, debug)
+            },
+            wast::Instruction::I64Clz => {
+                stack_sizes.pop();
+                stack_sizes.push(2);
+                emit_i64_clz(self, debug)
+            },
+            wast::Instruction::I32Ctz => {
+                stack_sizes.pop();
+                stack_sizes.push(1);
+                emit_i32_ctz(self, debug)
+            },
+            wast::Instruction::I64Ctz => {
+                stack_sizes.pop();
+                stack_sizes.push(2);
+                emit_i64_ctz(self, debug)
             },
             // control flow instructions
             wast::Instruction::Block(b) => {

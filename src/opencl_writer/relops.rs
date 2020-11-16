@@ -64,6 +64,17 @@ pub fn emit_i32_gt_u(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> Stri
             "*sp -= 1;")
 }
 
+pub fn emit_i64_gt_u(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> String {
+    format!("\t{};\n\t{}\n",
+            &emit_write_u64("(ulong)(stack_u32+*sp-4)",
+                            "(ulong)(stack_u32)",
+                            &format!("((ulong){} > (ulong){}) ? 1 : 0",
+                                     &emit_read_u64("(ulong)(stack_u32+*sp-4)", "(ulong)(stack_u32)", "warp_idx"),
+                                     &emit_read_u64("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx")),
+                            "warp_idx"),
+            "*sp -= 2;")
+}
+
 // signed version
 pub fn emit_i32_gt_s(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> String {
     format!("\t{};\n\t{}\n",

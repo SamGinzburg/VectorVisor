@@ -15,7 +15,8 @@ fn main() {
     // also consider supporting .wasm files as well?
 
 
-    //let file = fs::read_to_string("examples/arithmetic/lt.wat");
+    //let file = fs::read_to_string("examples/binops/lt.wat");
+    //let file = fs::read_to_string("examples/binops/sub.wat");
     //let file = fs::read_to_string("examples/call/call64.wat");
     //let file = fs::read_to_string("examples/call/call32.wat");
     //let file = fs::read_to_string("examples/call/call_indirect.wat");
