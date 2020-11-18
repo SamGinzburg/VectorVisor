@@ -48,6 +48,8 @@ pub struct OpenCLBuffers {
     loop_value_stack_state: ocl::core::Mem,
     hypercall_num: ocl::core::Mem,
     hypercall_continuation: ocl::core::Mem,
+    current_mem: ocl::core::Mem,
+    max_mem: ocl::core::Mem,
     entry: ocl::core::Mem,
 }
 
@@ -63,6 +65,8 @@ impl OpenCLBuffers {
                loop_value_stack_state: ocl::core::Mem,
                hypercall_num: ocl::core::Mem,
                hypercall_continuation: ocl::core::Mem,
+               current_mem: ocl::core::Mem,
+               max_mem: ocl::core::Mem,
                entry: ocl::core::Mem) -> OpenCLBuffers {
                 OpenCLBuffers {
                     stack_buffer: stack_buffer,
@@ -76,6 +80,8 @@ impl OpenCLBuffers {
                     loop_value_stack_state: loop_value_stack_state,
                     hypercall_num: hypercall_num,
                     hypercall_continuation: hypercall_continuation,
+                    current_mem: current_mem,
+                    max_mem: max_mem,
                     entry: entry,
                 }
     }
@@ -110,7 +116,8 @@ impl OpenCLRunner {
                call_stack_size: u32,
                stack_frames_size: u32,
                sfp_size: u32,
-               predictor_size: u32,
+               // needed for the size of the loop/branch data structures
+               num_compiled_funcs: u32,
                globals_buffer_size: u32) -> () {
         let (program, context, device_id) = self.setup_kernel();
         let num_vms = self.num_vms.clone();
@@ -121,7 +128,7 @@ impl OpenCLRunner {
                                                         call_stack_size, 
                                                         stack_frames_size, 
                                                         sfp_size, 
-                                                        predictor_size,
+                                                        num_compiled_funcs,
                                                         globals_buffer_size,
                                                         context);
 
@@ -161,7 +168,8 @@ impl OpenCLRunner {
                           stack_frame_size: u32,
                           stack_frame_ptr_size: u32,
                           call_stack_size: u32,
-                          predictor_size: u32,
+                          // needed for loop/branch structures
+                          num_compiled_funcs: u32,
                           global_buffers_size: u32,
                           context: ocl::core::Context) -> (OpenCLRunner, ocl::core::Context) {
         let stack_buffer = unsafe {
@@ -233,14 +241,14 @@ impl OpenCLRunner {
         let branch_value_stack_state = unsafe {
             ocl::core::create_buffer::<_, u8>(&context,
                                               ocl::core::MEM_READ_WRITE,
-                                              (predictor_size * self.num_vms) as usize,
+                                              (num_compiled_funcs * 4096 * 2 * self.num_vms) as usize,
                                               None).unwrap()
         };
 
         let loop_value_stack_state = unsafe {
             ocl::core::create_buffer::<_, u8>(&context,
                                               ocl::core::MEM_READ_WRITE,
-                                              (predictor_size * self.num_vms) as usize,
+                                              (num_compiled_funcs * 4096 * 2 * self.num_vms) as usize,
                                               None).unwrap()
         };
 
@@ -256,6 +264,20 @@ impl OpenCLRunner {
             ocl::core::create_buffer::<_, u8>(&context,
                                               ocl::core::MEM_READ_WRITE,
                                               (8 * self.num_vms) as usize,
+                                              None).unwrap()
+        };
+
+        let current_mem = unsafe {
+            ocl::core::create_buffer::<_, u8>(&context,
+                                              ocl::core::MEM_READ_WRITE,
+                                              (4 * self.num_vms) as usize,
+                                              None).unwrap()
+        };
+
+        let max_mem = unsafe {
+            ocl::core::create_buffer::<_, u8>(&context,
+                                              ocl::core::MEM_READ_WRITE,
+                                              (4 * self.num_vms) as usize,
                                               None).unwrap()
         };
 
@@ -278,6 +300,8 @@ impl OpenCLRunner {
                                                loop_value_stack_state,
                                                hypercall_num,
                                                hypercall_continuation,
+                                               current_mem,
+                                               max_mem,
                                                entry));
         (self, context)
     }
@@ -311,6 +335,7 @@ impl OpenCLRunner {
 
         // compile the GPU kernel(s)
         let src_cstring = CString::new(program.clone()).unwrap();
+        println!("Starting kernel compilation...");
         let compiled_program = ocl::core::create_program_with_source(&context, &[src_cstring]).unwrap();
         let compile_result = ocl::core::build_program(&compiled_program, None::<&[()]>, &CString::new(format!("-DNUM_THREADS={}", self.num_vms)).unwrap(), None, None);
         match compile_result {
@@ -320,7 +345,7 @@ impl OpenCLRunner {
                 std::fs::write("test.cl", program).expect("Unable to write file");
                 panic!("Unable to compile OpenCL kernel - see errors above");
             },
-            Ok(_) => (),
+            Ok(_) => println!("Finished kernel compilation!"),
         }
 
         return (compiled_program, context, device_id)
@@ -471,6 +496,8 @@ impl OpenCLRunner {
         // run the data kernel to init the memory
         ocl::core::set_kernel_arg(&data_kernel, 0, ArgVal::mem(&buffers.heap_buffer)).unwrap();
         ocl::core::set_kernel_arg(&data_kernel, 1, ArgVal::mem(&buffers.globals_buffer)).unwrap();
+        ocl::core::set_kernel_arg(&data_kernel, 2, ArgVal::mem(&buffers.current_mem)).unwrap();
+        ocl::core::set_kernel_arg(&data_kernel, 3, ArgVal::mem(&buffers.max_mem)).unwrap();
 
         unsafe {
             ocl::core::enqueue_kernel(&queue, &data_kernel, 1, None, &[self.num_vms as usize, 1, 1], None, None::<Event>, None::<&mut Event>).unwrap();
@@ -497,7 +524,9 @@ impl OpenCLRunner {
         ocl::core::set_kernel_arg(&start_kernel, 11, ArgVal::mem(&buffers.loop_value_stack_state)).unwrap();
         ocl::core::set_kernel_arg(&start_kernel, 12, ArgVal::mem(&buffers.hypercall_num)).unwrap();
         ocl::core::set_kernel_arg(&start_kernel, 13, ArgVal::mem(&buffers.hypercall_continuation)).unwrap();
-        ocl::core::set_kernel_arg(&start_kernel, 14, ArgVal::mem(&buffers.entry)).unwrap();
+        ocl::core::set_kernel_arg(&start_kernel, 14, ArgVal::mem(&buffers.current_mem)).unwrap();
+        ocl::core::set_kernel_arg(&start_kernel, 15, ArgVal::mem(&buffers.max_mem)).unwrap();
+        ocl::core::set_kernel_arg(&start_kernel, 16, ArgVal::mem(&buffers.entry)).unwrap();
 
         // now the data in the program has been initialized, we can run the main loop
         loop {

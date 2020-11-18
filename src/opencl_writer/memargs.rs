@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use crate::opencl_writer::mem_interleave::*;
 
 use wast::MemArg;
+use wast::MemoryArg;
 
 // Functions for loading from memory
 
@@ -211,6 +212,43 @@ pub fn emit_memstore_i64(writer: &opencl_writer::OpenCLCWriter, args: &MemArg, d
     // no values are pushed back
     ret_str += &format!("\t{}\n",
                         "*sp -= 3;");
+
+    ret_str
+}
+
+/*
+ * This function is essentially a no-op, since we pre-allocate the heaps for all procs!
+ * All we do is update the metadata saying that the heap has grown by N pages
+ */
+pub fn emit_mem_grow(writer: &opencl_writer::OpenCLCWriter, arg: &MemoryArg, debug: bool) -> String {
+    // arg is the index of the memory space, however we are assuming that there is only 1 so it doesn't matter
+    let num_pages_to_grow_by = emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx");
+    let mut ret_str = String::from("");
+    
+    // if curr_size + num_pages_to_grow_by <= max size (in terms of pages)
+    ret_str += &format!("\t{}\n",
+                        format!("if (*current_mem_size + {} <= *max_mem_size) {{", num_pages_to_grow_by));
+    // the grow is successful and push curr_size, else push -1 
+
+    ret_str += &format!("\t\t{};\n\t\t{};\n",
+                        emit_write_u32("(ulong)(stack_u32+*sp-1)",
+                                       "(ulong)(stack_u32)",
+                                       "*current_mem_size",
+                                       "warp_idx"),
+                        // update current_mem_size by the amount of pages grown 
+                        format!("*current_mem_size += {}", num_pages_to_grow_by));
+
+    ret_str += &format!("\t{}\n",
+                        "} else {");
+    // the grow failed, push an error onto the stack
+    ret_str += &format!("\t\t{};\n",
+                        emit_write_u32("(ulong)(stack_u32+*sp-1)",
+                                       "(ulong)(stack_u32)",
+                                       "(uint)-1",
+                                       "warp_idx"));
+
+    ret_str += &format!("\t{}\n",
+                        "}");
 
     ret_str
 }

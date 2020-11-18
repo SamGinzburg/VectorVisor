@@ -25,19 +25,17 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, idx: wast::Index, cal
         _ => panic!("Unable to get Id for function call!"),
     };
 
-    dbg!(id);
-
     // if the func has calling parameters, set those up
     // on the newly formed stack as well
     let func_type_signature = &writer.func_map.get(id).unwrap().ty;
     let mut offset = 0;
-    dbg!(func_type_signature);
+
     match func_type_signature.inline {
         // if we can find the type signature
         Some(_) => {
             for parameter in func_type_signature.clone().inline.unwrap().params.to_vec() {
                 match parameter {
-                    (Some(id), _, t) => {
+                    (Some(_), _, t) => {
                         offset += writer.get_size_valtype(&t);
                     },
                     _ => panic!("Unhandled parameter type")
@@ -69,13 +67,13 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, idx: wast::Index, cal
         //"stack_frames[*sfp] = *sp;",
         format!("{};", emit_write_u32("(ulong)(stack_frames+*sfp)", "(ulong)(stack_frames)", "*sp", "warp_idx")),
         // save the callee return stub number
-        //format!("call_stack[*sfp] = {};", *call_ret_idx),
         format!("{}", &format!("{};",
                       emit_write_u64("(ulong)(call_stack+*sfp)",
                                      "(ulong)(call_stack)",
                                      &format!("{}", *call_ret_idx), "warp_idx"))),
         // setup calling parameters for function
-        format!("goto {};", id),
+        // filter id to remove "." and "$" symbols, as they cannot be a part of C labels
+        format!("goto {};", id.replace(".", "").replace("$", "")),
         format!("call_return_stub_{}:", *call_ret_idx),
         format!("*sp += {};", return_size))
     } else {
@@ -83,11 +81,11 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, idx: wast::Index, cal
                 // increment stack frame pointer
                 "*sfp += 1;",
                 // save the current stack pointer for unwinding later
-                "stack_frames[*sfp] = *sp;",
+                format!("{};", emit_write_u32("(ulong)(stack_frames+*sfp)", "(ulong)(stack_frames)", "*sp", "warp_idx")),
                 // save the callee return stub number
                 // setup calling parameters for function
-                format!("goto {};", id),
-                format!("call_return_stub_{}:", 0))
+                format!("goto {};", id.replace(".", "").replace("$", "")),
+                format!("call_return_stub_{}:", *call_ret_idx))
     };
     *call_ret_idx += 1;
 
@@ -104,7 +102,8 @@ pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, fn_name: &str, fun
     };
     
     final_str += &format!("\t{}\n", "/* function unwind */");
-    final_str += &format!("{}_return:\n", fn_name);
+    // strip illegal chars from func name
+    final_str += &format!("{}_return:\n", fn_name.replace(".", "").replace("$", ""));
     // for each value returned by the function, return it on the stack
     // keep track of the change to stack ptr from previous returns
     let mut sp_counter = 0;

@@ -237,25 +237,49 @@ pub fn emit_i64_shr_s(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> Str
             "*sp -= 2;")
 }
 
-
+/*
+ * Implementing rotl safely in software: https://blog.regehr.org/archives/1063
+ */
 pub fn emit_i32_rotl(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> String {
-    format!("\t{};\n\t{}\n",
-            &emit_write_u32("(ulong)(stack_u32+*sp-2)",
-                            "(ulong)(stack_u32)",
-                            &format!("rotate({}, {})",
-                                     &emit_read_u32("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx"),
-                                     &emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx")),
-                            "warp_idx"),
-            "*sp -= 1;")
+    if !debug {
+        format!("\t{};\n\t{}\n",
+        &emit_write_u32("(ulong)(stack_u32+*sp-2)",
+                        "(ulong)(stack_u32)",
+                        &format!("rotate({}, {})",
+                                 &emit_read_u32("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx"),
+                                 &emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx")),
+                        "warp_idx"),
+        "*sp -= 1;")
+    } else {
+        format!("\t{};\n\t{}\n",
+        &emit_write_u32("(ulong)(stack_u32+*sp-2)",
+                        "(ulong)(stack_u32)",
+                        &format!("({x}<<{n}) | ({x}>>(32-{n}))",
+                                 x=&emit_read_u32("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx"),
+                                 n=&emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx")),
+                        "warp_idx"),
+        "*sp -= 1;")
+    }
 }
 
 pub fn emit_i64_rotl(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> String {
-    format!("\t{};\n\t{}\n",
-            &emit_write_u64("(ulong)(stack_u32+*sp-4)",
-                            "(ulong)(stack_u32)",
-                            &format!("rotate({}, {})",
-                                     &emit_read_u64("(ulong)(stack_u32+*sp-4)", "(ulong)(stack_u32)", "warp_idx"),
-                                     &emit_read_u64("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx")),
-                            "warp_idx"),
-            "*sp -= 2;")
+    if !debug {
+        format!("\t{};\n\t{}\n",
+        &emit_write_u64("(ulong)(stack_u32+*sp-4)",
+                        "(ulong)(stack_u32)",
+                        &format!("rotate({}, {})",
+                                 &emit_read_u64("(ulong)(stack_u32+*sp-4)", "(ulong)(stack_u32)", "warp_idx"),
+                                 &emit_read_u64("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx")),
+                        "warp_idx"),
+        "*sp -= 2;")
+    } else {
+        format!("\t{};\n\t{}\n",
+        &emit_write_u64("(ulong)(stack_u32+*sp-4)",
+                        "(ulong)(stack_u32)",
+                        &format!("({x}<<{n}) | ({x}>>(64-{n}))",
+                                 x=&emit_read_u64("(ulong)(stack_u32+*sp-4)", "(ulong)(stack_u32)", "warp_idx"),
+                                 n=&emit_read_u64("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx")),
+                        "warp_idx"),
+        "*sp -= 2;")
+    }
 }

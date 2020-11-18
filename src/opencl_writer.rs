@@ -37,6 +37,7 @@ use std::fmt;
 //use std::io::Write;
 use std::fmt::Write;
 use std::collections::HashMap;
+use std::convert::TryInto;
 
 use lazy_static::lazy_static;
 
@@ -464,7 +465,6 @@ impl<'a> OpenCLCWriter<'_> {
                     // else, this is a normal function call
                     // if self.func_map.get(id) is none, we have an import
                     // right now we only support WASI imports
-                    dbg!(id);
                     match self.func_map.get(id) {
                         Some(_) => {
                             let func_type_signature = &self.func_map.get(id).unwrap().ty;
@@ -606,10 +606,15 @@ impl<'a> OpenCLCWriter<'_> {
                 stack_sizes.pop();
                 emit_select(self, stack_sizes, debug)
             },
+            wast::Instruction::MemoryGrow(arg) => {
+                stack_sizes.pop();
+                stack_sizes.push(1);
+                emit_mem_grow(self, arg, debug)
+            },
             wast::Instruction::Return => emit_return(self, fn_name, debug),
-            wast::Instruction::Br(idx) => emit_br(self, *idx, debug),
-            wast::Instruction::BrIf(idx) => emit_br_if(self, *idx, debug),
-            wast::Instruction::BrTable(table_idxs) => emit_br_table(self, table_idxs, debug),
+            wast::Instruction::Br(idx) => emit_br(self, *idx, fn_name, debug),
+            wast::Instruction::BrIf(idx) => emit_br_if(self, *idx, fn_name, debug),
+            wast::Instruction::BrTable(table_idxs) => emit_br_table(self, table_idxs, fn_name, debug),
             wast::Instruction::Unreachable => self.emit_hypercall(1, hypercall_id_count, debug),
             _ => panic!("Instruction {:?} not yet implemented, in func: {:?}", instr, func.id)
         }
@@ -683,7 +688,8 @@ impl<'a> OpenCLCWriter<'_> {
                 }
 
                 // function entry point
-                final_string += &format!("{}:\n", id.name());
+                // strip illegal chars from function name
+                final_string += &format!("{}:\n", id.name().replace(".", "").replace("$", ""));
 
                 /*
                  * Stack setup for each function:
@@ -792,7 +798,6 @@ impl<'a> OpenCLCWriter<'_> {
             let (offset, _) = global_mappings.get(global.id.unwrap().name()).unwrap();
             match &global.kind {
                 wast::GlobalKind::Inline(expr) => {
-                    dbg!();
                     match &expr.instrs[0] {
                         wast::Instruction::I32Const(val) => {
                             ret_str += &format!("\t{};\n",
@@ -853,14 +858,10 @@ impl<'a> OpenCLCWriter<'_> {
         let mut mapping: HashMap<&str, (u32, u32)> = HashMap::new();
         let mut offset: u32 = 0;
         for global in &self.globals {
-            dbg!(global);
             match global {
                 wast::Global{span, id, exports, ty, kind} => {
                     let id = id.unwrap();
                     let type_size = self.get_size_valtype(&ty.ty);
-                    dbg!(id);
-                    dbg!(type_size);
-                    dbg!(offset);
                     mapping.insert(&id.name(), (offset, type_size.clone()));
                     offset += type_size;
                 },
@@ -869,8 +870,11 @@ impl<'a> OpenCLCWriter<'_> {
         }
 
         if debug {
-            result += &String::from("\nvoid data_init(uint *heap_u32_global, uint *globals_buffer) {\n");
+            result += &String::from("\nvoid data_init(uint *heap_u32, uint *globals_buffer, uint *curr_mem, uint *max_mem) {\n");
             result += &String::from("\tulong warp_idx = 0;\n");
+            // each page = 64KiB
+            result += &String::from("\tcurr_mem[warp_idx] = 1;\n");
+            result += &format!("\tmax_mem[warp_idx] = {};\n", heap_size / (1024*64));
 
             result += &self.emit_memcpy_arr();
 
@@ -878,8 +882,12 @@ impl<'a> OpenCLCWriter<'_> {
 
             result += &String::from("}\n\n");
         } else {
-            result += &String::from("\n__kernel void data_init(__global uint *heap_u32_global, __global uint *globals_buffer_global) {\n");
+            result += &String::from("\n__kernel void data_init(__global uint *heap_u32_global, __global uint *globals_buffer_global, __global uint *curr_mem_global, __global uint *max_mem_global) {\n");
             result += &String::from("\tulong warp_idx = get_global_id(0);\n");
+            // these structures are not interleaved, so its fine to just read/write them as is
+            // they are already essentially implicitly interleaved (like sp for example)
+            result += &String::from("\tcurr_mem_global[warp_idx] = 1;\n");
+            result += &format!("\tmax_mem_global[warp_idx] = {};\n", heap_size / (1024*64));
 
             if interleave == 0 {
                 result += &format!("\t{}\n",
@@ -927,7 +935,7 @@ impl<'a> OpenCLCWriter<'_> {
                              stack_frames_size_bytes: u32,
                              stack_frame_ptr_size_bytes: u32, 
                              predictor_size_bytes: u32,
-                             debug: bool) -> (String, u32, u32) {
+                             debug: bool) -> (String, u32, u32, u32) {
         let mut output = String::new();
 
         //let mut output = File::create(filename).unwrap();
@@ -981,11 +989,13 @@ impl<'a> OpenCLCWriter<'_> {
                                             ushort *loop_value_stack_state,
                                             int    *hypercall_number,
                                             uint   *hypercall_continuation,
+                                            uint   *current_mem_size,
+                                            uint   *max_mem_size,
                                             uint   entry_point) {{\n");
             // for debugging hardcode the warp_idx to 0
             write!(output, "\tulong warp_idx = 0;\n");
         } else {
-            let header = format!("__kernel void wasm_entry(__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}) {{\n",
+            let header = format!("__kernel void wasm_entry(__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}) {{\n",
                                     "uint   *stack_u32_global,",
                                     "ulong  *stack_u64_global,",
                                     "uint   *heap_u32_global,",
@@ -1000,13 +1010,15 @@ impl<'a> OpenCLCWriter<'_> {
                                     "ushort *loop_value_stack_state_global,",
                                     "int    *hypercall_number_global,",
                                     "uint   *hypercall_continuation_global,",
+                                    "uint   *current_mem_size_global,",
+                                    "uint   *max_mem_size_global,",
                                     "uint   *entry_point_global");
             // write thread-local private variables before header
 
             write!(output, "{}", header);
             // TODO: for the openCL launcher, pass the memory stride as a function parameter
             if interleave > 0 {
-                write!(output, "\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\n\t{}\n",
+                write!(output, "\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\n\t{}\n",
                 "uint  *stack_u32    = (uint*)stack_u32_global;",
                 "ulong *stack_u64    = (ulong*)stack_u32;",
                 "uint  *heap_u32     = (uint *)heap_u32_global;",
@@ -1025,11 +1037,13 @@ impl<'a> OpenCLCWriter<'_> {
                 "ushort *loop_value_stack_state   = (ushort*)loop_value_stack_state_global;",
                 "int *hypercall_number = (int *)hypercall_number_global+(get_global_id(0));",
                 "uint *hypercall_continuation = (uint *)hypercall_continuation_global+(get_global_id(0));",
+                "uint *current_mem_size = (uint *)current_mem_size_global+(get_global_id(0));",
+                "uint *max_mem_size = (uint *)max_mem_size_global+(get_global_id(0));",
                 "uint  entry_point   = entry_point_global[get_global_id(0)];",
                 "ulong warp_idx = get_global_id(0);");
             } else {
                 // The pointer math must be calculated in terms of bytes, which is why we cast to (char*) first
-                write!(output, "\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\n\t{}\n",
+                write!(output, "\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\n\t{}\n",
                 format!("uint  *stack_u32    = (uint*)((char*)stack_u32_global+(get_global_id(0) * {}));", stack_size_bytes),
                 "ulong *stack_u64    = (ulong*)stack_u32;",
                 format!("uint  *heap_u32     = (uint *)((char*)heap_u32_global+(get_global_id(0) * {}));", heap_size_bytes),
@@ -1049,6 +1063,8 @@ impl<'a> OpenCLCWriter<'_> {
                 format!("ulong *loop_value_stack_state   = (ulong*)((char*)loop_value_stack_state_global+(get_global_id(0) * {}));", predictor_size_bytes),
                 "int *hypercall_number = (int *)hypercall_number_global+(get_global_id(0));",
                 "uint *hypercall_continuation = (uint *)hypercall_continuation_global+(get_global_id(0));",
+                "uint *current_mem_size = (uint *)current_mem_size_global+(get_global_id(0));",
+                "uint *max_mem_size = (uint *)max_mem_size_global+(get_global_id(0));",
                 "uint  entry_point   = entry_point_global[get_global_id(0)];",
                 "ulong warp_idx = get_global_id(0);");
             }
@@ -1084,7 +1100,8 @@ impl<'a> OpenCLCWriter<'_> {
         write!(output, "\t{}\n", "switch (entry_point) {");
         for key in function_idx_label.keys() {
             write!(output, "\t\tcase {}:\n", function_idx_label.get(key).unwrap());
-            write!(output, "\t\t\tgoto {};\n", key);
+            // strip illegal chars from function names
+            write!(output, "\t\t\tgoto {};\n", key.replace(".", "").replace("$", ""));
             write!(output, "\t\t\tbreak;\n");
         }
         write!(output, "\t\tdefault:\n");
@@ -1096,7 +1113,7 @@ impl<'a> OpenCLCWriter<'_> {
         let hypercall_id_count: &mut u32 = &mut 0;
 
         let call_ret_map: &mut HashMap<&str, u32> = &mut HashMap::new();
-        let call_ret_idx: &mut u32 = &mut 0;
+        let mut call_ret_idx: u32 = 0;
 
         // generate the indirect call mapping T0, refer to openclwriter/functions.rs:emit_call_indirect
         // for notes on why we are doing this statically at compile time
@@ -1104,7 +1121,7 @@ impl<'a> OpenCLCWriter<'_> {
         for function in funcs.clone() {
             let func = self.emit_function(function,
                                           call_ret_map,
-                                          call_ret_idx,
+                                          &mut call_ret_idx,
                                           function_idx_label.clone(),
                                           hypercall_id_count,
                                           indirect_call_mapping,
@@ -1118,7 +1135,7 @@ impl<'a> OpenCLCWriter<'_> {
         write!(output, "{}\n", "function_return_stub:");
         write!(output, "\t{}\n", format!("switch ({}) {{",
                                  emit_read_u32("(ulong)(call_stack+*sfp)", "(ulong)(call_stack)", "warp_idx")));
-        for count in 0..*call_ret_idx {
+        for count in 0..call_ret_idx {
             write!(output, "\t\tcase {}:\n", count);
             write!(output, "\t\t\t*sfp -= 1;\n");
             write!(output, "\t\t\tgoto call_return_stub_{};\n", count);
@@ -1145,27 +1162,29 @@ impl<'a> OpenCLCWriter<'_> {
             write!(output, "{}", format!("\t{}\n", "uvwasi_options_t init_options;"));
             write!(output, "{}", format!("\t{}\n", "uvwasi_options_init(&init_options);"));
             write!(output, "{}", format!("\t{}\n", "uvwasi_init(&uvwasi, &init_options);"));
-            write!(output, "{}", format!("\tuint *stack_u32 = calloc(1024, sizeof(uint));\n"));
+            write!(output, "{}", format!("\tuint *stack_u32 = calloc(1024*1024, sizeof(uint));\n"));
             write!(output, "{}", format!("\tuint *globals = calloc(1024, sizeof(uint));\n"));
-            write!(output, "{}", format!("\tuint *hcall_buf = calloc(1024, sizeof(uint));\n"));
+            write!(output, "{}", format!("\tuint *hcall_buf = calloc(1024*16, sizeof(uint));\n"));
             write!(output, "{}", format!("\tulong *stack_u64 = (ulong *)stack_u32;\n"));
-            write!(output, "{}", format!("\tuint *heap_u32 = (uint *)calloc(1024, sizeof(uint));\n"));
+            write!(output, "{}", format!("\tuint *heap_u32 = (uint *)calloc(1024*1024*16, sizeof(uint));\n"));
             write!(output, "{}", format!("\tulong *heap_u64 = (ulong *)calloc(1024, sizeof(uint));\n"));
             write!(output, "{}", format!("\tuint *stack_frames = calloc(1024, sizeof(uint));\n"));
             write!(output, "{}", format!("\tuint *call_stack = calloc(1024, sizeof(uint));\n"));
             // the size of this structure is proportional to how many functions there are
             // size = function count * 4096 bytes (64 x 64)
-            write!(output, "{}", format!("\tuchar *branch_value_stack_state = calloc({}, sizeof(uchar));\n", funcs.len() * 4096));
-            write!(output, "{}", format!("\tuchar *loop_value_stack_state = calloc({}, sizeof(uchar));\n", funcs.len() * 4096));
+            write!(output, "{}", format!("\tuchar *branch_value_stack_state = calloc({}, sizeof(uchar));\n", funcs.len() * 4096 * 2));
+            write!(output, "{}", format!("\tuchar *loop_value_stack_state = calloc({}, sizeof(uchar));\n", funcs.len() * 4096 * 2));
 
             write!(output, "{}", format!("\tulong sp = 0;\n"));
             write!(output, "{}", format!("\tulong sfp = 0;\n"));
             write!(output, "{}", format!("\tint hypercall_number = -2;\n"));
             write!(output, "{}", format!("\tuint hypercall_continuation = 0;\n"));
+            write!(output, "{}", format!("\tuint curr_mem[1024];\n"));
+            write!(output, "{}", format!("\tuint max_mem[1024];\n"));
             write!(output, "{}", format!("\tstack_frames[sfp] = sp;\n"));
             write!(output, "{}", format!("\tstack_u64[0] = 0x1;\n"));
             write!(output, "{}", format!("\tsp += 2;\n"));
-            write!(output, "{}", format!("\tdata_init(heap_u32, globals);\n"));
+            write!(output, "{}", format!("\tdata_init(heap_u32, globals, curr_mem, max_mem);\n"));
             // TODO when calling the function get the entry_point for main
 
 
@@ -1175,7 +1194,7 @@ impl<'a> OpenCLCWriter<'_> {
             write!(output, "{}", format!("{}",
                     format!("\t\twasm_entry(stack_u32, stack_u64, heap_u32, heap_u64, hcall_buf, globals, stack_frames,
                                             &sp, &sfp, call_stack, branch_value_stack_state,
-                                            loop_value_stack_state, &hypercall_number, &hypercall_continuation, {});\n",
+                                            loop_value_stack_state, &hypercall_number, &hypercall_continuation, curr_mem, max_mem, {});\n",
                             function_idx_label.get("_start").unwrap())));
 
                     // if *sp == 0, break
@@ -1209,7 +1228,7 @@ impl<'a> OpenCLCWriter<'_> {
 
             write!(output, "}}\n\n");
         }
-        (output, *function_idx_label.get("_start").unwrap(), globals_buffer_size)
+        (output, *function_idx_label.get("_start").unwrap(), globals_buffer_size, funcs.len().try_into().unwrap())
     }
 }
 

@@ -43,7 +43,7 @@ pub fn emit_select(writer: &opencl_writer::OpenCLCWriter, stack_sizes: &mut Vec<
         sp_modifier = 3;
     }
 
-    ret_str += &format!("\t({} != 0) : ({}) ? ({});\n",
+    ret_str += &format!("\t({} != 0) ? ({}) : ({});\n",
                         c, write_val1, write_val2);
 
     ret_str += &format!("\t{}{};\n", "*sp -= ", sp_modifier);

@@ -14,7 +14,7 @@ pub fn emit_i32_clz(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> Strin
 
     let mut ret_str = String::from("");
 
-    ret_str += &format!("\t{}\n",
+    ret_str += &format!("\t{};\n",
                         emit_write_u32("(ulong)(stack_u32+*sp-1)",
                                        "(ulong)(stack_u32)",
                                        &read_val,
@@ -31,7 +31,7 @@ pub fn emit_i64_clz(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> Strin
     };
     let mut ret_str = String::from("");
 
-    ret_str += &format!("\t{}\n",
+    ret_str += &format!("\t{};\n",
                         emit_write_u64("(ulong)(stack_u32+*sp-2)",
                                        "(ulong)(stack_u32)",
                                        &read_val,
@@ -51,7 +51,7 @@ pub fn emit_i32_ctz(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> Strin
 
     let mut ret_str = String::from("");
 
-    ret_str += &format!("\t{}\n",
+    ret_str += &format!("\t{};\n",
                         emit_write_u32("(ulong)(stack_u32+*sp-1)",
                                        "(ulong)(stack_u32)",
                                        &read_val,
@@ -70,7 +70,7 @@ pub fn emit_i64_ctz(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> Strin
     };
     let mut ret_str = String::from("");
 
-    ret_str += &format!("\t{}\n",
+    ret_str += &format!("\t{};\n",
                         emit_write_u64("(ulong)(stack_u32+*sp-2)",
                                        "(ulong)(stack_u32)",
                                        &read_val,

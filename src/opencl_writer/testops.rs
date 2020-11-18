@@ -9,9 +9,9 @@ use crate::opencl_writer::mem_interleave::emit_write_u64;
  */
 
 pub fn emit_i32_eqz(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> String {
-    let read_prev = &format!("(int)({}) ? 1 : 0", emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx"));
+    let read_prev = &format!("((int)({}) == (int)0) ? 1 : 0", emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx"));
     format!("\t{};\n",
-            &emit_write_u32("(ulong)(stack_u32*sp-1)",
+            &emit_write_u32("(ulong)(stack_u32+*sp-1)",
                             "(ulong)(stack_u32)",
                             read_prev,
                             "warp_idx"))
