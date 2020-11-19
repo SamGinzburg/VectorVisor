@@ -101,7 +101,7 @@ pub fn emit_fd_write_helpers(writer: &opencl_writer::OpenCLCWriter, debug: bool)
 
     // copy the buffer to the location (heap -> hypercall_buffer)
     result += &format!("\t{};\n",
-                       "memcpy((ulong)((char*)heap_u32+buf_ptr),
+                       "___private_memcpy((ulong)((char*)heap_u32+buf_ptr),
                                (ulong)(heap_u32),
                                (ulong)((char*)hypercall_buffer+next_buffer_start+16),
                                (ulong)(hypercall_buffer),

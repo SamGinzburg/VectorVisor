@@ -44,12 +44,14 @@ pub struct OpenCLBuffers {
     sp: ocl::core::Mem,
     sfp: ocl::core::Mem,
     call_stack: ocl::core::Mem,
+    call_return_stack: ocl::core::Mem,
     branch_value_stack_state: ocl::core::Mem,
     loop_value_stack_state: ocl::core::Mem,
     hypercall_num: ocl::core::Mem,
     hypercall_continuation: ocl::core::Mem,
     current_mem: ocl::core::Mem,
     max_mem: ocl::core::Mem,
+    is_calling: ocl::core::Mem,
     entry: ocl::core::Mem,
 }
 
@@ -61,12 +63,14 @@ impl OpenCLBuffers {
                sp: ocl::core::Mem,
                sfp: ocl::core::Mem,
                call_stack: ocl::core::Mem,
+               call_return_stack: ocl::core::Mem,
                branch_value_stack_state: ocl::core::Mem,
                loop_value_stack_state: ocl::core::Mem,
                hypercall_num: ocl::core::Mem,
                hypercall_continuation: ocl::core::Mem,
                current_mem: ocl::core::Mem,
                max_mem: ocl::core::Mem,
+               is_calling: ocl::core::Mem,
                entry: ocl::core::Mem) -> OpenCLBuffers {
                 OpenCLBuffers {
                     stack_buffer: stack_buffer,
@@ -76,12 +80,14 @@ impl OpenCLBuffers {
                     sp: sp,
                     sfp: sfp,
                     call_stack: call_stack,
+                    call_return_stack: call_return_stack,
                     branch_value_stack_state: branch_value_stack_state,
                     loop_value_stack_state: loop_value_stack_state,
                     hypercall_num: hypercall_num,
                     hypercall_continuation: hypercall_continuation,
                     current_mem: current_mem,
                     max_mem: max_mem,
+                    is_calling: is_calling,
                     entry: entry,
                 }
     }
@@ -238,6 +244,13 @@ impl OpenCLRunner {
                                               None).unwrap()
         };
 
+        let call_return_stack = unsafe {
+            ocl::core::create_buffer::<_, u8>(&context,
+                                              ocl::core::MEM_READ_WRITE,
+                                              (call_stack_size * self.num_vms) as usize,
+                                              None).unwrap()
+        };
+
         let branch_value_stack_state = unsafe {
             ocl::core::create_buffer::<_, u8>(&context,
                                               ocl::core::MEM_READ_WRITE,
@@ -289,6 +302,13 @@ impl OpenCLRunner {
                                               None).unwrap()
         };
 
+        let is_calling = unsafe {
+            ocl::core::create_buffer::<_, u8>(&context,
+                                              ocl::core::MEM_READ_WRITE,
+                                              (1 * self.num_vms) as usize,
+                                              None).unwrap()
+        };
+        
         self.buffers = Some(OpenCLBuffers::new(stack_buffer,
                                                heap_buffer,
                                                stack_frames,
@@ -296,12 +316,14 @@ impl OpenCLRunner {
                                                sp,
                                                sfp,
                                                call_stack,
+                                               call_return_stack,
                                                branch_value_stack_state,
                                                loop_value_stack_state,
                                                hypercall_num,
                                                hypercall_continuation,
                                                current_mem,
                                                max_mem,
+                                               is_calling,
                                                entry));
         (self, context)
     }
@@ -498,6 +520,7 @@ impl OpenCLRunner {
         ocl::core::set_kernel_arg(&data_kernel, 1, ArgVal::mem(&buffers.globals_buffer)).unwrap();
         ocl::core::set_kernel_arg(&data_kernel, 2, ArgVal::mem(&buffers.current_mem)).unwrap();
         ocl::core::set_kernel_arg(&data_kernel, 3, ArgVal::mem(&buffers.max_mem)).unwrap();
+        ocl::core::set_kernel_arg(&data_kernel, 4, ArgVal::mem(&buffers.is_calling)).unwrap();
 
         unsafe {
             ocl::core::enqueue_kernel(&queue, &data_kernel, 1, None, &[self.num_vms as usize, 1, 1], None, None::<Event>, None::<&mut Event>).unwrap();
@@ -520,13 +543,15 @@ impl OpenCLRunner {
         ocl::core::set_kernel_arg(&start_kernel, 7, ArgVal::mem(&buffers.sp)).unwrap();
         ocl::core::set_kernel_arg(&start_kernel, 8, ArgVal::mem(&buffers.sfp)).unwrap();
         ocl::core::set_kernel_arg(&start_kernel, 9, ArgVal::mem(&buffers.call_stack)).unwrap();
-        ocl::core::set_kernel_arg(&start_kernel, 10, ArgVal::mem(&buffers.branch_value_stack_state)).unwrap();
-        ocl::core::set_kernel_arg(&start_kernel, 11, ArgVal::mem(&buffers.loop_value_stack_state)).unwrap();
-        ocl::core::set_kernel_arg(&start_kernel, 12, ArgVal::mem(&buffers.hypercall_num)).unwrap();
-        ocl::core::set_kernel_arg(&start_kernel, 13, ArgVal::mem(&buffers.hypercall_continuation)).unwrap();
-        ocl::core::set_kernel_arg(&start_kernel, 14, ArgVal::mem(&buffers.current_mem)).unwrap();
-        ocl::core::set_kernel_arg(&start_kernel, 15, ArgVal::mem(&buffers.max_mem)).unwrap();
-        ocl::core::set_kernel_arg(&start_kernel, 16, ArgVal::mem(&buffers.entry)).unwrap();
+        ocl::core::set_kernel_arg(&start_kernel, 10, ArgVal::mem(&buffers.call_return_stack)).unwrap();
+        ocl::core::set_kernel_arg(&start_kernel, 11, ArgVal::mem(&buffers.branch_value_stack_state)).unwrap();
+        ocl::core::set_kernel_arg(&start_kernel, 12, ArgVal::mem(&buffers.loop_value_stack_state)).unwrap();
+        ocl::core::set_kernel_arg(&start_kernel, 13, ArgVal::mem(&buffers.hypercall_num)).unwrap();
+        ocl::core::set_kernel_arg(&start_kernel, 14, ArgVal::mem(&buffers.hypercall_continuation)).unwrap();
+        ocl::core::set_kernel_arg(&start_kernel, 15, ArgVal::mem(&buffers.current_mem)).unwrap();
+        ocl::core::set_kernel_arg(&start_kernel, 16, ArgVal::mem(&buffers.max_mem)).unwrap();
+        ocl::core::set_kernel_arg(&start_kernel, 17, ArgVal::mem(&buffers.is_calling)).unwrap();
+        ocl::core::set_kernel_arg(&start_kernel, 18, ArgVal::mem(&buffers.entry)).unwrap();
 
         // now the data in the program has been initialized, we can run the main loop
         loop {

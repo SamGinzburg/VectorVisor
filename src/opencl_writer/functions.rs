@@ -5,6 +5,23 @@ use crate::opencl_writer::mem_interleave::emit_write_u32;
 use crate::opencl_writer::mem_interleave::emit_read_u64;
 use crate::opencl_writer::mem_interleave::emit_write_u64;
 
+/*
+ * Notes on Irreducible Control Flow (ICF):
+ * 
+ * WASM includes a set of branching instructions that behave as GOTOs essentially (br, br_if).
+ * These instructions jump directly to a specific label in the program and then continue execution.
+ * 
+ * Using GOTOs is the easiest way to implement this - in fact the official wasm2c compiler uses GOTOs to do
+ * exactly this! If we were targeting C, this would be fine, but we are targeting OpenCL C which does not allow
+ * for ICF at all!
+ * 
+ * We *have* to use gotos to implement our continuations, but we cannot use gotos to "call" the functions
+ * 
+ * In order to bypass this restriction we always return control to the main "wasm_entry" control function
+ * This function is responsible for starting/resuming all function calls
+ * 
+ */
+
 pub fn get_return_size(writer: &opencl_writer::OpenCLCWriter, ty: &wast::TypeUse<wast::FunctionType>) -> u32 {
     match ty.clone().inline {
         Some(r) => {
@@ -19,7 +36,7 @@ pub fn get_return_size(writer: &opencl_writer::OpenCLCWriter, ty: &wast::TypeUse
 }
 
 
-pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, idx: wast::Index, call_ret_map: &mut HashMap<&str, u32>, call_ret_idx: &mut u32, debug: bool) -> String {
+pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, idx: wast::Index, call_ret_map: &mut HashMap<&str, u32>, call_ret_idx: &mut u32, function_id_map: &HashMap<&str, u32>, debug: bool) -> String {
     let id = match idx {
         wast::Index::Id(id) => id.name(),
         _ => panic!("Unable to get Id for function call!"),
@@ -57,7 +74,7 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, idx: wast::Index, cal
     let return_size = get_return_size(writer, &func_type_signature.clone());
 
     let result = if offset > 0 {
-        format!("\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n{}\n\t{}\n",
+        format!("\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n{}\n\t{}\n",
         // move the stack pointer back by the offset required by calling parameters
         // the sp should point at the start of the arguments for the function
         format!("*sp -= {};", offset),
@@ -71,20 +88,41 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, idx: wast::Index, cal
                       emit_write_u64("(ulong)(call_stack+*sfp)",
                                      "(ulong)(call_stack)",
                                      &format!("{}", *call_ret_idx), "warp_idx"))),
-        // setup calling parameters for function
-        // filter id to remove "." and "$" symbols, as they cannot be a part of C labels
-        format!("goto {};", id.replace(".", "").replace("$", "")),
+        // push the entry point of the current function so we can return to it after the call
+        format!("{};", emit_write_u32("(ulong)(call_return_stack+*sfp)",
+                                      "(ulong)(call_return_stack)",
+                                      "(uint)*entry_point",
+                                      "warp_idx")),
+        // set the entry point for the control function
+        format!("*entry_point = {};", function_id_map.get(id).unwrap()),
+        // set the is_calling parameter to true, to indicate that we are calling a function
+        format!("{}", "*is_calling = 1;"),
+        // return to the control function
+        "return;",
         format!("call_return_stub_{}:", *call_ret_idx),
         format!("*sp += {};", return_size))
     } else {
-        format!("\t{}\n\t{}\n\t{}\n{}\n",
+        format!("\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n{}\n",
                 // increment stack frame pointer
                 "*sfp += 1;",
                 // save the current stack pointer for unwinding later
                 format!("{};", emit_write_u32("(ulong)(stack_frames+*sfp)", "(ulong)(stack_frames)", "*sp", "warp_idx")),
                 // save the callee return stub number
-                // setup calling parameters for function
-                format!("goto {};", id.replace(".", "").replace("$", "")),
+                format!("{}", &format!("{};",
+                      emit_write_u64("(ulong)(call_stack+*sfp)",
+                                     "(ulong)(call_stack)",
+                                     &format!("{}", *call_ret_idx), "warp_idx"))),
+                // push the entry point of the current function so we can return to it after the call
+                format!("{};", emit_write_u32("(ulong)(call_return_stack+*sfp)",
+                                              "(ulong)(call_return_stack)",
+                                              "(uint)*entry_point",
+                                              "warp_idx")),
+                // set the entry point of the function we want to call...
+                format!("*entry_point = {};", function_id_map.get(id).unwrap()),
+                // set the is_calling parameter to true, to indicate that we are calling a function
+                format!("{}", "*is_calling = 1;"),
+                // return to the control function
+                "return;",
                 format!("call_return_stub_{}:", *call_ret_idx))
     };
     *call_ret_idx += 1;
@@ -177,19 +215,19 @@ pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, fn_name: &str, fun
             _ => panic!("Unimplemented function return type!!!"),
         }
     }
+
+    // load the entry point to return to in the control function
+    final_str += &format!("\t*entry_point = {};\n", emit_read_u32("(ulong)(call_return_stack+*sfp)", "(ulong)(call_return_stack)", "warp_idx"));
+
     final_str += &format!("\t{}\n",
                             // reset the stack pointer to point at the end of the previous frame
                             &format!("*sp = {};", emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)(stack_frames)", "warp_idx")));
-                            //"*sp = stack_frames[*sfp];");
-    final_str += &format!("\t{}\n\t\t{}\n\t{}\n\t\t{}\n\t{}\n",
-                            // check if *sfp == 0
-                            "if (*sfp != 0) {",
-                            // if *sfp != 0, that means we have to return to the previous stack frame
-                                "goto function_return_stub;",
-                            "} else {",
-                            // we are the top-level stack frame, and can now exit the program
-                                "return;",
-                            "}");
+
+    // set the is_calling parameter to 0, to indicate that we are unwinding the call stack
+    final_str += &format!("\t{}\n", "*is_calling = 0;");
+
+    final_str += &format!("\t{}\n", "return;");
+
     final_str
 }
 
@@ -206,7 +244,7 @@ pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, fn_name: &str, fun
  *  each other, so we must process them sequentially.
  * 
  */
-pub fn emit_call_indirect(writer: &opencl_writer::OpenCLCWriter, table: &HashMap<u32, &wast::Index>, call_ret_map: &mut HashMap<&str, u32>, call_ret_idx: &mut u32, debug: bool) -> String {
+pub fn emit_call_indirect(writer: &opencl_writer::OpenCLCWriter, table: &HashMap<u32, &wast::Index>, call_ret_map: &mut HashMap<&str, u32>, call_ret_idx: &mut u32, function_id_map: HashMap<&str, u32>, debug: bool) -> String {
     let mut result = String::from("");
     // set up a switch case statement, we read the last value on the stack and determine what function we are going to call
     // this adds code bloat, but it reduces the complexity of the compiler.
@@ -221,7 +259,7 @@ pub fn emit_call_indirect(writer: &opencl_writer::OpenCLCWriter, table: &HashMap
         // now that we have found the appropriate call, we can pop the value off of the stack
         result += &format!("\t\t\t{}\n", format!("*sp -= 1;"));
         // emit the function call here!
-        result += &format!("{}", emit_fn_call(writer, **value, call_ret_map, call_ret_idx, debug));
+        result += &format!("{}", emit_fn_call(writer, **value, call_ret_map, call_ret_idx, &function_id_map, debug));
         result += &format!("\t\t\t{}\n", format!("break;"));
     }
 

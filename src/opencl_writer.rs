@@ -470,7 +470,7 @@ impl<'a> OpenCLCWriter<'_> {
                             let func_type_signature = &self.func_map.get(id).unwrap().ty;
                             let return_size = get_return_size(self, &func_type_signature.clone());
                             stack_sizes.push(return_size);
-                            emit_fn_call(&self, *idx, call_ret_map, call_ret_idx, debug)
+                            emit_fn_call(&self, *idx, call_ret_map, call_ret_idx, &function_id_map, debug)
                         },
                         // we have an import that isn't a system call...
                         None => String::from("")
@@ -485,7 +485,7 @@ impl<'a> OpenCLCWriter<'_> {
                     wast::Index::Num(_, _) => panic!(""),
                 };
                 */
-                emit_call_indirect(&self, indirect_call_mapping, call_ret_map, call_ret_idx, debug)
+                emit_call_indirect(&self, indirect_call_mapping, call_ret_map, call_ret_idx, function_id_map, debug)
             },
             wast::Instruction::I32Eq => {
                 stack_sizes.pop();
@@ -629,7 +629,9 @@ impl<'a> OpenCLCWriter<'_> {
                      indirect_call_mapping: &HashMap<u32, &wast::Index>, 
                      global_mappings: &HashMap<&str, (u32, u32)>,
                      debug: bool) -> String {
-        let mut final_string = String::from("");
+        let mut final_string = String::from(""); 
+        *call_ret_idx = 0;
+        *hypercall_id_count = 0;
 
         // store the stack offset for all parameters and locals
         let mut local_parameter_stack_offset: HashMap<&str, u32> = HashMap::new();
@@ -678,8 +680,6 @@ impl<'a> OpenCLCWriter<'_> {
                     None => (),
                 }
 
-                //stack_frames[*sfp - 1]; points to the head of the stack frame
-
                 // get offsets for locals
                 for local in locals {
                     local_parameter_stack_offset.insert(local.id.unwrap().name(), offset);
@@ -689,7 +689,32 @@ impl<'a> OpenCLCWriter<'_> {
 
                 // function entry point
                 // strip illegal chars from function name
-                final_string += &format!("{}:\n", id.name().replace(".", "").replace("$", ""));
+
+                final_string += &format!("{}",
+                        self.generate_function_prelude(&id.name().replace(".", "").replace("$", ""),
+                                                        0,
+                                                        0,
+                                                        0,
+                                                        0,
+                                                        0,
+                                                        0,
+                                                        0,
+                                                        0,
+                                                        false,
+                                                        debug));
+
+                // upon entry, first check to see if we are returning from a hypercall
+                // hypercall_number is set to -1 after completing the hypercall
+                write!(final_string, "\t{}\n", "if (*hypercall_number == -1) {");
+                // if we are returning from the hypercall, goto hypercall_return_table
+                write!(final_string, "{}", format!("\t\t{}\n", "goto hypercall_return_table;"));
+                write!(final_string, "\t}}\n");
+
+                // after checking for hypercalls, check if we are unwinding the call stack
+                // (returning from another function)
+                write!(final_string, "\t{}\n", "if (!*is_calling) {");
+                write!(final_string, "{}", format!("\t\t{}\n", "goto call_return_table;"));
+                write!(final_string, "\t}}\n");
 
                 /*
                  * Stack setup for each function:
@@ -744,8 +769,40 @@ impl<'a> OpenCLCWriter<'_> {
             },
             (_, _, _) => panic!("Inline function must always have a valid identifier in wasm")
         };
+
+        // the hypercall switch has to be at the end, because we can encounter a hypercall during the function
+        // we want to avoid doing double passes during compilation
+        
+        write!(final_string, "{}\n", "hypercall_return_table:");
+        // reset the hypercall_number to -2 to indicate that we have finished serving the hypercall
+        write!(final_string, "\t{}\n", "*hypercall_number = -2;");
+
+        write!(final_string, "\t{}\n", "switch (*hypercall_continuation) {");
+        for count in 0..*hypercall_id_count {
+            write!(final_string, "\t\tcase {}:\n", count);
+            write!(final_string, "\t\t\tgoto hypercall_return_stub_{};\n", count);
+            write!(final_string, "\t\t\tbreak;\n");
+        } 
+        write!(final_string, "\t}}\n");
+
+        // generate the function call return table
+        write!(final_string, "{}\n", format!("call_return_table:"));
+        write!(final_string, "\t{}\n", format!("switch ({}) {{",
+        emit_read_u32("(ulong)(call_stack+*sfp)", "(ulong)(call_stack)", "warp_idx")));
+        for count in 0..*call_ret_idx {
+            write!(final_string, "\t\tcase {}:\n", count);
+            write!(final_string, "\t\t\t*sfp -= 1;\n");
+            write!(final_string, "\t\t\tgoto call_return_stub_{};\n", count);
+            write!(final_string, "\t\t\tbreak;\n");
+        } 
+        write!(final_string, "\t}}\n");
+
+
+        final_string += &format!("}}\n");
+
         final_string
     }
+
     fn emit_memcpy_arr(&self) -> String {
         let mut result = String::from("");
         let mut counter = 0;
@@ -849,6 +906,153 @@ impl<'a> OpenCLCWriter<'_> {
         table_mapping
     }
 
+    fn generate_function_prelude(&self,
+                                 fn_name: &str,
+                                 interleave: u32,
+                                 stack_size_bytes: u32,
+                                 heap_size_bytes: u32,
+                                 stack_frames_size_bytes: u32,
+                                 call_stack_size_bytes: u32,
+                                 predictor_size_bytes: u32,
+                                 globals_buffer_size: u32,
+                                 stack_frame_ptr_size_bytes: u32,
+                                 is_control_fn: bool,
+                                 debug: bool) -> String {
+        let mut output = String::new();
+        /*
+         * Generate code for each function in the file first
+         */
+        if debug {
+            // write thread-local private variables before header
+            // store branch stack pointers for branch value stack unwinding
+            write!(output, "{}", format!("void {}(uint   *stack_u32,
+                                            ulong  *stack_u64,
+                                            uint   *heap_u32,
+                                            ulong  *heap_u64,
+                                            uint   *hypercall_buffer,
+                                            uint   *globals_buffer,
+                                            uint   *stack_frames,
+                                            ulong  *sp,
+                                            ulong  *sfp,
+                                            ulong  *call_stack,
+                                            uint   *call_return_stack,
+                                            ushort *branch_value_stack_state,
+                                            ushort *loop_value_stack_state,
+                                            int    *hypercall_number,
+                                            uint   *hypercall_continuation,
+                                            uint   *current_mem_size,
+                                            uint   *max_mem_size,
+                                            uchar  *is_calling,
+                                            ulong  warp_idx,
+                                            uint   *entry_point) {{\n", fn_name));
+        } else if is_control_fn {
+            let header = format!("__kernel void {}(__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}) {{\n",
+                                    fn_name,
+                                    "uint   *stack_u32_global,",
+                                    "ulong  *stack_u64_global,",
+                                    "uint   *heap_u32_global,",
+                                    "ulong  *heap_u64_global,",
+                                    "uint   *hypercall_buffer_global,",
+                                    "uint   *globals_buffer_global,",
+                                    "uint   *stack_frames_global,",
+                                    "ulong  *sp_global,",
+                                    "ulong  *sfp_global,",
+                                    "ulong  *call_stack_global,",
+                                    "uint   *call_return_stack_global,",
+                                    "ushort *branch_value_stack_state_global,",
+                                    "ushort *loop_value_stack_state_global,",
+                                    "int    *hypercall_number_global,",
+                                    "uint   *hypercall_continuation_global,",
+                                    "uint   *current_mem_size_global,",
+                                    "uint   *max_mem_size_global,",
+                                    "uchar  *is_calling_global,",
+                                    "uint   *entry_point_global");
+            // write thread-local private variables before header
+
+            write!(output, "{}", header);
+            // TODO: for the openCL launcher, pass the memory stride as a function parameter
+            if interleave > 0 {
+                write!(output, "\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\n\t{}\n",
+                "uint  *stack_u32    = (uint*)stack_u32_global;",
+                "ulong *stack_u64    = (ulong*)stack_u32;",
+                "uint  *heap_u32     = (uint *)heap_u32_global;",
+                "ulong *heap_u64     = (ulong *)heap_u32;",
+                "uint  *hypercall_buffer = (uint *)hypercall_buffer_global;",
+                "uint   *globals_buffer = (uint *)globals_buffer_global;",
+                "uint  *stack_frames = (uint*)stack_frames_global;",
+                // only an array of N elements, where N=warp size
+                "ulong *sp           = (ulong *)sp_global+(get_global_id(0));",
+                // the stack frame pointer is used for both the stack frame, and call stack as they are
+                // essentially the same structure, except they hold different values
+                "ulong *sfp          = (ulong*)(sfp_global+(get_global_id(0)));",
+                // holds the numeric index of the return label for where to jump after a function call
+                "ulong *call_stack   = (ulong*)call_stack_global;",
+                "ulong *call_return_stack   = (ulong*)call_return_stack_global;",
+                "ushort *branch_value_stack_state   = (ushort*)branch_value_stack_state_global;",
+                "ushort *loop_value_stack_state   = (ushort*)loop_value_stack_state_global;",
+                "int *hypercall_number = (int *)hypercall_number_global+(get_global_id(0));",
+                "uint *hypercall_continuation = (uint *)hypercall_continuation_global+(get_global_id(0));",
+                "uint *current_mem_size = (uint *)current_mem_size_global+(get_global_id(0));",
+                "uint *max_mem_size = (uint *)max_mem_size_global+(get_global_id(0));",
+                "uchar *is_calling = (uchar *)is_calling_global+(get_global_id(0));",
+                "uint  *entry_point   = (uint*)entry_point_global+get_global_id(0);",
+                "ulong warp_idx = get_global_id(0);");
+            } else {
+                // The pointer math must be calculated in terms of bytes, which is why we cast to (char*) first
+                write!(output, "\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\n\t{}\n",
+                format!("uint  *stack_u32    = (uint*)((char*)stack_u32_global+(get_global_id(0) * {}));", stack_size_bytes),
+                "ulong *stack_u64    = (ulong*)stack_u32;",
+                format!("uint  *heap_u32     = (uint *)((char*)heap_u32_global+(get_global_id(0) * {}));", heap_size_bytes),
+                "ulong *heap_u64     = (ulong *)heap_u32;",
+                // the hypercall_buffer is hardcoded to always be 16KiB - we can change this later if needed possibly
+                "uint  *hypercall_buffer = (uint *)((char*)hypercall_buffer_global+(get_global_id(0) * 1024*16));",
+                format!("uint  *globals_buffer = (uint*)((char*)globals_buffer_global+(get_global_id(0) * {}));", globals_buffer_size * 4),
+                format!("uint  *stack_frames = (uint*)((char*)stack_frames_global+(get_global_id(0) * {}));", stack_frames_size_bytes),
+                // only an array of N elements, where N=warp size
+                "ulong *sp           = (ulong *)sp_global+(get_global_id(0));",
+                // the stack frame pointer is used for both the stack frame, and call stack as they are
+                // essentially the same structure, except they hold different values
+                format!("ulong *sfp          = (ulong*)((char*)sfp_global+(get_global_id(0) * {}));", stack_frame_ptr_size_bytes),
+                // holds the numeric index of the return label for where to jump after a function call
+                format!("ulong *call_stack   = (ulong*)((char*)call_stack_global+(get_global_id(0) * {}));", call_stack_size_bytes),
+                format!("ulong *call_return_stack   = (ulong*)((char*)call_return_stack_global+(get_global_id(0) * {}));", call_stack_size_bytes),
+                format!("ulong *branch_value_stack_state   = (ulong*)((char*)branch_value_stack_state_global+(get_global_id(0) * {}));", predictor_size_bytes),
+                format!("ulong *loop_value_stack_state   = (ulong*)((char*)loop_value_stack_state_global+(get_global_id(0) * {}));", predictor_size_bytes),
+                "int *hypercall_number = (int *)hypercall_number_global+(get_global_id(0));",
+                "uint *hypercall_continuation = (uint *)hypercall_continuation_global+(get_global_id(0));",
+                "uint *current_mem_size = (uint *)current_mem_size_global+(get_global_id(0));",
+                "uint *max_mem_size = (uint *)max_mem_size_global+(get_global_id(0));",
+                "uchar *is_calling = (uchar *)is_calling_global+(get_global_id(0));",
+                "uint  *entry_point   = (uint *)entry_point_global+get_global_id(0);",
+                "ulong warp_idx = get_global_id(0);");
+            }
+        // if we are an OpenCL kernel and we are not the control function, we only need the function header itself
+        } else {
+            write!(output, "{}", format!("
+void {}( uint   *stack_u32,
+                  ulong  *stack_u64,
+                  uint   *heap_u32,
+                  ulong  *heap_u64,
+                  uint   *hypercall_buffer,
+                  uint   *globals_buffer,
+                  uint   *stack_frames,
+                  ulong  *sp,
+                  ulong  *sfp,
+                  ulong  *call_stack,
+                  uint   *call_return_stack,
+                  ushort *branch_value_stack_state,
+                  ushort *loop_value_stack_state,
+                  int    *hypercall_number,
+                  uint   *hypercall_continuation,
+                  uint   *current_mem_size,
+                  uint   *max_mem_size,
+                  uchar  *is_calling,
+                  ulong  warp_idx,
+                  uint   *entry_point) {{\n", fn_name));
+        }
+        output
+    }
+
     /*
      * This function generates the helper kernel that loads the data sections
      * It is also ressponsible for loading globals into memory id -> (offset, size)
@@ -870,10 +1074,11 @@ impl<'a> OpenCLCWriter<'_> {
         }
 
         if debug {
-            result += &String::from("\nvoid data_init(uint *heap_u32, uint *globals_buffer, uint *curr_mem, uint *max_mem) {\n");
+            result += &String::from("\nvoid data_init(uint *heap_u32, uint *globals_buffer, uint *curr_mem, uint *max_mem, uchar *is_calling) {\n");
             result += &String::from("\tulong warp_idx = 0;\n");
             // each page = 64KiB
             result += &String::from("\tcurr_mem[warp_idx] = 1;\n");
+            result += &String::from("\tis_calling[warp_idx] = 1;\n");
             result += &format!("\tmax_mem[warp_idx] = {};\n", heap_size / (1024*64));
 
             result += &self.emit_memcpy_arr();
@@ -882,11 +1087,12 @@ impl<'a> OpenCLCWriter<'_> {
 
             result += &String::from("}\n\n");
         } else {
-            result += &String::from("\n__kernel void data_init(__global uint *heap_u32_global, __global uint *globals_buffer_global, __global uint *curr_mem_global, __global uint *max_mem_global) {\n");
+            result += &String::from("\n__kernel void data_init(__global uint *heap_u32_global, __global uint *globals_buffer_global, __global uint *curr_mem_global, __global uint *max_mem_global, __global uchar *is_calling_global) {\n");
             result += &String::from("\tulong warp_idx = get_global_id(0);\n");
             // these structures are not interleaved, so its fine to just read/write them as is
-            // they are already essentially implicitly interleaved (like sp for example)
+            // they are already implicitly interleaved (like sp for example)
             result += &String::from("\tcurr_mem_global[warp_idx] = 1;\n");
+            result += &String::from("\tis_calling_global[warp_idx] = 1;\n");
             result += &format!("\tmax_mem_global[warp_idx] = {};\n", heap_size / (1024*64));
 
             if interleave == 0 {
@@ -969,106 +1175,6 @@ impl<'a> OpenCLCWriter<'_> {
 
         write!(output, "{}", data_section);
 
-        /*
-         * Generate code for each function in the file first
-         */
-        if debug {
-            // write thread-local private variables before header
-            // store branch stack pointers for branch value stack unwinding
-            write!(output, "void wasm_entry(uint   *stack_u32,
-                                            ulong  *stack_u64,
-                                            uint   *heap_u32,
-                                            ulong  *heap_u64,
-                                            uint   *hypercall_buffer,
-                                            uint   *globals_buffer,
-                                            uint   *stack_frames,
-                                            ulong  *sp,
-                                            ulong  *sfp,
-                                            ulong  *call_stack,
-                                            ushort *branch_value_stack_state,
-                                            ushort *loop_value_stack_state,
-                                            int    *hypercall_number,
-                                            uint   *hypercall_continuation,
-                                            uint   *current_mem_size,
-                                            uint   *max_mem_size,
-                                            uint   entry_point) {{\n");
-            // for debugging hardcode the warp_idx to 0
-            write!(output, "\tulong warp_idx = 0;\n");
-        } else {
-            let header = format!("__kernel void wasm_entry(__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}) {{\n",
-                                    "uint   *stack_u32_global,",
-                                    "ulong  *stack_u64_global,",
-                                    "uint   *heap_u32_global,",
-                                    "ulong  *heap_u64_global,",
-                                    "uint   *hypercall_buffer_global,",
-                                    "uint   *globals_buffer_global,",
-                                    "uint   *stack_frames_global,",
-                                    "ulong  *sp_global,",
-                                    "ulong  *sfp_global,",
-                                    "ulong  *call_stack_global,",
-                                    "ushort *branch_value_stack_state_global,",
-                                    "ushort *loop_value_stack_state_global,",
-                                    "int    *hypercall_number_global,",
-                                    "uint   *hypercall_continuation_global,",
-                                    "uint   *current_mem_size_global,",
-                                    "uint   *max_mem_size_global,",
-                                    "uint   *entry_point_global");
-            // write thread-local private variables before header
-
-            write!(output, "{}", header);
-            // TODO: for the openCL launcher, pass the memory stride as a function parameter
-            if interleave > 0 {
-                write!(output, "\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\n\t{}\n",
-                "uint  *stack_u32    = (uint*)stack_u32_global;",
-                "ulong *stack_u64    = (ulong*)stack_u32;",
-                "uint  *heap_u32     = (uint *)heap_u32_global;",
-                "ulong *heap_u64     = (ulong *)heap_u32;",
-                "uint  *hypercall_buffer = (uint *)hypercall_buffer_global;",
-                "uint   *globals_buffer = (uint *)globals_buffer_global;",
-                "uint  *stack_frames = (uint*)stack_frames_global;",
-                // only an array of N elements, where N=warp size
-                "ulong *sp           = (ulong *)sp_global+(get_global_id(0));",
-                // the stack frame pointer is used for both the stack frame, and call stack as they are
-                // essentially the same structure, except they hold different values
-                "ulong *sfp          = (ulong*)(sfp_global+(get_global_id(0)));",
-                // holds the numeric index of the return label for where to jump after a function call
-                "ulong *call_stack   = (ulong*)call_stack_global;",
-                "ushort *branch_value_stack_state   = (ushort*)branch_value_stack_state_global;",
-                "ushort *loop_value_stack_state   = (ushort*)loop_value_stack_state_global;",
-                "int *hypercall_number = (int *)hypercall_number_global+(get_global_id(0));",
-                "uint *hypercall_continuation = (uint *)hypercall_continuation_global+(get_global_id(0));",
-                "uint *current_mem_size = (uint *)current_mem_size_global+(get_global_id(0));",
-                "uint *max_mem_size = (uint *)max_mem_size_global+(get_global_id(0));",
-                "uint  entry_point   = entry_point_global[get_global_id(0)];",
-                "ulong warp_idx = get_global_id(0);");
-            } else {
-                // The pointer math must be calculated in terms of bytes, which is why we cast to (char*) first
-                write!(output, "\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\n\t{}\n",
-                format!("uint  *stack_u32    = (uint*)((char*)stack_u32_global+(get_global_id(0) * {}));", stack_size_bytes),
-                "ulong *stack_u64    = (ulong*)stack_u32;",
-                format!("uint  *heap_u32     = (uint *)((char*)heap_u32_global+(get_global_id(0) * {}));", heap_size_bytes),
-                "ulong *heap_u64     = (ulong *)heap_u32;",
-                // the hypercall_buffer is hardcoded to always be 16KiB - we can change this later if needed possibly
-                "uint  *hypercall_buffer = (uint *)((char*)hypercall_buffer_global+(get_global_id(0) * 1024*16));",
-                format!("uint  *globals_buffer = (uint*)((char*)globals_buffer_global+(get_global_id(0) * {}));", globals_buffer_size * 4),
-                format!("uint  *stack_frames = (uint*)((char*)stack_frames_global+(get_global_id(0) * {}));", stack_frames_size_bytes),
-                // only an array of N elements, where N=warp size
-                "ulong *sp           = (ulong *)sp_global+(get_global_id(0));",
-                // the stack frame pointer is used for both the stack frame, and call stack as they are
-                // essentially the same structure, except they hold different values
-                format!("ulong *sfp          = (ulong*)((char*)sfp_global+(get_global_id(0) * {}));", stack_frame_ptr_size_bytes),
-                // holds the numeric index of the return label for where to jump after a function call
-                format!("ulong *call_stack   = (ulong*)((char*)call_stack_global+(get_global_id(0) * {}));", call_stack_size_bytes),
-                format!("ulong *branch_value_stack_state   = (ulong*)((char*)branch_value_stack_state_global+(get_global_id(0) * {}));", predictor_size_bytes),
-                format!("ulong *loop_value_stack_state   = (ulong*)((char*)loop_value_stack_state_global+(get_global_id(0) * {}));", predictor_size_bytes),
-                "int *hypercall_number = (int *)hypercall_number_global+(get_global_id(0));",
-                "uint *hypercall_continuation = (uint *)hypercall_continuation_global+(get_global_id(0));",
-                "uint *current_mem_size = (uint *)current_mem_size_global+(get_global_id(0));",
-                "uint *max_mem_size = (uint *)max_mem_size_global+(get_global_id(0));",
-                "uint  entry_point   = entry_point_global[get_global_id(0)];",
-                "ulong warp_idx = get_global_id(0);");
-            }
-        }
 
         // for each function, assign an ID -> index mapping
         let mut function_idx_label: HashMap<&str, u32> = HashMap::new();
@@ -1085,28 +1191,6 @@ impl<'a> OpenCLCWriter<'_> {
             }
             count += 1;
         }
-
-        // upon entry, first check to see if we are returning from a hypercall
-        // hypercall_number is set to -1 after completing the hypercall
-        write!(output, "\t{}\n", "if (*hypercall_number == -1) {");
-        // if we are returning from the hypercall, goto hypercall_return_table
-        write!(output, "{}", format!("\t\t{}\n", "goto hypercall_return_table;"));
-        write!(output, "\t}}\n");
-
-
-        // function entry point
-
-        write!(output, "\t{}\n", "uint caller;");
-        write!(output, "\t{}\n", "switch (entry_point) {");
-        for key in function_idx_label.keys() {
-            write!(output, "\t\tcase {}:\n", function_idx_label.get(key).unwrap());
-            // strip illegal chars from function names
-            write!(output, "\t\t\tgoto {};\n", key.replace(".", "").replace("$", ""));
-            write!(output, "\t\t\tbreak;\n");
-        }
-        write!(output, "\t\tdefault:\n");
-            write!(output, "\t\t\treturn;\n");
-        write!(output, "\t}}\n");
 
         // hypercall ID tracker count, we use this number to auto-insert
         // the return stub later
@@ -1129,30 +1213,58 @@ impl<'a> OpenCLCWriter<'_> {
                                           debug);
             write!(output, "{}", func);
         }
-
-        // generate the function call return table
         
-        write!(output, "{}\n", "function_return_stub:");
-        write!(output, "\t{}\n", format!("switch ({}) {{",
-                                 emit_read_u32("(ulong)(call_stack+*sfp)", "(ulong)(call_stack)", "warp_idx")));
-        for count in 0..call_ret_idx {
-            write!(output, "\t\tcase {}:\n", count);
-            write!(output, "\t\t\t*sfp -= 1;\n");
-            write!(output, "\t\t\tgoto call_return_stub_{};\n", count);
+
+        // generate control function prelude
+        write!(output, "{}",
+                self.generate_function_prelude("wasm_entry",
+                                               interleave,
+                                               stack_size_bytes,
+                                               heap_size_bytes,
+                                               stack_frames_size_bytes,
+                                               call_stack_size_bytes,
+                                               predictor_size_bytes,
+                                               globals_buffer_size,
+                                               stack_frame_ptr_size_bytes,
+                                               true,
+                                               debug));
+
+        write!(output, "\t{}\n", "do {");
+        write!(output, "\t{}\n", "switch (*entry_point) {");
+        for key in function_idx_label.keys() {
+            write!(output, "\t\tcase {}:\n", function_idx_label.get(key).unwrap());
+            // strip illegal chars from function names
+            write!(output, "\t\t\t{}({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {});\n",
+                            key.replace(".", "").replace("$", ""),
+                            "stack_u32",
+                            "stack_u32",
+                            "heap_u32",
+                            "heap_u32",
+                            "hypercall_buffer",
+                            "globals_buffer",
+                            "stack_frames",
+                            "sp",
+                            "sfp",
+                            "call_stack",
+                            "call_return_stack",
+                            "branch_value_stack_state",
+                            "loop_value_stack_state",
+                            "hypercall_number",
+                            "hypercall_continuation",
+                            "current_mem_size",
+                            "max_mem_size",
+                            "is_calling",
+                            "warp_idx",
+                            "entry_point");
             write!(output, "\t\t\tbreak;\n");
-        } 
+        }
+        write!(output, "\t\tdefault:\n");
+            write!(output, "\t\t\treturn;\n");
         write!(output, "\t}}\n");
 
-        // generate the hypercall return table
+        // if we reset the hypercall_number, that means we need to exit back to the VMM
+        write!(output, "\t{}\n", "} while (*sfp != 0 && *hypercall_number == -2);");
 
-        write!(output, "{}\n", "hypercall_return_table:");
-        write!(output, "\t{}\n", "switch (*hypercall_continuation) {");
-        for count in 0..*hypercall_id_count {
-            write!(output, "\t\tcase {}:\n", count);
-            write!(output, "\t\t\tgoto hypercall_return_stub_{};\n", count);
-            write!(output, "\t\t\tbreak;\n");
-        } 
-        write!(output, "\t}}\n");
         write!(output, "}}\n");
 
         if debug {
@@ -1170,6 +1282,8 @@ impl<'a> OpenCLCWriter<'_> {
             write!(output, "{}", format!("\tulong *heap_u64 = (ulong *)calloc(1024, sizeof(uint));\n"));
             write!(output, "{}", format!("\tuint *stack_frames = calloc(1024, sizeof(uint));\n"));
             write!(output, "{}", format!("\tuint *call_stack = calloc(1024, sizeof(uint));\n"));
+            write!(output, "{}", format!("\tuint *call_return_stack = calloc(1024, sizeof(uint));\n"));
+
             // the size of this structure is proportional to how many functions there are
             // size = function count * 4096 bytes (64 x 64)
             write!(output, "{}", format!("\tuchar *branch_value_stack_state = calloc({}, sizeof(uchar));\n", funcs.len() * 4096 * 2));
@@ -1177,6 +1291,10 @@ impl<'a> OpenCLCWriter<'_> {
 
             write!(output, "{}", format!("\tulong sp = 0;\n"));
             write!(output, "{}", format!("\tulong sfp = 0;\n"));
+            write!(output, "{}", format!("\tuchar is_calling = 1;\n"));
+
+            write!(output, "{}", format!("\tulong entry_point = {};\n", function_idx_label.get("_start").unwrap()));
+
             write!(output, "{}", format!("\tint hypercall_number = -2;\n"));
             write!(output, "{}", format!("\tuint hypercall_continuation = 0;\n"));
             write!(output, "{}", format!("\tuint curr_mem[1024];\n"));
@@ -1184,18 +1302,13 @@ impl<'a> OpenCLCWriter<'_> {
             write!(output, "{}", format!("\tstack_frames[sfp] = sp;\n"));
             write!(output, "{}", format!("\tstack_u64[0] = 0x1;\n"));
             write!(output, "{}", format!("\tsp += 2;\n"));
-            write!(output, "{}", format!("\tdata_init(heap_u32, globals, curr_mem, max_mem);\n"));
-            // TODO when calling the function get the entry_point for main
-
+            write!(output, "{}", format!("\tdata_init(heap_u32, globals, curr_mem, max_mem, &is_calling);\n"));
 
             // now we are entering the main execution loop, continue until *sp == 0
             write!(output, "{}", format!("\twhile(1) {{\n"));
 
             write!(output, "{}", format!("{}",
-                    format!("\t\twasm_entry(stack_u32, stack_u64, heap_u32, heap_u64, hcall_buf, globals, stack_frames,
-                                            &sp, &sfp, call_stack, branch_value_stack_state,
-                                            loop_value_stack_state, &hypercall_number, &hypercall_continuation, curr_mem, max_mem, {});\n",
-                            function_idx_label.get("_start").unwrap())));
+                    format!("\t\twasm_entry(stack_u32, stack_u64, heap_u32, heap_u64, hcall_buf, globals, stack_frames, &sp, &sfp, call_stack, call_return_stack, branch_value_stack_state,       loop_value_stack_state, &hypercall_number, &hypercall_continuation, curr_mem, max_mem, &is_calling, 0, &entry_point);\n")));
 
                     // if *sp == 0, break
                     write!(output, "{}", format!("\t\tif (sp == 0) {{\n"));

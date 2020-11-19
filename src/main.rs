@@ -65,7 +65,6 @@ fn main() {
                                                                                                                 predictor_size, 
                                                                                                                 false);
             println!("Compiled: {} functions", num_compiled_funcs);
-            /*
             let (compiled_debug_kernel, _, _, _) = ast_debug.write_opencl_file(interleaved as u32,
                                                                                stack_size,
                                                                                heap_size, 
@@ -76,8 +75,6 @@ fn main() {
                                                                                true);
 
             std::fs::write("test.c", compiled_debug_kernel).expect("Unable to write file");
-            */
-
             // 16KB stack/heap by default - TODO: change these values after done testing
             (0..1).into_par_iter().for_each(|_idx| {
                 let runner = opencl_runner::OpenCLRunner::new(num_vms, interleaved, true, entry_point, compiled_kernel.clone());
