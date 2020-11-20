@@ -55,16 +55,27 @@ pub fn emit_end<'a>(writer: &opencl_writer::OpenCLCWriter<'a>, id: &Option<wast:
     // 0 -> block (label goes here, at the end statement)
     // 1-> loop (label was already inserted at the top, this is a no-op here)
     if block_type == 0 {
-        format!("\n{}_{}:\n\t{}\n", fn_name.replace(".", "").replace("$", ""), label,
+        if debug {
+            format!("\n{}_{}:\n\t{}\n", fn_name.replace(".", "").replace("$", ""), label,
                 format!("*sp = read_u16((ulong)(((char*)branch_value_stack_state)+(*sfp*128)+({}*2)+({}*4096)), (ulong)(branch_value_stack_state), warp_idx);",
                         branch_idx_u32, function_id_map.get(fn_name).unwrap()))
+        } else {
+            format!("\n{}_{}:\n\t{}\n", fn_name.replace(".", "").replace("$", ""), label,
+                format!("*sp = read_u16((ulong)(((global char*)branch_value_stack_state)+(*sfp*128)+({}*2)+({}*4096)), (ulong)(branch_value_stack_state), warp_idx);",
+                        branch_idx_u32, function_id_map.get(fn_name).unwrap()))
+        }
     } else {
         let mut result = String::from("");
         result += &format!("\t/* END (loop: {}_{}) */\n", fn_name.replace(".", "").replace("$", ""), label);
         
         // pop the control flow stack entry (reset the stack to the state it was in before the loop)
-        result += &format!("\t*sp = read_u16((ulong)(((char*)branch_value_stack_state)+(*sfp*128)+({}*2)+({}*4096)), (ulong)(branch_value_stack_state), warp_idx);\n",
-                            branch_idx_u32, function_id_map.get(fn_name).unwrap());
+        if debug {
+            result += &format!("\t*sp = read_u16((ulong)(((char*)branch_value_stack_state)+(*sfp*128)+({}*2)+({}*4096)), (ulong)(branch_value_stack_state), warp_idx);\n",
+                        branch_idx_u32, function_id_map.get(fn_name).unwrap());
+        } else {
+            result += &format!("\t*sp = read_u16((ulong)(((global char*)branch_value_stack_state)+(*sfp*128)+({}*2)+({}*4096)), (ulong)(branch_value_stack_state), warp_idx);\n",
+                        branch_idx_u32, function_id_map.get(fn_name).unwrap());
+        }
 
         result
     }
@@ -95,9 +106,15 @@ pub fn emit_loop(writer: &opencl_writer::OpenCLCWriter, block: &wast::BlockType,
     // lookups are done as: branch_value_stack_state[(*sfp * 64) + idx + (func_id * 4096)]
     // sfp = stack frame ptr, idx = branch ID, func_id = the numerical id of the function
 
-    result += &format!("\t{}\n",
-                        format!("write_u16((ulong)(((char*)loop_value_stack_state)+(*sfp*128)+({}*2)+({}*4096)), (ulong)(branch_value_stack_state), (ushort)*sp, warp_idx);",
-                        branch_idx_u32, function_id_map.get(fn_name).unwrap()));
+    if debug {
+        result += &format!("\t{}\n",
+                            format!("write_u16((ulong)(((char*)loop_value_stack_state)+(*sfp*128)+({}*2)+({}*4096)), (ulong)(branch_value_stack_state), (ushort)*sp, warp_idx);",
+                            branch_idx_u32, function_id_map.get(fn_name).unwrap()));
+    } else {
+        result += &format!("\t{}\n",
+                            format!("write_u16((ulong)(((global char*)loop_value_stack_state)+(*sfp*128)+({}*2)+({}*4096)), (ulong)(branch_value_stack_state), (ushort)*sp, warp_idx);",
+                            branch_idx_u32, function_id_map.get(fn_name).unwrap()));
+    }
 
     // emit a label here for the END instruction to jump back here to restart the loop
     result += &format!("{}_{}:\n", fn_name.replace(".", "").replace("$", ""), label);
@@ -130,9 +147,16 @@ pub fn emit_block(writer: &opencl_writer::OpenCLCWriter, block: &wast::BlockType
     // lookups are done as: branch_value_stack_state[(*sfp * 64) + idx + (func_id * 4096)]
     // sfp = stack frame ptr, idx = branch ID, func_id = the numerical id of the function
 
-    result += &format!("\t{}\n",
-                       format!("write_u16((ulong)(((char*)loop_value_stack_state)+(*sfp*128)+({}*2)+({}*4096)), (ulong)(branch_value_stack_state), (ushort)*sp, warp_idx);",
-                               branch_idx_u32, function_id_map.get(fn_name).unwrap()));
+    if debug {
+        result += &format!("\t{}\n",
+                    format!("write_u16((ulong)(((char*)loop_value_stack_state)+(*sfp*128)+({}*2)+({}*4096)), (ulong)(branch_value_stack_state), (ushort)*sp, warp_idx);",
+                            branch_idx_u32, function_id_map.get(fn_name).unwrap()));
+    } else {
+        result += &format!("\t{}\n",
+                    format!("write_u16((ulong)(((global char*)loop_value_stack_state)+(*sfp*128)+({}*2)+({}*4096)), (ulong)(branch_value_stack_state), (ushort)*sp, warp_idx);",
+                            branch_idx_u32, function_id_map.get(fn_name).unwrap()));
+    }
+
     // we don't emit a label for block statements here, any br's goto the END of the block
     // we don't need to modify the sp here, we will do all stack unwinding in the br instr
     result
