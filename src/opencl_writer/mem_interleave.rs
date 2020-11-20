@@ -210,7 +210,8 @@ pub fn generate_read_write_calls(writer: &opencl_writer::OpenCLCWriter, interlea
 
     // emit a memcpy function as well, for utility purposes
     result += &format!("\n{}\n",
-                       "void ___private_memcpy(ulong src, ulong mem_start_src, ulong dst, ulong mem_start_dst, ulong buf_len_bytes, uint warp_id) {");
+        "void ___private_memcpy(ulong src, ulong mem_start_src, ulong dst, ulong mem_start_dst, ulong buf_len_bytes, uint warp_id) {");
+
     
     result += &format!("\t{}\n",
                        "for (uint idx = 0; idx < buf_len_bytes; idx++) {");

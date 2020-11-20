@@ -973,29 +973,29 @@ impl<'a> OpenCLCWriter<'_> {
             // TODO: for the openCL launcher, pass the memory stride as a function parameter
             if interleave > 0 {
                 write!(output, "\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\n\t{}\n",
-                "uint  *stack_u32    = (uint*)stack_u32_global;",
-                "ulong *stack_u64    = (ulong*)stack_u32;",
-                "uint  *heap_u32     = (uint *)heap_u32_global;",
-                "ulong *heap_u64     = (ulong *)heap_u32;",
-                "uint  *hypercall_buffer = (uint *)hypercall_buffer_global;",
-                "uint   *globals_buffer = (uint *)globals_buffer_global;",
-                "uint  *stack_frames = (uint*)stack_frames_global;",
+                "global uint  *stack_u32    = (global uint*)stack_u32_global;",
+                "global ulong *stack_u64    = (global ulong*)stack_u32;",
+                "global uint  *heap_u32     = (global uint *)heap_u32_global;",
+                "global ulong *heap_u64     = (global ulong *)heap_u32;",
+                "global uint  *hypercall_buffer = (global uint *)hypercall_buffer_global;",
+                "global uint   *globals_buffer = (global uint *)globals_buffer_global;",
+                "global uint  *stack_frames = (global uint*)stack_frames_global;",
                 // only an array of N elements, where N=warp size
-                "ulong *sp           = (ulong *)sp_global+(get_global_id(0));",
+                "global ulong *sp           = (global ulong *)sp_global+(get_global_id(0));",
                 // the stack frame pointer is used for both the stack frame, and call stack as they are
                 // essentially the same structure, except they hold different values
-                "ulong *sfp          = (ulong*)(sfp_global+(get_global_id(0)));",
+                "global ulong *sfp          = (global ulong*)(sfp_global+(get_global_id(0)));",
                 // holds the numeric index of the return label for where to jump after a function call
-                "ulong *call_stack   = (ulong*)call_stack_global;",
-                "ulong *call_return_stack   = (ulong*)call_return_stack_global;",
-                "ushort *branch_value_stack_state   = (ushort*)branch_value_stack_state_global;",
-                "ushort *loop_value_stack_state   = (ushort*)loop_value_stack_state_global;",
-                "int *hypercall_number = (int *)hypercall_number_global+(get_global_id(0));",
-                "uint *hypercall_continuation = (uint *)hypercall_continuation_global+(get_global_id(0));",
-                "uint *current_mem_size = (uint *)current_mem_size_global+(get_global_id(0));",
-                "uint *max_mem_size = (uint *)max_mem_size_global+(get_global_id(0));",
-                "uchar *is_calling = (uchar *)is_calling_global+(get_global_id(0));",
-                "uint  *entry_point   = (uint*)entry_point_global+get_global_id(0);",
+                "global ulong *call_stack   = (global ulong*)call_stack_global;",
+                "global ulong *call_return_stack   = (global ulong*)call_return_stack_global;",
+                "global ushort *branch_value_stack_state   = (global ushort*)branch_value_stack_state_global;",
+                "global ushort *loop_value_stack_state   = (global ushort*)loop_value_stack_state_global;",
+                "global int *hypercall_number = (global int *)hypercall_number_global+(get_global_id(0));",
+                "global uint *hypercall_continuation = (global uint *)hypercall_continuation_global+(get_global_id(0));",
+                "global uint *current_mem_size = (global uint *)current_mem_size_global+(get_global_id(0));",
+                "global uint *max_mem_size = (global uint *)max_mem_size_global+(get_global_id(0));",
+                "global uchar *is_calling = (global uchar *)is_calling_global+(get_global_id(0));",
+                "global uint  *entry_point   = (global uint*)entry_point_global+get_global_id(0);",
                 "ulong warp_idx = get_global_id(0);");
             } else {
                 // The pointer math must be calculated in terms of bytes, which is why we cast to (char*) first
@@ -1029,26 +1029,26 @@ impl<'a> OpenCLCWriter<'_> {
         // if we are an OpenCL kernel and we are not the control function, we only need the function header itself
         } else {
             write!(output, "{}", format!("
-void {}( uint   *stack_u32,
-                  ulong  *stack_u64,
-                  uint   *heap_u32,
-                  ulong  *heap_u64,
-                  uint   *hypercall_buffer,
-                  uint   *globals_buffer,
-                  uint   *stack_frames,
-                  ulong  *sp,
-                  ulong  *sfp,
-                  ulong  *call_stack,
-                  uint   *call_return_stack,
-                  ushort *branch_value_stack_state,
-                  ushort *loop_value_stack_state,
-                  int    *hypercall_number,
-                  uint   *hypercall_continuation,
-                  uint   *current_mem_size,
-                  uint   *max_mem_size,
-                  uchar  *is_calling,
-                  ulong  warp_idx,
-                  uint   *entry_point) {{\n", fn_name));
+void {}(global uint   *stack_u32,
+    global ulong  *stack_u64,
+    global uint   *heap_u32,
+    global ulong  *heap_u64,
+    global uint   *hypercall_buffer,
+    global uint   *globals_buffer,
+    global uint   *stack_frames,
+    global ulong  *sp,
+    global ulong  *sfp,
+    global ulong  *call_stack,
+    global uint   *call_return_stack,
+    global ushort *branch_value_stack_state,
+    global ushort *loop_value_stack_state,
+    global int    *hypercall_number,
+    global uint   *hypercall_continuation,
+    global uint   *current_mem_size,
+    global uint   *max_mem_size,
+    global uchar  *is_calling,
+    ulong  warp_idx,
+    global uint   *entry_point) {{\n", fn_name));
         }
         output
     }
@@ -1097,15 +1097,15 @@ void {}( uint   *stack_u32,
 
             if interleave == 0 {
                 result += &format!("\t{}\n",
-                                   format!("uint *heap_u32 = (uint *)((char*)heap_u32_global+(get_global_id(0) * {}));", heap_size));
+                                   format!("global uint *heap_u32 = (global uint *)((global char*)heap_u32_global+(get_global_id(0) * {}));", heap_size));
                 result += &format!("\t{}\n",
-                                   format!("uint *globals_buffer = (uint *)((char*)globals_buffer_global+(get_global_id(0) * {}));", offset * 4));
+                                   format!("global uint *globals_buffer = (global uint *)((global char*)globals_buffer_global+(get_global_id(0) * {}));", offset * 4));
             
                 } else {
                 result += &format!("\t{}\n",
-                                    format!("uint *heap_u32 = (uint *)((char*)heap_u32_global);"));
+                                    format!("global uint *heap_u32 = (global uint *)(heap_u32_global);"));
                 result += &format!("\t{}\n",
-                                    format!("uint *globals_buffer = (uint *)((char*)globals_buffer_global);"));
+                                    format!("global uint *globals_buffer = (global uint *)(globals_buffer_global);"));
             }
 
             result += &self.emit_memcpy_arr();

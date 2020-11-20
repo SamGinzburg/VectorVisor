@@ -44,7 +44,11 @@ pub fn emit_hypercall_helpers(writer: &opencl_writer::OpenCLCWriter, call_name: 
 pub fn emit_fd_write_helpers(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> String {
     let mut result = String::from("");
 
-    result += &String::from("\nvoid fd_write_helper(uint *stack_u32, uint* heap_u32, uint *hypercall_buffer, ulong *sp, uint warp_idx) {\n");
+    if debug {
+        result += &String::from("\nvoid fd_write_helper(uint *stack_u32, uint* heap_u32, uint *hypercall_buffer, ulong *sp, uint warp_idx) {\n");
+    } else {
+        result += &String::from("\nvoid fd_write_helper(global uint *stack_u32, global uint* heap_u32, global uint *hypercall_buffer, global ulong *sp, uint warp_idx) {\n");
+    }
 
     // first, copy all of the iovecs over to the hypercall_buffer
     // the number of iovecs and the iovec array ptr is on the stack
