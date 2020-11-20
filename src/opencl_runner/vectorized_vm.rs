@@ -10,6 +10,8 @@ use crossbeam::channel::Sender;
 
 use std::sync::Arc;
 use std::cell::RefCell;
+use std::cell::UnsafeCell;
+use std::sync::Mutex;
 
 #[derive(Clone, Copy)]
 pub enum WasiSyscalls {
@@ -31,7 +33,7 @@ pub struct HyperCall<'a> {
     pub syscall: WasiSyscalls,
     pub is_interleaved_mem: bool,
     pub ocl_buffers: &'a OpenCLBuffers,
-    pub hypercall_buffer: Arc<&'a mut [u8]>,
+    pub hypercall_buffer: Arc<Mutex<&'a mut [u8]>>,
     pub queue: &'a CommandQueue,
 }
 
@@ -42,7 +44,7 @@ impl<'a> HyperCall<'a> {
                syscall: WasiSyscalls,
                is_interleaved_mem: bool,
                ocl_buffers: &'a OpenCLBuffers,
-               hypercall_buffer: Arc<&'a mut [u8]>,
+               hypercall_buffer: Arc<Mutex<&'a mut [u8]>>,
                queue: &'a CommandQueue) -> HyperCall<'a> {
         HyperCall {
             vm_id: vm_id,

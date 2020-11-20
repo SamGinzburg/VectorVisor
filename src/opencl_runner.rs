@@ -29,6 +29,7 @@ use crossbeam::channel::Receiver;
 
 use std::sync::Arc;
 use std::cell::RefCell;
+use std::sync::Mutex;
 
 pub enum VMMRuntimeStatus {
     StatusOkay,
@@ -398,7 +399,7 @@ impl OpenCLRunner {
         let mut entry_point_exit_flag;
         let vm_slice: Vec<u32> = std::ops::Range { start: 0, end: (self.num_vms) }.collect();
         let mut hypercall_sender = vec![];
-        let mut hcall_read_buffer = Arc::new(hypercall_buffer_read_buffer);
+        let hcall_read_buffer: Arc<Mutex<&mut [u8]>> = Arc::new(Mutex::new(hypercall_buffer_read_buffer));
 
         /*
          * Allocate the hypercall_buffer at the last minute, 16KiB per VM
@@ -598,7 +599,8 @@ impl OpenCLRunner {
 
             // read the hypercall_buffer
             unsafe {
-                let buf: &mut [u8] = *Arc::get_mut(&mut hcall_read_buffer).unwrap();
+                //let buf: &mut [u8] = &mut **hcall_read_buffer;
+                let mut buf: &mut [u8] = &mut hcall_read_buffer.lock().unwrap();
                 ocl::core::enqueue_read_buffer(&queue, &hypercall_buffer, true, 0, buf, None::<Event>, None::<&mut Event>).unwrap();
             }
 

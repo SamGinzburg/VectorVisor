@@ -1,4 +1,4 @@
-#![feature(get_mut_unchecked)]
+//#![feature(get_mut_unchecked)]
 extern crate ocl;
 
 mod opencl_writer;
@@ -22,10 +22,10 @@ fn main() {
     //let file = fs::read_to_string("examples/call/call32.wat");
     //let file = fs::read_to_string("examples/call/call_indirect.wat");
     //let file = fs::read_to_string("examples/branches/loop.wat");
-    //let file = fs::read_to_string("examples/wasi_examples/fd_write.wat");
+    let file = fs::read_to_string("examples/wasi_examples/fd_write.wat");
     //let file = fs::read_to_string("examples/globals/simple_global.wat");
     //let file = fs::read_to_string("examples/globals/global_set.wat");
-    let file = fs::read_to_string("examples/rust_hello.wat");
+    //let file = fs::read_to_string("examples/rust_hello.wat");
 
 
     let filedata = match file {

@@ -30,8 +30,7 @@ pub struct WasiFd {}
 
 impl WasiFd {
     pub fn hypercall_fd_write(ctx: &WasiCtx, hypercall: &mut HyperCall, sender: &Sender<HyperCallResult>) -> () {
-
-        let mut hcall_buf: &mut [u8] = unsafe { *Arc::get_mut_unchecked(&mut hypercall.hypercall_buffer) };
+        let mut hcall_buf: &mut [u8] = &mut hypercall.hypercall_buffer.lock().unwrap();
 
         /*
          * It may seem inefficient to recreate this for every hypercall, but it is actually far more efficient!

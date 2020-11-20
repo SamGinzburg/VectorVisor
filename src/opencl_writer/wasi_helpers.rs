@@ -55,7 +55,7 @@ pub fn emit_fd_write_helpers(writer: &opencl_writer::OpenCLCWriter, debug: bool)
      * Copy the stack over to the first 16 bytes of the hypercall_buffer (4, 4 byte values)
      */
     result += &format!("\t{};\n",
-                       "memcpy((ulong)(stack_u32+*sp-4),
+                       "___private_memcpy((ulong)(stack_u32+*sp-4),
                                (ulong)(stack_u32),
                                (ulong)(hypercall_buffer),
                                (ulong)(hypercall_buffer),
