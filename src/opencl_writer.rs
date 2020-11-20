@@ -803,7 +803,7 @@ impl<'a> OpenCLCWriter<'_> {
         final_string
     }
 
-    fn emit_memcpy_arr(&self) -> String {
+    fn emit_memcpy_arr(&self, debug: bool) -> String {
         let mut result = String::from("");
         let mut counter = 0;
         let mut offset_val = 0;
@@ -835,10 +835,19 @@ impl<'a> OpenCLCWriter<'_> {
             // now emit the memcpy instructions to copy to the heap
 
             result += &format!("\t{}\n", format!("for(uint idx = 0; idx < {}; idx++) {{", arr_len));
-            result += &format!("\t\t{}\n",
-                       format!("write_u8((ulong)((char*)heap_u32 + {} + idx), (ulong)(heap_u32), data_segment_data_{}[idx], warp_idx);",
-                               offset_val,
-                               counter));
+            if debug {
+                result += &format!("\t\t{}\n",
+                    format!("write_u8((ulong)((global char*)heap_u32 + {} + idx), (ulong)(heap_u32), data_segment_data_{}[idx], warp_idx);",
+                        offset_val,
+                        counter));
+            } else {
+                result += &format!("\t\t{}\n",
+                    format!("write_u8((ulong)((global char*)heap_u32 + {} + idx), (ulong)(heap_u32), data_segment_data_{}[idx], warp_idx);",
+                        offset_val,
+                        counter));
+            }
+
+
             result += &String::from("\t}\n");
 
             arr_len = 0;
@@ -1081,7 +1090,7 @@ void {}(global uint   *stack_u32,
             result += &String::from("\tis_calling[warp_idx] = 1;\n");
             result += &format!("\tmax_mem[warp_idx] = {};\n", heap_size / (1024*64));
 
-            result += &self.emit_memcpy_arr();
+            result += &self.emit_memcpy_arr(debug);
 
             result += &self.emit_global_init(&mapping, debug);
 
@@ -1108,7 +1117,7 @@ void {}(global uint   *stack_u32,
                                     format!("global uint *globals_buffer = (global uint *)(globals_buffer_global);"));
             }
 
-            result += &self.emit_memcpy_arr();
+            result += &self.emit_memcpy_arr(debug);
 
             result += &self.emit_global_init(&mapping, debug);
 

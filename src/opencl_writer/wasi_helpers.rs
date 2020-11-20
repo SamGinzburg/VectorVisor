@@ -83,34 +83,64 @@ pub fn emit_fd_write_helpers(writer: &opencl_writer::OpenCLCWriter, debug: bool)
                        format!("for(uint idx = 0; idx < {}; idx ++) {{", "iovec_loop_ctr"));
 
     // copy the iovec to the hypercall_buffer
-    result += &format!("\t{}\n",
-                       &format!("buf_ptr = {};\n\tbuf_len = {};\n",
-                       emit_read_u32("(ulong)(((char*)heap_u32)+iovec_offset)", "(ulong)(heap_u32)", "warp_idx"),
-                       emit_read_u32("(ulong)(((char*)heap_u32)+iovec_offset+4)", "(ulong)(heap_u32)", "warp_idx")));
-
-    // write the iovec to the hypercall_buffer
-    result += &format!("\t{};\n",
-                       emit_write_u32("(ulong)((char*)hypercall_buffer + iovec_hypercall_offset)",
-                                      "(ulong)(hypercall_buffer)",
-                                      "next_buffer_start",
-                                      "warp_idx")); 
-    result += &format!("\t{};\n",
-                        emit_write_u32("(ulong)((char*)hypercall_buffer + iovec_hypercall_offset+4)",
-                                        "(ulong)(hypercall_buffer)",
-                                        "buf_len",
-                                        "warp_idx"));
+    if debug {
+        result += &format!("\t{}\n",
+        &format!("buf_ptr = {};\n\tbuf_len = {};\n",
+        emit_read_u32("(ulong)(((char*)heap_u32)+iovec_offset)", "(ulong)(heap_u32)", "warp_idx"),
+        emit_read_u32("(ulong)(((char*)heap_u32)+iovec_offset+4)", "(ulong)(heap_u32)", "warp_idx")));
     
-    // now that we've written the iovec, we can copy the buffer 
-    // we can compute the end of the iovec array, but must keep track of the lengths of all of the previous buffers
+        // write the iovec to the hypercall_buffer
+        result += &format!("\t{};\n",
+            emit_write_u32("(ulong)((char*)hypercall_buffer + iovec_hypercall_offset)",
+                       "(ulong)(hypercall_buffer)",
+                       "next_buffer_start",
+                       "warp_idx")); 
 
-    // copy the buffer to the location (heap -> hypercall_buffer)
-    result += &format!("\t{};\n",
-                       "___private_memcpy((ulong)((char*)heap_u32+buf_ptr),
-                               (ulong)(heap_u32),
-                               (ulong)((char*)hypercall_buffer+next_buffer_start+16),
-                               (ulong)(hypercall_buffer),
-                               buf_len,
-                               warp_idx)");
+        result += &format!("\t{};\n",
+             emit_write_u32("(ulong)((char*)hypercall_buffer + iovec_hypercall_offset+4)",
+                         "(ulong)(hypercall_buffer)",
+                         "buf_len",
+                         "warp_idx"));
+
+        // now that we've written the iovec, we can copy the buffer 
+        // we can compute the end of the iovec array, but must keep track of the lengths of all of the previous buffers
+
+        // copy the buffer to the location (heap -> hypercall_buffer)
+        result += &format!("\t{};\n",
+                        "___private_memcpy((ulong)((char*)heap_u32+buf_ptr),
+                                (ulong)(heap_u32),
+                                (ulong)((char*)hypercall_buffer+next_buffer_start+16),
+                                (ulong)(hypercall_buffer),
+                                buf_len,
+                                warp_idx)");
+    } else {
+        result += &format!("\t{}\n",
+        &format!("buf_ptr = {};\n\tbuf_len = {};\n",
+        emit_read_u32("(ulong)(((global char*)heap_u32)+iovec_offset)", "(ulong)(heap_u32)", "warp_idx"),
+        emit_read_u32("(ulong)(((global char*)heap_u32)+iovec_offset+4)", "(ulong)(heap_u32)", "warp_idx")));
+
+        // write the iovec to the hypercall_buffer
+        result += &format!("\t{};\n",
+            emit_write_u32("(ulong)((global char*)hypercall_buffer + iovec_hypercall_offset)",
+                       "(ulong)(hypercall_buffer)",
+                       "next_buffer_start",
+                       "warp_idx")); 
+
+        result += &format!("\t{};\n",
+             emit_write_u32("(ulong)((global char*)hypercall_buffer + iovec_hypercall_offset+4)",
+                         "(ulong)(hypercall_buffer)",
+                         "buf_len",
+                         "warp_idx"));
+
+        result += &format!("\t{};\n",
+                        "___private_memcpy((ulong)((global char*)heap_u32+buf_ptr),
+                                (ulong)(heap_u32),
+                                (ulong)((global char*)hypercall_buffer+next_buffer_start+16),
+                                (ulong)(hypercall_buffer),
+                                buf_len,
+                                warp_idx)");
+    }
+
 
     // update next_buffer_start
     result += &format!("\tnext_buffer_start += buf_len;\n");
