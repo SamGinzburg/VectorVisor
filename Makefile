@@ -1,2 +1,3 @@
 docker:
-		docker build -t wasm-parser .
+		DOCKER_BUILDKIT=1 docker build -t wasm-parser -o bin/ .
+

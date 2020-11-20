@@ -1,1 +1,9 @@
 target/*
+opencl_test_harness/*
+cpu_debug_test_harness/*
+includes/*
+uvwasi/*
+.vscode
+test
+test.*
+.DS_Store

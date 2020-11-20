@@ -20,4 +20,5 @@ RUN ["apk", "add", "--no-cache", "musl-dev"]
 RUN [ "cargo", "build" ]
 
 # copy the finished binary back
-COPY target/debug/wasm-parser wasm-parser-linux
+FROM scratch AS export-stage
+COPY --from=builder /usr/src/wasm-parser/target/debug/wasm-parser /
