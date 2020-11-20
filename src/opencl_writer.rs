@@ -866,11 +866,20 @@ impl<'a> OpenCLCWriter<'_> {
                 wast::GlobalKind::Inline(expr) => {
                     match &expr.instrs[0] {
                         wast::Instruction::I32Const(val) => {
-                            ret_str += &format!("\t{};\n",
-                                        &emit_write_u32(&format!("(ulong)((char*)globals_buffer+{})", offset*4),
-                                                    "(ulong)(globals_buffer)",
-                                                    &val.to_string(),
-                                                    "warp_idx"));
+                            if debug {
+                                ret_str += &format!("\t{};\n",
+                                &emit_write_u32(&format!("(ulong)((char*)globals_buffer+{})", offset*4),
+                                            "(ulong)(globals_buffer)",
+                                            &val.to_string(),
+                                            "warp_idx"));
+                            } else {
+                                ret_str += &format!("\t{};\n",
+                                &emit_write_u32(&format!("(ulong)((global char*)globals_buffer+{})", offset*4),
+                                            "(ulong)(globals_buffer)",
+                                            &val.to_string(),
+                                            "warp_idx"));
+                            }
+
                         },
                         _ => panic!("Unknown constant in emit_global_init"),
                     }
