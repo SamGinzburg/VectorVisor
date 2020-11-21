@@ -70,10 +70,10 @@ pub fn emit_end<'a>(writer: &opencl_writer::OpenCLCWriter<'a>, id: &Option<wast:
         
         // pop the control flow stack entry (reset the stack to the state it was in before the loop)
         if debug {
-            result += &format!("\t*sp = read_u16((ulong)(((char*)branch_value_stack_state)+(*sfp*128)+({}*2)+({}*4096)), (ulong)(branch_value_stack_state), warp_idx);\n",
+            result += &format!("\t*sp = read_u16((ulong)(((char*)loop_value_stack_state)+(*sfp*128)+({}*2)+({}*4096)), (ulong)(loop_value_stack_state), warp_idx);\n",
                         branch_idx_u32, function_id_map.get(fn_name).unwrap());
         } else {
-            result += &format!("\t*sp = read_u16((ulong)(((global char*)branch_value_stack_state)+(*sfp*128)+({}*2)+({}*4096)), (ulong)(branch_value_stack_state), warp_idx);\n",
+            result += &format!("\t*sp = read_u16((ulong)(((global char*)loop_value_stack_state)+(*sfp*128)+({}*2)+({}*4096)), (ulong)(loop_value_stack_state), warp_idx);\n",
                         branch_idx_u32, function_id_map.get(fn_name).unwrap());
         }
 
@@ -103,16 +103,16 @@ pub fn emit_loop(writer: &opencl_writer::OpenCLCWriter, block: &wast::BlockType,
     // we have to emulate a 2-D array, since openCL does not support double pts in v1.2
     // the format is (64 x 64 * number of functions),
     // so [..........] 4096 entries per function consecutively
-    // lookups are done as: branch_value_stack_state[(*sfp * 64) + idx + (func_id * 4096)]
+    // lookups are done as: loop_value_stack_state[(*sfp * 64) + idx + (func_id * 4096)]
     // sfp = stack frame ptr, idx = branch ID, func_id = the numerical id of the function
 
     if debug {
         result += &format!("\t{}\n",
-                            format!("write_u16((ulong)(((char*)loop_value_stack_state)+(*sfp*128)+({}*2)+({}*4096)), (ulong)(branch_value_stack_state), (ushort)*sp, warp_idx);",
+                            format!("write_u16((ulong)(((char*)loop_value_stack_state)+(*sfp*128)+({}*2)+({}*4096)), (ulong)(loop_value_stack_state), (ushort)*sp, warp_idx);",
                             branch_idx_u32, function_id_map.get(fn_name).unwrap()));
     } else {
         result += &format!("\t{}\n",
-                            format!("write_u16((ulong)(((global char*)loop_value_stack_state)+(*sfp*128)+({}*2)+({}*4096)), (ulong)(branch_value_stack_state), (ushort)*sp, warp_idx);",
+                            format!("write_u16((ulong)(((global char*)loop_value_stack_state)+(*sfp*128)+({}*2)+({}*4096)), (ulong)(loop_value_stack_state), (ushort)*sp, warp_idx);",
                             branch_idx_u32, function_id_map.get(fn_name).unwrap()));
     }
 
@@ -149,11 +149,11 @@ pub fn emit_block(writer: &opencl_writer::OpenCLCWriter, block: &wast::BlockType
 
     if debug {
         result += &format!("\t{}\n",
-                    format!("write_u16((ulong)(((char*)loop_value_stack_state)+(*sfp*128)+({}*2)+({}*4096)), (ulong)(branch_value_stack_state), (ushort)*sp, warp_idx);",
+                    format!("write_u16((ulong)(((char*)branch_value_stack_state)+(*sfp*128)+({}*2)+({}*4096)), (ulong)(branch_value_stack_state), (ushort)*sp, warp_idx);",
                             branch_idx_u32, function_id_map.get(fn_name).unwrap()));
     } else {
         result += &format!("\t{}\n",
-                    format!("write_u16((ulong)(((global char*)loop_value_stack_state)+(*sfp*128)+({}*2)+({}*4096)), (ulong)(branch_value_stack_state), (ushort)*sp, warp_idx);",
+                    format!("write_u16((ulong)(((global char*)branch_value_stack_state)+(*sfp*128)+({}*2)+({}*4096)), (ulong)(branch_value_stack_state), (ushort)*sp, warp_idx);",
                             branch_idx_u32, function_id_map.get(fn_name).unwrap()));
     }
 

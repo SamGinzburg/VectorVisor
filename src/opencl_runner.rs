@@ -337,9 +337,6 @@ impl OpenCLRunner {
      */
     pub fn setup_kernel(&self) -> (ocl::core::Program, ocl::core::Context, ocl::core::DeviceId) {
         let program = self.program_source.clone();
-
-        // (1) Define which platform and device(s) to use. Create a context,
-        // queue, and program then define some dims..
         let platform_id = ocl::core::default_platform().unwrap();
         let device_type = if true {
             Some(ocl::core::DEVICE_TYPE_GPU)
