@@ -18,8 +18,6 @@ RUN ["ln", "-s", "/usr/lib64/libOpenCL.so.1", "/usr/lib/libOpenCL.so"]
 # Run the specified command within the container.
 RUN [ "cargo", "build"]
 
-RUN [ "readelf", "-d" "/usr/src/wasm-parser/target/debug/wasm-parser"]
-
 # copy the finished binary back
 FROM scratch AS export-stage
 COPY --from=builder /usr/src/wasm-parser/target/debug/wasm-parser /

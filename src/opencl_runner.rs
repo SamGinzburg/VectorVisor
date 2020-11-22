@@ -353,11 +353,31 @@ impl OpenCLRunner {
         let context_properties = ContextProperties::new().platform(platform_id);
         let context = ocl::core::create_context(Some(&context_properties), &[device_id], None, None).unwrap();        
 
+        let dev_type = ocl::core::get_device_info(&device_id, ocl::core::DeviceInfo::Type);
+        let dev_name = ocl::core::get_device_info(&device_id, ocl::core::DeviceInfo::Name);
+        let vendor = ocl::core::get_device_info(&device_id, ocl::core::DeviceInfo::Vendor);
+        let ocl_version = ocl::core::get_device_info(&device_id, ocl::core::DeviceInfo::Version);
+        let ocl_c_version = ocl::core::get_device_info(&device_id, ocl::core::DeviceInfo::OpenclCVersion);
+        let compute_units = ocl::core::get_device_info(&device_id, ocl::core::DeviceInfo::MaxComputeUnits);
+        let max_param_size = ocl::core::get_device_info(&device_id, ocl::core::DeviceInfo::MaxParameterSize);
+        let max_global_mem_size = ocl::core::get_device_info(&device_id, ocl::core::DeviceInfo::GlobalMemSize);
+        let max_constant_buffer_size = ocl::core::get_device_info(&device_id, ocl::core::DeviceInfo::MaxConstantBufferSize);
+        
+        dbg!(dev_type);
+        dbg!(dev_name);
+        dbg!(vendor);
+        dbg!(ocl_version);
+        dbg!(ocl_c_version);
+        dbg!(compute_units);
+        dbg!(max_param_size);
+        dbg!(max_global_mem_size);
+        dbg!(max_constant_buffer_size);
+
         // compile the GPU kernel(s)
         let src_cstring = CString::new(program.clone()).unwrap();
         println!("Starting kernel compilation...");
         let compiled_program = ocl::core::create_program_with_source(&context, &[src_cstring]).unwrap();
-        let compile_result = ocl::core::build_program(&compiled_program, None::<&[()]>, &CString::new(format!("-DNUM_THREADS={}", self.num_vms)).unwrap(), None, None);
+        let compile_result = ocl::core::build_program(&compiled_program, None::<&[()]>, &CString::new(format!("-cl-opt-disable -DNUM_THREADS={}", self.num_vms)).unwrap(), None, None);
         match compile_result {
             Err(e) => {
                 println!("Compilation error:\n{}", e);

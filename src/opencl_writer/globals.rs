@@ -9,11 +9,14 @@ use std::collections::HashMap;
 pub fn emit_global_get(writer: &opencl_writer::OpenCLCWriter,
                        global_id: &str,
                        global_mappings: &HashMap<&str, (u32, u32)>,
+                       stack_sizes: &mut Vec<u32>,
                        debug: bool) -> String {
     let mut ret_str = String::from("");
     let (offset, size) = global_mappings.get(global_id).unwrap();
     match size {
         1 => {
+            stack_sizes.push(1);
+
             if debug {
                 ret_str += &format!("\t{};\n",
                 emit_write_u32("(ulong)(stack_u32+*sp)",
@@ -32,10 +35,11 @@ pub fn emit_global_get(writer: &opencl_writer::OpenCLCWriter,
                                "warp_idx"));
             }
 
-
             ret_str += &String::from("\t*sp += 1;\n");
         },
         2 => {
+            stack_sizes.push(2);
+
             if debug {
                 ret_str += &format!("\t{};\n",
                 emit_write_u64("(ulong)(stack_u32+*sp)",
@@ -67,9 +71,12 @@ pub fn emit_global_get(writer: &opencl_writer::OpenCLCWriter,
 pub fn emit_global_set(writer: &opencl_writer::OpenCLCWriter,
                        global_id: &str,
                        global_mappings: &HashMap<&str, (u32, u32)>,
+                       stack_sizes: &mut Vec<u32>,
                        debug: bool) -> String {
     let mut ret_str = String::from("");
     let (offset, size) = global_mappings.get(global_id).unwrap();
+    stack_sizes.pop();
+
     match size {
         1 => {
             if debug {

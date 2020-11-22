@@ -141,7 +141,7 @@ pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, fn_name: &str, fun
     
     final_str += &format!("\t{}\n", "/* function unwind */");
     // strip illegal chars from func name
-    final_str += &format!("{}_return:\n", fn_name.replace(".", "").replace("$", ""));
+    final_str += &format!("{}_return:\n", format!("{}{}", "$_", fn_name.replace(".", "")));
     // for each value returned by the function, return it on the stack
     // keep track of the change to stack ptr from previous returns
     let mut sp_counter = 0;

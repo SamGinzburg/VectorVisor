@@ -7,7 +7,7 @@ use std::collections::HashMap;
 // TODO: double check the semantics of this? 
 pub fn emit_return(writer: &opencl_writer::OpenCLCWriter, fn_name: &str, debug: bool) -> String {
     // strip illegal chars from fn name
-    format!("\tgoto {}_return;\n", fn_name.replace(".", "").replace("$", ""))
+    format!("\tgoto {}_return;\n", format!("{}{}", "$_", fn_name.replace(".", "")))
 }
 
 // this function is semantically equivalent to function_unwind
@@ -20,9 +20,9 @@ pub fn emit_br(writer: &opencl_writer::OpenCLCWriter, idx: wast::Index, fn_name:
     };
 
     // debug comment
-    ret_str += &format!("\t{}\n", format!("/* br {}_{} */", fn_name.replace(".", "").replace("$", ""), branch_id));
+    ret_str += &format!("\t{}\n", format!("/* br {}_{} */", format!("{}{}", "$_", fn_name.replace(".", "")), branch_id));
     // strip illegal chars from function name
-    ret_str += &format!("\t{}\n", format!("goto {}_{};", fn_name.replace(".", "").replace("$", ""), branch_id));
+    ret_str += &format!("\t{}\n", format!("goto {}_{};", format!("{}{}", "$_", fn_name.replace(".", "")), branch_id));
 
     ret_str
 }
@@ -56,17 +56,17 @@ pub fn emit_end<'a>(writer: &opencl_writer::OpenCLCWriter<'a>, id: &Option<wast:
     // 1-> loop (label was already inserted at the top, this is a no-op here)
     if block_type == 0 {
         if debug {
-            format!("\n{}_{}:\n\t{}\n", fn_name.replace(".", "").replace("$", ""), label,
+            format!("\n{}_{}:\n\t{}\n", format!("{}{}", "$_", fn_name.replace(".", "")), label,
                 format!("*sp = read_u16((ulong)(((char*)branch_value_stack_state)+(*sfp*128)+({}*2)+({}*4096)), (ulong)(branch_value_stack_state), warp_idx);",
                         branch_idx_u32, function_id_map.get(fn_name).unwrap()))
         } else {
-            format!("\n{}_{}:\n\t{}\n", fn_name.replace(".", "").replace("$", ""), label,
+            format!("\n{}_{}:\n\t{}\n", format!("{}{}", "$_", fn_name.replace(".", "")), label,
                 format!("*sp = read_u16((ulong)(((global char*)branch_value_stack_state)+(*sfp*128)+({}*2)+({}*4096)), (ulong)(branch_value_stack_state), warp_idx);",
                         branch_idx_u32, function_id_map.get(fn_name).unwrap()))
         }
     } else {
         let mut result = String::from("");
-        result += &format!("\t/* END (loop: {}_{}) */\n", fn_name.replace(".", "").replace("$", ""), label);
+        result += &format!("\t/* END (loop: {}_{}) */\n", format!("{}{}", "$_", fn_name.replace(".", "")), label);
         
         // pop the control flow stack entry (reset the stack to the state it was in before the loop)
         if debug {
@@ -117,7 +117,7 @@ pub fn emit_loop(writer: &opencl_writer::OpenCLCWriter, block: &wast::BlockType,
     }
 
     // emit a label here for the END instruction to jump back here to restart the loop
-    result += &format!("{}_{}:\n", fn_name.replace(".", "").replace("$", ""), label);
+    result += &format!("{}_{}:\n", format!("{}{}", "$_", fn_name.replace(".", "")), label);
     // the stack pointer should be reset by the BR/BR_IF instruction, so no need to touch it here
 
     result

@@ -31,16 +31,18 @@ pub fn emit_select(writer: &opencl_writer::OpenCLCWriter, stack_sizes: &mut Vec<
         write_val2 = emit_write_u32("(ulong)(stack_u32+*sp-3)", "(ulong)(stack_u32)", val2, "warp_idx");
 
         sp_modifier = 2;
+        stack_sizes.push(1);
     } else {
         // pop val 2
-        let val2 = &emit_read_u32("(ulong)(stack_u32+*sp-3)", "(ulong)(stack_u32)", "warp_idx");
+        let val2 = &emit_read_u64("(ulong)(stack_u32+*sp-3)", "(ulong)(stack_u32)", "warp_idx");
         // pop val 1
-        let val1 = &emit_read_u32("(ulong)(stack_u32+*sp-5)", "(ulong)(stack_u32)", "warp_idx");
+        let val1 = &emit_read_u64("(ulong)(stack_u32+*sp-5)", "(ulong)(stack_u32)", "warp_idx");
     
-        write_val1 = emit_write_u32("(ulong)(stack_u32+*sp-5)", "(ulong)(stack_u32)", val1, "warp_idx");
-        write_val2 = emit_write_u32("(ulong)(stack_u32+*sp-5)", "(ulong)(stack_u32)", val2, "warp_idx");
+        write_val1 = emit_write_u64("(ulong)(stack_u32+*sp-5)", "(ulong)(stack_u32)", val1, "warp_idx");
+        write_val2 = emit_write_u64("(ulong)(stack_u32+*sp-5)", "(ulong)(stack_u32)", val2, "warp_idx");
    
         sp_modifier = 3;
+        stack_sizes.push(2);
     }
 
     ret_str += &format!("\t({} != 0) ? ({}) : ({});\n",

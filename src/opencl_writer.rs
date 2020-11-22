@@ -226,7 +226,7 @@ impl<'a> OpenCLCWriter<'_> {
             wast::Instruction::I64Load(memarg) => {
                 stack_sizes.pop();
                 stack_sizes.push(2);
-                emit_memload_i64_8u(self, memarg, debug)
+                emit_memload_i64(self, memarg, debug)
             },
             wast::Instruction::I64Store(memarg) => {
                 stack_sizes.pop();
@@ -235,13 +235,13 @@ impl<'a> OpenCLCWriter<'_> {
             },
             wast::Instruction::GlobalGet(idx) => {
                 match idx {
-                    wast::Index::Id(id) => emit_global_get(self, id.name(), global_mappings, debug),
+                    wast::Index::Id(id) => emit_global_get(self, id.name(), global_mappings, stack_sizes, debug),
                     wast::Index::Num(_, _) => panic!("no support for Num index references in GlobalGet yet"),
                 }
             },
             wast::Instruction::GlobalSet(idx) => {
                 match idx {
-                    wast::Index::Id(id) => emit_global_set(self, id.name(), global_mappings, debug),
+                    wast::Index::Id(id) => emit_global_set(self, id.name(), global_mappings, stack_sizes, debug),
                     wast::Index::Num(_, _) => panic!("no support for Num index references in GlobalGet yet"),
                 }
             },
@@ -261,7 +261,7 @@ impl<'a> OpenCLCWriter<'_> {
             },
             wast::Instruction::LocalSet(idx) => {
                 match idx {
-                    wast::Index::Id(id) => emit_local_set(self, id.name(), offsets, type_info, debug),
+                    wast::Index::Id(id) => emit_local_set(self, id.name(), offsets, type_info, stack_sizes, debug),
                     wast::Index::Num(_, _) => panic!("no support for Num index references in local.get yet"),
                 }
             },
@@ -691,7 +691,7 @@ impl<'a> OpenCLCWriter<'_> {
                 // strip illegal chars from function name
 
                 final_string += &format!("{}",
-                        self.generate_function_prelude(&id.name().replace(".", "").replace("$", ""),
+                        self.generate_function_prelude(&format!("{}{}", "$_", id.name().replace(".", "")),
                                                         0,
                                                         0,
                                                         0,
@@ -837,7 +837,7 @@ impl<'a> OpenCLCWriter<'_> {
             result += &format!("\t{}\n", format!("for(uint idx = 0; idx < {}; idx++) {{", arr_len));
             if debug {
                 result += &format!("\t\t{}\n",
-                    format!("write_u8((ulong)((global char*)heap_u32 + {} + idx), (ulong)(heap_u32), data_segment_data_{}[idx], warp_idx);",
+                    format!("write_u8((ulong)((char*)heap_u32 + {} + idx), (ulong)(heap_u32), data_segment_data_{}[idx], warp_idx);",
                         offset_val,
                         counter));
             } else {
@@ -1251,9 +1251,10 @@ void {}(global uint   *stack_u32,
         write!(output, "\t{}\n", "switch (*entry_point) {");
         for key in function_idx_label.keys() {
             write!(output, "\t\tcase {}:\n", function_idx_label.get(key).unwrap());
+            write!(output, "\t\tprintf(\"calling: {}\\n\");\n", function_idx_label.get(key).unwrap());
             // strip illegal chars from function names
             write!(output, "\t\t\t{}({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {});\n",
-                            key.replace(".", "").replace("$", ""),
+                            format!("{}{}", "$_", key.replace(".", "")),
                             "stack_u32",
                             "stack_u32",
                             "heap_u32",
