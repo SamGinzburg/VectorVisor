@@ -87,7 +87,8 @@ impl<'a> OpenCLCWriter<'_> {
     }
 
     pub fn parse_file(&mut self) -> Result<bool, String> {
-        let module = parser::parse::<Wat>(self.parse_buffer).unwrap();
+        let mut module = parser::parse::<Wat>(self.parse_buffer).unwrap();
+        //let resolved_module = module.module.resolve().unwrap();
 
         match module.module.kind {
             Text(t) => {
@@ -155,19 +156,32 @@ impl<'a> OpenCLCWriter<'_> {
     }
 
     fn emit_instructions(&self,
+                         // instruction to emit
                          instr: &wast::Instruction,
+                         // sizes of current stack items
                          stack_sizes: &mut Vec<u32>,
-                         offsets: &HashMap<&str, u32>,
-                         type_info: &HashMap<&str, ValType>,
+                         // the offset of parameters on the current callstack
+                         parameter_offset: i32,
+                         // map of local/parameter IDs to offset from stack frame start
+                         offsets: &HashMap<String, u32>,
+                         type_info: &HashMap<String, ValType>,
                          call_ret_map: &mut HashMap<&str, u32>,
                          call_ret_idx: &mut u32,
+                         // function name
                          fn_name: &str,
+                         // stack of control flow operations (blocks, loops)
                          control_stack: &mut Vec<(String, u32)>,
+                         // map of function names to IDs
                          function_id_map: HashMap<&str, u32>,
+                         // count of how many hypercalls have been encountered (used for re-entry)
                          hypercall_id_count: &mut u32,
+                         // map of indexes in the indirect call table ($T0) to function indicies
                          indirect_call_mapping: &HashMap<u32, &wast::Index>,
-                         global_mappings: &HashMap<&str, (u32, u32)>,
+                         // map of global identifiers to (offset, size of global)
+                         global_mappings: &HashMap<String, (u32, u32)>,
+                         // the current function
                          func: &wast::Func,
+                         // emit OpenCL C (False) or standard C for debugging on the CPU (True)
                          debug: bool) -> String {
         match instr {
             wast::Instruction::Drop => {
@@ -235,14 +249,22 @@ impl<'a> OpenCLCWriter<'_> {
             },
             wast::Instruction::GlobalGet(idx) => {
                 match idx {
-                    wast::Index::Id(id) => emit_global_get(self, id.name(), global_mappings, stack_sizes, debug),
-                    wast::Index::Num(_, _) => panic!("no support for Num index references in GlobalGet yet"),
+                    wast::Index::Id(id) => {
+                        emit_global_get(self, id.name(), global_mappings, stack_sizes, debug)
+                    },
+                    wast::Index::Num(value, _) => {
+                        emit_global_get(self, &format!("g{}", value), global_mappings, stack_sizes, debug)
+                    },
                 }
             },
             wast::Instruction::GlobalSet(idx) => {
                 match idx {
-                    wast::Index::Id(id) => emit_global_set(self, id.name(), global_mappings, stack_sizes, debug),
-                    wast::Index::Num(_, _) => panic!("no support for Num index references in GlobalGet yet"),
+                    wast::Index::Id(id) => {
+                        emit_global_set(self, id.name(), global_mappings, stack_sizes, debug)
+                    },
+                    wast::Index::Num(value, _) => {
+                        emit_global_set(self, &format!("g{}", value), global_mappings, stack_sizes, debug)
+                    },
                 }
             },
             wast::Instruction::I32Const(val) => {
@@ -255,20 +277,32 @@ impl<'a> OpenCLCWriter<'_> {
             },
             wast::Instruction::LocalGet(idx) => {
                 match idx {
-                    wast::Index::Id(id) => emit_local_get(self, id.name(), offsets, type_info, stack_sizes, debug),
-                    wast::Index::Num(_, _) => panic!("no support for Num index references in local.get yet"),
+                    wast::Index::Id(id) => {
+                        emit_local_get(self, parameter_offset, id.name(), offsets, type_info, stack_sizes, debug)
+                    },
+                    wast::Index::Num(value, _) => {
+                        emit_local_get(self, parameter_offset, &format!("{}", value), offsets, type_info, stack_sizes, debug)
+                    },
                 }
             },
             wast::Instruction::LocalSet(idx) => {
                 match idx {
-                    wast::Index::Id(id) => emit_local_set(self, id.name(), offsets, type_info, stack_sizes, debug),
-                    wast::Index::Num(_, _) => panic!("no support for Num index references in local.get yet"),
+                    wast::Index::Id(id) => {
+                        emit_local_set(self, parameter_offset, id.name(), offsets, type_info, stack_sizes, debug)
+                    },
+                    wast::Index::Num(value, _) => {
+                        emit_local_set(self, parameter_offset, &format!("{}", value), offsets, type_info, stack_sizes, debug)
+                    },
                 }
             },
             wast::Instruction::LocalTee(idx) => {
                 match idx {
-                    wast::Index::Id(id) => emit_local_tee(self, id.name(), offsets, type_info, stack_sizes, debug),
-                    wast::Index::Num(_, _) => panic!("no support for Num index references in local.get yet"),
+                    wast::Index::Id(id) => {
+                        emit_local_tee(self, parameter_offset, id.name(), offsets, type_info, stack_sizes, debug)
+                    },
+                    wast::Index::Num(value, _) => {
+                        emit_local_tee(self, parameter_offset, &format!("{}", value), offsets, type_info, stack_sizes, debug)
+                    },
                 }
             },
             /*
@@ -436,7 +470,7 @@ impl<'a> OpenCLCWriter<'_> {
             wast::Instruction::Call(idx) => {
                 let id = match idx {
                     wast::Index::Id(id) => id.name(),
-                    _ => panic!("Unable to get Id for function call!"),
+                    _ => panic!("Unable to get Id for function call: {:?}", idx),
                 };
 
                 // check function to see if it is imported
@@ -477,7 +511,7 @@ impl<'a> OpenCLCWriter<'_> {
                     }
                 }
             },
-            wast::Instruction::CallIndirect(call_indirect) => {
+            wast::Instruction::CallIndirect(_call_indirect) => {
                 // we don't need to do table lookups because we are assuming that there can be at most 1 table
                 /*
                 let table: &str = match call_indirect.table {
@@ -485,7 +519,7 @@ impl<'a> OpenCLCWriter<'_> {
                     wast::Index::Num(_, _) => panic!(""),
                 };
                 */
-                emit_call_indirect(&self, indirect_call_mapping, call_ret_map, call_ret_idx, function_id_map, debug)
+                emit_call_indirect(&self, parameter_offset, indirect_call_mapping, call_ret_map, call_ret_idx, function_id_map, debug)
             },
             wast::Instruction::I32Eq => {
                 stack_sizes.pop();
@@ -603,7 +637,6 @@ impl<'a> OpenCLCWriter<'_> {
                 emit_end(&self, id, &label, t, fn_name, function_id_map, debug)
             },
             wast::Instruction::Select(_) => {
-                stack_sizes.pop();
                 emit_select(self, stack_sizes, debug)
             },
             wast::Instruction::MemoryGrow(arg) => {
@@ -613,8 +646,8 @@ impl<'a> OpenCLCWriter<'_> {
             },
             wast::Instruction::Return => emit_return(self, fn_name, debug),
             wast::Instruction::Br(idx) => emit_br(self, *idx, fn_name, debug),
-            wast::Instruction::BrIf(idx) => emit_br_if(self, *idx, fn_name, debug),
-            wast::Instruction::BrTable(table_idxs) => emit_br_table(self, table_idxs, fn_name, debug),
+            wast::Instruction::BrIf(idx) => emit_br_if(self, *idx, fn_name, stack_sizes, debug),
+            wast::Instruction::BrTable(table_idxs) => emit_br_table(self, table_idxs, fn_name, stack_sizes, debug),
             wast::Instruction::Unreachable => self.emit_hypercall(1, hypercall_id_count, debug),
             _ => panic!("Instruction {:?} not yet implemented, in func: {:?}", instr, func.id)
         }
@@ -627,15 +660,15 @@ impl<'a> OpenCLCWriter<'_> {
                      function_id_map: HashMap<&str, u32>,
                      hypercall_id_count: &mut u32,
                      indirect_call_mapping: &HashMap<u32, &wast::Index>, 
-                     global_mappings: &HashMap<&str, (u32, u32)>,
+                     global_mappings: &HashMap<String, (u32, u32)>,
                      debug: bool) -> String {
         let mut final_string = String::from(""); 
         *call_ret_idx = 0;
         *hypercall_id_count = 0;
 
         // store the stack offset for all parameters and locals
-        let mut local_parameter_stack_offset: HashMap<&str, u32> = HashMap::new();
-        let mut local_type_info: HashMap<&str, ValType> = HashMap::new();
+        let mut local_parameter_stack_offset: HashMap<String, u32> = HashMap::new();
+        let mut local_type_info: HashMap<String, ValType> = HashMap::new();
 
         // Function header
         match (&func.kind, &func.id, &func.ty) {
@@ -662,29 +695,49 @@ impl<'a> OpenCLCWriter<'_> {
                 }
 
                 let mut offset = 0;
+                let mut param_idx: u32 = 0;
                 // get offsets for parameters, we record offsets from the start of the stack frame
                 match typeuse.clone().inline {
                     Some(params) => {
                         for parameter in params.params.to_vec() {
                             match parameter {
                                 (Some(id), _, t) => {
-                                    local_parameter_stack_offset.insert(id.name(), offset);
-                                    local_type_info.insert(id.name(), t.clone());
+                                    local_parameter_stack_offset.insert(id.name().to_string(), offset);
+                                    local_type_info.insert(id.name().to_string(), t.clone());
+                                    offset += self.get_size_valtype(&t);
+                                },
+                                // if there is no id, we have to name the parameter ourselves!
+                                (None, _, t) => {
+                                    local_parameter_stack_offset.insert(format!("{}", param_idx), offset);
+                                    local_type_info.insert(format!("{}", param_idx), t.clone());
                                     offset += self.get_size_valtype(&t);
                                 },
                                 _ => panic!("Unhandled parameter type")
                             }
+                            param_idx += 1;
                         }
         
                     },
                     None => (),
                 }
 
+                // store the offset of the parameters (for offset computation later)
+                let param_offset: i32 = 0 - offset as i32;
+
+                // we reuse param_idx because that is the default numbering convention in WASM
+                // if you have 1 param 1 local, you have p0 then l1
+
                 // get offsets for locals
                 for local in locals {
-                    local_parameter_stack_offset.insert(local.id.unwrap().name(), offset);
-                    local_type_info.insert(local.id.unwrap().name(), local.ty.clone());
+                    let local_id = match local.id {
+                        Some(name) => name.name().to_string(),
+                        None => format!("{}", param_idx),
+                    };
+                    local_parameter_stack_offset.insert(local_id.clone(), offset);
+                    local_type_info.insert(local_id.clone(), local.ty.clone());
+                    
                     offset += self.get_size_valtype(&local.ty);
+                    param_idx += 1;
                 }
 
                 // function entry point
@@ -733,7 +786,7 @@ impl<'a> OpenCLCWriter<'_> {
                 // for each local, push them onto the stack
 
                 for local in locals {
-                    final_string += &emit_local(&self, local.clone(), &local_parameter_stack_offset, debug);
+                    final_string += &emit_local(&self, local.clone(), debug);
                 }
 
                 // keep a stack of control-flow labels
@@ -749,6 +802,7 @@ impl<'a> OpenCLCWriter<'_> {
                 for instruction in expression.instrs.iter() {
                     final_string += &self.emit_instructions(instruction,
                                                             stack_sizes,
+                                                            param_offset,
                                                             &local_parameter_stack_offset,
                                                             &local_type_info,
                                                             call_ret_map,
@@ -857,11 +911,18 @@ impl<'a> OpenCLCWriter<'_> {
         result
     }
 
-    fn emit_global_init(&self, global_mappings: &HashMap<&str, (u32, u32)>, debug: bool) -> String {
+    fn emit_global_init(&self, global_mappings: &HashMap<String, (u32, u32)>, debug: bool) -> String {
         let mut ret_str = String::from("");
 
+        // needed for case where globals are auto-indexed
+        let mut global_count: u32 = 0;
+
         for global in &self.globals {
-            let (offset, _) = global_mappings.get(global.id.unwrap().name()).unwrap();
+            let (offset, _) = match global.id {
+                Some(id) => global_mappings.get(global.id.unwrap().name()).unwrap(),
+                None => global_mappings.get(&format!("g{}", global_count)).unwrap(),
+            };
+            
             match &global.kind {
                 wast::GlobalKind::Inline(expr) => {
                     match &expr.instrs[0] {
@@ -886,6 +947,7 @@ impl<'a> OpenCLCWriter<'_> {
                 },
                 _ => panic!("GlobalKind inlineimport not implemented"), 
             }
+            global_count += 1;
         }
 
         ret_str
@@ -1075,20 +1137,27 @@ void {}(global uint   *stack_u32,
      * This function generates the helper kernel that loads the data sections
      * It is also ressponsible for loading globals into memory id -> (offset, size)
      */
-    fn generate_data_section(&self, interleave: u32, heap_size: u32, debug: bool) -> (String, HashMap<&str, (u32, u32)>) {
+    fn generate_data_section(&self, interleave: u32, heap_size: u32, debug: bool) -> (String, HashMap<String, (u32, u32)>) {
         let mut result = String::from("");
-        let mut mapping: HashMap<&str, (u32, u32)> = HashMap::new();
+        let mut mapping: HashMap<String, (u32, u32)> = HashMap::new();
         let mut offset: u32 = 0;
+        // needed if globals are referred to using numerical indexes
+        let mut global_id: u32 = 0;
         for global in &self.globals {
             match global {
                 wast::Global{span, id, exports, ty, kind} => {
-                    let id = id.unwrap();
+                    let id = match id {
+                        Some(id) => String::from(id.name()),
+                        None => format!("g{}", global_id),
+                    };
+
                     let type_size = self.get_size_valtype(&ty.ty);
-                    mapping.insert(&id.name(), (offset, type_size.clone()));
+                    mapping.insert(id, (offset, type_size.clone()));
                     offset += type_size;
                 },
                 _ => panic!("Uknown global kind found"),
             }
+            global_id += 1;
         }
 
         if debug {
@@ -1251,7 +1320,7 @@ void {}(global uint   *stack_u32,
         write!(output, "\t{}\n", "switch (*entry_point) {");
         for key in function_idx_label.keys() {
             write!(output, "\t\tcase {}:\n", function_idx_label.get(key).unwrap());
-            write!(output, "\t\tprintf(\"calling: {}\\n\");\n", function_idx_label.get(key).unwrap());
+            write!(output, "\t\tprintf(\"calling: {}\\n\");\n", key.replace(".", ""));
             // strip illegal chars from function names
             write!(output, "\t\t\t{}({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {});\n",
                             format!("{}{}", "$_", key.replace(".", "")),

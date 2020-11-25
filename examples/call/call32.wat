@@ -4,7 +4,7 @@
     (local.get $p1)
     (i32.add)
   )
-  (func $_start (param $p0 i32) (result i32)
+  (func $_start (result i32)
     (local $l2 i32)
     (i32.const 11)
     (i32.const 5)

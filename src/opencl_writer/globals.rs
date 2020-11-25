@@ -8,7 +8,7 @@ use std::collections::HashMap;
 
 pub fn emit_global_get(writer: &opencl_writer::OpenCLCWriter,
                        global_id: &str,
-                       global_mappings: &HashMap<&str, (u32, u32)>,
+                       global_mappings: &HashMap<String, (u32, u32)>,
                        stack_sizes: &mut Vec<u32>,
                        debug: bool) -> String {
     let mut ret_str = String::from("");
@@ -70,7 +70,7 @@ pub fn emit_global_get(writer: &opencl_writer::OpenCLCWriter,
 
 pub fn emit_global_set(writer: &opencl_writer::OpenCLCWriter,
                        global_id: &str,
-                       global_mappings: &HashMap<&str, (u32, u32)>,
+                       global_mappings: &HashMap<String, (u32, u32)>,
                        stack_sizes: &mut Vec<u32>,
                        debug: bool) -> String {
     let mut ret_str = String::from("");

@@ -5,7 +5,7 @@
     (local.get $p1)
     (i64.add)
   )
-  (func $_start (param $p0 i64) (result i64)
+  (func $_start (result i64)
     (local $l2 i64)
     (i64.const 11)
     (i64.const 5)

@@ -12,7 +12,10 @@ fn main() {
     // TODO add Clap arg parsing here to get the WASM files from CLI
     // also consider supporting .wasm files as well?
 
+    //let file = fs::read_to_string("examples/mem/simple.wat");
+    //let file = fs::read_to_string("examples/mem/loadstack.wat");
 
+    //let file = fs::read_to_string("examples/locals/param.wat");
     //let file = fs::read_to_string("examples/binops/lt.wat");
     //let file = fs::read_to_string("examples/binops/sub.wat");
     //let file = fs::read_to_string("examples/call/call64.wat");
@@ -24,7 +27,7 @@ fn main() {
     //let file = fs::read_to_string("examples/globals/simple_global.wat");
     //let file = fs::read_to_string("examples/globals/global_set.wat");
     let file = fs::read_to_string("examples/rust_hello.wat");
-
+    //let file = fs::read_to_string("examples/rust-factorial.wat");
 
     let filedata = match file {
         Ok(text) => text,

@@ -8,8 +8,8 @@ use crate::opencl_writer::mem_interleave::emit_write_u64;
 
 use std::collections::HashMap;
 
-pub fn emit_local_get(writer: &opencl_writer::OpenCLCWriter, id: &str, offsets: &HashMap<&str, u32>, type_info: &HashMap<&str, ValType>, stack_sizes: &mut Vec<u32>, debug: bool) -> String {
-    let offset = offsets.get(id).unwrap();
+pub fn emit_local_get(writer: &opencl_writer::OpenCLCWriter, parameter_offset: i32, id: &str, offsets: &HashMap<String, u32>, type_info: &HashMap<String, ValType>, stack_sizes: &mut Vec<u32>, debug: bool) -> String {
+    let offset: i32 = *offsets.get(id).unwrap() as i32 + parameter_offset;
     let t = type_info.get(id).unwrap();
 
     match t {
@@ -77,46 +77,50 @@ pub fn emit_local_get(writer: &opencl_writer::OpenCLCWriter, id: &str, offsets: 
     }
 }
 
-pub fn emit_local_set(writer: &opencl_writer::OpenCLCWriter, id: &str, offsets: &HashMap<&str, u32>, type_info: &HashMap<&str, ValType>, stack_sizes: &mut Vec<u32>, debug: bool) -> String {
-    let offset = offsets.get(id).unwrap();
+pub fn emit_local_set(writer: &opencl_writer::OpenCLCWriter, parameter_offset: i32, id: &str, offsets: &HashMap<String, u32>, type_info: &HashMap<String, ValType>, stack_sizes: &mut Vec<u32>, debug: bool) -> String {
+    let offset: i32 = *offsets.get(id).unwrap() as i32 + parameter_offset;
     let t = type_info.get(id).unwrap();
 
     stack_sizes.pop();
 
     match t {
         wast::ValType::I32 => {
-            format!("\t{};\n",
+            format!("\t{};\n\t{};\n",
                     emit_write_u32(&format!("(ulong)(stack_u32+{}+{})", offset, &emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx")),
                                    "(ulong)stack_u32",
                                    &emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)stack_u32", "warp_idx"),
-                                   "warp_idx"))
+                                   "warp_idx"),
+                    "*sp -= 1")
         },
         wast::ValType::I64 => {
-            format!("\t{};\n",
+            format!("\t{};\n\t{};\n",
                     emit_write_u64(&format!("(ulong)(stack_u32+{}+{})", offset, &emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx")),
                                    "(ulong)stack_u32",
                                    &emit_read_u64("(ulong)(stack_u32+*sp-2)", "(ulong)stack_u32", "warp_idx"),
-                                   "warp_idx"))
+                                   "warp_idx"),
+                    "*sp -= 2")
         },
         wast::ValType::F32 => {
-            format!("\t{};\n",
+            format!("\t{};\n\t{};\n",
                     emit_write_u32(&format!("(ulong)(stack_u32+{}+{})", offset, &emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx")),
                                    "(ulong)stack_u32",
                                    &emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)stack_u32", "warp_idx"),
-                                   "warp_idx"))
+                                   "warp_idx"),
+                    "*sp -= 1")
         },
         wast::ValType::F64 => {
-            format!("\t{};\n",
+            format!("\t{};\n\t{};\n",
                     emit_write_u64(&format!("(ulong)(stack_u32+{}+{})", offset, &emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx")),
                                    "(ulong)stack_u32",
                                    &emit_read_u64("(ulong)(stack_u32+*sp-2)", "(ulong)stack_u32", "warp_idx"),
-                                   "warp_idx"))
+                                   "warp_idx"),
+                    "*sp -= 2")
         },
         _ => panic!("emit_local_set type not handled")
     }
 }
 
-pub fn emit_local_tee(writer: &opencl_writer::OpenCLCWriter, id: &str, offsets: &HashMap<&str, u32>, type_info: &HashMap<&str, ValType>, stack_sizes: &mut Vec<u32>, debug: bool) -> String {
+pub fn emit_local_tee(writer: &opencl_writer::OpenCLCWriter, parameter_offset: i32, id: &str, offsets: &HashMap<String, u32>, type_info: &HashMap<String, ValType>, stack_sizes: &mut Vec<u32>, debug: bool) -> String {
     /*
      * peak the top of the stack, push the most recent value again
      * call local.set [x]
@@ -135,7 +139,7 @@ pub fn emit_local_tee(writer: &opencl_writer::OpenCLCWriter, id: &str, offsets: 
                                     &emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx"),
                                     "warp_idx"),
                     "*sp += 1;",
-                    format!("{}", emit_local_set(writer, id, offsets, type_info, stack_sizes, debug)))
+                    format!("{}", emit_local_set(writer, parameter_offset, id, offsets, type_info, stack_sizes, debug)))
         },
         wast::ValType::I64 => {
 
@@ -147,7 +151,7 @@ pub fn emit_local_tee(writer: &opencl_writer::OpenCLCWriter, id: &str, offsets: 
                                     &emit_read_u64("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx"),
                                     "warp_idx"),
                     "*sp += 2;",
-                    format!("{}", emit_local_set(writer, id, offsets, type_info, stack_sizes, debug)))
+                    format!("{}", emit_local_set(writer, parameter_offset, id, offsets, type_info, stack_sizes, debug)))
         },
         wast::ValType::F32 => {
 
@@ -159,7 +163,7 @@ pub fn emit_local_tee(writer: &opencl_writer::OpenCLCWriter, id: &str, offsets: 
                                     &emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx"),
                                     "warp_idx"),
                     "*sp += 1;",
-                    format!("{}", emit_local_set(writer, id, offsets, type_info, stack_sizes, debug)))
+                    format!("{}", emit_local_set(writer, parameter_offset, id, offsets, type_info, stack_sizes, debug)))
         },
         wast::ValType::F64 => {
 
@@ -171,13 +175,13 @@ pub fn emit_local_tee(writer: &opencl_writer::OpenCLCWriter, id: &str, offsets: 
                                     &emit_read_u64("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx"),
                                     "warp_idx"),
                     "*sp += 2;",
-                    format!("{}", emit_local_set(writer, id, offsets, type_info, stack_sizes, debug)))
+                    format!("{}", emit_local_set(writer, parameter_offset, id, offsets, type_info, stack_sizes, debug)))
         },
         _ => panic!("emit_local_tee type not handled")
     }
 }
 
-pub fn emit_local(writer: &opencl_writer::OpenCLCWriter, local: &wast::Local, offsets: &HashMap<&str, u32>, debug: bool) -> String {
+pub fn emit_local(writer: &opencl_writer::OpenCLCWriter, local: &wast::Local, debug: bool) -> String {
     /*
      * When emitting locals we know we have access to the global stack.
      * We zero-init all values.
@@ -185,12 +189,7 @@ pub fn emit_local(writer: &opencl_writer::OpenCLCWriter, local: &wast::Local, of
      */
     match local.ty {
         wast::ValType::I32 => {
-            let local_id = match local.id {
-                Some(id) => id.name(),
-                None => panic!("Unexpected local without identifier"),
-            };
-            String::from(format!("\t{}\n\t{};\n\t{}\n",
-                            format!("/* local id: {} */", local_id),
+            String::from(format!("\t{};\n\t{}\n",
                             &emit_write_u32("(ulong)(stack_u32+*sp)",
                                             "(ulong)(stack_u32)",
                                             "(uint)0",
@@ -198,12 +197,7 @@ pub fn emit_local(writer: &opencl_writer::OpenCLCWriter, local: &wast::Local, of
                             "*sp += 1;"))
         },
         wast::ValType::I64 => {
-            let local_id = match local.id {
-                Some(id) => id.name(),
-                None => panic!("Unexpected local without identifier"),
-            };
-            String::from(format!("\t{}\n\t{};\n\t{}\n",
-                            format!("/* local id: {} */", local_id),
+            String::from(format!("\t{};\n\t{}\n",
                             &emit_write_u64("(ulong)(stack_u32+*sp)",
                                             "(ulong)(stack_u32)",
                                             "(ulong)0",
@@ -211,12 +205,7 @@ pub fn emit_local(writer: &opencl_writer::OpenCLCWriter, local: &wast::Local, of
                             "*sp += 2;"))
         },
         wast::ValType::F32 => {
-            let local_id = match local.id {
-                Some(id) => id.name(),
-                None => panic!("Unexpected local without identifier"),
-            };
-            String::from(format!("\t{}\n\t{};\n\t{}\n",
-                            format!("/* local id: {} */", local_id),
+            String::from(format!("\t{};\n\t{}\n",
                             &emit_write_u32("(ulong)(stack_u32+*sp)",
                                             "(ulong)(stack_u32)",
                                             "(uint)0",
@@ -224,12 +213,7 @@ pub fn emit_local(writer: &opencl_writer::OpenCLCWriter, local: &wast::Local, of
                             "*sp += 1;"))
         },
         wast::ValType::F64 => {
-            let local_id = match local.id {
-                Some(id) => id.name(),
-                None => panic!("Unexpected local without identifier"),
-            };
-            String::from(format!("\t{}\n\t{};\n\t{}\n",
-                            format!("/* local id: {} */", local_id),
+            String::from(format!("\t{};\n\t{}\n",
                             &emit_write_u64("(ulong)(stack_u32+*sp)",
                                             "(ulong)(stack_u32)",
                                             "(ulong)0",

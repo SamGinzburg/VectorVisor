@@ -1,8 +1,13 @@
 (module
   (func $_lt (param $p0 i32) (param $p1 i32) (result i32)
+    (local $l1 i32)
     (local.get $p0)
     (local.get $p1)
     (i32.lt_u)
+    (local.set $l1)
+    (local.get $l1)
+    (local.get $l1)
+    (i32.add)
   )
 
   (func $_start (result i32)

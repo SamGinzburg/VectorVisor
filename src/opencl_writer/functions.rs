@@ -45,24 +45,27 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, idx: wast::Index, cal
     // if the func has calling parameters, set those up
     // on the newly formed stack as well
     let func_type_signature = &writer.func_map.get(id).unwrap().ty;
-    let mut offset = 0;
 
+    /*
+     * We have to recompute the parameter offset, because this is the offset for the function
+     * we are about to call, not the current function
+     */
+    let mut parameter_offset: u32 = 0;
     match func_type_signature.inline {
         // if we can find the type signature
         Some(_) => {
             for parameter in func_type_signature.clone().inline.unwrap().params.to_vec() {
                 match parameter {
-                    (Some(_), _, t) => {
-                        offset += writer.get_size_valtype(&t);
+                    (_, _, t) => {
+                        parameter_offset += writer.get_size_valtype(&t);
                     },
                     _ => panic!("Unhandled parameter type")
                 }
             }
         },
-        // if we cannot find the type signature
+        // if we cannot find the type signature, no-op
         None => (),
     }
-
 
     // for each function call, map the call to an index
     // we use this index later on to return back to the instruction after the call
@@ -73,11 +76,10 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, idx: wast::Index, cal
     // get the return type of the function
     let return_size = get_return_size(writer, &func_type_signature.clone());
 
-    let result = if offset > 0 {
+    let result = if parameter_offset > 0 {
         format!("\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n{}\n\t{}\n",
         // move the stack pointer back by the offset required by calling parameters
-        // the sp should point at the start of the arguments for the function
-        format!("*sp -= {};", offset),
+        // the sp should point at the start of the locals for the function
         // increment stack frame pointer
         "*sfp += 1;",
         // save the current stack pointer for unwinding later
@@ -100,9 +102,10 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, idx: wast::Index, cal
         // return to the control function
         "return;",
         format!("call_return_stub_{}:", *call_ret_idx),
-        format!("*sp += {};", return_size))
+        format!("*sp += {};", return_size),
+        format!("*sp -= {};", parameter_offset))
     } else {
-        format!("\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n{}\n",
+        format!("\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n{}\n",
                 // increment stack frame pointer
                 "*sfp += 1;",
                 // save the current stack pointer for unwinding later
@@ -123,7 +126,8 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, idx: wast::Index, cal
                 format!("{}", "*is_calling = 1;"),
                 // return to the control function
                 "return;",
-                format!("call_return_stub_{}:", *call_ret_idx))
+                format!("call_return_stub_{}:", *call_ret_idx),
+                format!("*sp -= {};", parameter_offset))
     };
     *call_ret_idx += 1;
 
@@ -145,21 +149,44 @@ pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, fn_name: &str, fun
     // for each value returned by the function, return it on the stack
     // keep track of the change to stack ptr from previous returns
     let mut sp_counter = 0;
-    let mut offset = String::from("");
+
+    /*
+     * We have to recompute the parameter offset, because this is the offset for the function
+     * we are about to call, not the current function
+     */
+    let mut parameter_offset: u32 = 0;
+    let func_type_signature = &writer.func_map.get(fn_name).unwrap().ty;
+    match func_type_signature.inline {
+        // if we can find the type signature
+        Some(_) => {
+            for parameter in func_type_signature.clone().inline.unwrap().params.to_vec() {
+                match parameter {
+                    (Some(_), _, t) => {
+                        parameter_offset += writer.get_size_valtype(&t);
+                    },
+                    _ => panic!("Unhandled parameter type")
+                }
+            }
+        },
+        // if we cannot find the type signature, no-op
+        None => (),
+    }
+    
+    let mut offset;
     for value in results {
         match value {
             wast::ValType::I32 => {
                 // compute the offset to read from the bottom of the stack
                 if sp_counter > 0 {
-                    offset = format!("write_u32((ulong)(stack_u32+read_u32((ulong)(stack_frames+*sfp), warp_idx)),
+                    offset = format!("write_u32((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), warp_idx)),
                                                 (ulong)stack_u32,
                                                 read_u32((ulong)(stack_u32+*sp-{}-1), (ulong)stack_u32, warp_idx),
-                                                warp_idx);", sp_counter);
+                                                warp_idx);", parameter_offset, sp_counter);
                 } else {
-                    offset = format!("write_u32((ulong)(stack_u32+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx)),
+                    offset = format!("write_u32((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx)),
                                                 (ulong)stack_u32,
                                                 read_u32((ulong)(stack_u32+*sp-1), (ulong)stack_u32, warp_idx),
-                                                warp_idx);");
+                                                warp_idx);", parameter_offset);
                 }
                 final_str += &format!("\t{}\n", offset);
                 sp_counter += 1;
@@ -167,15 +194,15 @@ pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, fn_name: &str, fun
             wast::ValType::I64 => {
                 // compute the offset to read from the bottom of the stack
                 if sp_counter > 0 {
-                    offset = format!("write_u64((ulong)(stack_u32+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx)),
+                    offset = format!("write_u64((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx)),
                                                 (ulong)stack_u32,
                                                 read_u64((ulong)(stack_u32+*sp-{}-2), (ulong)stack_u32, warp_idx),
-                                                warp_idx);", sp_counter);
+                                                warp_idx);", parameter_offset, sp_counter);
                 } else {
-                    offset = format!("write_u64((ulong)(stack_u32+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx)),
+                    offset = format!("write_u64((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx)),
                                                 (ulong)stack_u32,
                                                 read_u64((ulong)(stack_u32+*sp-2), (ulong)stack_u32, warp_idx),
-                                                warp_idx);");
+                                                warp_idx);", parameter_offset);
                 }
                 final_str += &format!("\t{}\n", offset);
                 sp_counter += 2;
@@ -183,15 +210,15 @@ pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, fn_name: &str, fun
             wast::ValType::F32 => {
                 // compute the offset to read from the bottom of the stack
                 if sp_counter > 0 {
-                    offset = format!("write_u32((ulong)(stack_u32+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx)),
+                    offset = format!("write_u32((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx)),
                                                 (ulong)stack_u32,
                                                 read_u32((ulong)(stack_u32+*sp-{}-1), (ulong)stack_u32, warp_idx),
-                                                warp_idx);", sp_counter);
+                                                warp_idx);", parameter_offset, sp_counter);
                 } else {
-                    offset = format!("write_u32((ulong)(stack_u32+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx)),
+                    offset = format!("write_u32((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx)),
                                                 (ulong)stack_u32,
                                                 read_u32((ulong)(stack_u32+*sp-1), (ulong)stack_u32, warp_idx),
-                                                warp_idx);");
+                                                warp_idx);", parameter_offset);
                 }
                 final_str += &format!("\t{}\n", offset);
                 sp_counter += 1;
@@ -199,15 +226,15 @@ pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, fn_name: &str, fun
             wast::ValType::F64 => {
                 // compute the offset to read from the bottom of the stack
                 if sp_counter > 0 {
-                    offset = format!("write_u64((ulong)(stack_u32+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx)),
+                    offset = format!("write_u64((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx)),
                                                 (ulong)stack_u32,
                                                 read_u64((ulong)(stack_u32+*sp-{}-2), (ulong)stack_u32, warp_idx),
-                                                warp_idx);", sp_counter);
+                                                warp_idx);", parameter_offset, sp_counter);
                 } else {
-                    offset = format!("write_u64((ulong)(stack_u32+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx)),
+                    offset = format!("write_u64((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx)),
                                                 (ulong)stack_u32,
                                                 read_u64((ulong)(stack_u32+*sp-2), (ulong)stack_u32, warp_idx),
-                                                warp_idx);");
+                                                warp_idx);", parameter_offset);
                 }
                 final_str += &format!("\t{}\n", offset);
                 sp_counter += 2;
@@ -244,7 +271,7 @@ pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, fn_name: &str, fun
  *  each other, so we must process them sequentially.
  * 
  */
-pub fn emit_call_indirect(writer: &opencl_writer::OpenCLCWriter, table: &HashMap<u32, &wast::Index>, call_ret_map: &mut HashMap<&str, u32>, call_ret_idx: &mut u32, function_id_map: HashMap<&str, u32>, debug: bool) -> String {
+pub fn emit_call_indirect(writer: &opencl_writer::OpenCLCWriter, parameter_offset: i32, table: &HashMap<u32, &wast::Index>, call_ret_map: &mut HashMap<&str, u32>, call_ret_idx: &mut u32, function_id_map: HashMap<&str, u32>, debug: bool) -> String {
     let mut result = String::from("");
     // set up a switch case statement, we read the last value on the stack and determine what function we are going to call
     // this adds code bloat, but it reduces the complexity of the compiler.

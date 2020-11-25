@@ -27,11 +27,14 @@ pub fn emit_br(writer: &opencl_writer::OpenCLCWriter, idx: wast::Index, fn_name:
     ret_str
 }
 
-pub fn emit_br_if(writer: &opencl_writer::OpenCLCWriter, idx: wast::Index, fn_name: &str, debug: bool) -> String {
+pub fn emit_br_if(writer: &opencl_writer::OpenCLCWriter, idx: wast::Index, fn_name: &str, stack_sizes: &mut Vec<u32>, debug: bool) -> String {
     let mut ret_str = String::from("");
 
     // br_if is just an if statement, if cond is true => br l else continue
-    ret_str += &format!("\tif ({} != 0) {{\n", "read_u32((ulong)(stack_u32+*sp-1), (ulong)(stack_u32), warp_idx)");
+    // pop the value first
+    ret_str += &format!("\t{}\n",
+                        format!("*sp -= {};", stack_sizes.pop().unwrap()));
+    ret_str += &format!("\tif ({} != 0) {{\n", "read_u32((ulong)(stack_u32+*sp), (ulong)(stack_u32), warp_idx)");
     ret_str += &emit_br(writer, idx, fn_name, debug);
     ret_str += &format!("\t}}\n");
 
@@ -56,13 +59,15 @@ pub fn emit_end<'a>(writer: &opencl_writer::OpenCLCWriter<'a>, id: &Option<wast:
     // 1-> loop (label was already inserted at the top, this is a no-op here)
     if block_type == 0 {
         if debug {
-            format!("\n{}_{}:\n\t{}\n", format!("{}{}", "$_", fn_name.replace(".", "")), label,
+            format!("\n{}_{}:\n\t{}\n\t{}\n", format!("{}{}", "$_", fn_name.replace(".", "")), label,
                 format!("*sp = read_u16((ulong)(((char*)branch_value_stack_state)+(*sfp*128)+({}*2)+({}*4096)), (ulong)(branch_value_stack_state), warp_idx);",
-                        branch_idx_u32, function_id_map.get(fn_name).unwrap()))
+                        branch_idx_u32, function_id_map.get(fn_name).unwrap()),
+                format!("printf (\"end: {}_{}\\n\");", format!("{}{}", "_", fn_name.replace(".", "")), label))
         } else {
-            format!("\n{}_{}:\n\t{}\n", format!("{}{}", "$_", fn_name.replace(".", "")), label,
+            format!("\n{}_{}:\n\t{}\n\t{}\n", format!("{}{}", "$_", fn_name.replace(".", "")), label,
                 format!("*sp = read_u16((ulong)(((global char*)branch_value_stack_state)+(*sfp*128)+({}*2)+({}*4096)), (ulong)(branch_value_stack_state), warp_idx);",
-                        branch_idx_u32, function_id_map.get(fn_name).unwrap()))
+                        branch_idx_u32, function_id_map.get(fn_name).unwrap()),
+                format!("printf (\"end: {}_{}\\n\");", format!("{}{}", "_", fn_name.replace(".", "")), label))
         }
     } else {
         let mut result = String::from("");
@@ -163,14 +168,17 @@ pub fn emit_block(writer: &opencl_writer::OpenCLCWriter, block: &wast::BlockType
 }
 
 
-pub fn emit_br_table(writer: &opencl_writer::OpenCLCWriter, table_indicies: &wast::BrTableIndices, fn_name: &str, debug: bool) -> String {
+pub fn emit_br_table(writer: &opencl_writer::OpenCLCWriter, table_indicies: &wast::BrTableIndices, fn_name: &str, stack_sizes: &mut Vec<u32>, debug: bool) -> String {
     let mut ret_str = String::from("");
 
     let indicies = &table_indicies.labels;
 
     // read the label_idx from stack, always i32
-    let label_idx = emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx");
+    let label_idx = emit_read_u32("(ulong)(stack_u32+*sp)", "(ulong)(stack_u32)", "warp_idx");
 
+    // pop the value we are branching on
+    ret_str += &format!("\t{}\n",
+                        format!("*sp -= {};", stack_sizes.pop().unwrap()));
     // generate a switch case for each label index
     ret_str += &format!("\tswitch({}) {{\n", label_idx);
 

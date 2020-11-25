@@ -9,6 +9,8 @@ pub fn emit_select(writer: &opencl_writer::OpenCLCWriter, stack_sizes: &mut Vec<
 
     // pop c
     let c = emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx");
+    
+    stack_sizes.pop().unwrap();
 
     // we have to make sure that the values are the same size
     let size1 = stack_sizes.pop().unwrap();

@@ -1,0 +1,12 @@
+(module
+  (memory (export "memory") 1)
+  (func $_start (result i64)
+    (i32.const 5)
+    (i32.const 100)
+    (i64.extend_i32_u)
+    (i64.store)
+    (i32.const 5)
+    (i64.load)
+  )
+  (export "_start" (func $_start))
+)
