@@ -16,7 +16,7 @@ fn main() {
     //let file = fs::read_to_string("examples/mem/loadstack.wat");
 
     //let file = fs::read_to_string("examples/locals/param.wat");
-    //let file = fs::read_to_string("examples/binops/lt.wat");
+    let file = fs::read_to_string("examples/binops/lt.wat");
     //let file = fs::read_to_string("examples/binops/sub.wat");
     //let file = fs::read_to_string("examples/call/call64.wat");
     //let file = fs::read_to_string("examples/call/call32.wat");
@@ -26,7 +26,7 @@ fn main() {
     //let file = fs::read_to_string("examples/wasi_examples/fd_write_loop.wat");
     //let file = fs::read_to_string("examples/globals/simple_global.wat");
     //let file = fs::read_to_string("examples/globals/global_set.wat");
-    let file = fs::read_to_string("examples/rust_hello.wat");
+    //let file = fs::read_to_string("examples/rust_hello.wat");
     //let file = fs::read_to_string("examples/rust-test-wasi.wat");
 
     let filedata = match file {
@@ -52,14 +52,15 @@ fn main() {
     let sfp_size = 1024;
     let predictor_size = 4096;
     let num_vms = 16;
-    let interleaved = true;
+    let interleaved = false;
+    let is_gpu = true;
 
     // TODO: given stack_size/heap_size/num_vms, group the VMs together under multiple command queues
 
     match (result, result_debug) {
         (true, true) => {
             // apply our compilation pass to the source WASM 
-            let (compiled_kernel, entry_point, globals_buffer_size, num_compiled_funcs) = ast.write_opencl_file(interleaved as u32,
+            let (compiled_kernel, funcs, header, entry_point, globals_buffer_size, num_compiled_funcs) = ast.write_opencl_file(interleaved as u32,
                                                                                                                 stack_size,
                                                                                                                 heap_size, 
                                                                                                                 call_stack_size, 
@@ -68,7 +69,7 @@ fn main() {
                                                                                                                 predictor_size, 
                                                                                                                 false);
             println!("Compiled: {} functions", num_compiled_funcs);
-            let (compiled_debug_kernel, _, _, _) = ast_debug.write_opencl_file(interleaved as u32,
+            let (compiled_debug_kernel, _, _, _, _, _) = ast_debug.write_opencl_file(interleaved as u32,
                                                                                stack_size,
                                                                                heap_size, 
                                                                                call_stack_size, 
@@ -78,9 +79,9 @@ fn main() {
                                                                                true);
 
             std::fs::write("test.c", compiled_debug_kernel).expect("Unable to write file");
-            // 16KB stack/heap by default - TODO: change these values after done testing
-            (0..4).into_par_iter().for_each(|_idx| {
-                let runner = opencl_runner::OpenCLRunner::new(num_vms, interleaved, true, entry_point, compiled_kernel.clone());
+
+            (0..1).into_par_iter().for_each(|_idx| {
+                let runner = opencl_runner::OpenCLRunner::new(num_vms, interleaved, is_gpu, entry_point, compiled_kernel.clone(), funcs.clone(), header.clone());
                 runner.run(stack_size,
                            heap_size, 
                            call_stack_size, 

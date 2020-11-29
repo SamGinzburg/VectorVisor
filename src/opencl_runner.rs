@@ -101,6 +101,8 @@ impl OpenCLBuffers {
 pub struct OpenCLRunner {
     num_vms: u32,
     program_source: String,
+    functions_source: Vec<String>,
+    func_header: String,
     is_gpu_backend: bool,
     is_memory_interleaved: bool,
     entry_point: u32,
@@ -108,10 +110,12 @@ pub struct OpenCLRunner {
 }
 
 impl OpenCLRunner {
-    pub fn new(num_vms: u32, mem_interleave: bool, running_on_gpu: bool, entry_point: u32, program: String) -> OpenCLRunner {
+    pub fn new(num_vms: u32, mem_interleave: bool, running_on_gpu: bool, entry_point: u32, program: String, program_funcs: Vec<String>, header: String) -> OpenCLRunner {
         OpenCLRunner {
             num_vms: num_vms,
             program_source: program,
+            functions_source: program_funcs,
+            func_header: header,
             is_gpu_backend: running_on_gpu,
             is_memory_interleaved: mem_interleave,
             entry_point: entry_point,
@@ -340,11 +344,13 @@ impl OpenCLRunner {
      */
     pub fn setup_kernel(&self) -> (ocl::core::Program, ocl::core::Context, ocl::core::DeviceId) {
         let program = self.program_source.clone();
+        let header = self.func_header.clone();
+
         let platform_id = ocl::core::default_platform().unwrap();
-        let device_type = if true {
+        let device_type = if self.is_gpu_backend {
             Some(ocl::core::DEVICE_TYPE_GPU)
         } else {
-            Some(ocl::core::DEVICE_TYPE_GPU)
+            Some(ocl::core::DEVICE_TYPE_CPU)
         };
 
         let device_ids = ocl::core::get_device_ids(&platform_id, device_type, None).unwrap();
@@ -365,7 +371,8 @@ impl OpenCLRunner {
         let max_param_size = ocl::core::get_device_info(&device_id, ocl::core::DeviceInfo::MaxParameterSize);
         let max_global_mem_size = ocl::core::get_device_info(&device_id, ocl::core::DeviceInfo::GlobalMemSize);
         let max_constant_buffer_size = ocl::core::get_device_info(&device_id, ocl::core::DeviceInfo::MaxConstantBufferSize);
-        
+        let linker_available = ocl::core::get_device_info(&device_id, ocl::core::DeviceInfo::LinkerAvailable);
+
         dbg!(dev_type);
         dbg!(dev_name);
         dbg!(vendor);
@@ -375,13 +382,56 @@ impl OpenCLRunner {
         dbg!(max_param_size);
         dbg!(max_global_mem_size);
         dbg!(max_constant_buffer_size);
+        dbg!(linker_available);
 
         // compile the GPU kernel(s)
         let src_cstring = CString::new(program.clone()).unwrap();
+        let src_header = CString::new(header.clone()).unwrap();
+
         println!("Starting kernel compilation...");
-        let compiled_program = ocl::core::create_program_with_source(&context, &[src_cstring]).unwrap();
-        let compile_result = ocl::core::build_program(&compiled_program, None::<&[()]>, &CString::new(format!("-cl-opt-disable -DNUM_THREADS={}", self.num_vms)).unwrap(), None, None);
-        match compile_result {
+        
+        let mut compiled_functions: Vec<ocl::core::Program> = Vec::new();
+        println!("Trying to compile funcs...");
+
+        let header = ocl::core::create_program_with_source(&context, &[src_header.clone()]).unwrap();
+
+
+        let compiled_program = ocl::core::create_program_with_source(&context, &[src_cstring.clone()]).unwrap();
+        ocl::core::compile_program(&compiled_program, Some(&[device_ids[0]]), &CString::new(format!("-DNUM_THREADS={}", self.num_vms)).unwrap(), &[], &[], None, None, None);
+        let buildinfo = ocl::core::get_program_build_info(&compiled_program, &device_ids[0], ocl::core::ProgramBuildInfo::BuildLog).unwrap();
+        dbg!(buildinfo);
+
+        //compiled_functions.push(compiled_program);
+
+        for idx in 0..self.functions_source.len() {
+            let func_src = CString::new(self.functions_source[idx].clone()).unwrap();
+            let _compiled_program = ocl::core::create_program_with_source(&context, &[func_src]).unwrap();
+            compiled_functions.push(_compiled_program);
+            dbg!(idx);
+        }
+
+        for idx in 0..self.functions_source.len() {
+            let _compile_result = ocl::core::compile_program(&compiled_functions[idx], Some(&[device_ids[0]]), &CString::new(format!("-DNUM_THREADS={}", self.num_vms)).unwrap(), &[&header], &[CString::new(format!("helper.cl")).unwrap()], None, None, None);
+            let buildinfo = ocl::core::get_program_build_info(&compiled_functions[idx], &device_ids[0], ocl::core::ProgramBuildInfo::BuildLog);
+           // dbg!(buildinfo);    
+            let binaryinfo = ocl::core::get_program_info(&compiled_functions[idx], ocl::core::ProgramInfo::BinarySizes);
+            dbg!(binaryinfo);
+        }
+
+       let mut test: Vec<&ocl::core::Program> = Vec::new();
+        for item in 0..compiled_functions.len() {
+            test.push(&compiled_functions[item]);
+        }
+
+        let link_result = ocl::core::link_program(&context, Some(&[device_ids[0]]), &CString::new("-create-library").unwrap(), &test.as_slice(), None, None, None).unwrap();
+        let binaryinfo = ocl::core::get_program_info(&link_result, ocl::core::ProgramInfo::BinarySizes);
+        dbg!(binaryinfo);
+        
+        let link_result2 = ocl::core::link_program(&context, Some(&[device_ids[0]]), &CString::new("").unwrap(), &[&compiled_program], None, None, None);
+        //let buildinfo = ocl::core::get_program_build_info(&link_result2.unwrap(), &device_ids[0], ocl::core::ProgramBuildInfo::BuildLog);
+        //panic!(buildinfo);    
+
+        match link_result2 {
             Err(e) => {
                 println!("Compilation error:\n{}", e);
                 println!("\n\nWriting source to output file test.cl\n");
@@ -391,7 +441,7 @@ impl OpenCLRunner {
             Ok(_) => println!("Finished kernel compilation!"),
         }
 
-        return (compiled_program, context, device_id)
+        return (link_result2.unwrap(), context, device_id)
     }
 
     /*

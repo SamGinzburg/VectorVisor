@@ -36,7 +36,7 @@ pub fn get_return_size(writer: &opencl_writer::OpenCLCWriter, ty: &wast::TypeUse
 }
 
 
-pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, idx: wast::Index, call_ret_map: &mut HashMap<&str, u32>, call_ret_idx: &mut u32, function_id_map: &HashMap<&str, u32>, debug: bool) -> String {
+pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, fn_name: String, idx: wast::Index, call_ret_map: &mut HashMap<&str, u32>, call_ret_idx: &mut u32, function_id_map: &HashMap<&str, u32>, debug: bool) -> String {
     let id = match idx {
         wast::Index::Id(id) => id.name(),
         _ => panic!("Unable to get Id for function call!"),
@@ -101,7 +101,7 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, idx: wast::Index, cal
         format!("{}", "*is_calling = 1;"),
         // return to the control function
         "return;",
-        format!("call_return_stub_{}:", *call_ret_idx),
+        format!("{}_call_return_stub_{}:", format!("{}{}", "$_", fn_name.replace(".", "")), *call_ret_idx),
         format!("*sp += {};", return_size),
         format!("*sp -= {};", parameter_offset))
     } else {
@@ -126,7 +126,7 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, idx: wast::Index, cal
                 format!("{}", "*is_calling = 1;"),
                 // return to the control function
                 "return;",
-                format!("call_return_stub_{}:", *call_ret_idx),
+                format!("{}_call_return_stub_{}:", format!("{}{}", "$_", fn_name.replace(".", "")), *call_ret_idx),
                 format!("*sp -= {};", parameter_offset))
     };
     *call_ret_idx += 1;
@@ -160,7 +160,6 @@ pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, fn_name: &str, fun
         // if we can find the type signature
         Some(_) => {
             for parameter in func_type_signature.clone().inline.unwrap().params.to_vec() {
-                dbg!(parameter);
                 match parameter {
                     (_, _, t) => {
                         parameter_offset += writer.get_size_valtype(&t);
@@ -272,7 +271,7 @@ pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, fn_name: &str, fun
  *  each other, so we must process them sequentially.
  * 
  */
-pub fn emit_call_indirect(writer: &opencl_writer::OpenCLCWriter, parameter_offset: i32, table: &HashMap<u32, &wast::Index>, call_ret_map: &mut HashMap<&str, u32>, call_ret_idx: &mut u32, function_id_map: HashMap<&str, u32>, debug: bool) -> String {
+pub fn emit_call_indirect(writer: &opencl_writer::OpenCLCWriter, fn_name: String, arameter_offset: i32, table: &HashMap<u32, &wast::Index>, call_ret_map: &mut HashMap<&str, u32>, call_ret_idx: &mut u32, function_id_map: HashMap<&str, u32>, debug: bool) -> String {
     let mut result = String::from("");
     // set up a switch case statement, we read the last value on the stack and determine what function we are going to call
     // this adds code bloat, but it reduces the complexity of the compiler.
@@ -287,7 +286,7 @@ pub fn emit_call_indirect(writer: &opencl_writer::OpenCLCWriter, parameter_offse
         // now that we have found the appropriate call, we can pop the value off of the stack
         result += &format!("\t\t\t{}\n", format!("*sp -= 1;"));
         // emit the function call here!
-        result += &format!("{}", emit_fn_call(writer, **value, call_ret_map, call_ret_idx, &function_id_map, debug));
+        result += &format!("{}", emit_fn_call(writer, fn_name.clone(), **value, call_ret_map, call_ret_idx, &function_id_map, debug));
         result += &format!("\t\t\t{}\n", format!("break;"));
     }
 

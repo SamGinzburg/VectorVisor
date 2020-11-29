@@ -98,11 +98,11 @@ pub fn emit_end<'a>(writer: &opencl_writer::OpenCLCWriter<'a>, id: &Option<wast:
     if block_type == 0 {
         if debug {
             format!("\n{}_{}:\n\t{}\n", format!("{}{}", "$_", fn_name.replace(".", "")), label,
-                format!("*sp = read_u16((ulong)(((char*)branch_value_stack_state)+(*sfp*128)+({}*2)+({}*4096)), (ulong)(branch_value_stack_state), warp_idx);",
+                format!("*sp = read_u32((ulong)(((char*)branch_value_stack_state)+(*sfp*128)+({}*4)+({}*4096)), (ulong)(branch_value_stack_state), warp_idx);",
                         branch_idx_u32, function_id_map.get(fn_name).unwrap()))
         } else {
             format!("\n{}_{}:\n\t{}\n", format!("{}{}", "$_", fn_name.replace(".", "")), label,
-                format!("*sp = read_u16((ulong)(((global char*)branch_value_stack_state)+(*sfp*128)+({}*2)+({}*4096)), (ulong)(branch_value_stack_state), warp_idx);",
+                format!("*sp = read_u32((ulong)(((global char*)branch_value_stack_state)+(*sfp*128)+({}*4)+({}*4096)), (ulong)(branch_value_stack_state), warp_idx);",
                         branch_idx_u32, function_id_map.get(fn_name).unwrap()))
         }
     } else {
@@ -111,10 +111,10 @@ pub fn emit_end<'a>(writer: &opencl_writer::OpenCLCWriter<'a>, id: &Option<wast:
         
         // pop the control flow stack entry (reset the stack to the state it was in before the loop)
         if debug {
-            result += &format!("\t*sp = read_u16((ulong)(((char*)loop_value_stack_state)+(*sfp*128)+({}*2)+({}*4096)), (ulong)(loop_value_stack_state), warp_idx);\n",
+            result += &format!("\t*sp = read_u32((ulong)(((char*)loop_value_stack_state)+(*sfp*128)+({}*4)+({}*4096)), (ulong)(loop_value_stack_state), warp_idx);\n",
                         branch_idx_u32, function_id_map.get(fn_name).unwrap());
         } else {
-            result += &format!("\t*sp = read_u16((ulong)(((global char*)loop_value_stack_state)+(*sfp*128)+({}*2)+({}*4096)), (ulong)(loop_value_stack_state), warp_idx);\n",
+            result += &format!("\t*sp = read_u32((ulong)(((global char*)loop_value_stack_state)+(*sfp*128)+({}*4)+({}*4096)), (ulong)(loop_value_stack_state), warp_idx);\n",
                         branch_idx_u32, function_id_map.get(fn_name).unwrap());
         }
 
@@ -135,11 +135,11 @@ pub fn emit_loop(writer: &opencl_writer::OpenCLCWriter, block: &wast::BlockType,
 
     if debug {
         result += &format!("\t{}\n",
-                            format!("write_u16((ulong)(((char*)loop_value_stack_state)+(*sfp*128)+({}*2)+({}*4096)), (ulong)(loop_value_stack_state), (ushort)*sp, warp_idx);",
+                            format!("write_u32((ulong)(((char*)loop_value_stack_state)+(*sfp*128)+({}*4)+({}*4096)), (ulong)(loop_value_stack_state), (ushort)*sp, warp_idx);",
                             branch_idx_u32, function_id_map.get(fn_name).unwrap()));
     } else {
         result += &format!("\t{}\n",
-                            format!("write_u16((ulong)(((global char*)loop_value_stack_state)+(*sfp*128)+({}*2)+({}*4096)), (ulong)(loop_value_stack_state), (ushort)*sp, warp_idx);",
+                            format!("write_u32((ulong)(((global char*)loop_value_stack_state)+(*sfp*128)+({}*4)+({}*4096)), (ulong)(loop_value_stack_state), (ushort)*sp, warp_idx);",
                             branch_idx_u32, function_id_map.get(fn_name).unwrap()));
     }
 
@@ -148,14 +148,14 @@ pub fn emit_loop(writer: &opencl_writer::OpenCLCWriter, block: &wast::BlockType,
 
     // we convert our loop into a recursive call here - the loop header is treated as a function call re-entry point
 
-    result += &format!("call_return_stub_{}:\n", *call_ret_idx);
+    result += &format!("{}_call_return_stub_{}:\n", format!("{}{}", "$_", fn_name.replace(".", "")), *call_ret_idx);
 
     // pop the control flow stack entry (reset the stack to the state it was in before the loop)
     if debug {
-        result += &format!("\t*sp = read_u16((ulong)(((char*)loop_value_stack_state)+(*sfp*128)+({}*2)+({}*4096)), (ulong)(loop_value_stack_state), warp_idx);\n",
+        result += &format!("\t*sp = read_u32((ulong)(((char*)loop_value_stack_state)+(*sfp*128)+({}*4)+({}*4096)), (ulong)(loop_value_stack_state), warp_idx);\n",
                     branch_idx_u32, function_id_map.get(fn_name).unwrap());
     } else {
-        result += &format!("\t*sp = read_u16((ulong)(((global char*)loop_value_stack_state)+(*sfp*128)+({}*2)+({}*4096)), (ulong)(loop_value_stack_state), warp_idx);\n",
+        result += &format!("\t*sp = read_u32((ulong)(((global char*)loop_value_stack_state)+(*sfp*128)+({}*4)+({}*4096)), (ulong)(loop_value_stack_state), warp_idx);\n",
                     branch_idx_u32, function_id_map.get(fn_name).unwrap());
     }
 
