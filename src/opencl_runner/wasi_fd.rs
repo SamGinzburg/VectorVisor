@@ -52,8 +52,6 @@ impl WasiFd {
         let raw_mem: &mut [u8] = unsafe { memory.data_unchecked_mut() };
 
         // copy the hypercall buffer over to the memory object
-        // TODO: we can optimize this later, to read minimal amounts of memory
-        // Further TODO: we also need to create a generic interleaved read/write function for this
         if hypercall.is_interleaved_mem {
             fd = Interleave::read_u32(hcall_buf, 0, hypercall.num_total_vms, hypercall.vm_id);
             num_iovecs = Interleave::read_u32(hcall_buf, 8, hypercall.num_total_vms, hypercall.vm_id);

@@ -27,7 +27,7 @@ fn main() {
     //let file = fs::read_to_string("examples/globals/simple_global.wat");
     //let file = fs::read_to_string("examples/globals/global_set.wat");
     let file = fs::read_to_string("examples/rust_hello.wat");
-    //let file = fs::read_to_string("examples/rust-factorial.wat");
+    //let file = fs::read_to_string("examples/rust-test-wasi.wat");
 
     let filedata = match file {
         Ok(text) => text,
@@ -45,14 +45,16 @@ fn main() {
     let result_debug = ast_debug.parse_file().unwrap();
 
     // per-VM parameters (all in bytes)
-    let stack_size = 1024 * 64 * 20;
-    let heap_size = 1024 * 64 * 20;
+    let stack_size = 1024 * 64;
+    let heap_size = 1024 * 64;
     let call_stack_size = 1024;
     let stack_frames_size = 1024;
     let sfp_size = 1024;
     let predictor_size = 4096;
     let num_vms = 16;
     let interleaved = true;
+
+    // TODO: given stack_size/heap_size/num_vms, group the VMs together under multiple command queues
 
     match (result, result_debug) {
         (true, true) => {
@@ -77,7 +79,7 @@ fn main() {
 
             std::fs::write("test.c", compiled_debug_kernel).expect("Unable to write file");
             // 16KB stack/heap by default - TODO: change these values after done testing
-            (0..1).into_par_iter().for_each(|_idx| {
+            (0..4).into_par_iter().for_each(|_idx| {
                 let runner = opencl_runner::OpenCLRunner::new(num_vms, interleaved, true, entry_point, compiled_kernel.clone());
                 runner.run(stack_size,
                            heap_size, 

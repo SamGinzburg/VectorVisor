@@ -160,8 +160,9 @@ pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, fn_name: &str, fun
         // if we can find the type signature
         Some(_) => {
             for parameter in func_type_signature.clone().inline.unwrap().params.to_vec() {
+                dbg!(parameter);
                 match parameter {
-                    (Some(_), _, t) => {
+                    (_, _, t) => {
                         parameter_offset += writer.get_size_valtype(&t);
                     },
                     _ => panic!("Unhandled parameter type")

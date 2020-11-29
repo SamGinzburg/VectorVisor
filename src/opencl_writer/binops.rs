@@ -127,6 +127,17 @@ pub fn emit_i32_shl(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> Strin
             "*sp -= 1;")
 }
 
+pub fn emit_i64_shl(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> String {
+    format!("\t{};\n\t{}\n",
+            &emit_write_u32("(ulong)(stack_u32+*sp-4)",
+                            "(ulong)(stack_u32)",
+                            &format!("(ulong){} << {}",
+                                     &emit_read_u32("(ulong)(stack_u32+*sp-4)", "(ulong)(stack_u32)", "warp_idx"),
+                                     &emit_read_u32("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx")),
+                            "warp_idx"),
+            "*sp -= 2;")
+}
+
 pub fn emit_i32_xor(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> String {
     format!("\t{};\n\t{}\n",
             &emit_write_u32("(ulong)(stack_u32+*sp-2)",

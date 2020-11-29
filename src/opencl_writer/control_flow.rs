@@ -1,6 +1,7 @@
 use crate::opencl_writer;
 use crate::opencl_writer::Regex;
 use crate::opencl_writer::mem_interleave::emit_read_u32;
+use crate::opencl_writer::mem_interleave::emit_write_u64;
 
 use std::collections::HashMap;
 
@@ -11,23 +12,60 @@ pub fn emit_return(writer: &opencl_writer::OpenCLCWriter, fn_name: &str, debug: 
 }
 
 // this function is semantically equivalent to function_unwind
-pub fn emit_br(writer: &opencl_writer::OpenCLCWriter, idx: wast::Index, fn_name: &str, debug: bool) -> String {
+pub fn emit_br(writer: &opencl_writer::OpenCLCWriter, idx: wast::Index, fn_name: &str, control_stack: &mut Vec<(String, u32, i32)>, function_id_map: HashMap<&str, u32>, debug: bool) -> String {
     let mut ret_str = String::from("");
 
-    let branch_id = match idx {
-        wast::Index::Id(id) => id.name(),
-        _ => panic!("Branch specified in terms of numerical index instead of Id"),
+    // we need to do linear scans for blocks that are pre-named
+    let mut temp_map: HashMap<String, (String, u32, i32)> = HashMap::new();
+    for (label, block_type, reentry) in control_stack.clone() {
+        temp_map.insert(label.to_string(), (label.to_string(), block_type, reentry));
+    }
+
+    let (block_name, block_type, loop_header_reentry) = match idx {
+        wast::Index::Id(id) => {
+            temp_map.get(id.name()).unwrap()
+        },
+        wast::Index::Num(value, _) => {
+            control_stack.get(control_stack.len() - 1 - value as usize).unwrap()
+        },
     };
 
-    // debug comment
-    ret_str += &format!("\t{}\n", format!("/* br {}_{} */", format!("{}{}", "$_", fn_name.replace(".", "")), branch_id));
-    // strip illegal chars from function name
-    ret_str += &format!("\t{}\n", format!("goto {}_{};", format!("{}{}", "$_", fn_name.replace(".", "")), branch_id));
+    if *block_type == 1 && *loop_header_reentry < 0 {
+        panic!("Invalid loop re-entry point");
+    }
 
+    // First, determine if the branch is a forward branch or a backwards branch (targeting a loop header)
+    // block = 0, loop = 1
+    if *block_type == 0 {
+        // If we are targeting a forward branch, just emit the goto
+        ret_str += &format!("\t{}\n", format!("goto {}_{};", format!("{}{}", "$_", fn_name.replace(".", "")), block_name));
+    } else {
+        // If we are targeting a loop, we have to emit a return instead, to convert the iterative loop into a recursive function call
+        ret_str += &format!("\t{}\n",
+                            "*sfp += 1;");
+        // increment the stack frame pointer & save the label of the loop header so we return to it
+        ret_str += &format!("\t{}\n", &format!("{};",
+                      emit_write_u64("(ulong)(call_stack+*sfp)",
+                                     "(ulong)(call_stack)",
+                                     &format!("{}", *loop_header_reentry), "warp_idx")));
+
+        // set our re-entry target to ourself
+        ret_str += &format!("\t{}\n",
+                            format!("*entry_point = {};", function_id_map.get(fn_name).unwrap()));
+        // set is_calling to false to perform the recursive call to ourself
+        // upon re-entry, we will pop off the top call_stack value which will be pointing at our loop header
+        ret_str += &format!("\t{}\n",
+                            "*is_calling = 0;");
+        ret_str += &format!("\t{}\n",
+                            "return;");
+        //ret_str += &format!("\t{}\n", format!("goto {}_{};", format!("{}{}", "$_", fn_name.replace(".", "")), block_name));
+    }
+    
+    
     ret_str
 }
 
-pub fn emit_br_if(writer: &opencl_writer::OpenCLCWriter, idx: wast::Index, fn_name: &str, stack_sizes: &mut Vec<u32>, debug: bool) -> String {
+pub fn emit_br_if(writer: &opencl_writer::OpenCLCWriter, idx: wast::Index, fn_name: &str, stack_sizes: &mut Vec<u32>, control_stack: &mut Vec<(String, u32, i32)>, function_id_map: HashMap<&str, u32>, debug: bool) -> String {
     let mut ret_str = String::from("");
 
     // br_if is just an if statement, if cond is true => br l else continue
@@ -35,7 +73,7 @@ pub fn emit_br_if(writer: &opencl_writer::OpenCLCWriter, idx: wast::Index, fn_na
     ret_str += &format!("\t{}\n",
                         format!("*sp -= {};", stack_sizes.pop().unwrap()));
     ret_str += &format!("\tif ({} != 0) {{\n", "read_u32((ulong)(stack_u32+*sp), (ulong)(stack_u32), warp_idx)");
-    ret_str += &emit_br(writer, idx, fn_name, debug);
+    ret_str += &emit_br(writer, idx, fn_name, control_stack, function_id_map, debug);
     ret_str += &format!("\t}}\n");
 
     ret_str
@@ -59,15 +97,13 @@ pub fn emit_end<'a>(writer: &opencl_writer::OpenCLCWriter<'a>, id: &Option<wast:
     // 1-> loop (label was already inserted at the top, this is a no-op here)
     if block_type == 0 {
         if debug {
-            format!("\n{}_{}:\n\t{}\n\t{}\n", format!("{}{}", "$_", fn_name.replace(".", "")), label,
+            format!("\n{}_{}:\n\t{}\n", format!("{}{}", "$_", fn_name.replace(".", "")), label,
                 format!("*sp = read_u16((ulong)(((char*)branch_value_stack_state)+(*sfp*128)+({}*2)+({}*4096)), (ulong)(branch_value_stack_state), warp_idx);",
-                        branch_idx_u32, function_id_map.get(fn_name).unwrap()),
-                format!("printf (\"end: {}_{}\\n\");", format!("{}{}", "_", fn_name.replace(".", "")), label))
+                        branch_idx_u32, function_id_map.get(fn_name).unwrap()))
         } else {
-            format!("\n{}_{}:\n\t{}\n\t{}\n", format!("{}{}", "$_", fn_name.replace(".", "")), label,
+            format!("\n{}_{}:\n\t{}\n", format!("{}{}", "$_", fn_name.replace(".", "")), label,
                 format!("*sp = read_u16((ulong)(((global char*)branch_value_stack_state)+(*sfp*128)+({}*2)+({}*4096)), (ulong)(branch_value_stack_state), warp_idx);",
-                        branch_idx_u32, function_id_map.get(fn_name).unwrap()),
-                format!("printf (\"end: {}_{}\\n\");", format!("{}{}", "_", fn_name.replace(".", "")), label))
+                        branch_idx_u32, function_id_map.get(fn_name).unwrap()))
         }
     } else {
         let mut result = String::from("");
@@ -88,22 +124,8 @@ pub fn emit_end<'a>(writer: &opencl_writer::OpenCLCWriter<'a>, id: &Option<wast:
 
 // basically the same as emit_block, except we have to reset the stack pointer
 // at the *top* of the block, since we are doing a backwards jump not a forward jump
-pub fn emit_loop(writer: &opencl_writer::OpenCLCWriter, block: &wast::BlockType, fn_name: &str, function_id_map: HashMap<&str, u32>, debug: bool) -> String {
+pub fn emit_loop(writer: &opencl_writer::OpenCLCWriter, block: &wast::BlockType, label: String, branch_idx_u32: u32, fn_name: &str, function_id_map: HashMap<&str, u32>, call_ret_idx: &mut u32, debug: bool) -> String {
     let mut result: String = String::from("");
-    let label = block.label.unwrap().name();
-
-    // first we have to save the current stack pointer
-    // to reset the stack if we jump to this label
-    let re = Regex::new(r"\d+").unwrap();
-    // we can use the branch index to save to global state
-    let branch_idx: &str = re.captures(label).unwrap().get(0).map_or("", |m| m.as_str());
-    let branch_idx_u32 = branch_idx.parse::<u32>().unwrap();
-    if branch_idx_u32 > 1024 {
-        panic!("Only up to 1024 branches per function are supported");
-    }
-
-    // create a new stack frame for the block, store stack frame pointer in local
-    // function private data
 
     // we have to emulate a 2-D array, since openCL does not support double pts in v1.2
     // the format is (64 x 64 * number of functions),
@@ -122,29 +144,28 @@ pub fn emit_loop(writer: &opencl_writer::OpenCLCWriter, block: &wast::BlockType,
     }
 
     // emit a label here for the END instruction to jump back here to restart the loop
-    result += &format!("{}_{}:\n", format!("{}{}", "$_", fn_name.replace(".", "")), label);
-    // the stack pointer should be reset by the BR/BR_IF instruction, so no need to touch it here
+    //result += &format!("{}_{}:\n", format!("{}{}", "$_", fn_name.replace(".", "")), label);
+
+    // we convert our loop into a recursive call here - the loop header is treated as a function call re-entry point
+
+    result += &format!("call_return_stub_{}:\n", *call_ret_idx);
+
+    // pop the control flow stack entry (reset the stack to the state it was in before the loop)
+    if debug {
+        result += &format!("\t*sp = read_u16((ulong)(((char*)loop_value_stack_state)+(*sfp*128)+({}*2)+({}*4096)), (ulong)(loop_value_stack_state), warp_idx);\n",
+                    branch_idx_u32, function_id_map.get(fn_name).unwrap());
+    } else {
+        result += &format!("\t*sp = read_u16((ulong)(((global char*)loop_value_stack_state)+(*sfp*128)+({}*2)+({}*4096)), (ulong)(loop_value_stack_state), warp_idx);\n",
+                    branch_idx_u32, function_id_map.get(fn_name).unwrap());
+    }
+
+    *call_ret_idx += 1;
 
     result
 }
 
-pub fn emit_block(writer: &opencl_writer::OpenCLCWriter, block: &wast::BlockType, fn_name: &str, function_id_map: HashMap<&str, u32>, debug: bool) -> String {
+pub fn emit_block(writer: &opencl_writer::OpenCLCWriter, block: &wast::BlockType, label: String, branch_idx_u32: u32, fn_name: &str, function_id_map: HashMap<&str, u32>, debug: bool) -> String {
     let mut result: String = String::from("");
-    let label = block.label.unwrap().name();
-
-    // first we have to save the current stack pointer
-    // to reset the stack if we jump to this label
-    let re = Regex::new(r"\d+").unwrap();
-    // we can use the branch index to save to global state
-    let branch_idx: &str = re.captures(label).unwrap().get(0).map_or("", |m| m.as_str());
-    let branch_idx_u32 = branch_idx.parse::<u32>().unwrap();
-    if branch_idx_u32 > 1024 {
-        panic!("Only up to 1024 branches per function are supported");
-    }
-
-    // create a new stack frame for the block, store stack frame pointer in local
-    // function private data
-
 
     // we have to emulate a 2-D array, since openCL does not support double ptrs in v1.2
     // the format is (64 x 64 * number of functions),
@@ -168,7 +189,7 @@ pub fn emit_block(writer: &opencl_writer::OpenCLCWriter, block: &wast::BlockType
 }
 
 
-pub fn emit_br_table(writer: &opencl_writer::OpenCLCWriter, table_indicies: &wast::BrTableIndices, fn_name: &str, stack_sizes: &mut Vec<u32>, debug: bool) -> String {
+pub fn emit_br_table(writer: &opencl_writer::OpenCLCWriter, table_indicies: &wast::BrTableIndices, fn_name: &str, stack_sizes: &mut Vec<u32>, control_stack: &mut Vec<(String, u32, i32)>, function_id_map: HashMap<&str, u32>, debug: bool) -> String {
     let mut ret_str = String::from("");
 
     let indicies = &table_indicies.labels;
@@ -187,7 +208,7 @@ pub fn emit_br_table(writer: &opencl_writer::OpenCLCWriter, table_indicies: &was
         // decrement the stack
         ret_str += &format!("\t\t\t{}\n", "*sp -= 1;");
         // emit br i
-        ret_str += &emit_br(writer, indicies[index], fn_name, debug);
+        ret_str += &emit_br(writer, indicies[index], fn_name, control_stack, function_id_map.clone(), debug);
         ret_str += &format!("\t\t\tbreak;\n");
     }
 
@@ -196,7 +217,7 @@ pub fn emit_br_table(writer: &opencl_writer::OpenCLCWriter, table_indicies: &was
     // decrement the stack
     ret_str += &format!("\t\t\t{}\n", "*sp -= 1;");
     // emit br i
-    ret_str += &emit_br(writer, table_indicies.default, fn_name, debug);
+    ret_str += &emit_br(writer, table_indicies.default, fn_name, control_stack, function_id_map, debug);
     ret_str += &format!("\t\t\tbreak;\n");
 
     ret_str += &format!("\t}}\n");

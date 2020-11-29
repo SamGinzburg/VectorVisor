@@ -22,10 +22,12 @@ use crossbeam::channel::bounded;
 
 use rayon::prelude::*;
 use ocl::core::CommandQueue;
+use ocl::core::CommandQueueProperties;
 
 use crossbeam::channel::Sender;
 use crossbeam::channel::Receiver;
 
+use std::time;
 
 use std::sync::Arc;
 use std::cell::RefCell;
@@ -144,7 +146,8 @@ impl OpenCLRunner {
 
 
             // each vector VMM group gets its own command queue - in the future we may have 1 queue per [Large N] number of VMs
-            let command_queue = ocl::core::create_command_queue(&context, &device_id, None).unwrap();
+            let properties = CommandQueueProperties::new().profiling();
+            let command_queue = ocl::core::create_command_queue(&context, &device_id, Some(properties)).unwrap();
 
             // We purposefully leak the runner into a static object to deal with the lifetimes of the
             // hypercall dispatch thread pools, we will clean up the new_runner object if needed
@@ -417,6 +420,8 @@ impl OpenCLRunner {
         let vm_slice: Vec<u32> = std::ops::Range { start: 0, end: (self.num_vms) }.collect();
         let mut hypercall_sender = vec![];
         let hcall_read_buffer: Arc<Mutex<&mut [u8]>> = Arc::new(Mutex::new(hypercall_buffer_read_buffer));
+        let mut total_gpu_execution_time: u64 = 0;
+        let e2e_time_start = std::time::Instant::now();
 
         /*
          * Allocate the hypercall_buffer at the last minute, 16KiB per VM
@@ -539,9 +544,10 @@ impl OpenCLRunner {
         ocl::core::set_kernel_arg(&data_kernel, 2, ArgVal::mem(&buffers.current_mem)).unwrap();
         ocl::core::set_kernel_arg(&data_kernel, 3, ArgVal::mem(&buffers.max_mem)).unwrap();
         ocl::core::set_kernel_arg(&data_kernel, 4, ArgVal::mem(&buffers.is_calling)).unwrap();
-
+        
+        let mut profiling_event = ocl::Event::empty();
         unsafe {
-            ocl::core::enqueue_kernel(&queue, &data_kernel, 1, None, &[self.num_vms as usize, 1, 1], None, None::<Event>, None::<&mut Event>).unwrap();
+            ocl::core::enqueue_kernel(&queue, &data_kernel, 1, None, &[self.num_vms as usize, 1, 1], None, None::<Event>, Some(&mut profiling_event)).unwrap();
             match ocl::core::finish(&queue) {
                 Err(e) => {
                     panic!("Unable to finish waiting on queue for data_kernel\n\n{}", e);
@@ -549,7 +555,11 @@ impl OpenCLRunner {
                 Ok(_) => (),
             }
         }
-        
+
+        let start_data_kernel = profiling_event.profiling_info(ocl::enums::ProfilingInfo::Queued).unwrap().time().unwrap();
+        let end_data_kernel = profiling_event.profiling_info(ocl::enums::ProfilingInfo::End).unwrap().time().unwrap();
+        total_gpu_execution_time += end_data_kernel-start_data_kernel;
+
         // set up the clArgs for the wasm_entry kernel
         ocl::core::set_kernel_arg(&start_kernel, 0, ArgVal::mem(&buffers.stack_buffer)).unwrap();
         ocl::core::set_kernel_arg(&start_kernel, 1, ArgVal::mem(&buffers.stack_buffer)).unwrap();
@@ -577,8 +587,9 @@ impl OpenCLRunner {
             // warning - bugged kernels can cause GPU driver hangs! Will result in the driver restarting...
             // Hangs are frequently a sign of a segmentation fault from inside of the GPU kernel
             // Unfortunately the OpenCL API doesn't give us a good way to identify what happened - the OS logs (dmesg) do have a record of this though
+            profiling_event = ocl::Event::empty();
             unsafe {
-                ocl::core::enqueue_kernel(&queue, &start_kernel, 1, None, &[self.num_vms as usize, 1, 1], None, None::<Event>, None::<&mut Event>).unwrap();
+                ocl::core::enqueue_kernel(&queue, &start_kernel, 1, None, &[self.num_vms as usize, 1, 1], None, None::<Event>, Some(&mut profiling_event)).unwrap();
                 match ocl::core::finish(&queue) {
                     Err(e) => {
                         panic!("Unable to finish waiting on queue for data_kernel\n\n{}", e);
@@ -586,6 +597,10 @@ impl OpenCLRunner {
                     Ok(_) => (),
                 }
             }
+
+            let start_start_kernel = profiling_event.profiling_info(ocl::enums::ProfilingInfo::Queued).unwrap().time().unwrap();
+            let end_start_kernel = profiling_event.profiling_info(ocl::enums::ProfilingInfo::End).unwrap().time().unwrap();
+            total_gpu_execution_time += end_start_kernel-start_start_kernel;
 
             // upon exiting we check the stack pointer for each VM
             unsafe {
@@ -654,7 +669,6 @@ impl OpenCLRunner {
             // after all of the hypercalls are finished, we should update all of the stack pointers
             // also we need to set the hypercall num to -1 to indicate we are resuming the continuation
             for idx in 0..self.num_vms {
-                stack_pointer_temp[idx as usize] += 1;
                 hypercall_num_temp[idx as usize] = -1;
             }
 
@@ -713,6 +727,11 @@ impl OpenCLRunner {
             dbg!(result as i32);
         }
 
+        let e2e_time_end = std::time::Instant::now();
+
+        dbg!("E2E execution time in nanoseconds", (e2e_time_end - e2e_time_start).as_nanos());
+        dbg!("On GPU time in nanoseconds", total_gpu_execution_time);
+        println!("fraction of time on GPU: {}", total_gpu_execution_time as f64 / (e2e_time_end - e2e_time_start).as_nanos() as f64);
         return VMMRuntimeStatus::StatusOkay;
     }
 
