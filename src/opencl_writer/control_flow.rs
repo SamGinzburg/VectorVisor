@@ -175,11 +175,11 @@ pub fn emit_block(writer: &opencl_writer::OpenCLCWriter, block: &wast::BlockType
 
     if debug {
         result += &format!("\t{}\n",
-                    format!("write_u16((ulong)(((char*)branch_value_stack_state)+(*sfp*128)+({}*2)+({}*4096)), (ulong)(branch_value_stack_state), (ushort)*sp, warp_idx);",
+                    format!("write_u16((ulong)(((char*)branch_value_stack_state)+(*sfp*128)+({}*4)+({}*4096)), (ulong)(branch_value_stack_state), (ushort)*sp, warp_idx);",
                             branch_idx_u32, function_id_map.get(fn_name).unwrap()));
     } else {
         result += &format!("\t{}\n",
-                    format!("write_u16((ulong)(((global char*)branch_value_stack_state)+(*sfp*128)+({}*2)+({}*4096)), (ulong)(branch_value_stack_state), (ushort)*sp, warp_idx);",
+                    format!("write_u16((ulong)(((global char*)branch_value_stack_state)+(*sfp*128)+({}*4)+({}*4096)), (ulong)(branch_value_stack_state), (ushort)*sp, warp_idx);",
                             branch_idx_u32, function_id_map.get(fn_name).unwrap()));
     }
 
@@ -205,8 +205,6 @@ pub fn emit_br_table(writer: &opencl_writer::OpenCLCWriter, table_indicies: &was
 
     for index in 0..indicies.len() {
         ret_str += &format!("\t\tcase {}:\n", index);
-        // decrement the stack
-        ret_str += &format!("\t\t\t{}\n", "*sp -= 1;");
         // emit br i
         ret_str += &emit_br(writer, indicies[index], fn_name, control_stack, function_id_map.clone(), debug);
         ret_str += &format!("\t\t\tbreak;\n");

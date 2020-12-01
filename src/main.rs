@@ -16,7 +16,7 @@ fn main() {
     //let file = fs::read_to_string("examples/mem/loadstack.wat");
 
     //let file = fs::read_to_string("examples/locals/param.wat");
-    let file = fs::read_to_string("examples/binops/lt.wat");
+    //let file = fs::read_to_string("examples/binops/lt.wat");
     //let file = fs::read_to_string("examples/binops/sub.wat");
     //let file = fs::read_to_string("examples/call/call64.wat");
     //let file = fs::read_to_string("examples/call/call32.wat");
@@ -27,7 +27,7 @@ fn main() {
     //let file = fs::read_to_string("examples/globals/simple_global.wat");
     //let file = fs::read_to_string("examples/globals/global_set.wat");
     //let file = fs::read_to_string("examples/rust_hello.wat");
-    //let file = fs::read_to_string("examples/rust-test-wasi.wat");
+    let file = fs::read_to_string("examples/rust-test-wasi.wat");
 
     let filedata = match file {
         Ok(text) => text,
@@ -45,14 +45,14 @@ fn main() {
     let result_debug = ast_debug.parse_file().unwrap();
 
     // per-VM parameters (all in bytes)
-    let stack_size = 1024 * 64;
-    let heap_size = 1024 * 64;
+    let stack_size = 1024 * 64 * 20;
+    let heap_size = 1024 * 64 * 50;
     let call_stack_size = 1024;
     let stack_frames_size = 1024;
     let sfp_size = 1024;
     let predictor_size = 4096;
     let num_vms = 16;
-    let interleaved = false;
+    let interleaved = true;
     let is_gpu = true;
 
     // TODO: given stack_size/heap_size/num_vms, group the VMs together under multiple command queues

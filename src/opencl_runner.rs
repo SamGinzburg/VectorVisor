@@ -224,7 +224,7 @@ impl OpenCLRunner {
         let stack_frames = unsafe {
             ocl::core::create_buffer::<_, u8>(&context,
                                               ocl::core::MEM_READ_WRITE,
-                                              (stack_frame_size * self.num_vms) as usize,
+                                              (stack_frame_size * 4 * self.num_vms) as usize,
                                               None).unwrap()
         };
 
@@ -240,7 +240,7 @@ impl OpenCLRunner {
         let sfp = unsafe {
             ocl::core::create_buffer::<_, u8>(&context,
                                               ocl::core::MEM_READ_WRITE,
-                                              (stack_frame_ptr_size * self.num_vms) as usize,
+                                              (stack_frame_ptr_size * 4 * self.num_vms) as usize,
                                               None).unwrap()
         };
 
@@ -248,28 +248,28 @@ impl OpenCLRunner {
         let call_stack = unsafe {
             ocl::core::create_buffer::<_, u8>(&context,
                                               ocl::core::MEM_READ_WRITE,
-                                              (call_stack_size * self.num_vms) as usize,
+                                              (call_stack_size * 4 * self.num_vms) as usize,
                                               None).unwrap()
         };
 
         let call_return_stack = unsafe {
             ocl::core::create_buffer::<_, u8>(&context,
                                               ocl::core::MEM_READ_WRITE,
-                                              (call_stack_size * self.num_vms) as usize,
+                                              (call_stack_size * 4 * self.num_vms) as usize,
                                               None).unwrap()
         };
 
         let branch_value_stack_state = unsafe {
             ocl::core::create_buffer::<_, u8>(&context,
                                               ocl::core::MEM_READ_WRITE,
-                                              (num_compiled_funcs * 4096 * 2 * self.num_vms) as usize,
+                                              (num_compiled_funcs * 4096 * 8 * self.num_vms) as usize,
                                               None).unwrap()
         };
 
         let loop_value_stack_state = unsafe {
             ocl::core::create_buffer::<_, u8>(&context,
                                               ocl::core::MEM_READ_WRITE,
-                                              (num_compiled_funcs * 4096 * 2 * self.num_vms) as usize,
+                                              (num_compiled_funcs * 4096 * 8 * self.num_vms) as usize,
                                               None).unwrap()
         };
 
@@ -277,14 +277,14 @@ impl OpenCLRunner {
         let hypercall_num = unsafe {
             ocl::core::create_buffer::<_, u8>(&context,
                                               ocl::core::MEM_READ_WRITE,
-                                              (8 * self.num_vms) as usize,
+                                              (4 * self.num_vms) as usize,
                                               None).unwrap()
         };
 
         let hypercall_continuation = unsafe {
             ocl::core::create_buffer::<_, u8>(&context,
                                               ocl::core::MEM_READ_WRITE,
-                                              (8 * self.num_vms) as usize,
+                                              (4 * self.num_vms) as usize,
                                               None).unwrap()
         };
 
@@ -306,7 +306,7 @@ impl OpenCLRunner {
         let entry = unsafe {
             ocl::core::create_buffer::<_, u8>(&context,
                                               ocl::core::MEM_READ_WRITE,
-                                              (8 * self.num_vms) as usize,
+                                              (4 * self.num_vms) as usize,
                                               None).unwrap()
         };
 
@@ -423,10 +423,12 @@ impl OpenCLRunner {
             test.push(&compiled_functions[item]);
         }
 
+        /*
         let link_result = ocl::core::link_program(&context, Some(&[device_ids[0]]), &CString::new("-create-library").unwrap(), &test.as_slice(), None, None, None).unwrap();
         let binaryinfo = ocl::core::get_program_info(&link_result, ocl::core::ProgramInfo::BinarySizes);
         dbg!(binaryinfo);
-        
+        */
+
         let link_result2 = ocl::core::link_program(&context, Some(&[device_ids[0]]), &CString::new("").unwrap(), &[&compiled_program], None, None, None);
         //let buildinfo = ocl::core::get_program_build_info(&link_result2.unwrap(), &device_ids[0], ocl::core::ProgramBuildInfo::BuildLog);
         //panic!(buildinfo);    
@@ -471,7 +473,6 @@ impl OpenCLRunner {
         let mut hypercall_sender = vec![];
         let hcall_read_buffer: Arc<Mutex<&mut [u8]>> = Arc::new(Mutex::new(hypercall_buffer_read_buffer));
         let mut total_gpu_execution_time: u64 = 0;
-        let e2e_time_start = std::time::Instant::now();
 
         /*
          * Allocate the hypercall_buffer at the last minute, 16KiB per VM
@@ -483,6 +484,8 @@ impl OpenCLRunner {
                                               (hypercall_buffer_size * self.num_vms) as usize,
                                               None).unwrap()
         };
+
+        let e2e_time_start = std::time::Instant::now();
 
 
         /* 

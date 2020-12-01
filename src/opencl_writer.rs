@@ -815,7 +815,14 @@ impl<'a> OpenCLCWriter<'_> {
                             } else {
                                 *num_function_calls += 1;
                             }
-                        }
+                        },
+                        wast::Instruction::CallIndirect(_) => {
+                            // we generate a switch-case for each possible function in table $T0
+                            // so we have to generate re-entry points for all of them as well
+                            for (_, _) in indirect_call_mapping {
+                                *num_function_calls += 1;
+                            }
+                        },
                         wast::Instruction::Loop(_) => {
                             // if we find a loop, we will treat the back-branch of each loop
                             // as a function call, see opencl_writer/control_flow.rs for more details on why we do this
@@ -1247,14 +1254,38 @@ void {}(global uint   *stack_u32,
             global_id += 1;
         }
 
+        let (program_start_mem_pages, program_start_max_pages) = match self.memory.get(0) {
+            Some(mem) => match mem.kind {
+                wast::MemoryKind::Normal(memtype) => {
+                    match memtype {
+                        wast::MemoryType::B32{limits, shared} => {
+                            let max = match limits.max {
+                                Some(val) => val,
+                                None => heap_size/(1024*64),
+                            };
+                            (limits.min as u64, max as u64)
+                        },
+                        wast::MemoryType::B64{limits, shared} => {
+                            let max = match limits.max {
+                                Some(val) => val,
+                                None => heap_size as u64/(1024*64),
+                            };
+                            (limits.min, max)
+                        },
+                    }
+                },
+                _ => (1 as u64, heap_size as u64/(1024*64)),
+            },
+            None => (1 as u64, heap_size as u64/(1024*64)),
+        };
+
         if debug {
             result += &String::from("\nvoid data_init(uint *heap_u32, uint *globals_buffer, uint *curr_mem, uint *max_mem, uchar *is_calling) {\n");
             result += &String::from("\tulong warp_idx = 0;\n");
             // each page = 64KiB
-            result += &format!("\tcurr_mem[warp_idx] = {};\n", heap_size/(1024*64));
+            result += &format!("\tcurr_mem[warp_idx] = {};\n", program_start_mem_pages);
             result += &String::from("\tis_calling[warp_idx] = 1;\n");
-            result += &format!("\tmax_mem[warp_idx] = {};\n", heap_size/(1024*64));
-
+            result += &format!("\tmax_mem[warp_idx] = {};\n", program_start_max_pages);
             result += &self.emit_memcpy_arr(debug);
 
             result += &self.emit_global_init(&mapping, debug);
@@ -1265,9 +1296,9 @@ void {}(global uint   *stack_u32,
             result += &String::from("\tulong warp_idx = get_global_id(0);\n");
             // these structures are not interleaved, so its fine to just read/write them as is
             // they are already implicitly interleaved (like sp for example)
-            result += &format!("\tcurr_mem_global[warp_idx] = {};\n", heap_size/(1024*64));
+            result += &format!("\tcurr_mem_global[warp_idx] = {};\n", program_start_mem_pages);
             result += &String::from("\tis_calling_global[warp_idx] = 1;\n");
-            result += &format!("\tmax_mem_global[warp_idx] = {};\n", heap_size / (1024*64));
+            result += &format!("\tmax_mem_global[warp_idx] = {};\n", program_start_max_pages);
 
             if interleave == 0 {
                 result += &format!("\t{}\n",
@@ -1390,7 +1421,7 @@ void {}(global uint   *stack_u32,
                                           debug);
 
             if debug {
-                write!(output, "{}", func);
+                //write!(output, "{}", func);
             }
 
             write!(output, "{}", func);
@@ -1405,7 +1436,9 @@ void {}(global uint   *stack_u32,
                 (_, _, _) => panic!("Inline function must always have a valid identifier in wasm")
             };
 
-            write!(output, "{};", self.generate_function_prelude(&format!("{}{}", "$_", fname.replace(".", "")), interleave, 0, 0, 0, 0, 0, 0, 0, false, false));
+            // if we are going to try linking a lib
+            //write!(output, "{};", self.generate_function_prelude(&format!("{}{}", "$_", fname.replace(".", "")), interleave, 0, 0, 0, 0, 0, 0, 0, false, false));
+            
             let header_include = format!("#include \"helper.cl\"\n{}", func);
             func_vec.push(header_include);
         }
@@ -1429,6 +1462,7 @@ void {}(global uint   *stack_u32,
         write!(output, "\t{}\n", "switch (*entry_point) {");
         for key in function_idx_label.keys() {
             write!(output, "\t\tcase {}:\n", function_idx_label.get(key).unwrap());
+            write!(output, "\t\tprintf(\"{}\\n\");\n", format!("{}{}", "$_", key.replace(".", "")));
             // strip illegal chars from function names
             write!(output, "\t\t\t{}({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {});\n",
                             format!("{}{}", "$_", key.replace(".", "")),
@@ -1504,7 +1538,7 @@ void {}(global uint   *stack_u32,
             write!(output, "{}", format!("\twhile(1) {{\n"));
 
             write!(output, "{}", format!("{}",
-                    format!("\t\twasm_entry(stack_u32, stack_u64, heap_u32, heap_u64, hcall_buf, globals, stack_frames, &sp, &sfp, call_stack, call_return_stack, branch_value_stack_state,       loop_value_stack_state, &hypercall_number, &hypercall_continuation, curr_mem, max_mem, &is_calling, 0, &entry_point);\n")));
+                    format!("\t\twasm_entry(stack_u32, stack_u64, heap_u32, heap_u64, hcall_buf, globals, stack_frames, &sp, &sfp, call_stack, call_return_stack, branch_value_stack_state, loop_value_stack_state, &hypercall_number, &hypercall_continuation, curr_mem, max_mem, &is_calling, 0, &entry_point);\n")));
 
                     // if *sp == 0, break
                     write!(output, "{}", format!("\t\tif (sp == 0) {{\n"));
