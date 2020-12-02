@@ -1346,7 +1346,8 @@ void {}(global uint   *stack_u32,
                              stack_frames_size_bytes: u32,
                              stack_frame_ptr_size_bytes: u32, 
                              predictor_size_bytes: u32,
-                             debug: bool) -> (String, Vec<String>, String, u32, u32, u32) {
+                             debug_print_function_calls: bool,
+                             debug: bool) -> (String, u32, u32, u32) {
         let mut output = String::new();
         let mut header = String::new();
         let mut func_vec = Vec::new();
@@ -1462,7 +1463,9 @@ void {}(global uint   *stack_u32,
         write!(output, "\t{}\n", "switch (*entry_point) {");
         for key in function_idx_label.keys() {
             write!(output, "\t\tcase {}:\n", function_idx_label.get(key).unwrap());
-            write!(output, "\t\tprintf(\"{}\\n\");\n", format!("{}{}", "$_", key.replace(".", "")));
+            if debug_print_function_calls {
+                write!(output, "\t\tprintf(\"{}\\n\");\n", format!("{}{}", "$_", key.replace(".", "")));
+            }
             // strip illegal chars from function names
             write!(output, "\t\t\t{}({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {});\n",
                             format!("{}{}", "$_", key.replace(".", "")),
@@ -1571,7 +1574,7 @@ void {}(global uint   *stack_u32,
 
             write!(output, "}}\n\n");
         }
-        (output, func_vec, header, *function_idx_label.get("_start").unwrap(), globals_buffer_size, funcs.len().try_into().unwrap())
+        (output, *function_idx_label.get("_start").unwrap(), globals_buffer_size, funcs.len().try_into().unwrap())
     }
 }
 

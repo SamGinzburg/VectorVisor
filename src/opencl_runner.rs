@@ -27,11 +27,13 @@ use ocl::core::CommandQueueProperties;
 use crossbeam::channel::Sender;
 use crossbeam::channel::Receiver;
 
-use std::time;
-
+use std::fs::File;
+use std::io::Write;
 use std::sync::Arc;
-use std::cell::RefCell;
 use std::sync::Mutex;
+use serde::{Serialize, Deserialize};
+use bincode;
+
 
 pub enum VMMRuntimeStatus {
     StatusOkay,
@@ -96,13 +98,23 @@ impl OpenCLBuffers {
     }
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct SeralizedProgram {
+    pub program_data: Vec<u8>,
+    pub entry_point: u32,
+    pub num_compiled_funcs: u32,
+    pub globals_buffer_size: u32,
+}
 
+#[derive(Clone)]
+pub enum InputProgram {
+    binary(Vec<u8>),
+    text(String),
+}
 
 pub struct OpenCLRunner {
     num_vms: u32,
-    program_source: String,
-    functions_source: Vec<String>,
-    func_header: String,
+    input_program: InputProgram,
     is_gpu_backend: bool,
     is_memory_interleaved: bool,
     entry_point: u32,
@@ -110,12 +122,10 @@ pub struct OpenCLRunner {
 }
 
 impl OpenCLRunner {
-    pub fn new(num_vms: u32, mem_interleave: bool, running_on_gpu: bool, entry_point: u32, program: String, program_funcs: Vec<String>, header: String) -> OpenCLRunner {
+    pub fn new(num_vms: u32, mem_interleave: bool, running_on_gpu: bool, entry_point: u32, program: InputProgram) -> OpenCLRunner {
         OpenCLRunner {
             num_vms: num_vms,
-            program_source: program,
-            functions_source: program_funcs,
-            func_header: header,
+            input_program: program,
             is_gpu_backend: running_on_gpu,
             is_memory_interleaved: mem_interleave,
             entry_point: entry_point,
@@ -124,6 +134,7 @@ impl OpenCLRunner {
     }
 
     pub fn run(self,
+               input_filename: &str,
                stack_size: u32,
                heap_size: u32,
                call_stack_size: u32,
@@ -132,7 +143,7 @@ impl OpenCLRunner {
                // needed for the size of the loop/branch data structures
                num_compiled_funcs: u32,
                globals_buffer_size: u32) -> () {
-        let (program, context, device_id) = self.setup_kernel();
+        let (program, context, device_id) = self.setup_kernel(input_filename, num_compiled_funcs, globals_buffer_size);
         let num_vms = self.num_vms.clone();
 
         // create the buffers
@@ -188,14 +199,14 @@ impl OpenCLRunner {
                           context: ocl::core::Context) -> (OpenCLRunner, ocl::core::Context) {
         let stack_buffer = unsafe {
             ocl::core::create_buffer::<_, u8>(&context,
-                                              ocl::core::MEM_READ_WRITE,
+                                              ocl::core::MEM_ALLOC_HOST_PTR | ocl::core::MEM_READ_WRITE,
                                               (stack_size * self.num_vms) as usize,
                                               None).unwrap()
         };
 
         let heap_buffer = unsafe {
             ocl::core::create_buffer::<_, u8>(&context,
-                                              ocl::core::MEM_READ_WRITE,
+                                              ocl::core::MEM_ALLOC_HOST_PTR | ocl::core::MEM_READ_WRITE,
                                               (heap_size * self.num_vms) as usize,
                                               None).unwrap()
         };
@@ -342,10 +353,7 @@ impl OpenCLRunner {
      * It returns a sending channel for the HTTP Endpoint to send requests to be processed with.
      * 
      */
-    pub fn setup_kernel(&self) -> (ocl::core::Program, ocl::core::Context, ocl::core::DeviceId) {
-        let program = self.program_source.clone();
-        let header = self.func_header.clone();
-
+    pub fn setup_kernel(&self, input_filename: &str, num_compiled_funcs: u32, globals_buffer_size: u32) -> (ocl::core::Program, ocl::core::Context, ocl::core::DeviceId) {
         let platform_id = ocl::core::default_platform().unwrap();
         let device_type = if self.is_gpu_backend {
             Some(ocl::core::DEVICE_TYPE_GPU)
@@ -385,65 +393,70 @@ impl OpenCLRunner {
         dbg!(linker_available);
 
         // compile the GPU kernel(s)
-        let src_cstring = CString::new(program.clone()).unwrap();
-        let src_header = CString::new(header.clone()).unwrap();
+        let program_to_run = match &self.input_program {
+            InputProgram::text(program) => {
+                let src_cstring = CString::new(program.clone()).unwrap();
 
-        println!("Starting kernel compilation...");
+                println!("Starting kernel compilation...");
         
-        let mut compiled_functions: Vec<ocl::core::Program> = Vec::new();
-        println!("Trying to compile funcs...");
+                let compiled_program = ocl::core::create_program_with_source(&context, &[src_cstring.clone()]).unwrap();
+                ocl::core::compile_program(&compiled_program, Some(&[device_ids[0]]), &CString::new(format!("-DNUM_THREADS={}", self.num_vms)).unwrap(), &[], &[], None, None, None).unwrap();
+        
+                let buildinfo = ocl::core::get_program_build_info(&compiled_program, &device_ids[0], ocl::core::ProgramBuildInfo::BuildLog).unwrap();
+                dbg!(buildinfo);
+        
+                let final_program = ocl::core::link_program(&context, Some(&[device_ids[0]]), &CString::new("").unwrap(), &[&compiled_program], None, None, None);
+        
+                match final_program {
+                    Err(e) => {
+                        println!("Compilation error:\n{}", e);
+                        println!("\n\nWriting source to output file test.cl\n");
+                        std::fs::write("test.cl", program).expect("Unable to write file");
+                        panic!("Unable to compile OpenCL kernel - see errors above");
+                    },
+                    Ok(_) => println!("Finished kernel compilation!"),
+                }
 
-        let header = ocl::core::create_program_with_source(&context, &[src_header.clone()]).unwrap();
+                // if we are going to save the program, we save the binary here
+                let program_to_save = final_program.unwrap();
+                let saved_binary = ocl::core::get_program_info(&program_to_save, ocl::core::ProgramInfo::Binaries);
+                let binary = match saved_binary.unwrap() {
+                    ocl::core::types::enums::ProgramInfoResult::Binaries(binary_vec) => binary_vec.get(0).unwrap().clone(),
+                    _ => panic!("Incorrect result from get_program_info"),
+                };
+                /*
+                 * When packaging the binary, we also have to save program metadata such as:
+                 * 1) the program entry_point
+                 * 2) global buffer size
+                 * 3) number of total compiled functions
+                 * 
+                 * Note: The binary built here is not necessarily portable across GPUs
+                 */
+                let program_to_serialize = SeralizedProgram {
+                    program_data: binary,
+                    globals_buffer_size: globals_buffer_size,
+                    entry_point: self.entry_point,
+                    num_compiled_funcs: num_compiled_funcs,
+                };
 
-
-        let compiled_program = ocl::core::create_program_with_source(&context, &[src_cstring.clone()]).unwrap();
-        ocl::core::compile_program(&compiled_program, Some(&[device_ids[0]]), &CString::new(format!("-DNUM_THREADS={}", self.num_vms)).unwrap(), &[], &[], None, None, None);
-        let buildinfo = ocl::core::get_program_build_info(&compiled_program, &device_ids[0], ocl::core::ProgramBuildInfo::BuildLog).unwrap();
-        dbg!(buildinfo);
-
-        //compiled_functions.push(compiled_program);
-
-        for idx in 0..self.functions_source.len() {
-            let func_src = CString::new(self.functions_source[idx].clone()).unwrap();
-            let _compiled_program = ocl::core::create_program_with_source(&context, &[func_src]).unwrap();
-            compiled_functions.push(_compiled_program);
-            dbg!(idx);
-        }
-
-        for idx in 0..self.functions_source.len() {
-            let _compile_result = ocl::core::compile_program(&compiled_functions[idx], Some(&[device_ids[0]]), &CString::new(format!("-DNUM_THREADS={}", self.num_vms)).unwrap(), &[&header], &[CString::new(format!("helper.cl")).unwrap()], None, None, None);
-            let buildinfo = ocl::core::get_program_build_info(&compiled_functions[idx], &device_ids[0], ocl::core::ProgramBuildInfo::BuildLog);
-           // dbg!(buildinfo);    
-            let binaryinfo = ocl::core::get_program_info(&compiled_functions[idx], ocl::core::ProgramInfo::BinarySizes);
-            dbg!(binaryinfo);
-        }
-
-       let mut test: Vec<&ocl::core::Program> = Vec::new();
-        for item in 0..compiled_functions.len() {
-            test.push(&compiled_functions[item]);
-        }
-
-        /*
-        let link_result = ocl::core::link_program(&context, Some(&[device_ids[0]]), &CString::new("-create-library").unwrap(), &test.as_slice(), None, None, None).unwrap();
-        let binaryinfo = ocl::core::get_program_info(&link_result, ocl::core::ProgramInfo::BinarySizes);
-        dbg!(binaryinfo);
-        */
-
-        let link_result2 = ocl::core::link_program(&context, Some(&[device_ids[0]]), &CString::new("").unwrap(), &[&compiled_program], None, None, None);
-        //let buildinfo = ocl::core::get_program_build_info(&link_result2.unwrap(), &device_ids[0], ocl::core::ProgramBuildInfo::BuildLog);
-        //panic!(buildinfo);    
-
-        match link_result2 {
-            Err(e) => {
-                println!("Compilation error:\n{}", e);
-                println!("\n\nWriting source to output file test.cl\n");
-                std::fs::write("test.cl", program).expect("Unable to write file");
-                panic!("Unable to compile OpenCL kernel - see errors above");
+                let serialized_program = bincode::serialize(&program_to_serialize).unwrap();
+                let mut file = File::create(format!("{}.bin", input_filename)).unwrap();
+                file.write_all(&serialized_program);
+                program_to_save
             },
-            Ok(_) => println!("Finished kernel compilation!"),
-        }
+            InputProgram::binary(b) => {
+                let program_to_run = match ocl::core::create_program_with_binary(&context, &[device_ids[0]], &[&b]) {
+                    Ok(binary) => binary,
+                    Err(e) => panic!("Unable to create program from given binary: {:?}", e),
+                };
+                ocl::core::build_program(&program_to_run, Some(&[device_ids[0]]), &CString::new(format!("-DNUM_THREADS={}", self.num_vms)).unwrap(), None, None).unwrap();
+                let knames = ocl::core::get_program_info(&program_to_run, ocl::core::ProgramInfo::KernelNames);
+                println!("Loaded kernels: {}", knames.unwrap());
+                program_to_run
+            },
+        };
 
-        return (link_result2.unwrap(), context, device_id)
+        return (program_to_run, context, device_id)
     }
 
     /*
