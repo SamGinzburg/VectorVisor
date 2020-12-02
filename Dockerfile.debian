@@ -1,12 +1,6 @@
 # Use the official image as a parent image.
 FROM rust:1.48.0-buster AS builder
 
-# Set the working directory.
-WORKDIR /usr/src/wasm-parser
-
-# Copy the files from your host to your current location.
-COPY . .
-
 # Add metadata to the image to describe which port the container is listening on at runtime.
 EXPOSE 8080
 
@@ -14,6 +8,12 @@ EXPOSE 8080
 RUN ["apt-get", "update"]
 RUN ["apt-get", "install", "ocl-icd-libopencl1"]
 RUN ["ln", "-s", "/usr/lib64/libOpenCL.so.1", "/usr/lib/libOpenCL.so"]
+
+# Set the working directory.
+WORKDIR /usr/src/wasm-parser
+
+# Copy the files from your host to your current location.
+COPY . .
 
 # Run the specified command within the container.
 RUN [ "cargo", "build"]

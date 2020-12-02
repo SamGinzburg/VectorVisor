@@ -50,10 +50,18 @@ fn main() {
             .number_of_values(1)
             .takes_value(true))
         .arg(Arg::with_name("vmcount")
-            .short("vc")
+            .short("v")
             .long("vmcount")
             .value_name("NUM VMs (number of VMs to run)")
             .default_value("16") // default of 16
+            .help("The number of VMs to run in parallel")
+            .multiple(false)
+            .number_of_values(1)
+            .takes_value(true))
+        .arg(Arg::with_name("vmgroups")
+            .long("vmgroups")
+            .value_name("NUM VM GROUPS (number of VMs to run * num groups = total VMs to run)")
+            .default_value("1") // default of 1
             .help("The number of VMs to run in parallel")
             .multiple(false)
             .number_of_values(1)
@@ -87,7 +95,7 @@ fn main() {
         .arg(Arg::with_name("debugcallprint")
             .short("d")
             .long("debugcallprint")
-            .value_name("DEBUG PRINT FN CALLS")
+            .value_name("DEBUG PRINT FN CALLS (true/false)")
             .default_value("false") // default of 1024
             .help("Print the name of the WASM function being called during execution (huge overhead)")
             .multiple(false)
@@ -106,6 +114,7 @@ fn main() {
     let sfp_size = call_stack_size;
     let predictor_size = 4096;
     let num_vms = value_t!(matches.value_of("vmcount"), u32).unwrap_or_else(|e| e.exit());
+    let num_vm_groups = value_t!(matches.value_of("vmgroups"), u32).unwrap_or_else(|e| e.exit());
     let is_gpu = value_t!(matches.value_of("isgpu"), bool).unwrap_or_else(|e| e.exit());
     let debug_call_print = value_t!(matches.value_of("debugcallprint"), bool).unwrap_or_else(|e| e.exit());
 
@@ -158,7 +167,7 @@ fn main() {
     };
 
     let fname = &file_path.as_str();
-    (0..1).into_par_iter().for_each(|_idx| {
+    (0..num_vm_groups).into_par_iter().for_each(|_idx| {
         let runner = opencl_runner::OpenCLRunner::new(num_vms, interleaved, is_gpu, entry_point, file.clone());
         runner.run(fname,
                    stack_size,

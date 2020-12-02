@@ -1,12 +1,6 @@
 # Use the official image as a parent image.
 FROM centos:7 AS builder
 
-# Set the working directory.
-WORKDIR /usr/src/wasm-parser
-
-# Copy the files from your host to your current location.
-COPY . .
-
 # Add metadata to the image to describe which port the container is listening on at runtime.
 EXPOSE 8080
 
@@ -45,6 +39,12 @@ RUN set -eux; \
 
 # Install the OpenCL dev headers
 RUN ["yum", "-y", "install", "ocl-icd-devel"]
+
+# Set the working directory.
+WORKDIR /usr/src/wasm-parser
+
+# Copy the files from your host to your current location.
+COPY . .
 
 # Run the specified command within the container.
 RUN [ "cargo", "build" ]

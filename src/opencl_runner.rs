@@ -200,14 +200,14 @@ impl OpenCLRunner {
         let stack_buffer = unsafe {
             ocl::core::create_buffer::<_, u8>(&context,
                                               ocl::core::MEM_ALLOC_HOST_PTR | ocl::core::MEM_READ_WRITE,
-                                              (stack_size * self.num_vms) as usize,
+                                              (stack_size as u64 * self.num_vms as u64) as usize,
                                               None).unwrap()
         };
 
         let heap_buffer = unsafe {
             ocl::core::create_buffer::<_, u8>(&context,
                                               ocl::core::MEM_ALLOC_HOST_PTR | ocl::core::MEM_READ_WRITE,
-                                              (heap_size * self.num_vms) as usize,
+                                              (heap_size as u64 * self.num_vms as u64) as usize,
                                               None).unwrap()
         };
 
@@ -235,7 +235,7 @@ impl OpenCLRunner {
         let stack_frames = unsafe {
             ocl::core::create_buffer::<_, u8>(&context,
                                               ocl::core::MEM_READ_WRITE,
-                                              (stack_frame_size * 4 * self.num_vms) as usize,
+                                              (stack_frame_size as u64 * 4 * self.num_vms as u64) as usize,
                                               None).unwrap()
         };
 
@@ -273,14 +273,14 @@ impl OpenCLRunner {
         let branch_value_stack_state = unsafe {
             ocl::core::create_buffer::<_, u8>(&context,
                                               ocl::core::MEM_READ_WRITE,
-                                              (num_compiled_funcs * 4096 * 8 * self.num_vms) as usize,
+                                              (num_compiled_funcs as u64 * 4096 * self.num_vms as u64) as usize,
                                               None).unwrap()
         };
 
         let loop_value_stack_state = unsafe {
             ocl::core::create_buffer::<_, u8>(&context,
                                               ocl::core::MEM_READ_WRITE,
-                                              (num_compiled_funcs * 4096 * 8 * self.num_vms) as usize,
+                                              (num_compiled_funcs as u64 * 4096 * self.num_vms as u64) as usize,
                                               None).unwrap()
         };
 
@@ -441,7 +441,7 @@ impl OpenCLRunner {
 
                 let serialized_program = bincode::serialize(&program_to_serialize).unwrap();
                 let mut file = File::create(format!("{}.bin", input_filename)).unwrap();
-                file.write_all(&serialized_program);
+                file.write_all(&serialized_program).unwrap();
                 program_to_save
             },
             InputProgram::binary(b) => {
@@ -486,6 +486,8 @@ impl OpenCLRunner {
         let mut hypercall_sender = vec![];
         let hcall_read_buffer: Arc<Mutex<&mut [u8]>> = Arc::new(Mutex::new(hypercall_buffer_read_buffer));
         let mut total_gpu_execution_time: u64 = 0;
+        let mut hcall_execution_time: u128 = 0;
+        let mut vmm_overhead: u128 = 0;
 
         /*
          * Allocate the hypercall_buffer at the last minute, 16KiB per VM
@@ -497,9 +499,6 @@ impl OpenCLRunner {
                                               (hypercall_buffer_size * self.num_vms) as usize,
                                               None).unwrap()
         };
-
-        let e2e_time_start = std::time::Instant::now();
-
 
         /* 
          * Start up N threads to serve WASI hypercalls
@@ -604,6 +603,9 @@ impl OpenCLRunner {
             }
         }
 
+        // start counting only when all VM init is finished
+        let e2e_time_start = std::time::Instant::now();
+
         // run the data kernel to init the memory
         ocl::core::set_kernel_arg(&data_kernel, 0, ArgVal::mem(&buffers.heap_buffer)).unwrap();
         ocl::core::set_kernel_arg(&data_kernel, 1, ArgVal::mem(&buffers.globals_buffer)).unwrap();
@@ -622,7 +624,7 @@ impl OpenCLRunner {
             }
         }
 
-        let start_data_kernel = profiling_event.profiling_info(ocl::enums::ProfilingInfo::Queued).unwrap().time().unwrap();
+        let start_data_kernel = profiling_event.profiling_info(ocl::enums::ProfilingInfo::Submit).unwrap().time().unwrap();
         let end_data_kernel = profiling_event.profiling_info(ocl::enums::ProfilingInfo::End).unwrap().time().unwrap();
         total_gpu_execution_time += end_data_kernel-start_data_kernel;
 
@@ -664,11 +666,13 @@ impl OpenCLRunner {
                 }
             }
 
-            let start_start_kernel = profiling_event.profiling_info(ocl::enums::ProfilingInfo::Queued).unwrap().time().unwrap();
+            let start_start_kernel = profiling_event.profiling_info(ocl::enums::ProfilingInfo::Submit).unwrap().time().unwrap();
             let end_start_kernel = profiling_event.profiling_info(ocl::enums::ProfilingInfo::End).unwrap().time().unwrap();
             total_gpu_execution_time += end_start_kernel-start_start_kernel;
 
             // upon exiting we check the stack pointer for each VM
+            let vmm_pre_overhead = std::time::Instant::now();
+
             unsafe {
                 ocl::core::enqueue_read_buffer(&queue, &buffers.sp, true, 0, &mut stack_pointer_temp, None::<Event>, None::<&mut Event>).unwrap();
                 ocl::core::enqueue_read_buffer(&queue, &buffers.entry, true, 0, &mut entry_point_temp, None::<Event>, None::<&mut Event>).unwrap();
@@ -694,8 +698,13 @@ impl OpenCLRunner {
             if entry_point_exit_flag {
                 break;
             }
+            let vmm_pre_overhead_end = std::time::Instant::now();
+            vmm_overhead += (vmm_pre_overhead_end - vmm_pre_overhead).as_nanos();
+
 
             // read the hypercall_buffer
+            let start_hcall_dispatch = std::time::Instant::now();
+
             unsafe {
                 //let buf: &mut [u8] = &mut **hcall_read_buffer;
                 let mut buf: &mut [u8] = &mut hcall_read_buffer.lock().unwrap();
@@ -731,6 +740,11 @@ impl OpenCLRunner {
                     _ => (),
                 }
             }
+
+            let end_hcall_dispatch = std::time::Instant::now();
+            hcall_execution_time += (end_hcall_dispatch - start_hcall_dispatch).as_nanos();
+
+            let vmm_post_overhead = std::time::Instant::now();
 
             // after all of the hypercalls are finished, we should update all of the stack pointers
             // also we need to set the hypercall num to -1 to indicate we are resuming the continuation
@@ -773,6 +787,8 @@ impl OpenCLRunner {
                     Ok(_) => (),
                 }
             }
+            let vmm_post_overhead_end = std::time::Instant::now();
+            vmm_overhead += (vmm_post_overhead_end - vmm_post_overhead).as_nanos();
         }
 
         // To get final results back from the stack if we want for debugging stuff
@@ -797,7 +813,11 @@ impl OpenCLRunner {
 
         dbg!("E2E execution time in nanoseconds", (e2e_time_end - e2e_time_start).as_nanos());
         dbg!("On GPU time in nanoseconds", total_gpu_execution_time);
+
         println!("fraction of time on GPU: {}", total_gpu_execution_time as f64 / (e2e_time_end - e2e_time_start).as_nanos() as f64);
+        println!("fraction of time on hcall dispatch: {}", hcall_execution_time as f64 / (e2e_time_end - e2e_time_start).as_nanos() as f64);
+        println!("fraction of time on VMM overhead: {}", vmm_overhead as f64 / (e2e_time_end - e2e_time_start).as_nanos() as f64);
+
         return VMMRuntimeStatus::StatusOkay;
     }
 
