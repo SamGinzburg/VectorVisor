@@ -4,20 +4,21 @@ use std::fmt;
 use crate::opencl_runner::OpenCLBuffers;
 
 use crate::opencl_runner::WasiFd;
+use crate::opencl_runner::environment::Environment;
+
 use ocl::core::CommandQueue;
 
 use crossbeam::channel::Sender;
 
 use std::sync::Arc;
-use std::cell::RefCell;
-use std::cell::UnsafeCell;
 use std::sync::Mutex;
 
 #[derive(Clone, Copy)]
 pub enum WasiSyscalls {
-    FdWrite,
-    ProcExit,
-    InvalidHyperCallNum
+    FdWrite              =  0,
+    ProcExit             =  1,
+    EnvironSizeGet       =  2,
+    InvalidHyperCallNum  = -1,
 }
 
 impl fmt::Debug for WasiSyscalls {
@@ -130,6 +131,9 @@ impl VectorizedVM {
                 sender.send({
                     HyperCallResult::new(0, hypercall.vm_id, WasiSyscalls::ProcExit)
                 }).unwrap();
+            },
+            WasiSyscalls::EnvironSizeGet => {
+                Environment::hypercall_environ_sizes_get(&self.ctx, hypercall, sender);
             }
             _ => panic!("Unsupported hypercall invoked! {:?}", hypercall),
         }

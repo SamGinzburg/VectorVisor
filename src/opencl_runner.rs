@@ -1,6 +1,7 @@
 mod vectorized_vm;
 mod wasi_fd;
 mod interleave_offsets;
+mod environment;
 
 use wasi_fd::WasiFd;
 use vectorized_vm::VectorizedVM;
@@ -400,8 +401,16 @@ impl OpenCLRunner {
                 println!("Starting kernel compilation...");
         
                 let compiled_program = ocl::core::create_program_with_source(&context, &[src_cstring.clone()]).unwrap();
-                ocl::core::compile_program(&compiled_program, Some(&[device_ids[0]]), &CString::new(format!("-DNUM_THREADS={}", self.num_vms)).unwrap(), &[], &[], None, None, None).unwrap();
-        
+                let build_result = ocl::core::compile_program(&compiled_program, Some(&[device_ids[0]]), &CString::new(format!("-DNUM_THREADS={}", self.num_vms)).unwrap(), &[], &[], None, None, None);
+                match build_result {
+                    Err(e) => {
+                        println!("Build error:\n{}", e);
+                        println!("\n\nWriting source to output file test.cl\n");
+                        std::fs::write("test.cl", program).expect("Unable to write file");
+                        panic!("Build failure: {:?}", e);
+                    }
+                    Ok(_) => (),
+                };
                 let buildinfo = ocl::core::get_program_build_info(&compiled_program, &device_ids[0], ocl::core::ProgramBuildInfo::BuildLog).unwrap();
                 dbg!(buildinfo);
         
@@ -409,7 +418,7 @@ impl OpenCLRunner {
         
                 match final_program {
                     Err(e) => {
-                        println!("Compilation error:\n{}", e);
+                        println!("Link error:\n{}", e);
                         println!("\n\nWriting source to output file test.cl\n");
                         std::fs::write("test.cl", program).expect("Unable to write file");
                         panic!("Unable to compile OpenCL kernel - see errors above");
@@ -442,6 +451,11 @@ impl OpenCLRunner {
                 let serialized_program = bincode::serialize(&program_to_serialize).unwrap();
                 let mut file = File::create(format!("{}.bin", input_filename)).unwrap();
                 file.write_all(&serialized_program).unwrap();
+
+                // while we are at it, might as well save the input .cl file as well
+                let mut file = File::create(format!("{}.cl", input_filename)).unwrap();
+                file.write_all(&program.clone().into_bytes()).unwrap();
+
                 program_to_save
             },
             InputProgram::binary(b) => {
@@ -716,6 +730,7 @@ impl OpenCLRunner {
                 let hypercall_id = match hypercall_num_temp[*vm_id as usize] as i64 {
                     0 => WasiSyscalls::FdWrite,
                     1 => WasiSyscalls::ProcExit,
+                    2 => WasiSyscalls::EnvironSizeGet,
                     _ => WasiSyscalls::InvalidHyperCallNum,
                 };
 
@@ -775,8 +790,10 @@ impl OpenCLRunner {
             // update the entry point to resume execution
             // update all of the stack pointers
             // update the hypercall numbers to -1 to indicate that we are now returning from the hypercall
-
+            // also don't forget to write the hcall buf back
             unsafe {
+                let mut hcall_buf = hcall_read_buffer.lock().unwrap();
+                ocl::core::enqueue_write_buffer(&queue, &hypercall_buffer, false, 0, &mut hcall_buf, None::<Event>, None::<&mut Event>).unwrap();
                 ocl::core::enqueue_write_buffer(&queue, &buffers.entry, false, 0, &mut entry_point_temp, None::<Event>, None::<&mut Event>).unwrap();
                 ocl::core::enqueue_write_buffer(&queue, &buffers.sp, false, 0, &mut stack_pointer_temp, None::<Event>, None::<&mut Event>).unwrap();
                 ocl::core::enqueue_write_buffer(&queue, &buffers.hypercall_num, false, 0, &mut hypercall_num_temp, None::<Event>, None::<&mut Event>).unwrap();

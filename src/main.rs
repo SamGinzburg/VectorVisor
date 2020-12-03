@@ -106,7 +106,8 @@ fn main() {
     dbg!(matches.clone());
 
     let file_path = value_t!(matches.value_of("input"), String).unwrap_or_else(|e| e.exit());
-    let interleaved = matches.is_present("interleaved");
+    let interleaved = value_t!(matches.value_of("isinterleaved"), bool).unwrap_or_else(|e| e.exit());
+    dbg!(interleaved);
     let stack_size = value_t!(matches.value_of("stack"), u32).unwrap_or_else(|e| e.exit());
     let heap_size = value_t!(matches.value_of("heap"), u32).unwrap_or_else(|e| e.exit());
     let call_stack_size = value_t!(matches.value_of("callstack"), u32).unwrap_or_else(|e| e.exit());

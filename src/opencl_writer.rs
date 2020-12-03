@@ -45,14 +45,23 @@ use lazy_static::lazy_static;
  * This hashmap contains the WASI calls that have already been implemented!
  */
 lazy_static! {
-    static ref wasi_snapshot_preview1: HashMap<&'static str, bool> = {
+    static ref WASI_SNAPSHOT_PREVIEW1: HashMap<&'static str, bool> = {
         let mut m = HashMap::new();
-        m.insert("fd_write", true);
-        m.insert("proc_exit", true);
+        m.insert("fd_write", true);          // 0
+        m.insert("proc_exit", true);         // 1
+        m.insert("environ_sizes_get", true); // 2
+        m.insert("environ_get", true);       // 3
         m
     };
 }
 
+#[derive(Clone)]
+enum WasmHypercallId {
+    fd_write           = 0,
+    proc_exit          = 1,
+    environ_sizes_get  = 2,
+    environ_get        = 3,
+}
 
 pub struct OpenCLCWriter<'a> {
     types: Vec<wast::Type<'a>>,
@@ -133,14 +142,16 @@ impl<'a> OpenCLCWriter<'_> {
         }
     }
 
-    fn emit_hypercall(&self, hypercall_id: u32, hypercall_id_count: &mut u32, fn_name: String, debug: bool) -> String {
+    fn emit_hypercall(&self, hypercall_id: WasmHypercallId, hypercall_id_count: &mut u32, fn_name: String, debug: bool) -> String {
         let mut ret_str = String::from("");
         // set the hypercall ret flag flag + r
-        ret_str += &format!("\t{}\n", format!("*hypercall_number = {};", hypercall_id));
+        ret_str += &format!("\t{}\n", format!("*hypercall_number = {};", hypercall_id.clone() as u32));
 
         // run the hypercall setup code - to marshall data for the VMM to read
+
+        // hypercalls that are omitted from this table are implied to not require any data transfer via the hcall buffer 
         match hypercall_id {
-            0 => ret_str += &emit_fd_write_call_helper(self, debug),
+            WasmHypercallId::fd_write => ret_str += &emit_fd_write_call_helper(self, debug),
             _ => (),
         }
         // insert return (we exit back to the VMM)
@@ -150,15 +161,22 @@ impl<'a> OpenCLCWriter<'_> {
         // insert return label, the VMM will return to right after the return
         ret_str += &format!("{}_hypercall_return_stub_{}:\n", format!("{}{}", "$_", fn_name.replace(".", "")), hypercall_id_count);
 
-        // after the hypercall, we need to pop the params off the stack and push the return value
+        // after the hypercall, we need to reset values on re-entry, and possible copy data back from the hcall buf
+        // skipped hypercall entries here are no-ops
+        dbg!(hypercall_id.clone() as u32);
         match hypercall_id {
-            0 => {
+            WasmHypercallId::fd_write => {
                 // fd_write takes 4 u32 parameters
                 // we just assume that we always succeed
                 ret_str += &format!("\t{};\n",
                             emit_write_u32("(ulong)(stack_u32+*sp-4)", "(ulong)(stack_u32)", "0", "warp_idx"));
                 ret_str += &format!("\t{}\n",
                                     "*sp -= 3;");
+            },
+            // environ_sizes_get
+            WasmHypercallId::environ_sizes_get => {
+                dbg!("emitting environ");
+                ret_str += &emit_environ_sizes_get_post(&self ,debug);
             },
             _ => (),
         }
@@ -498,19 +516,21 @@ impl<'a> OpenCLCWriter<'_> {
                         Some((wasi_api, Some(wasi_fn_name), _)) => {
                             // okay, now we check to see if the WASI call is supported by the compiler
                             // if not -> panic, else, emit the call
-                            match (wasi_api, wasi_snapshot_preview1.get(wasi_fn_name)) {
+                            match (wasi_api, WASI_SNAPSHOT_PREVIEW1.get(wasi_fn_name)) {
                                 // ignore WASI API scoping for now
                                 (_, Some(true)) => {
                                     match wasi_fn_name {
-                                        &"fd_write" => self.emit_hypercall(0, hypercall_id_count, fn_name.to_string(), debug),
-                                        &"proc_exit" => self.emit_hypercall(1, hypercall_id_count, fn_name.to_string(), debug),
+                                        &"fd_write"          => self.emit_hypercall(WasmHypercallId::fd_write, hypercall_id_count, fn_name.to_string(), debug),
+                                        &"proc_exit"         => self.emit_hypercall(WasmHypercallId::proc_exit, hypercall_id_count, fn_name.to_string(), debug),
+                                        &"environ_sizes_get" => self.emit_hypercall(WasmHypercallId::environ_sizes_get, hypercall_id_count, fn_name.to_string(), debug),
+                                        &"environ_get"       => self.emit_hypercall(WasmHypercallId::environ_get, hypercall_id_count, fn_name.to_string(), debug),
                                         _ => panic!("Unidentified WASI fn name: {:?}", wasi_fn_name),
                                     }
                                 },
-                                _ => panic!("WASI import not found, this probably means the system call is not yet implemented: {:?}", wasi_fn_name)
+                                _ => panic!("WASI import not found, this probably means the hypercall is not yet implemented: {:?}", wasi_fn_name)
                             }
                         },
-                        _ => panic!("Unsupported system call found {:?}", self.imports_map.get(id))
+                        _ => panic!("Unsupported hypercall found {:?}", self.imports_map.get(id))
                     }
                 } else {
                     // else, this is a normal function call
@@ -682,7 +702,7 @@ impl<'a> OpenCLCWriter<'_> {
             wast::Instruction::Br(idx) => emit_br(self, *idx, fn_name, control_stack, function_id_map, debug),
             wast::Instruction::BrIf(idx) => emit_br_if(self, *idx, fn_name, stack_sizes, control_stack, function_id_map, debug),
             wast::Instruction::BrTable(table_idxs) => emit_br_table(self, table_idxs, fn_name, stack_sizes, control_stack, function_id_map, debug),
-            wast::Instruction::Unreachable => self.emit_hypercall(1, hypercall_id_count, fn_name.to_string(), debug),
+            wast::Instruction::Unreachable => self.emit_hypercall(WasmHypercallId::proc_exit, hypercall_id_count, fn_name.to_string(), debug),
             _ => panic!("Instruction {:?} not yet implemented, in func: {:?}", instr, func.id)
         }
     }

@@ -7,10 +7,7 @@ use crate::opencl_runner::vectorized_vm::HyperCallResult;
 use crate::opencl_runner::vectorized_vm::WasiSyscalls;
 use crate::opencl_runner::interleave_offsets::Interleave;
 
-use ocl::core::Event;
-
 use wasi_common::wasi::types::CiovecArray;
-use wasi_common::wasi::types::Ciovec;
 use wasi_common::fs::Fd;
 
 use wasmtime::*;
@@ -18,13 +15,8 @@ use wasmtime_wiggle::WasmtimeGuestMemory;
 use wiggle::GuestPtr;
 
 use byteorder::LittleEndian;
-use byteorder::ReadBytesExt;
-use byteorder::WriteBytesExt;
 use byteorder::ByteOrder;
-use std::convert::TryInto;
 use crossbeam::channel::Sender;
-
-use std::sync::Arc;
 
 pub struct WasiFd {}
 

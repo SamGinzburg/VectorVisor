@@ -169,3 +169,37 @@ pub fn emit_fd_write_call_helper(writer: &opencl_writer::OpenCLCWriter, debug: b
                         "sp",
                         "warp_idx"))
 }
+
+
+pub fn emit_environ_sizes_get_post(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> String {
+    let mut ret_str = String::from("");
+    // This function takes two u32 arguments, so we need to pop those off
+    // arg1: offset for size, arg2: offset for arg string data size
+    // We also need to copy back the two results from the hcall buf
+    // offset 0 in the hcall buf is the number of arguments
+
+    ret_str += &format!("\t{};\n",
+                        emit_write_u32(&format!("(ulong)((global char*)heap_u32+{})", &emit_read_u32("(ulong)(stack_u32+*sp-2)",
+                                                                                                        "(ulong)(stack_u32)",
+                                                                                                        "warp_idx")),
+                                        "(ulong)(heap_u32)",
+                                        &emit_read_u32("(ulong)(hypercall_buffer)", "(ulong)(hypercall_buffer)", "warp_idx"),
+                                        "warp_idx"));
+    // offset 4 in the hcall buf is the size of the argument string data
+    ret_str += &format!("\t{};\n",
+                        emit_write_u32(&format!("(ulong)((global char*)heap_u32+{})", &emit_read_u32("(ulong)(stack_u32+*sp-1)",
+                                                                                                        "(ulong)(stack_u32)",
+                                                                                                        "warp_idx")),
+                                        "(ulong)(heap_u32)",
+                                        &emit_read_u32("(ulong)((global char*)hypercall_buffer+4)", "(ulong)(hypercall_buffer)", "warp_idx"),
+                                        "warp_idx"));
+
+    // now return the error code
+    ret_str += &format!("\t{};\n",
+                        emit_write_u32("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "0", "warp_idx"));
+
+    ret_str += &format!("\t{};\n",
+                        "*sp -= 1");
+
+    ret_str
+}
