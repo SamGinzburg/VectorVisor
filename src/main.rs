@@ -107,7 +107,6 @@ fn main() {
 
     let file_path = value_t!(matches.value_of("input"), String).unwrap_or_else(|e| e.exit());
     let interleaved = value_t!(matches.value_of("isinterleaved"), bool).unwrap_or_else(|e| e.exit());
-    dbg!(interleaved);
     let stack_size = value_t!(matches.value_of("stack"), u32).unwrap_or_else(|e| e.exit());
     let heap_size = value_t!(matches.value_of("heap"), u32).unwrap_or_else(|e| e.exit());
     let call_stack_size = value_t!(matches.value_of("callstack"), u32).unwrap_or_else(|e| e.exit());
@@ -126,7 +125,7 @@ fn main() {
 
     dbg!(extension);
 
-    let (file, entry_point, num_compiled_funcs, globals_buffer_size) = match extension {
+    let (file, entry_point, num_compiled_funcs, globals_buffer_size, interleaved) = match extension {
         "wat" => {
             let filedata = match fs::read_to_string(file_path.clone()) {
                 Ok(text) => text,
@@ -150,7 +149,7 @@ fn main() {
                                                                                                                             debug_call_print,
                                                                                                                             false);
             println!("Compiled: {} functions", num_compiled_funcs);
-            (InputProgram::text(compiled_kernel.clone()), entry_point, num_compiled_funcs, globals_buffer_size)
+            (InputProgram::text(compiled_kernel.clone()), entry_point, num_compiled_funcs, globals_buffer_size, interleaved)
         },
         "wasm" => {
             panic!(".wasm files not supported yet")
@@ -163,7 +162,7 @@ fn main() {
             };
 
             let program: SeralizedProgram = bincode::deserialize(&filedata).unwrap();
-            (InputProgram::binary(program.program_data), program.entry_point, program.num_compiled_funcs, program.globals_buffer_size)
+            (InputProgram::binary(program.program_data), program.entry_point, program.num_compiled_funcs, program.globals_buffer_size, program.interleaved)
         },
     };
 

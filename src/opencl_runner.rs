@@ -105,6 +105,7 @@ pub struct SeralizedProgram {
     pub entry_point: u32,
     pub num_compiled_funcs: u32,
     pub globals_buffer_size: u32,
+    pub interleaved: bool,
 }
 
 #[derive(Clone)]
@@ -446,6 +447,7 @@ impl OpenCLRunner {
                     globals_buffer_size: globals_buffer_size,
                     entry_point: self.entry_point,
                     num_compiled_funcs: num_compiled_funcs,
+                    interleaved: self.is_memory_interleaved,
                 };
 
                 let serialized_program = bincode::serialize(&program_to_serialize).unwrap();
