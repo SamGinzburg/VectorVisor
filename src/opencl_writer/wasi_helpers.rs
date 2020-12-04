@@ -178,21 +178,98 @@ pub fn emit_environ_sizes_get_post(writer: &opencl_writer::OpenCLCWriter, debug:
     // We also need to copy back the two results from the hcall buf
     // offset 0 in the hcall buf is the number of arguments
 
+    if debug {
+        ret_str += &format!("\t{};\n",
+                emit_write_u32(&format!("(ulong)((char*)heap_u32+{})", &emit_read_u32("(ulong)(stack_u32+*sp-2)",
+                                                                                        "(ulong)(stack_u32)",
+                                                                                        "warp_idx")),
+                        "(ulong)(heap_u32)",
+                        &emit_read_u32("(ulong)(hypercall_buffer)", "(ulong)(hypercall_buffer)", "warp_idx"),
+                        "warp_idx"));
+        // offset 4 in the hcall buf is the size of the argument string data
+        ret_str += &format!("\t{};\n",
+                emit_write_u32(&format!("(ulong)((char*)heap_u32+{})", &emit_read_u32("(ulong)(stack_u32+*sp-1)",
+                                                                                                "(ulong)(stack_u32)",
+                                                                                                "warp_idx")),
+                        "(ulong)(heap_u32)",
+                        &emit_read_u32("(ulong)((char*)hypercall_buffer+4)", "(ulong)(hypercall_buffer)", "warp_idx"),
+                        "warp_idx"));
+    } else {
+        ret_str += &format!("\t{};\n",
+                emit_write_u32(&format!("(ulong)((global char*)heap_u32+{})", &emit_read_u32("(ulong)(stack_u32+*sp-2)",
+                                                                                        "(ulong)(stack_u32)",
+                                                                                        "warp_idx")),
+                        "(ulong)(heap_u32)",
+                        &emit_read_u32("(ulong)(hypercall_buffer)", "(ulong)(hypercall_buffer)", "warp_idx"),
+                        "warp_idx"));
+
+        // offset 4 in the hcall buf is the size of the argument string data
+        ret_str += &format!("\t{};\n",
+                emit_write_u32(&format!("(ulong)((global char*)heap_u32+{})", &emit_read_u32("(ulong)(stack_u32+*sp-1)",
+                                                                                                "(ulong)(stack_u32)",
+                                                                                                "warp_idx")),
+                        "(ulong)(heap_u32)",
+                        &emit_read_u32("(ulong)((global char*)hypercall_buffer+4)", "(ulong)(hypercall_buffer)", "warp_idx"),
+                        "warp_idx"));
+    }
+
+
+    // now return the error code
     ret_str += &format!("\t{};\n",
-                        emit_write_u32(&format!("(ulong)((global char*)heap_u32+{})", &emit_read_u32("(ulong)(stack_u32+*sp-2)",
-                                                                                                        "(ulong)(stack_u32)",
-                                                                                                        "warp_idx")),
-                                        "(ulong)(heap_u32)",
-                                        &emit_read_u32("(ulong)(hypercall_buffer)", "(ulong)(hypercall_buffer)", "warp_idx"),
-                                        "warp_idx"));
-    // offset 4 in the hcall buf is the size of the argument string data
+                        emit_write_u32("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "0", "warp_idx"));
+
     ret_str += &format!("\t{};\n",
-                        emit_write_u32(&format!("(ulong)((global char*)heap_u32+{})", &emit_read_u32("(ulong)(stack_u32+*sp-1)",
-                                                                                                        "(ulong)(stack_u32)",
-                                                                                                        "warp_idx")),
-                                        "(ulong)(heap_u32)",
-                                        &emit_read_u32("(ulong)((global char*)hypercall_buffer+4)", "(ulong)(hypercall_buffer)", "warp_idx"),
-                                        "warp_idx"));
+                        "*sp -= 1");
+
+    ret_str
+}
+
+pub fn emit_environ_get(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> String {
+    let mut ret_str = String::from("");
+    // This function takes two u32 arguments, so we need to pop those off
+    // arg1: pointer to a buffer of pointers
+    // arg2: pointer to a buffer to store the string data
+    // when we return, the hcall_buffer will include the two buf_lens as the first two 4 bytes values
+
+    ret_str += &format!("\tprintf(\"ARG1: %d\\n\", {});\n", &emit_read_u32("(ulong)(hypercall_buffer)", "(ulong)(hypercall_buffer)", "warp_idx"));
+    ret_str += &format!("\tprintf(\"ARG2: %d\\n\", {});\n", &emit_read_u32("(ulong)(hypercall_buffer+1)", "(ulong)(hypercall_buffer)", "warp_idx"));
+    let size_ptr_buf = emit_read_u32("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx");
+    let size_string_buf = emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx");
+    ret_str += &format!("\tprintf(\"size_ptr_buf: %d\\n\", {});\n", &size_ptr_buf);
+    ret_str += &format!("\tprintf(\"size_string_buf: %d\\n\", {});\n", &size_string_buf);
+
+    if debug {
+        // copy over the buffer of pointers
+        ret_str += &format!("\t___private_memcpy((ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), warp_idx);\n",
+                            &emit_read_u32("(ulong)((char *)hypercall_buffer+8)", "(ulong)(hypercall_buffer)", "warp_idx"), //src
+                            "hypercall_buffer", // mem_start_src
+                            &format!("(char *)heap_u32+{}", size_ptr_buf), //dst
+                            "heap_u32", // mem_start_dst
+                            &emit_read_u32("(ulong)(hypercall_buffer)", "(ulong)(hypercall_buffer)", "warp_idx")); // buf_len_bytes;
+        // copy the string data
+        ret_str += &format!("\t___private_memcpy((ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), warp_idx);\n",
+                            &emit_read_u32(&format!("(ulong)((char *)hypercall_buffer+({}*4))", size_ptr_buf), "(ulong)(hypercall_buffer)", "warp_idx"), //src
+                            "hypercall_buffer", // mem_start_src
+                            &format!("(char *)heap_u32+{}", size_string_buf), //dst
+                            "heap_u32", // mem_start_dst
+                            &emit_read_u32("(ulong)(hypercall_buffer+1)", "(ulong)(hypercall_buffer)", "warp_idx")); // buf_len_bytes;
+    } else {
+        // copy over the buffer of pointers
+        ret_str += &format!("\t___private_memcpy((ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), warp_idx);\n",
+                            "(ulong)((global char *)hypercall_buffer+8)",
+                            "hypercall_buffer", // mem_start_src
+                            &format!("(global char *)heap_u32+{}", size_ptr_buf), //dst
+                            "heap_u32", // mem_start_dst
+                            &emit_read_u32("(ulong)(hypercall_buffer)", "(ulong)(hypercall_buffer)", "warp_idx")); // buf_len_bytes;
+
+        // copy the string data
+        ret_str += &format!("\t___private_memcpy((ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), warp_idx);\n",
+                            &format!("(ulong)((global char *)hypercall_buffer+8+({}*4))", size_ptr_buf), //src
+                            "hypercall_buffer", // mem_start_src
+                            &format!("(global char *)heap_u32+{}", size_string_buf), //dst
+                            "heap_u32", // mem_start_dst
+                            &emit_read_u32("(ulong)(hypercall_buffer+1)", "(ulong)(hypercall_buffer)", "warp_idx")); // buf_len_bytes;
+        }
 
     // now return the error code
     ret_str += &format!("\t{};\n",

@@ -101,6 +101,22 @@ fn main() {
             .multiple(false)
             .number_of_values(1)
             .takes_value(true))
+        .arg(Arg::with_name("cflags")
+            .long("cflags")
+            .value_name("CLI arguments to pass to compile_program")
+            .default_value("")
+            .help("Pass args to the program compilation step")
+            .multiple(false)
+            .number_of_values(1)
+            .takes_value(true))
+        .arg(Arg::with_name("ldflags")
+            .long("ldflags")
+            .value_name("CLI arguments to pass to link_program")
+            .default_value("")
+            .help("Pass args to the program linking step")
+            .multiple(false)
+            .number_of_values(1)
+            .takes_value(true))
         .get_matches();
 
     dbg!(matches.clone());
@@ -117,6 +133,9 @@ fn main() {
     let num_vm_groups = value_t!(matches.value_of("vmgroups"), u32).unwrap_or_else(|e| e.exit());
     let is_gpu = value_t!(matches.value_of("isgpu"), bool).unwrap_or_else(|e| e.exit());
     let debug_call_print = value_t!(matches.value_of("debugcallprint"), bool).unwrap_or_else(|e| e.exit());
+    let compile_args = value_t!(matches.value_of("cflags"), String).unwrap_or_else(|e| e.exit());
+    let link_args = value_t!(matches.value_of("ldflags"), String).unwrap_or_else(|e| e.exit());
+    dbg!(compile_args.clone());
 
     let extension = match Path::new(&file_path).extension() {
         Some(ext) => ext.to_str().unwrap(),
@@ -154,7 +173,7 @@ fn main() {
         "wasm" => {
             panic!(".wasm files not supported yet")
         },
-        _ => {
+        "bin" => {
             // read the binary file as a Vec<u8>
             let filedata = match fs::read(file_path.clone()) {
                 Ok(text) => text,
@@ -162,8 +181,10 @@ fn main() {
             };
 
             let program: SeralizedProgram = bincode::deserialize(&filedata).unwrap();
+            println!("Loaded program with entry point: {}, num_compiled_funcs: {}, globals_buffer_size: {}, is_interleaved: {}", program.entry_point, program.num_compiled_funcs, program.globals_buffer_size, program.interleaved);
             (InputProgram::binary(program.program_data), program.entry_point, program.num_compiled_funcs, program.globals_buffer_size, program.interleaved)
         },
+        _ => panic!("Unrecognized input filetype: {}", extension),
     };
 
     let fname = &file_path.as_str();
@@ -176,7 +197,9 @@ fn main() {
                    stack_frames_size, 
                    sfp_size, 
                    num_compiled_funcs,
-                   globals_buffer_size);
+                   globals_buffer_size,
+                   compile_args.clone(),
+                   link_args.clone());
     });
 }
  

@@ -163,7 +163,6 @@ impl<'a> OpenCLCWriter<'_> {
 
         // after the hypercall, we need to reset values on re-entry, and possible copy data back from the hcall buf
         // skipped hypercall entries here are no-ops
-        dbg!(hypercall_id.clone() as u32);
         match hypercall_id {
             WasmHypercallId::fd_write => {
                 // fd_write takes 4 u32 parameters
@@ -175,9 +174,11 @@ impl<'a> OpenCLCWriter<'_> {
             },
             // environ_sizes_get
             WasmHypercallId::environ_sizes_get => {
-                dbg!("emitting environ");
                 ret_str += &emit_environ_sizes_get_post(&self ,debug);
             },
+            WasmHypercallId::environ_get => {
+                ret_str += &emit_environ_get(&self, debug);
+            }
             _ => (),
         }
 
@@ -225,7 +226,7 @@ impl<'a> OpenCLCWriter<'_> {
                 // which is when drop follows a function call
 
                 format!("\t{}{};\n",
-                        "*sp -=", stack_sizes.pop().unwrap())
+                        "*sp -= ", stack_sizes.pop().unwrap())
             }
             wast::Instruction::I32Store(memarg) => {
                 stack_sizes.pop();

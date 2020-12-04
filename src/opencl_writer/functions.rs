@@ -278,7 +278,6 @@ pub fn emit_call_indirect(writer: &opencl_writer::OpenCLCWriter, fn_name: String
     // It is worth revisiting this later, but not urgent. 
 
     result += &format!("\t{}\n",
-                       // the most recent item on the stack is 
                        &format!("switch({}) {{", emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx")));
     // generate all of the cases in the table, all uninitialized values will trap to the default case
     for (key, value) in table {

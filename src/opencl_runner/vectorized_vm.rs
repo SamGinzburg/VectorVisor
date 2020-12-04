@@ -1,5 +1,7 @@
 use wasi_common::WasiCtx;
 use std::fmt;
+use wasmtime::*;
+use wasmtime_wiggle::WasmtimeGuestMemory;
 
 use crate::opencl_runner::OpenCLBuffers;
 
@@ -18,6 +20,7 @@ pub enum WasiSyscalls {
     FdWrite              =  0,
     ProcExit             =  1,
     EnvironSizeGet       =  2,
+    EnvironGet           =  3,
     InvalidHyperCallNum  = -1,
 }
 
@@ -98,6 +101,12 @@ impl HyperCallResult {
 pub struct VectorizedVM {
     // each VM has its own WASI state tracking object
     ctx: WasiCtx,
+    engine: Engine,
+    store: Store,
+    pub memory: Memory,
+    pub wasm_memory: WasmtimeGuestMemory,
+    pub enviroment_size: Option<u32>,
+    pub environment_str_size: Option<u32>,
     vm_id: u32,
 }
 
@@ -106,9 +115,23 @@ impl VectorizedVM {
         // default context with no args yet - we can inherit arguments from the CLI if we want
         // or we can pass them in some other config file
         let wasi_ctx = WasiCtx::new(&[""]).unwrap();
+        let engine = Engine::default();
+        let store = Store::new(&engine);
+        let memory_ty = MemoryType::new(Limits::new(1, None));
+        let memory = Memory::new(&store, memory_ty);
 
         VectorizedVM {
             ctx: wasi_ctx,
+            engine: engine,
+            store: store,
+            /*
+             * Memories are internally reference counted so you can clone a Memory. The cloning process only performs a shallow clone, so two cloned Memory instances are equivalent in their functionality.
+             * See: https://docs.wasmtime.dev/api/wasmtime/struct.Memory.html
+             */
+            memory: memory.clone(),
+            wasm_memory: WasmtimeGuestMemory::new(memory),
+            enviroment_size: None,
+            environment_str_size: None,
             vm_id: vm_id,
         }
     }
@@ -124,7 +147,7 @@ impl VectorizedVM {
                               sender: &Sender<HyperCallResult>) -> () {
         match hypercall.syscall {
             WasiSyscalls::FdWrite => {
-                WasiFd::hypercall_fd_write(&self.ctx, hypercall, sender);
+                WasiFd::hypercall_fd_write(&self.ctx, self, hypercall, sender);
             },
             // ProcExit is special cased, since we want to manually mask off those VMs
             WasiSyscalls::ProcExit => {
@@ -134,6 +157,9 @@ impl VectorizedVM {
             },
             WasiSyscalls::EnvironSizeGet => {
                 Environment::hypercall_environ_sizes_get(&self.ctx, hypercall, sender);
+            },
+            WasiSyscalls::EnvironGet => {
+                Environment::hypercall_environ_get(&self.ctx, self, hypercall, sender);
             }
             _ => panic!("Unsupported hypercall invoked! {:?}", hypercall),
         }

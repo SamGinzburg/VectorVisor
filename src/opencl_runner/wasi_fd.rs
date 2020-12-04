@@ -1,10 +1,11 @@
 use wasi_common::WasiCtx;
 // this provides the needed traits for the WASI calls
 use wasi_common::wasi::wasi_snapshot_preview1::WasiSnapshotPreview1;
-//use wasi_common::snapshots::wasi_snapshot_preview1::WasiSnapshotPreview1;
+
 use crate::opencl_runner::vectorized_vm::HyperCall;
 use crate::opencl_runner::vectorized_vm::HyperCallResult;
 use crate::opencl_runner::vectorized_vm::WasiSyscalls;
+use crate::opencl_runner::vectorized_vm::VectorizedVM;
 use crate::opencl_runner::interleave_offsets::Interleave;
 
 use wasi_common::wasi::types::CiovecArray;
@@ -21,22 +22,11 @@ use crossbeam::channel::Sender;
 pub struct WasiFd {}
 
 impl WasiFd {
-    pub fn hypercall_fd_write(ctx: &WasiCtx, hypercall: &mut HyperCall, sender: &Sender<HyperCallResult>) -> () {
+    pub fn hypercall_fd_write(ctx: &WasiCtx, vm_ctx: &VectorizedVM, hypercall: &mut HyperCall, sender: &Sender<HyperCallResult>) -> () {
         let mut hcall_buf: &mut [u8] = &mut hypercall.hypercall_buffer.lock().unwrap();
 
-        /*
-         * It may seem inefficient to recreate this for every hypercall, but it is actually far more efficient!
-         * This is because we only have N active threads at a time, so we only have N 64KiB pages allocated at a time!
-         * 
-         * Preallocating these structures adds *massive* overhead - 64KiB * (1024 * 16) = 1GiB!!!
-         * 
-         * The compute tradeoff is definately worth it, as we are far more memory-bound than anything else in this system
-         * 
-         */
-        let engine = Engine::default();
-        let store = Store::new(&engine);
-        let memory_ty = MemoryType::new(Limits::new(1, None));
-        let memory = Memory::new(&store, memory_ty);
+        let memory = &vm_ctx.memory;
+        let wasm_mem = &vm_ctx.wasm_memory;
 
         let fd: u32;
         let num_iovecs: u32;
@@ -84,8 +74,7 @@ impl WasiFd {
             }
         }
 
-        // after all reads/writes are done, wrap the memory with the GuestMemory trait
-        let wasm_mem = WasmtimeGuestMemory::new(memory);
+        //dbg!(&raw_mem[0..64]);
 
         // we hardcode the ciovec array to start at offset 0
         let ciovec_ptr: &CiovecArray = &GuestPtr::new(&wasm_mem, (0 as u32, 1 as u32));

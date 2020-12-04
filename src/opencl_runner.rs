@@ -144,8 +144,10 @@ impl OpenCLRunner {
                sfp_size: u32,
                // needed for the size of the loop/branch data structures
                num_compiled_funcs: u32,
-               globals_buffer_size: u32) -> () {
-        let (program, context, device_id) = self.setup_kernel(input_filename, num_compiled_funcs, globals_buffer_size);
+               globals_buffer_size: u32,
+               compile_flags: String,
+               link_flags: String) -> () {
+        let (program, context, device_id) = self.setup_kernel(input_filename, num_compiled_funcs, globals_buffer_size, compile_flags, link_flags);
         let num_vms = self.num_vms.clone();
 
         // create the buffers
@@ -201,14 +203,14 @@ impl OpenCLRunner {
                           context: ocl::core::Context) -> (OpenCLRunner, ocl::core::Context) {
         let stack_buffer = unsafe {
             ocl::core::create_buffer::<_, u8>(&context,
-                                              ocl::core::MEM_ALLOC_HOST_PTR | ocl::core::MEM_READ_WRITE,
+                                              ocl::core::MEM_READ_WRITE,
                                               (stack_size as u64 * self.num_vms as u64) as usize,
                                               None).unwrap()
         };
 
         let heap_buffer = unsafe {
             ocl::core::create_buffer::<_, u8>(&context,
-                                              ocl::core::MEM_ALLOC_HOST_PTR | ocl::core::MEM_READ_WRITE,
+                                              ocl::core::MEM_READ_WRITE,
                                               (heap_size as u64 * self.num_vms as u64) as usize,
                                               None).unwrap()
         };
@@ -355,7 +357,7 @@ impl OpenCLRunner {
      * It returns a sending channel for the HTTP Endpoint to send requests to be processed with.
      * 
      */
-    pub fn setup_kernel(&self, input_filename: &str, num_compiled_funcs: u32, globals_buffer_size: u32) -> (ocl::core::Program, ocl::core::Context, ocl::core::DeviceId) {
+    pub fn setup_kernel(&self, input_filename: &str, num_compiled_funcs: u32, globals_buffer_size: u32, compile_flags: String, link_flags: String) -> (ocl::core::Program, ocl::core::Context, ocl::core::DeviceId) {
         let platform_id = ocl::core::default_platform().unwrap();
         let device_type = if self.is_gpu_backend {
             Some(ocl::core::DEVICE_TYPE_GPU)
@@ -399,10 +401,14 @@ impl OpenCLRunner {
             InputProgram::text(program) => {
                 let src_cstring = CString::new(program.clone()).unwrap();
 
+                println!("Sucessfully compiled kernel to OpenCL C: saving to: {}", format!("{}.cl", input_filename));
+                let mut file = File::create(format!("{}.cl", input_filename)).unwrap();
+                file.write_all(&program.clone().into_bytes()).unwrap();      
+                
                 println!("Starting kernel compilation...");
         
                 let compiled_program = ocl::core::create_program_with_source(&context, &[src_cstring.clone()]).unwrap();
-                let build_result = ocl::core::compile_program(&compiled_program, Some(&[device_ids[0]]), &CString::new(format!("-DNUM_THREADS={}", self.num_vms)).unwrap(), &[], &[], None, None, None);
+                let build_result = ocl::core::compile_program(&compiled_program, Some(&[device_ids[0]]), &CString::new(format!("{} -DNUM_THREADS={}", compile_flags, self.num_vms)).unwrap(), &[], &[], None, None, None);
                 match build_result {
                     Err(e) => {
                         println!("Build error:\n{}", e);
@@ -410,12 +416,14 @@ impl OpenCLRunner {
                         std::fs::write("test.cl", program).expect("Unable to write file");
                         panic!("Build failure: {:?}", e);
                     }
-                    Ok(_) => (),
+                    Ok(_) => {
+                          
+                    },
                 };
                 let buildinfo = ocl::core::get_program_build_info(&compiled_program, &device_ids[0], ocl::core::ProgramBuildInfo::BuildLog).unwrap();
                 dbg!(buildinfo);
         
-                let final_program = ocl::core::link_program(&context, Some(&[device_ids[0]]), &CString::new("").unwrap(), &[&compiled_program], None, None, None);
+                let final_program = ocl::core::link_program(&context, Some(&[device_ids[0]]), &CString::new(format!("{}", link_flags)).unwrap(), &[&compiled_program], None, None, None);
         
                 match final_program {
                     Err(e) => {
@@ -530,7 +538,7 @@ impl OpenCLRunner {
          * 
          */
         let number_vms = self.num_vms.clone();
-        let num_threads = 4;
+        let num_threads = 1;
         let (result_sender, result_receiver): (Sender<HyperCallResult>, Receiver<HyperCallResult>) = bounded(0);
         for _idx in 0..num_threads {
             let (sender, recv): (Sender<HyperCall>, Receiver<HyperCall>) = unbounded();
@@ -540,7 +548,8 @@ impl OpenCLRunner {
                 let receiver = recv.clone();
                 // create the WASI contexts for this thread
                 let mut wasi_ctxs = vec![];
-                for vm in 0..number_vms/num_threads {
+                // we divide up the number of VMs per thread evenly
+                for vm in 0..(number_vms/num_threads) {
                     wasi_ctxs.push(VectorizedVM::new(vm));
                 }
 
@@ -556,7 +565,7 @@ impl OpenCLRunner {
                         },
                     };
                     // get the WASI context
-                    let wasi_context = &wasi_ctxs[(incoming_msg.vm_id % (num_threads/4)) as usize];
+                    let wasi_context = &wasi_ctxs[(incoming_msg.vm_id % (number_vms/num_threads)) as usize];
 
                     wasi_context.dispatch_hypercall(&mut incoming_msg, &sender_copy.clone());
                 }
@@ -669,7 +678,7 @@ impl OpenCLRunner {
         loop {
             // run the kernel!
             // warning - bugged kernels can cause GPU driver hangs! Will result in the driver restarting...
-            // Hangs are frequently a sign of a segmentation fault from inside of the GPU kernel
+            // Hangs are frequently a sign of a segmentation faults from inside of the GPU kernel
             // Unfortunately the OpenCL API doesn't give us a good way to identify what happened - the OS logs (dmesg) do have a record of this though
             profiling_event = ocl::Event::empty();
             unsafe {
@@ -684,7 +693,7 @@ impl OpenCLRunner {
 
             let start_start_kernel = profiling_event.profiling_info(ocl::enums::ProfilingInfo::Submit).unwrap().time().unwrap();
             let end_start_kernel = profiling_event.profiling_info(ocl::enums::ProfilingInfo::End).unwrap().time().unwrap();
-            total_gpu_execution_time += end_start_kernel-start_start_kernel;
+            //total_gpu_execution_time += end_start_kernel-start_start_kernel;
 
             // upon exiting we check the stack pointer for each VM
             let vmm_pre_overhead = std::time::Instant::now();
@@ -722,8 +731,7 @@ impl OpenCLRunner {
             let start_hcall_dispatch = std::time::Instant::now();
 
             unsafe {
-                //let buf: &mut [u8] = &mut **hcall_read_buffer;
-                let mut buf: &mut [u8] = &mut hcall_read_buffer.lock().unwrap();
+                let buf: &mut [u8] = &mut hcall_read_buffer.lock().unwrap();
                 ocl::core::enqueue_read_buffer(&queue, &hypercall_buffer, true, 0, buf, None::<Event>, None::<&mut Event>).unwrap();
             }
 
@@ -733,11 +741,12 @@ impl OpenCLRunner {
                     0 => WasiSyscalls::FdWrite,
                     1 => WasiSyscalls::ProcExit,
                     2 => WasiSyscalls::EnvironSizeGet,
+                    3 => WasiSyscalls::EnvironGet,
                     _ => WasiSyscalls::InvalidHyperCallNum,
                 };
 
-                hypercall_sender[(vm_id % 4) as usize].send(
-                    HyperCall::new(*vm_id,
+                hypercall_sender[(vm_id % num_threads) as usize].send(
+                    HyperCall::new((*vm_id as u32).clone(),
                                    number_vms,
                                    stack_pointer_temp[*vm_id as usize],
                                    hypercall_id,
@@ -799,12 +808,6 @@ impl OpenCLRunner {
                 ocl::core::enqueue_write_buffer(&queue, &buffers.entry, false, 0, &mut entry_point_temp, None::<Event>, None::<&mut Event>).unwrap();
                 ocl::core::enqueue_write_buffer(&queue, &buffers.sp, false, 0, &mut stack_pointer_temp, None::<Event>, None::<&mut Event>).unwrap();
                 ocl::core::enqueue_write_buffer(&queue, &buffers.hypercall_num, false, 0, &mut hypercall_num_temp, None::<Event>, None::<&mut Event>).unwrap();
-                match ocl::core::finish(&queue) {
-                    Err(e) => {
-                        panic!("Unable to finish waiting on queue for write_buffer cmds\n\n{}", e);
-                    },
-                    Ok(_) => (),
-                }
             }
             let vmm_post_overhead_end = std::time::Instant::now();
             vmm_overhead += (vmm_post_overhead_end - vmm_post_overhead).as_nanos();
@@ -812,21 +815,21 @@ impl OpenCLRunner {
 
         // To get final results back from the stack if we want for debugging stuff
         // only uncomment this out if you need to debug stuff, it will panic if you have too many VMs and too small of a buffer
+        /*
         unsafe {
             ocl::core::enqueue_read_buffer(&queue, &buffers.stack_buffer, true, 0, &mut check_results_debug, None::<Event>, None::<&mut Event>).unwrap();
         }
 
         if self.is_memory_interleaved {
-            for idx in 0..self.num_vms {
-                let result = Interleave::read_u32(&mut check_results_debug, 0, self.num_vms, idx);
-                dbg!(result as i32);
-            }
+            let result = Interleave::read_u32(&mut check_results_debug, 0, self.num_vms, 0);
+            dbg!(result as i32);
         } else {
             use byteorder::LittleEndian;
             use byteorder::ByteOrder;
             let result = LittleEndian::read_u32(&check_results_debug[0..4]);
             dbg!(result as i32);
         }
+        */
 
         let e2e_time_end = std::time::Instant::now();
 
