@@ -5,6 +5,8 @@ mod opencl_runner;
 
 use std::fs;
 use std::path::Path;
+use std::fs::File;
+use std::io::Write;
 
 use wast::parser::{ParseBuffer};
 use rayon::prelude::*;
@@ -117,6 +119,49 @@ fn main() {
             .multiple(false)
             .number_of_values(1)
             .takes_value(true))
+        // the following flags are *only* for use with passing in PTX files
+        .arg(Arg::with_name("entry")
+            .long("entry")
+            .value_name("Entry point of kernel")
+            .default_value("")
+            .help("Indicate the numerical entry point of the GPU kernel (for use with PTX input)")
+            .multiple(false)
+            .number_of_values(1)
+            .takes_value(true))
+        .arg(Arg::with_name("numfuncs")
+            .long("numfuncs")
+            .value_name("Total number of functions in kernel")
+            .default_value("")
+            .help("Indicate the total number of functions in the file (for use with PTX input)")
+            .multiple(false)
+            .number_of_values(1)
+            .takes_value(true))
+        .arg(Arg::with_name("globals-buffer-size")
+            .long("globals-buffer-size")
+            .value_name("Size of the globals buffer")
+            .default_value("")
+            .help("Indicate the size of the globals buffer (for use with PTX input)")
+            .multiple(false)
+            .number_of_values(1)
+            .takes_value(true))
+        // add a param for cases where we want to only get the .cl file and compile externally from the driver
+        // this is useful in cases where we want to manually compile to PTX/AMDGPU/SPIRV binaries
+        /*.arg(Arg::with_name("compile")
+            .long("compile")
+            .value_name("Input WASM code to compile")
+            .default_value("")
+            .help("This flag only compiles the input WASM to OpenCL C and saves the file to disk for later compilation")
+            .multiple(false)
+            .number_of_values(1)
+            .takes_value(true))
+        .arg(Arg::with_name("forceinline")
+            .long("forceinline")
+            .value_name("Force the compiler to inline all functions")
+            .default_value("false")
+            .help("This flag adds the inline trait to all functions")
+            .multiple(false)
+            .number_of_values(1)
+            .takes_value(true))*/
         .get_matches();
 
     dbg!(matches.clone());
@@ -135,7 +180,45 @@ fn main() {
     let debug_call_print = value_t!(matches.value_of("debugcallprint"), bool).unwrap_or_else(|e| e.exit());
     let compile_args = value_t!(matches.value_of("cflags"), String).unwrap_or_else(|e| e.exit());
     let link_args = value_t!(matches.value_of("ldflags"), String).unwrap_or_else(|e| e.exit());
+    //let force_inline = value_t!(matches.value_of("forceinline"), bool).unwrap_or_else(|e| e.exit());
+
     dbg!(compile_args.clone());
+
+    /*
+    let compile = value_t!(matches.value_of("compile"), String).unwrap_or_else(|e| e.exit());
+    if compile != "" {
+        let filedata = match fs::read_to_string(compile.clone()) {
+            Ok(text) => text,
+            Err(e) => panic!(e),
+        };
+        let pb = ParseBuffer::new(&filedata).unwrap();
+        let pb_debug = ParseBuffer::new(&filedata).unwrap();
+        let mut ast = opencl_writer::OpenCLCWriter::new(&pb);
+        let mut ast_debug = opencl_writer::OpenCLCWriter::new(&pb_debug);
+        let result = ast.parse_file().unwrap();
+        let result_debug = ast_debug.parse_file().unwrap();
+        let (compiled_kernel, entry_point, globals_buffer_size, num_compiled_funcs) = ast.write_opencl_file(interleaved as u32,
+                                                                                                            stack_size,
+                                                                                                            heap_size, 
+                                                                                                            call_stack_size, 
+                                                                                                            stack_frames_size, 
+                                                                                                            sfp_size, 
+                                                                                                            predictor_size,
+                                                                                                            debug_call_print,
+                                                                                                            force_inline,
+                                                                                                            false);
+
+        println!("The following info is needed to later run compiled pre-compiled/externally compiled binaries");
+        println!("Compiled: {} functions", num_compiled_funcs);
+        println!("Entry point: {}", entry_point);
+        println!("Globals buffer: {}", globals_buffer_size);
+        println!("interleaved: {}", interleaved);
+
+        let mut file = File::create(format!("{}.cl", compile)).unwrap();
+        file.write_all(&compiled_kernel.clone().into_bytes()).unwrap();
+    }
+    */
+
 
     let extension = match Path::new(&file_path).extension() {
         Some(ext) => ext.to_str().unwrap(),
@@ -166,8 +249,13 @@ fn main() {
                                                                                                                             sfp_size, 
                                                                                                                             predictor_size,
                                                                                                                             debug_call_print,
+                                                                                                                            force_inline
                                                                                                                             false);
             println!("Compiled: {} functions", num_compiled_funcs);
+            println!("Entry point: {}", entry_point);
+            println!("Globals buffer: {}", globals_buffer_size);
+            println!("interleaved: {}", interleaved);
+
             (InputProgram::text(compiled_kernel.clone()), entry_point, num_compiled_funcs, globals_buffer_size, interleaved)
         },
         "wasm" => {
@@ -184,6 +272,20 @@ fn main() {
             println!("Loaded program with entry point: {}, num_compiled_funcs: {}, globals_buffer_size: {}, is_interleaved: {}", program.entry_point, program.num_compiled_funcs, program.globals_buffer_size, program.interleaved);
             (InputProgram::binary(program.program_data), program.entry_point, program.num_compiled_funcs, program.globals_buffer_size, program.interleaved)
         },
+        // nvidia specific assembly code, prebuilt
+        "ptx" => {
+            // read the binary file as a Vec<u8>
+            let filedata = match fs::read(file_path.clone()) {
+                Ok(text) => text,
+                Err(e) => panic!(e),
+            };
+            let entry = value_t!(matches.value_of("entry"), u32).unwrap_or_else(|e| e.exit());
+            let numfuncs = value_t!(matches.value_of("numfuncs"), u32).unwrap_or_else(|e| e.exit());
+            let globals_buffer_size = value_t!(matches.value_of("globals-buffer-size"), u32).unwrap_or_else(|e| e.exit());
+        
+            println!("Loaded program with entry point: {}, num_compiled_funcs: {}, globals_buffer_size: {}, is_interleaved: {}", entry, numfuncs, globals_buffer_size, interleaved);
+            (InputProgram::binary(filedata), entry, numfuncs, globals_buffer_size, interleaved)
+        }
         _ => panic!("Unrecognized input filetype: {}", extension),
     };
 

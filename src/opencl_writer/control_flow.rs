@@ -85,6 +85,7 @@ pub fn emit_end<'a>(writer: &opencl_writer::OpenCLCWriter<'a>, id: &Option<wast:
     // after a block ends, we need to unwind the stack!
     let re = Regex::new(r"\d+").unwrap();
     // we can use the branch index to save to global state
+
     let branch_idx: &str = re.captures(label).unwrap().get(0).map_or("", |m| m.as_str());
     let branch_idx_u32 = branch_idx.parse::<u32>().unwrap();
     if branch_idx_u32 > 1024 {

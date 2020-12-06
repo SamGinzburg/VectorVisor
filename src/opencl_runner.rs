@@ -384,6 +384,7 @@ impl OpenCLRunner {
         let max_global_mem_size = ocl::core::get_device_info(&device_id, ocl::core::DeviceInfo::GlobalMemSize);
         let max_constant_buffer_size = ocl::core::get_device_info(&device_id, ocl::core::DeviceInfo::MaxConstantBufferSize);
         let linker_available = ocl::core::get_device_info(&device_id, ocl::core::DeviceInfo::LinkerAvailable);
+        let extensions = ocl::core::get_device_info(&device_id, ocl::core::DeviceInfo::Extensions);
 
         dbg!(dev_type);
         dbg!(dev_name);
@@ -395,6 +396,7 @@ impl OpenCLRunner {
         dbg!(max_global_mem_size);
         dbg!(max_constant_buffer_size);
         dbg!(linker_available);
+        dbg!(extensions);
 
         // compile the GPU kernel(s)
         let program_to_run = match &self.input_program {
@@ -406,7 +408,8 @@ impl OpenCLRunner {
                 file.write_all(&program.clone().into_bytes()).unwrap();      
                 
                 println!("Starting kernel compilation...");
-        
+                let compile_start = std::time::Instant::now();
+
                 let compiled_program = ocl::core::create_program_with_source(&context, &[src_cstring.clone()]).unwrap();
                 let build_result = ocl::core::compile_program(&compiled_program, Some(&[device_ids[0]]), &CString::new(format!("{} -DNUM_THREADS={}", compile_flags, self.num_vms)).unwrap(), &[], &[], None, None, None);
                 match build_result {
@@ -422,9 +425,16 @@ impl OpenCLRunner {
                 };
                 let buildinfo = ocl::core::get_program_build_info(&compiled_program, &device_ids[0], ocl::core::ProgramBuildInfo::BuildLog).unwrap();
                 dbg!(buildinfo);
-        
+                let compile_end = std::time::Instant::now();
+                println!("Compile time for kernel: {:?}", compile_end-compile_start);
+
+                println!("Now linking program...");
+
+                let link_start = std::time::Instant::now();
                 let final_program = ocl::core::link_program(&context, Some(&[device_ids[0]]), &CString::new(format!("{}", link_flags)).unwrap(), &[&compiled_program], None, None, None);
-        
+                let link_end = std::time::Instant::now();
+                println!("Link time for kernel: {:?}", link_end-link_start);
+
                 match final_program {
                     Err(e) => {
                         println!("Link error:\n{}", e);
@@ -693,7 +703,7 @@ impl OpenCLRunner {
 
             let start_start_kernel = profiling_event.profiling_info(ocl::enums::ProfilingInfo::Submit).unwrap().time().unwrap();
             let end_start_kernel = profiling_event.profiling_info(ocl::enums::ProfilingInfo::End).unwrap().time().unwrap();
-            //total_gpu_execution_time += end_start_kernel-start_start_kernel;
+            total_gpu_execution_time += end_start_kernel-start_start_kernel;
 
             // upon exiting we check the stack pointer for each VM
             let vmm_pre_overhead = std::time::Instant::now();
