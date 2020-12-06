@@ -146,7 +146,7 @@ fn main() {
             .takes_value(true))
         // add a param for cases where we want to only get the .cl file and compile externally from the driver
         // this is useful in cases where we want to manually compile to PTX/AMDGPU/SPIRV binaries
-        /*.arg(Arg::with_name("compile")
+        .arg(Arg::with_name("compile")
             .long("compile")
             .value_name("Input WASM code to compile")
             .default_value("")
@@ -161,7 +161,7 @@ fn main() {
             .help("This flag adds the inline trait to all functions")
             .multiple(false)
             .number_of_values(1)
-            .takes_value(true))*/
+            .takes_value(true))
         .get_matches();
 
     dbg!(matches.clone());
@@ -180,11 +180,10 @@ fn main() {
     let debug_call_print = value_t!(matches.value_of("debugcallprint"), bool).unwrap_or_else(|e| e.exit());
     let compile_args = value_t!(matches.value_of("cflags"), String).unwrap_or_else(|e| e.exit());
     let link_args = value_t!(matches.value_of("ldflags"), String).unwrap_or_else(|e| e.exit());
-    //let force_inline = value_t!(matches.value_of("forceinline"), bool).unwrap_or_else(|e| e.exit());
+    let force_inline = value_t!(matches.value_of("forceinline"), bool).unwrap_or_else(|e| e.exit());
 
     dbg!(compile_args.clone());
 
-    /*
     let compile = value_t!(matches.value_of("compile"), String).unwrap_or_else(|e| e.exit());
     if compile != "" {
         let filedata = match fs::read_to_string(compile.clone()) {
@@ -217,8 +216,6 @@ fn main() {
         let mut file = File::create(format!("{}.cl", compile)).unwrap();
         file.write_all(&compiled_kernel.clone().into_bytes()).unwrap();
     }
-    */
-
 
     let extension = match Path::new(&file_path).extension() {
         Some(ext) => ext.to_str().unwrap(),
@@ -249,7 +246,7 @@ fn main() {
                                                                                                                             sfp_size, 
                                                                                                                             predictor_size,
                                                                                                                             debug_call_print,
-                                                                                                                            force_inline
+                                                                                                                            force_inline,
                                                                                                                             false);
             println!("Compiled: {} functions", num_compiled_funcs);
             println!("Entry point: {}", entry_point);

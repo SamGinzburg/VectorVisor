@@ -716,6 +716,7 @@ impl<'a> OpenCLCWriter<'_> {
                      hypercall_id_count: &mut u32,
                      indirect_call_mapping: &HashMap<u32, &wast::Index>, 
                      global_mappings: &HashMap<String, (u32, u32)>,
+                     force_inline: bool,
                      debug: bool) -> String {
         let mut final_string = String::from(""); 
         *call_ret_idx = 0;
@@ -1368,6 +1369,7 @@ void {}(global uint   *stack_u32,
                              stack_frame_ptr_size_bytes: u32, 
                              predictor_size_bytes: u32,
                              debug_print_function_calls: bool,
+                             force_inline: bool,
                              debug: bool) -> (String, u32, u32, u32) {
         let mut output = String::new();
         let mut header = String::new();
@@ -1440,6 +1442,7 @@ void {}(global uint   *stack_u32,
                                           hypercall_id_count,
                                           indirect_call_mapping,
                                           &global_mappings,
+                                          force_inline,
                                           debug);
 
             if debug {
