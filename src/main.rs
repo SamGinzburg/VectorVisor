@@ -149,7 +149,7 @@ fn main() {
         .arg(Arg::with_name("compile")
             .long("compile")
             .value_name("Input WASM code to compile")
-            .default_value("")
+            .default_value("false")
             .help("This flag only compiles the input WASM to OpenCL C and saves the file to disk for later compilation")
             .multiple(false)
             .number_of_values(1)
@@ -184,9 +184,9 @@ fn main() {
 
     dbg!(compile_args.clone());
 
-    let compile = value_t!(matches.value_of("compile"), String).unwrap_or_else(|e| e.exit());
-    if compile != "" {
-        let filedata = match fs::read_to_string(compile.clone()) {
+    let compile = value_t!(matches.value_of("compile"), bool).unwrap_or_else(|e| e.exit());
+    if compile {
+        let filedata = match fs::read_to_string(file_path.clone()) {
             Ok(text) => text,
             Err(e) => panic!(e),
         };
@@ -215,6 +215,7 @@ fn main() {
 
         let mut file = File::create(format!("{}.cl", compile)).unwrap();
         file.write_all(&compiled_kernel.clone().into_bytes()).unwrap();
+        return;
     }
 
     let extension = match Path::new(&file_path).extension() {

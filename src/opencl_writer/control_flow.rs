@@ -8,7 +8,7 @@ use std::collections::HashMap;
 // TODO: double check the semantics of this? 
 pub fn emit_return(writer: &opencl_writer::OpenCLCWriter, fn_name: &str, debug: bool) -> String {
     // strip illegal chars from fn name
-    format!("\tgoto {}_return;\n", format!("{}{}", "$_", fn_name.replace(".", "")))
+    format!("\tgoto {}_return;\n", format!("{}{}", "__", fn_name.replace(".", "")))
 }
 
 // this function is semantically equivalent to function_unwind
@@ -38,7 +38,7 @@ pub fn emit_br(writer: &opencl_writer::OpenCLCWriter, idx: wast::Index, fn_name:
     // block = 0, loop = 1
     if *block_type == 0 {
         // If we are targeting a forward branch, just emit the goto
-        ret_str += &format!("\t{}\n", format!("goto {}_{};", format!("{}{}", "$_", fn_name.replace(".", "")), block_name));
+        ret_str += &format!("\t{}\n", format!("goto {}_{};", format!("{}{}", "__", fn_name.replace(".", "")), block_name));
     } else {
         // If we are targeting a loop, we have to emit a return instead, to convert the iterative loop into a recursive function call
         ret_str += &format!("\t{}\n",
@@ -58,7 +58,7 @@ pub fn emit_br(writer: &opencl_writer::OpenCLCWriter, idx: wast::Index, fn_name:
                             "*is_calling = 0;");
         ret_str += &format!("\t{}\n",
                             "return;");
-        //ret_str += &format!("\t{}\n", format!("goto {}_{};", format!("{}{}", "$_", fn_name.replace(".", "")), block_name));
+        //ret_str += &format!("\t{}\n", format!("goto {}_{};", format!("{}{}", "__", fn_name.replace(".", "")), block_name));
     }
     
     
@@ -98,17 +98,17 @@ pub fn emit_end<'a>(writer: &opencl_writer::OpenCLCWriter<'a>, id: &Option<wast:
     // 1-> loop (label was already inserted at the top, this is a no-op here)
     if block_type == 0 {
         if debug {
-            format!("\n{}_{}:\n\t{}\n", format!("{}{}", "$_", fn_name.replace(".", "")), label,
+            format!("\n{}_{}:\n\t{}\n", format!("{}{}", "__", fn_name.replace(".", "")), label,
                 format!("*sp = read_u32((ulong)(((char*)branch_value_stack_state)+(*sfp*128)+({}*4)+({}*4096)), (ulong)(branch_value_stack_state), warp_idx);",
                         branch_idx_u32, function_id_map.get(fn_name).unwrap()))
         } else {
-            format!("\n{}_{}:\n\t{}\n", format!("{}{}", "$_", fn_name.replace(".", "")), label,
+            format!("\n{}_{}:\n\t{}\n", format!("{}{}", "__", fn_name.replace(".", "")), label,
                 format!("*sp = read_u32((ulong)(((global char*)branch_value_stack_state)+(*sfp*128)+({}*4)+({}*4096)), (ulong)(branch_value_stack_state), warp_idx);",
                         branch_idx_u32, function_id_map.get(fn_name).unwrap()))
         }
     } else {
         let mut result = String::from("");
-        result += &format!("\t/* END (loop: {}_{}) */\n", format!("{}{}", "$_", fn_name.replace(".", "")), label);
+        result += &format!("\t/* END (loop: {}_{}) */\n", format!("{}{}", "__", fn_name.replace(".", "")), label);
         
         // pop the control flow stack entry (reset the stack to the state it was in before the loop)
         if debug {
@@ -145,11 +145,11 @@ pub fn emit_loop(writer: &opencl_writer::OpenCLCWriter, block: &wast::BlockType,
     }
 
     // emit a label here for the END instruction to jump back here to restart the loop
-    //result += &format!("{}_{}:\n", format!("{}{}", "$_", fn_name.replace(".", "")), label);
+    //result += &format!("{}_{}:\n", format!("{}{}", "__", fn_name.replace(".", "")), label);
 
     // we convert our loop into a recursive call here - the loop header is treated as a function call re-entry point
 
-    result += &format!("{}_call_return_stub_{}:\n", format!("{}{}", "$_", fn_name.replace(".", "")), *call_ret_idx);
+    result += &format!("{}_call_return_stub_{}:\n", format!("{}{}", "__", fn_name.replace(".", "")), *call_ret_idx);
 
     // pop the control flow stack entry (reset the stack to the state it was in before the loop)
     if debug {

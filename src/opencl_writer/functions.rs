@@ -101,7 +101,7 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, fn_name: String, idx:
         format!("{}", "*is_calling = 1;"),
         // return to the control function
         "return;",
-        format!("{}_call_return_stub_{}:", format!("{}{}", "$_", fn_name.replace(".", "")), *call_ret_idx),
+        format!("{}_call_return_stub_{}:", format!("{}{}", "__", fn_name.replace(".", "")), *call_ret_idx),
         format!("*sp += {};", return_size),
         format!("*sp -= {};", parameter_offset))
     } else {
@@ -126,7 +126,7 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, fn_name: String, idx:
                 format!("{}", "*is_calling = 1;"),
                 // return to the control function
                 "return;",
-                format!("{}_call_return_stub_{}:", format!("{}{}", "$_", fn_name.replace(".", "")), *call_ret_idx),
+                format!("{}_call_return_stub_{}:", format!("{}{}", "__", fn_name.replace(".", "")), *call_ret_idx),
                 format!("*sp -= {};", parameter_offset))
     };
     *call_ret_idx += 1;
@@ -145,7 +145,7 @@ pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, fn_name: &str, fun
     
     final_str += &format!("\t{}\n", "/* function unwind */");
     // strip illegal chars from func name
-    final_str += &format!("{}_return:\n", format!("{}{}", "$_", fn_name.replace(".", "")));
+    final_str += &format!("{}_return:\n", format!("{}{}", "__", fn_name.replace(".", "")));
     // for each value returned by the function, return it on the stack
     // keep track of the change to stack ptr from previous returns
     let mut sp_counter = 0;

@@ -159,7 +159,7 @@ impl<'a> OpenCLCWriter<'_> {
                             format!("*hypercall_continuation = {};", hypercall_id_count),
                             "return;");
         // insert return label, the VMM will return to right after the return
-        ret_str += &format!("{}_hypercall_return_stub_{}:\n", format!("{}{}", "$_", fn_name.replace(".", "")), hypercall_id_count);
+        ret_str += &format!("{}_hypercall_return_stub_{}:\n", format!("{}{}", "__", fn_name.replace(".", "")), hypercall_id_count);
 
         // after the hypercall, we need to reset values on re-entry, and possible copy data back from the hcall buf
         // skipped hypercall entries here are no-ops
@@ -800,7 +800,7 @@ impl<'a> OpenCLCWriter<'_> {
                 // strip illegal chars from function name
 
                 final_string += &format!("{} {{\n",
-                        self.generate_function_prelude(&format!("{}{}", "$_", id.name().replace(".", "")),
+                        self.generate_function_prelude(&format!("{}{}", "__", id.name().replace(".", "")),
                                                         0,
                                                         0,
                                                         0,
@@ -861,7 +861,7 @@ impl<'a> OpenCLCWriter<'_> {
                 write!(final_string, "\t\t{}\n", "switch (*hypercall_continuation) {");
                 for count in 0..*num_hypercalls {
                     write!(final_string, "\t\t\tcase {}:\n", count);
-                    write!(final_string, "\t\t\t\tgoto {}_hypercall_return_stub_{};\n", format!("{}{}", "$_", id.name().replace(".", "")), count);
+                    write!(final_string, "\t\t\t\tgoto {}_hypercall_return_stub_{};\n", format!("{}{}", "__", id.name().replace(".", "")), count);
                     write!(final_string, "\t\t\t\tbreak;\n");
                 } 
                 write!(final_string, "\t\t}}\n");
@@ -877,7 +877,7 @@ impl<'a> OpenCLCWriter<'_> {
                 for count in 0..*num_function_calls {
                     write!(final_string, "\t\t\tcase {}:\n", count);
                     write!(final_string, "\t\t\t\t*sfp -= 1;\n");
-                    write!(final_string, "\t\t\t\tgoto {}_call_return_stub_{};\n", format!("{}{}", "$_", id.name().replace(".", "")), count);
+                    write!(final_string, "\t\t\t\tgoto {}_call_return_stub_{};\n", format!("{}{}", "__", id.name().replace(".", "")), count);
                     write!(final_string, "\t\t\t\tbreak;\n");
                 }
                 write!(final_string, "\t\t}}\n");
@@ -1462,7 +1462,7 @@ void {}(global uint   *stack_u32,
             };
 
             // if we are going to try linking a lib
-            //write!(output, "{};", self.generate_function_prelude(&format!("{}{}", "$_", fname.replace(".", "")), interleave, 0, 0, 0, 0, 0, 0, 0, false, false));
+            //write!(output, "{};", self.generate_function_prelude(&format!("{}{}", "__", fname.replace(".", "")), interleave, 0, 0, 0, 0, 0, 0, 0, false, false));
             
             let header_include = format!("#include \"helper.cl\"\n{}", func);
             func_vec.push(header_include);
@@ -1488,11 +1488,11 @@ void {}(global uint   *stack_u32,
         for key in function_idx_label.keys() {
             write!(output, "\t\tcase {}:\n", function_idx_label.get(key).unwrap());
             if debug_print_function_calls {
-                write!(output, "\t\tprintf(\"{}\\n\");\n", format!("{}{}", "$_", key.replace(".", "")));
+                write!(output, "\t\tprintf(\"{}\\n\");\n", format!("{}{}", "__", key.replace(".", "")));
             }
             // strip illegal chars from function names
             write!(output, "\t\t\t{}({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {});\n",
-                            format!("{}{}", "$_", key.replace(".", "")),
+                            format!("{}{}", "__", key.replace(".", "")),
                             "stack_u32",
                             "stack_u64",
                             "heap_u32",
