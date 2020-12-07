@@ -386,17 +386,17 @@ impl OpenCLRunner {
         let linker_available = ocl::core::get_device_info(&device_id, ocl::core::DeviceInfo::LinkerAvailable);
         let extensions = ocl::core::get_device_info(&device_id, ocl::core::DeviceInfo::Extensions);
 
-        dbg!(dev_type);
-        dbg!(dev_name);
-        dbg!(vendor);
-        dbg!(ocl_version);
-        dbg!(ocl_c_version);
-        dbg!(compute_units);
-        dbg!(max_param_size);
-        dbg!(max_global_mem_size);
-        dbg!(max_constant_buffer_size);
-        dbg!(linker_available);
-        dbg!(extensions);
+        println!("{:?}", dev_type);
+        println!("{:?}", dev_name);
+        println!("{:?}", vendor);
+        println!("{:?}", ocl_version);
+        println!("{:?}", ocl_c_version);
+        println!("{:?}", compute_units);
+        println!("{:?}", max_param_size);
+        println!("{:?}", max_global_mem_size);
+        println!("{:?}", max_constant_buffer_size);
+        println!("{:?}", linker_available);
+        println!("{:?}", extensions);
 
         // compile the GPU kernel(s)
         let program_to_run = match &self.input_program {
@@ -699,7 +699,7 @@ impl OpenCLRunner {
                 ocl::core::enqueue_kernel(&queue, &start_kernel, 1, None, &[self.num_vms as usize, 1, 1], None, None::<Event>, Some(&mut profiling_event)).unwrap();
                 match ocl::core::finish(&queue) {
                     Err(e) => {
-                        panic!("Unable to finish waiting on queue for data_kernel\n\n{}", e);
+                        panic!("Unable to finish waiting on queue for start_kernel\n\n{}", e);
                     },
                     Ok(_) => (),
                 }
@@ -847,8 +847,8 @@ impl OpenCLRunner {
 
         let e2e_time_end = std::time::Instant::now();
 
-        dbg!("E2E execution time in nanoseconds", (e2e_time_end - e2e_time_start).as_nanos());
-        dbg!("On GPU time in nanoseconds", total_gpu_execution_time);
+        println!("E2E execution time in nanoseconds: {}", (e2e_time_end - e2e_time_start).as_nanos());
+        println!("On GPU time in nanoseconds: {}", total_gpu_execution_time);
 
         println!("fraction of time on GPU: {}", total_gpu_execution_time as f64 / (e2e_time_end - e2e_time_start).as_nanos() as f64);
         println!("fraction of time on hcall dispatch: {}", hcall_execution_time as f64 / (e2e_time_end - e2e_time_start).as_nanos() as f64);

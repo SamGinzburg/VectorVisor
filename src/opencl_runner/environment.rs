@@ -66,9 +66,8 @@ impl Environment {
         let env_str_ptr = &GuestPtr::new(&wasm_mem, 8 + num_env_vars * 4);
         ctx.environ_get(ciovec_ptr, env_str_ptr).unwrap();
 
-
-        let arr = &raw_mem[(8 + num_env_vars * 4) as usize..(8 + num_env_vars * 4 + env_str_size) as usize];
-        println!("{}", String::from_utf8(arr.to_vec()).unwrap());
+        //let arr = &raw_mem[(8 + num_env_vars * 4) as usize..(8 + num_env_vars * 4 + env_str_size) as usize];
+        //println!("{}", String::from_utf8(arr.to_vec()).unwrap());
         //println!("{:?}", &arr);
 
         // copy the results back to the hcall_buf
@@ -87,7 +86,7 @@ impl Environment {
             }
         }
 
-        dbg!(&mut hcall_buf[0..16]);
+        //dbg!(&mut hcall_buf[0..16]);
 
         sender.send({
             HyperCallResult::new(0, hypercall.vm_id, WasiSyscalls::EnvironSizeGet)

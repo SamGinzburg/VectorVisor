@@ -213,7 +213,7 @@ fn main() {
         println!("Globals buffer: {}", globals_buffer_size);
         println!("interleaved: {}", interleaved);
 
-        let mut file = File::create(format!("{}.cl", compile)).unwrap();
+        let mut file = File::create(format!("{}.cl", file_path)).unwrap();
         file.write_all(&compiled_kernel.clone().into_bytes()).unwrap();
         return;
     }
