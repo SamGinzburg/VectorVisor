@@ -524,6 +524,8 @@ impl OpenCLRunner {
         let mut hypercall_sender = vec![];
         let hcall_read_buffer: Arc<Mutex<&mut [u8]>> = Arc::new(Mutex::new(hypercall_buffer_read_buffer));
         let mut total_gpu_execution_time: u64 = 0;
+        let mut queue_submit_delta: u64 = 0;
+
         let mut hcall_execution_time: u128 = 0;
         let mut vmm_overhead: u128 = 0;
 
@@ -705,10 +707,11 @@ impl OpenCLRunner {
                 }
             }
 
-            let start_start_kernel = profiling_event.profiling_info(ocl::enums::ProfilingInfo::Submit).unwrap().time().unwrap();
+            let queue_start_kernel = profiling_event.profiling_info(ocl::enums::ProfilingInfo::Queued).unwrap().time().unwrap();
+            let start_start_kernel = profiling_event.profiling_info(ocl::enums::ProfilingInfo::Start).unwrap().time().unwrap();
             let end_start_kernel = profiling_event.profiling_info(ocl::enums::ProfilingInfo::End).unwrap().time().unwrap();
-            total_gpu_execution_time += end_start_kernel-start_start_kernel;
-
+            total_gpu_execution_time += end_start_kernel-queue_start_kernel;
+            queue_submit_delta += start_start_kernel-queue_start_kernel;
             // upon exiting we check the stack pointer for each VM
             let vmm_pre_overhead = std::time::Instant::now();
 
@@ -849,7 +852,8 @@ impl OpenCLRunner {
 
         println!("E2E execution time in nanoseconds: {}", (e2e_time_end - e2e_time_start).as_nanos());
         println!("On GPU time in nanoseconds: {}", total_gpu_execution_time);
-
+        println!("GPU Start-Queue overhead in nanoseconds: {}", queue_submit_delta);
+        println!("GPU Overhead / GPU Execution Time: {}", queue_submit_delta as f64 / total_gpu_execution_time as f64);
         println!("fraction of time on GPU: {}", total_gpu_execution_time as f64 / (e2e_time_end - e2e_time_start).as_nanos() as f64);
         println!("fraction of time on hcall dispatch: {}", hcall_execution_time as f64 / (e2e_time_end - e2e_time_start).as_nanos() as f64);
         println!("fraction of time on VMM overhead: {}", vmm_overhead as f64 / (e2e_time_end - e2e_time_start).as_nanos() as f64);

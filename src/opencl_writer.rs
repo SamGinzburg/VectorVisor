@@ -717,6 +717,7 @@ impl<'a> OpenCLCWriter<'_> {
                      indirect_call_mapping: &HashMap<u32, &wast::Index>, 
                      global_mappings: &HashMap<String, (u32, u32)>,
                      force_inline: bool,
+                     is_gpu: bool,
                      debug: bool) -> String {
         let mut final_string = String::from(""); 
         *call_ret_idx = 0;
@@ -934,7 +935,10 @@ impl<'a> OpenCLCWriter<'_> {
                                                             func,
                                                             block_name_count,
                                                             loop_name_count,
-                                                            debug);
+                                                            // if we are compiling a CPU kernel
+                                                            // we have to force this to true, even if we aren't
+                                                            // actually emitting "debug" code
+                                                            !is_gpu || debug);
                 }
 
                 // to unwind from the function we unwind the call stack by moving the stack pointer
@@ -1301,6 +1305,9 @@ void {}(global uint   *stack_u32,
             None => (1 as u64, heap_size as u64/(1024*64)),
         };
 
+        dbg!(program_start_mem_pages);
+        dbg!(program_start_max_pages);
+
         if debug {
             result += &String::from("\nvoid data_init(uint *heap_u32, uint *globals_buffer, uint *curr_mem, uint *max_mem, uchar *is_calling) {\n");
             result += &String::from("\tulong warp_idx = 0;\n");
@@ -1370,6 +1377,7 @@ void {}(global uint   *stack_u32,
                              predictor_size_bytes: u32,
                              debug_print_function_calls: bool,
                              force_inline: bool,
+                             is_gpu: bool,
                              debug: bool) -> (String, u32, u32, u32) {
         let mut output = String::new();
         let mut header = String::new();
@@ -1443,6 +1451,7 @@ void {}(global uint   *stack_u32,
                                           indirect_call_mapping,
                                           &global_mappings,
                                           force_inline,
+                                          is_gpu,
                                           debug);
 
             if debug {

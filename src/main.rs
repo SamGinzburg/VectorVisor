@@ -205,6 +205,7 @@ fn main() {
                                                                                                             predictor_size,
                                                                                                             debug_call_print,
                                                                                                             force_inline,
+                                                                                                            is_gpu,
                                                                                                             false);
 
         println!("The following info is needed to later run compiled pre-compiled/externally compiled binaries");
@@ -248,6 +249,7 @@ fn main() {
                                                                                                                             predictor_size,
                                                                                                                             debug_call_print,
                                                                                                                             force_inline,
+                                                                                                                            is_gpu,
                                                                                                                             false);
             println!("Compiled: {} functions", num_compiled_funcs);
             println!("Entry point: {}", entry_point);
