@@ -290,7 +290,9 @@ fn main() {
     };
 
     let fname = &file_path.as_str();
-    (0..num_vm_groups).into_par_iter().for_each(|_idx| {
+    //let mut spawned_threads = Vec::new();
+
+    (0..num_vm_groups).map(|_idx| {
         let runner = opencl_runner::OpenCLRunner::new(num_vms, interleaved, is_gpu, entry_point, file.clone());
         runner.run(fname,
                    stack_size,
@@ -301,7 +303,9 @@ fn main() {
                    num_compiled_funcs,
                    globals_buffer_size,
                    compile_args.clone(),
-                   link_args.clone());
+                   link_args.clone())
+    }).for_each(|handler| {
+        handler.join().unwrap();
     });
 }
  

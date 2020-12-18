@@ -32,6 +32,7 @@ use std::fs::File;
 use std::io::Write;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::thread::JoinHandle;
 use serde::{Serialize, Deserialize};
 use bincode;
 
@@ -146,7 +147,7 @@ impl OpenCLRunner {
                num_compiled_funcs: u32,
                globals_buffer_size: u32,
                compile_flags: String,
-               link_flags: String) -> () {
+               link_flags: String) -> JoinHandle<()> {
         let (program, context, device_id) = self.setup_kernel(input_filename, num_compiled_funcs, globals_buffer_size, compile_flags, link_flags);
         let num_vms = self.num_vms.clone();
 
@@ -187,7 +188,7 @@ impl OpenCLRunner {
             // In the future if we want to make this dynamic, we need to cleanup the leaked objects
 
         });
-        handler.join().unwrap();
+        handler
     }
 
     // All of the size parameters are *per-VM* sizes, not total
@@ -203,14 +204,14 @@ impl OpenCLRunner {
                           context: ocl::core::Context) -> (OpenCLRunner, ocl::core::Context) {
         let stack_buffer = unsafe {
             ocl::core::create_buffer::<_, u8>(&context,
-                                              ocl::core::MEM_READ_WRITE,
+                                              ocl::core::MEM_READ_WRITE | ocl::core::MEM_ALLOC_HOST_PTR,
                                               (stack_size as u64 * self.num_vms as u64) as usize,
                                               None).unwrap()
         };
 
         let heap_buffer = unsafe {
             ocl::core::create_buffer::<_, u8>(&context,
-                                              ocl::core::MEM_READ_WRITE,
+                                              ocl::core::MEM_READ_WRITE | ocl::core::MEM_ALLOC_HOST_PTR,
                                               (heap_size as u64 * self.num_vms as u64) as usize,
                                               None).unwrap()
         };
