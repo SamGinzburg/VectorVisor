@@ -6,6 +6,7 @@
   (type $t2 (func (result i32)))
   (import "wasi_unstable" "fd_write" (func $wasi_unstable.fd_write (type $t0)))
   (import "wasi_unstable" "proc_exit" (func $wasi_unstable.proc_exit (type $t1)))
+
   (func $_start (type $t2)
     i32.const 1
     i32.const 8

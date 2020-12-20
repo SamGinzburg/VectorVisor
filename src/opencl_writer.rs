@@ -219,6 +219,7 @@ impl<'a> OpenCLCWriter<'_> {
                          loop_name_count: &mut u32,
                          // emit OpenCL C (False) or standard C for debugging on the CPU (True)
                          debug: bool) -> String {
+        println!("{}", debug);
         match instr {
             wast::Instruction::Drop => {
                 // based on the previous stack size, decrement sp

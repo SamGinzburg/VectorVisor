@@ -37,5 +37,5 @@
   (memory $memory 1)
   (export "memory" (memory 0))
   (export "_start" (func $_start))
-  (data $d0 (i32.const 8) "\10\00\00\00\ff\00\00\00")
-  (data $d1 (i32.const 16) "Hello World!\0a"))
+  (data $d0 (i32.const 8) "\10\00\00\00\ff\00\00\00"))
+  ;;(data $d1 (i32.const 16) "Hello World!\0a"))

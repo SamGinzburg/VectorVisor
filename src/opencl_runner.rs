@@ -204,14 +204,16 @@ impl OpenCLRunner {
                           context: ocl::core::Context) -> (OpenCLRunner, ocl::core::Context) {
         let stack_buffer = unsafe {
             ocl::core::create_buffer::<_, u8>(&context,
-                                              ocl::core::MEM_READ_WRITE | ocl::core::MEM_ALLOC_HOST_PTR,
+                                              //ocl::core::MEM_READ_WRITE | ocl::core::MEM_ALLOC_HOST_PTR,
+                                              ocl::core::MEM_READ_WRITE,
                                               (stack_size as u64 * self.num_vms as u64) as usize,
                                               None).unwrap()
         };
 
         let heap_buffer = unsafe {
             ocl::core::create_buffer::<_, u8>(&context,
-                                              ocl::core::MEM_READ_WRITE | ocl::core::MEM_ALLOC_HOST_PTR,
+                                              //ocl::core::MEM_READ_WRITE | ocl::core::MEM_ALLOC_HOST_PTR,
+                                              ocl::core::MEM_READ_WRITE,
                                               (heap_size as u64 * self.num_vms as u64) as usize,
                                               None).unwrap()
         };
@@ -387,17 +389,17 @@ impl OpenCLRunner {
         let linker_available = ocl::core::get_device_info(&device_id, ocl::core::DeviceInfo::LinkerAvailable);
         let extensions = ocl::core::get_device_info(&device_id, ocl::core::DeviceInfo::Extensions);
 
-        println!("{:?}", dev_type);
-        println!("{:?}", dev_name);
-        println!("{:?}", vendor);
-        println!("{:?}", ocl_version);
-        println!("{:?}", ocl_c_version);
-        println!("{:?}", compute_units);
-        println!("{:?}", max_param_size);
-        println!("{:?}", max_global_mem_size);
-        println!("{:?}", max_constant_buffer_size);
-        println!("{:?}", linker_available);
-        println!("{:?}", extensions);
+        println!("Device type: {:?}", dev_type);
+        println!("Device name: {:?}", dev_name);
+        println!("Vendor: {:?}", vendor);
+        println!("OpenCL Version: {:?}", ocl_version);
+        println!("OpenCL C Version: {:?}", ocl_c_version);
+        println!("Num. compute units: {:?}", compute_units);
+        println!("Max param size: {:?}", max_param_size);
+        println!("Max global mem size: {:?}", max_global_mem_size);
+        println!("Max constant buffer size: {:?}", max_constant_buffer_size);
+        println!("Linker available: {:?}", linker_available);
+        println!("OpenCL Extensions: {:?}", extensions);
 
         // compile the GPU kernel(s)
         let program_to_run = match &self.input_program {
