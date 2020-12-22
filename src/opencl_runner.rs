@@ -854,10 +854,10 @@ impl OpenCLRunner {
         let e2e_time_end = std::time::Instant::now();
 
         println!("E2E execution time in nanoseconds: {}", (e2e_time_end - e2e_time_start).as_nanos());
-        println!("On GPU time in nanoseconds: {}", total_gpu_execution_time);
-        println!("GPU Start-Queue overhead in nanoseconds: {}", queue_submit_delta);
-        println!("GPU Overhead / GPU Execution Time: {}", queue_submit_delta as f64 / total_gpu_execution_time as f64);
-        println!("fraction of time on GPU: {}", total_gpu_execution_time as f64 / (e2e_time_end - e2e_time_start).as_nanos() as f64);
+        println!("On device time in nanoseconds: {}", total_gpu_execution_time);
+        println!("Device Start-Queue overhead in nanoseconds: {}", queue_submit_delta);
+        println!("Device Overhead / Device Execution Time: {}", queue_submit_delta as f64 / total_gpu_execution_time as f64);
+        println!("fraction of time on device: {}", total_gpu_execution_time as f64 / (e2e_time_end - e2e_time_start).as_nanos() as f64);
         println!("fraction of time on hcall dispatch: {}", hcall_execution_time as f64 / (e2e_time_end - e2e_time_start).as_nanos() as f64);
         println!("fraction of time on VMM overhead: {}", vmm_overhead as f64 / (e2e_time_end - e2e_time_start).as_nanos() as f64);
 

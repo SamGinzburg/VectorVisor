@@ -717,6 +717,7 @@ impl<'a> OpenCLCWriter<'_> {
                      indirect_call_mapping: &HashMap<u32, &wast::Index>, 
                      global_mappings: &HashMap<String, (u32, u32)>,
                      force_inline: bool,
+                     debug_call_print: bool,
                      is_gpu: bool,
                      debug: bool) -> String {
         let mut final_string = String::from(""); 
@@ -813,6 +814,13 @@ impl<'a> OpenCLCWriter<'_> {
                                                         false,
                                                         debug));
 
+                if debug_call_print {
+                    write!(final_string, "\t\tprintf(\"*sfp = %d\\n\", *sfp);\n");
+                    write!(final_string, "\t\tprintf(\"*sp = %d\\n\", *sp);\n");
+                    write!(final_string, "\t\tprintf(\"read_u32(stack_frames+*sfp) = %d\\n\", read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx));\n");
+                    write!(final_string, "\t\tprintf(\"read_u32(call_stack+*sfp) = %d\\n\", read_u32((ulong)(call_stack+*sfp), (ulong)(call_stack), warp_idx));\n");
+                }
+
                 /*
                  * First, before emitting the function call & hypercall return tables,
                  * we need to do an analysis pass on the instructions to:
@@ -878,6 +886,9 @@ impl<'a> OpenCLCWriter<'_> {
                 for count in 0..*num_function_calls {
                     write!(final_string, "\t\t\tcase {}:\n", count);
                     write!(final_string, "\t\t\t\t*sfp -= 1;\n");
+                    if debug_call_print {
+                        write!(final_string, "\t\t\t\tprintf(\"goto: {}_call_return_stub_{}\\n\");\n", format!("{}{}", "__", id.name().replace(".", "")), count);
+                    }
                     write!(final_string, "\t\t\t\tgoto {}_call_return_stub_{};\n", format!("{}{}", "__", id.name().replace(".", "")), count);
                     write!(final_string, "\t\t\t\tbreak;\n");
                 }
@@ -1316,7 +1327,6 @@ void {}(global uint   *stack_u32,
             result += &String::from("\tis_calling[warp_idx] = 1;\n");
             result += &format!("\tmax_mem[warp_idx] = {};\n", program_start_max_pages);
             result += &self.emit_memcpy_arr(debug);
-
             result += &self.emit_global_init(&mapping, debug);
 
             result += &String::from("}\n\n");
@@ -1343,7 +1353,6 @@ void {}(global uint   *stack_u32,
             }
 
             result += &self.emit_memcpy_arr(debug);
-
             result += &self.emit_global_init(&mapping, debug);
 
             result += &String::from("}\n\n");
@@ -1451,6 +1460,7 @@ void {}(global uint   *stack_u32,
                                           indirect_call_mapping,
                                           &global_mappings,
                                           force_inline,
+                                          debug_print_function_calls,
                                           is_gpu,
                                           debug);
 
@@ -1491,6 +1501,67 @@ void {}(global uint   *stack_u32,
                                                stack_frame_ptr_size_bytes,
                                                true,
                                                debug));
+
+        /*
+         * Set up the stack frame for the first function call (___start)
+         * we need to make sure that stack_u32 is set up properly, so that parameters for the first function being called can be
+         * accessed. This is because of our indexing for function params (negative offsets)
+         * 
+         * This is language specific:
+         *  wasi-libc takes no args for start, see: https://github.com/WebAssembly/wasi-libc/blob/master/libc-bottom-half/crt/crt1.c
+         * 
+         *  However, rust does: https://github.com/rust-lang/rust/blob/0d97f7a96877a96015d70ece41ad08bb7af12377/library/std/src/rt.rs#L60
+         * 
+         */
+
+        // to solve this issue, we just increment the stack_u32 ptr by the size of params for the start function
+        // this is inefficient, to search through all the functions until we find start, but not really that slow in the grand scheme of things
+        for function in funcs.clone() {
+            match function.id {
+                Some(name) => {
+                    if name.name() == "_start" {
+                        // move stack_u32 by the total size of all parameters
+                        let mut offset = 0;
+                        match function.ty.clone().inline {
+                            Some(params) => {
+                                for parameter in params.params.to_vec() {
+                                    match parameter {
+                                        (Some(id), _, t) => {
+                                            offset += self.get_size_valtype(&t);
+                                        },
+                                        // if there is no id, we have to name the parameter ourselves!
+                                        (None, _, t) => {
+                                            offset += self.get_size_valtype(&t);
+                                        },
+                                        _ => panic!("Unhandled parameter type")
+                                    }
+                                }
+                
+                            },
+                            None => (),
+                        }
+                        write!(output, "\tstack_u32 += {};\n", offset);
+                        break;
+                    }
+                },
+                _ => (),
+            }
+        }
+
+        if debug_print_function_calls {
+            write!(output, "\tprintf(\"stack_u32: %p\\n\", stack_u32);\n");
+            write!(output, "\tprintf(\"heap_u32: %p\\n\", heap_u32);\n");
+            write!(output, "\tprintf(\"call_stack: %p\\n\", call_stack);\n");
+            write!(output, "\tprintf(\"is_calling: %p\\n\", is_calling);\n");
+            write!(output, "\tprintf(\"hypercall_buffer: %p\\n\", hypercall_buffer);\n");
+            write!(output, "\tprintf(\"call_return_stack: %p\\n\", call_return_stack);\n");
+            write!(output, "\tprintf(\"branch_value_stack_state: %p\\n\", branch_value_stack_state);\n");
+            write!(output, "\tprintf(\"loop_value_stack_state: %p\\n\", loop_value_stack_state);\n");
+            write!(output, "\tprintf(\"hypercall_number: %p\\n\", hypercall_number);\n");
+            write!(output, "\tprintf(\"hypercall_continuation: %p\\n\", hypercall_continuation);\n");
+            write!(output, "\tprintf(\"current_mem_size: %p\\n\", current_mem_size);\n");
+            write!(output, "\tprintf(\"max_mem_size: %p\\n\", max_mem_size);\n");
+        }
 
         write!(output, "\t{}\n", "do {");
         write!(output, "\t{}\n", "switch (*entry_point) {");
