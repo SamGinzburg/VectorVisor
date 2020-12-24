@@ -1,5 +1,5 @@
 ;; see https://github.com/WebAssembly/WASI/blob/master/phases/snapshot/witx/wasi_snapshot_preview1.witx
-;; wasmtime fd_prestat_get.wat --dir=.
+;; RUST_LOG=trace wasmtime wasi_examples/fd_prestat_get.wat --dir=.
 (module
   (type $t0 (func (param i32 i32) (result i32)))
   (type $t1 (func (param i32)))
@@ -16,16 +16,11 @@
     i32.const 16  ;; buf pointer where metadata will be stored 
     call $fd_prestat_get
     drop
-    i32.const 16
-    i32.load8_u
-    ;;i32.const 1
-    ;;i32.const 8
-    ;;i32.const 1
-    ;;i32.const 10
-    ;;call $wasi_unstable.fd_write
+    ;; buf points at the preopen type, buf + 4 points at the size of the name, u32 in size
+    i32.const 20
+    i32.load
+    ;; the value loaded should be equal to the strlen of --dir="." -> 1
   )
   (memory $memory 1)
   (export "memory" (memory 0))
-  (export "_start" (func $_start))
-  (data $d0 (i32.const 8) "\10\00\00\00\ff\00\00\00")
-  (data $d1 (i32.const 16) "Hello World!\0a"))
+  (export "_start" (func $_start)))

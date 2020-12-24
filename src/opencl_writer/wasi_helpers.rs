@@ -170,6 +170,52 @@ pub fn emit_fd_write_call_helper(writer: &opencl_writer::OpenCLCWriter, debug: b
                         "warp_idx"))
 }
 
+pub fn emit_fd_prestat_get_helper(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> String {
+    let mut ret_str = String::from("");
+    /*
+     * We only need to copy over the fd
+     */
+    ret_str += &format!("\t{};\n",
+        emit_write_u32("(ulong)(hypercall_buffer)",
+                "(ulong)(hypercall_buffer)",
+                &emit_read_u32("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx"),
+                "warp_idx"));
+    ret_str
+}
+
+pub fn emit_fd_prestat_get_post(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> String {
+    let mut ret_str = String::from("");
+    /*
+     * We need to copy back the (i32) size of the string describing the fd name
+     */
+    let str_len = &emit_read_u32("(ulong)(hypercall_buffer)", "(ulong)(hypercall_buffer)", "warp_idx");
+    let offset = &emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx");
+    
+    if debug {
+        ret_str += &format!("\t{};\n",
+            emit_write_u32(&format!("(ulong)((char*)heap_u32+{}+4)", offset),
+                        "(ulong)(heap_u32)",
+                        str_len,
+                        "warp_idx"));
+    } else {
+        ret_str += &format!("\t{};\n",
+            emit_write_u32(&format!("(ulong)((global char*)heap_u32+{}+4)", offset),
+                        "(ulong)(heap_u32)",
+                        str_len,
+                        "warp_idx"));
+    }
+
+    // now return the error code
+
+    ret_str += &format!("\t{};\n",
+                        emit_write_u32("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "0", "warp_idx"));
+
+    ret_str += &format!("\t{};\n",
+                        "*sp -= 1");
+
+    ret_str
+}
+
 
 pub fn emit_environ_sizes_get_post(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> String {
     let mut ret_str = String::from("");
@@ -224,21 +270,16 @@ pub fn emit_environ_sizes_get_post(writer: &opencl_writer::OpenCLCWriter, debug:
     ret_str
 }
 
-pub fn emit_environ_get(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> String {
+pub fn emit_environ_get_post(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> String {
     let mut ret_str = String::from("");
     // This function takes two u32 arguments, so we need to pop those off
     // arg1: pointer to a buffer of pointers
     // arg2: pointer to a buffer to store the string data
     // when we return, the hcall_buffer will include the two buf_lens as the first two 4 bytes values
 
-    //ret_str += &format!("\tprintf(\"ARG1: %d\\n\", {});\n", &emit_read_u32("(ulong)(hypercall_buffer)", "(ulong)(hypercall_buffer)", "warp_idx"));
-    //ret_str += &format!("\tprintf(\"ARG2: %d\\n\", {});\n", &emit_read_u32("(ulong)(hypercall_buffer+1)", "(ulong)(hypercall_buffer)", "warp_idx"));
-    
     let env_count = &emit_read_u32("(ulong)(hypercall_buffer)", "(ulong)(hypercall_buffer)", "warp_idx");
     let size_ptr_buf = emit_read_u32("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx");
     let size_string_buf = emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx");
-    //ret_str += &format!("\tprintf(\"size_ptr_buf: %d\\n\", {});\n", &size_ptr_buf);
-    //ret_str += &format!("\tprintf(\"size_string_buf: %d\\n\", {});\n", &size_string_buf);
 
     if debug {
         // copy over the buffer of pointers

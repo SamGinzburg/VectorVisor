@@ -10,6 +10,8 @@ use crate::opencl_runner::interleave_offsets::Interleave;
 
 use wasi_common::wasi::types::CiovecArray;
 use wasi_common::fs::Fd;
+use wasi_common::wasi::types::PrestatDir;
+use wasi_common::wasi::types::Prestat;
 
 use wasmtime::*;
 use wasmtime_wiggle::WasmtimeGuestMemory;
@@ -84,5 +86,41 @@ impl WasiFd {
         sender.send({
             HyperCallResult::new(result.unwrap() as i32, hypercall.vm_id, WasiSyscalls::FdWrite)
         }).unwrap();
+    }
+
+    pub fn hypercall_fd_prestat_get(ctx: &WasiCtx, vm_ctx: &VectorizedVM, hypercall: &mut HyperCall, sender: &Sender<HyperCallResult>) -> () {
+        let mut hcall_buf: &mut [u8] = &mut hypercall.hypercall_buffer.lock().unwrap();
+
+        let memory = &vm_ctx.memory;
+        let wasm_mem = &vm_ctx.wasm_memory;
+
+        let fd: u32;
+
+        let raw_mem: &mut [u8] = unsafe { memory.data_unchecked_mut() };
+        if hypercall.is_interleaved_mem {
+            fd = Interleave::read_u32(hcall_buf, 0, hypercall.num_total_vms, hypercall.vm_id);
+        } else {
+            // set the buffer to the scratch space for the appropriate VM
+            // we don't have to do this for the interleave
+            hcall_buf = &mut hcall_buf[(hypercall.vm_id * 16384) as usize..((hypercall.vm_id+1) * 16384) as usize];
+            fd = LittleEndian::read_u32(&hcall_buf[0..4]);
+        }
+
+        let result = match ctx.fd_prestat_get(Fd::from(fd)){
+            Ok(Prestat::Dir(prestat_dir)) => prestat_dir.pr_name_len,
+            Err(e) => 0,
+        };
+
+        if hypercall.is_interleaved_mem {
+            Interleave::write_u32(hcall_buf, 0, hypercall.num_total_vms, result, hypercall.vm_id);
+        } else {
+            hcall_buf = &mut hcall_buf[(hypercall.vm_id * 16384) as usize..((hypercall.vm_id+1) * 16384) as usize];
+            LittleEndian::write_u32(&mut hcall_buf[0..4], result);
+        }
+
+        sender.send({
+            HyperCallResult::new(0 as i32, hypercall.vm_id, WasiSyscalls::FdWrite)
+        }).unwrap();
+    
     }
 }

@@ -36,6 +36,8 @@ use std::thread::JoinHandle;
 use serde::{Serialize, Deserialize};
 use bincode;
 
+use byteorder::LittleEndian;
+use byteorder::ByteOrder;
 
 pub enum VMMRuntimeStatus {
     StatusOkay,
@@ -147,7 +149,8 @@ impl OpenCLRunner {
                num_compiled_funcs: u32,
                globals_buffer_size: u32,
                compile_flags: String,
-               link_flags: String) -> JoinHandle<()> {
+               link_flags: String,
+               print_return: bool) -> JoinHandle<()> {
         let (program, context, device_id) = self.setup_kernel(input_filename, num_compiled_funcs, globals_buffer_size, compile_flags, link_flags);
         let num_vms = self.num_vms.clone();
 
@@ -176,7 +179,7 @@ impl OpenCLRunner {
             let leaked_command_queue: &'static CommandQueue = Box::leak(Box::new(command_queue));
             let hypercall_buffer_read_buffer: &'static mut [u8] = Box::leak(vec![0u8; 16 * 1024 * num_vms as usize].into_boxed_slice());
 
-            let status = final_runner.run_vector_vms(stack_frames_size, program, &leaked_command_queue, hypercall_buffer_read_buffer, 1024*16, context);
+            let status = final_runner.run_vector_vms(stack_frames_size, program, &leaked_command_queue, hypercall_buffer_read_buffer, 1024*16, context, print_return);
             // this line should never be reached, reaching it signifies that either
             // 1) The VMM has exited normally
             // 2) The VMM has exited prematurely due to a crash
@@ -511,7 +514,8 @@ impl OpenCLRunner {
                          queue: &'static CommandQueue,
                          hypercall_buffer_read_buffer: &'static mut [u8],
                          hypercall_buffer_size: u32,
-                         ctx: ocl::core::Context) -> VMMRuntimeStatus {
+                         ctx: ocl::core::Context,
+                         print_return: bool) -> VMMRuntimeStatus {
         // we have the compiled program & context, we now can set up the kernels...
         let data_kernel = ocl::core::create_kernel(&program, "data_init").unwrap();
         let start_kernel = ocl::core::create_kernel(&program, "wasm_entry").unwrap();
@@ -519,8 +523,6 @@ impl OpenCLRunner {
         let mut stack_pointer_temp = vec![0u64; self.num_vms as usize];
         let mut entry_point_temp = vec![0u32; self.num_vms as usize];
         let mut hypercall_num_temp = vec![0i32; self.num_vms as usize];
-        // this is for debugging only...
-        let mut check_results_debug = vec![0u8; 200 as usize];
         let mut sp_exit_flag;
         let mut entry_point_exit_flag;
         let vm_slice: Vec<u32> = std::ops::Range { start: 0, end: (self.num_vms) }.collect();
@@ -762,6 +764,7 @@ impl OpenCLRunner {
                     1 => WasiSyscalls::ProcExit,
                     2 => WasiSyscalls::EnvironSizeGet,
                     3 => WasiSyscalls::EnvironGet,
+                    4 => WasiSyscalls::FdPrestatGet,
                     _ => WasiSyscalls::InvalidHyperCallNum,
                 };
 
@@ -833,25 +836,26 @@ impl OpenCLRunner {
             vmm_overhead += (vmm_post_overhead_end - vmm_post_overhead).as_nanos();
         }
 
+        let e2e_time_end = std::time::Instant::now();
+
         // To get final results back from the stack if we want for debugging stuff
         // only uncomment this out if you need to debug stuff, it will panic if you have too many VMs and too small of a buffer
-        /*
-        unsafe {
-            ocl::core::enqueue_read_buffer(&queue, &buffers.stack_buffer, true, 0, &mut check_results_debug, None::<Event>, None::<&mut Event>).unwrap();
+        dbg!(print_return);
+        if print_return {
+            let mut check_results_debug = vec![0u8; (self.num_vms * 4) as usize];
+            unsafe {
+                ocl::core::enqueue_read_buffer(&queue, &buffers.stack_buffer, true, 0, &mut check_results_debug, None::<Event>, None::<&mut Event>).unwrap();
+            }
+            for vm_idx in 0..self.num_vms {
+                if self.is_memory_interleaved {
+                    let result = Interleave::read_u32(&mut check_results_debug, 0, self.num_vms, vm_idx);
+                    dbg!(result as i32);
+                } else {
+                    let result = LittleEndian::read_u32(&check_results_debug[vm_idx as usize..(vm_idx+4) as usize]);
+                    dbg!(result as i32);
+                }
+            }
         }
-
-        if self.is_memory_interleaved {
-            let result = Interleave::read_u32(&mut check_results_debug, 0, self.num_vms, 0);
-            dbg!(result as i32);
-        } else {
-            use byteorder::LittleEndian;
-            use byteorder::ByteOrder;
-            let result = LittleEndian::read_u32(&check_results_debug[0..4]);
-            dbg!(result as i32);
-        }
-        */
-
-        let e2e_time_end = std::time::Instant::now();
 
         println!("E2E execution time in nanoseconds: {}", (e2e_time_end - e2e_time_start).as_nanos());
         println!("On device time in nanoseconds: {}", total_gpu_execution_time);

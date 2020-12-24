@@ -111,6 +111,14 @@ fn main() {
             .multiple(false)
             .number_of_values(1)
             .takes_value(true))
+        .arg(Arg::with_name("printreturn")
+            .long("printreturn")
+            .value_name("Print the last 4 bytes on the stack after proc_exit")
+            .default_value("false")
+            .help("Print the last 4 bytes on the stack after proc_exit")
+            .multiple(false)
+            .number_of_values(1)
+            .takes_value(true))
         .arg(Arg::with_name("ldflags")
             .long("ldflags")
             .value_name("CLI arguments to pass to link_program")
@@ -177,6 +185,7 @@ fn main() {
     let num_vms = value_t!(matches.value_of("vmcount"), u32).unwrap_or_else(|e| e.exit());
     let num_vm_groups = value_t!(matches.value_of("vmgroups"), u32).unwrap_or_else(|e| e.exit());
     let is_gpu = value_t!(matches.value_of("isgpu"), bool).unwrap_or_else(|e| e.exit());
+    let print_return = value_t!(matches.value_of("printreturn"), bool).unwrap_or_else(|e| e.exit());
     let debug_call_print = value_t!(matches.value_of("debugcallprint"), bool).unwrap_or_else(|e| e.exit());
     let compile_args = value_t!(matches.value_of("cflags"), String).unwrap_or_else(|e| e.exit());
     let link_args = value_t!(matches.value_of("ldflags"), String).unwrap_or_else(|e| e.exit());
@@ -303,7 +312,8 @@ fn main() {
                    num_compiled_funcs,
                    globals_buffer_size,
                    compile_args.clone(),
-                   link_args.clone())
+                   link_args.clone(),
+                   print_return)
     }).for_each(|handler| {
         handler.join().unwrap();
     });

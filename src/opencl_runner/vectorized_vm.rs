@@ -1,4 +1,6 @@
 use wasi_common::WasiCtx;
+use wasi_common::WasiCtxBuilder;
+
 use std::fmt;
 use wasmtime::*;
 use wasmtime_wiggle::WasmtimeGuestMemory;
@@ -14,6 +16,8 @@ use crossbeam::channel::Sender;
 
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::fs::File;
+use std::path::Path;
 
 #[derive(Clone, Copy)]
 pub enum WasiSyscalls {
@@ -21,6 +25,7 @@ pub enum WasiSyscalls {
     ProcExit             =  1,
     EnvironSizeGet       =  2,
     EnvironGet           =  3,
+    FdPrestatGet         =  4,
     InvalidHyperCallNum  = -1,
 }
 
@@ -114,7 +119,14 @@ impl VectorizedVM {
     pub fn new(vm_id: u32) -> VectorizedVM {
         // default context with no args yet - we can inherit arguments from the CLI if we want
         // or we can pass them in some other config file
-        let wasi_ctx = WasiCtx::new(&[""]).unwrap();
+        let wasi_ctx = WasiCtxBuilder::new()
+                        .inherit_args()
+                        .inherit_stdio()
+                        .inherit_env()
+                        // preopen whatever the current directory is
+                        // TODO: pass this via CLI somehow
+                        //.preopened_dir(File::open(".").unwrap(), Path::new("."))
+                        .build().unwrap();
         let engine = Engine::default();
         let store = Store::new(&engine);
         let memory_ty = MemoryType::new(Limits::new(1, None));
@@ -160,6 +172,9 @@ impl VectorizedVM {
             },
             WasiSyscalls::EnvironGet => {
                 Environment::hypercall_environ_get(&self.ctx, self, hypercall, sender);
+            },
+            WasiSyscalls::FdPrestatGet => {
+                WasiFd::hypercall_fd_prestat_get(&self.ctx, self, hypercall, sender);
             }
             _ => panic!("Unsupported hypercall invoked! {:?}", hypercall),
         }
