@@ -1,5 +1,5 @@
 ;; see https://github.com/WebAssembly/WASI/blob/master/phases/snapshot/witx/wasi_snapshot_preview1.witx
-;; RUST_LOG=trace wasmtime wasi_examples/fd_prestat_get.wat --dir=.
+;; RUST_LOG=trace wasmtime wasi_examples/fd_prestat_dir_name.wat --dir=.
 (module
   (type $t0 (func (param i32 i32) (result i32)))
   (type $t1 (func (param i32)))
@@ -16,10 +16,9 @@
     i32.const 16  ;; buf pointer where metadata will be stored 
     call $fd_prestat_get
     drop
-    ;; buf points at the preopen type, buf + 4 points at the size of the name, u32 in size
-    i32.const 3
-    i32.const 50
-    i32.const 20
+    i32.const 3  ;; fd
+    i32.const 50 ;; store the string at this pointer
+    i32.const 20 ;; load the string length from this pointer (will match result from fd_prestat_get)
     i32.load
     call $fd_prestat_dir_name
     drop
