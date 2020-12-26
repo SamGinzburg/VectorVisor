@@ -765,6 +765,7 @@ impl OpenCLRunner {
                     2 => WasiSyscalls::EnvironSizeGet,
                     3 => WasiSyscalls::EnvironGet,
                     4 => WasiSyscalls::FdPrestatGet,
+                    5 => WasiSyscalls::FdPrestatDirName,
                     _ => WasiSyscalls::InvalidHyperCallNum,
                 };
 

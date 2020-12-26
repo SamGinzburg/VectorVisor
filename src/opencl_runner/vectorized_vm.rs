@@ -21,12 +21,13 @@ use std::path::Path;
 
 #[derive(Clone, Copy)]
 pub enum WasiSyscalls {
-    FdWrite              =  0,
-    ProcExit             =  1,
-    EnvironSizeGet       =  2,
-    EnvironGet           =  3,
-    FdPrestatGet         =  4,
-    InvalidHyperCallNum  = -1,
+    FdWrite               =  0,
+    ProcExit              =  1,
+    EnvironSizeGet        =  2,
+    EnvironGet            =  3,
+    FdPrestatGet          =  4,
+    FdPrestatDirName      =  5,
+    InvalidHyperCallNum   = -1,
 }
 
 impl fmt::Debug for WasiSyscalls {
@@ -125,7 +126,7 @@ impl VectorizedVM {
                         .inherit_env()
                         // preopen whatever the current directory is
                         // TODO: pass this via CLI somehow
-                        //.preopened_dir(File::open(".").unwrap(), Path::new("."))
+                        .preopened_dir(File::open(".").unwrap(), Path::new("."))
                         .build().unwrap();
         let engine = Engine::default();
         let store = Store::new(&engine);
@@ -175,7 +176,10 @@ impl VectorizedVM {
             },
             WasiSyscalls::FdPrestatGet => {
                 WasiFd::hypercall_fd_prestat_get(&self.ctx, self, hypercall, sender);
-            }
+            },
+            WasiSyscalls::FdPrestatDirName => {
+                WasiFd::hypercall_fd_prestat_dir_name(&self.ctx, self, hypercall, sender);
+            },
             _ => panic!("Unsupported hypercall invoked! {:?}", hypercall),
         }
 

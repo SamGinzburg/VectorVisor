@@ -52,17 +52,19 @@ lazy_static! {
         m.insert("environ_sizes_get", true); // 2
         m.insert("environ_get", true);       // 3
         m.insert("fd_prestat_get", true);    // 4
+        m.insert("fd_prestat_dir_name", true);    // 5
         m
     };
 }
 
 #[derive(Clone)]
 enum WasmHypercallId {
-    fd_write           = 0,
-    proc_exit          = 1,
-    environ_sizes_get  = 2,
-    environ_get        = 3,
-    fd_prestat_get     = 4,
+    fd_write            = 0,
+    proc_exit           = 1,
+    environ_sizes_get   = 2,
+    environ_get         = 3,
+    fd_prestat_get      = 4,
+    fd_prestat_dir_name = 5,
 }
 
 pub struct OpenCLCWriter<'a> {
@@ -155,6 +157,7 @@ impl<'a> OpenCLCWriter<'_> {
         match hypercall_id {
             WasmHypercallId::fd_write => ret_str += &emit_fd_write_call_helper(self, debug),
             WasmHypercallId::fd_prestat_get => ret_str += &emit_fd_prestat_get_helper(self, debug),
+            WasmHypercallId::fd_prestat_dir_name => ret_str += &emit_fd_prestat_dir_name_helper(self, debug),
             _ => (),
         }
         // insert return (we exit back to the VMM)
@@ -183,7 +186,10 @@ impl<'a> OpenCLCWriter<'_> {
             },
             WasmHypercallId::fd_prestat_get => {
                 ret_str += &emit_fd_prestat_get_post(&self, debug);
-            }
+            },
+            WasmHypercallId::fd_prestat_dir_name => {
+                ret_str += &emit_fd_prestat_dir_name_post(&self, debug);
+            },
             _ => (),
         }
 
@@ -526,11 +532,12 @@ impl<'a> OpenCLCWriter<'_> {
                                 // ignore WASI API scoping for now
                                 (_, Some(true)) => {
                                     match wasi_fn_name {
-                                        &"fd_write"          => self.emit_hypercall(WasmHypercallId::fd_write, hypercall_id_count, fn_name.to_string(), debug),
-                                        &"proc_exit"         => self.emit_hypercall(WasmHypercallId::proc_exit, hypercall_id_count, fn_name.to_string(), debug),
-                                        &"environ_sizes_get" => self.emit_hypercall(WasmHypercallId::environ_sizes_get, hypercall_id_count, fn_name.to_string(), debug),
-                                        &"environ_get"       => self.emit_hypercall(WasmHypercallId::environ_get, hypercall_id_count, fn_name.to_string(), debug),
-                                        &"fd_prestat_get"    => self.emit_hypercall(WasmHypercallId::fd_prestat_get, hypercall_id_count, fn_name.to_string(), debug),
+                                        &"fd_write"               => self.emit_hypercall(WasmHypercallId::fd_write, hypercall_id_count, fn_name.to_string(), debug),
+                                        &"proc_exit"              => self.emit_hypercall(WasmHypercallId::proc_exit, hypercall_id_count, fn_name.to_string(), debug),
+                                        &"environ_sizes_get"      => self.emit_hypercall(WasmHypercallId::environ_sizes_get, hypercall_id_count, fn_name.to_string(), debug),
+                                        &"environ_get"            => self.emit_hypercall(WasmHypercallId::environ_get, hypercall_id_count, fn_name.to_string(), debug),
+                                        &"fd_prestat_get"         => self.emit_hypercall(WasmHypercallId::fd_prestat_get, hypercall_id_count, fn_name.to_string(), debug),
+                                        &"fd_prestat_dir_name"    => self.emit_hypercall(WasmHypercallId::fd_prestat_dir_name, hypercall_id_count, fn_name.to_string(), debug),
                                         _ => panic!("Unidentified WASI fn name: {:?}", wasi_fn_name),
                                     }
                                 },

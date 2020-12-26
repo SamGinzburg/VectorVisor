@@ -89,7 +89,7 @@ impl Environment {
         //dbg!(&mut hcall_buf[0..16]);
 
         sender.send({
-            HyperCallResult::new(0, hypercall.vm_id, WasiSyscalls::EnvironSizeGet)
+            HyperCallResult::new(0, hypercall.vm_id, WasiSyscalls::EnvironGet)
         }).unwrap();
     }
 

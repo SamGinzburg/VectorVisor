@@ -183,6 +183,70 @@ pub fn emit_fd_prestat_get_helper(writer: &opencl_writer::OpenCLCWriter, debug: 
     ret_str
 }
 
+pub fn emit_fd_prestat_dir_name_helper(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> String {
+    let mut ret_str = String::from("");
+    /*
+     * We need to copy over the fd, string length, and the string itself
+     */
+
+    let fd = &emit_read_u32("(ulong)(stack_u32+*sp-3)", "(ulong)(stack_u32)", "warp_idx");
+    let str_ptr = &emit_read_u32("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx");
+    let str_len = &emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx");
+
+    ret_str += &format!("\t{};\n",
+        emit_write_u32("(ulong)(hypercall_buffer)",
+                "(ulong)(hypercall_buffer)",
+                fd,
+                "warp_idx"));
+
+    // str len
+    ret_str += &format!("\t{};\n",
+        emit_write_u32("(ulong)(hypercall_buffer+1)",
+                "(ulong)(hypercall_buffer)",
+                str_len,
+                "warp_idx"));
+
+    // the str itself we memcpy right after the length
+    /*
+    ret_str += &format!("\t{};\n",
+                        format!("___private_memcpy({}, {}, {}, {}, {}, {})",
+                                format!("(ulong)(uchar *)heap_u32+{}", str_ptr),
+                                "(ulong)(heap_u32)",
+                                "(ulong)(hypercall_buffer+2)",
+                                "(ulong)(hypercall_buffer)",
+                                str_len,
+                                "warp_idx"));
+                                */
+
+    ret_str
+}
+
+pub fn emit_fd_prestat_dir_name_post(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> String {
+    let mut ret_str = String::from("");
+
+    let str_ptr = &emit_read_u32("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx");
+    let str_len = &emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx");
+
+    // we need to copy back the directory name that we just read
+    ret_str += &format!("\t{};\n",
+                        format!("___private_memcpy({}, {}, {}, {}, {}, {})",
+                                "(ulong)(hypercall_buffer+2)",
+                                "(ulong)(hypercall_buffer)",
+                                format!("(ulong)(global uchar *)heap_u32+{}", str_ptr),
+                                "(ulong)(heap_u32)",
+                                str_len,
+                                "warp_idx"));
+
+    // now return the error code
+    ret_str += &format!("\t{};\n",
+                        emit_write_u32("(ulong)(stack_u32+*sp-3)", "(ulong)(stack_u32)", "0", "warp_idx"));
+
+    ret_str += &format!("\t{};\n",
+                        "*sp -= 2");
+
+    ret_str
+}
+
 pub fn emit_fd_prestat_get_post(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> String {
     let mut ret_str = String::from("");
     /*
