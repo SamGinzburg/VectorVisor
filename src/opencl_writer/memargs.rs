@@ -312,3 +312,15 @@ pub fn emit_mem_grow(writer: &opencl_writer::OpenCLCWriter, arg: &MemoryArg, deb
 
     ret_str
 }
+
+pub fn emit_mem_size(writer: &opencl_writer::OpenCLCWriter, arg: &MemoryArg, debug: bool) -> String {
+    let mut ret_str = String::from("");
+
+    let current_mem_size = emit_write_u32("(ulong)(stack_u32+*sp)", "(ulong)(stack_u32)", "*current_mem_size", "warp_idx");
+
+    ret_str += &format!("\t{};\n", current_mem_size);
+    ret_str += &format!("\t{};\n",
+                        "*sp += 1");
+
+    ret_str
+}

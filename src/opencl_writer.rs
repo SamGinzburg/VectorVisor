@@ -101,8 +101,7 @@ impl<'a> OpenCLCWriter<'_> {
 
     pub fn parse_file(&mut self) -> Result<bool, String> {
         let mut module = parser::parse::<Wat>(self.parse_buffer).unwrap();
-        //let resolved_module = module.module.resolve().unwrap();
-
+        
         match module.module.kind {
             Text(t) => {
                 for item in t {
@@ -117,7 +116,9 @@ impl<'a> OpenCLCWriter<'_> {
                         wast::ModuleField::Func(f) => {
                             match f.id {
                                 Some(f_id) => self.func_map.insert(f_id.name(), f),
-                                None => continue,
+                                None => {
+                                    continue
+                                },
                             };
                         },
                         wast::ModuleField::Table(table) => self.tables.push(table),
@@ -712,6 +713,10 @@ impl<'a> OpenCLCWriter<'_> {
                 stack_sizes.push(1);
                 emit_mem_grow(self, arg, debug)
             },
+            wast::Instruction::MemorySize(arg) => {
+                stack_sizes.push(1);
+                emit_mem_size(self, arg, debug)
+            },
             wast::Instruction::Return => emit_return(self, fn_name, debug),
             wast::Instruction::Br(idx) => emit_br(self, *idx, fn_name, control_stack, function_id_map, debug),
             wast::Instruction::BrIf(idx) => emit_br_if(self, *idx, fn_name, stack_sizes, control_stack, function_id_map, debug),
@@ -761,9 +766,11 @@ impl<'a> OpenCLCWriter<'_> {
                  *  We have a more complex situation, since we can't actually modify the GPU kernel after it is created,
                  *  So instead we have to statically link the functions.
                  */
+                /*
                 if id.name() == "__wasm_call_ctors" {
                     return "".to_string()
                 }
+                */
 
                 let mut offset = 0;
                 let mut param_idx: u32 = 0;
@@ -1579,6 +1586,12 @@ void {}(global uint   *stack_u32,
         write!(output, "\t{}\n", "do {");
         write!(output, "\t{}\n", "switch (*entry_point) {");
         for key in function_idx_label.keys() {
+
+            dbg!(key);
+            if *key == "__wasm_call_ctors" {
+                //continue;
+            }
+
             write!(output, "\t\tcase {}:\n", function_idx_label.get(key).unwrap());
             if debug_print_function_calls {
                 write!(output, "\t\tprintf(\"{}\\n\");\n", format!("{}{}", "__", key.replace(".", "")));
