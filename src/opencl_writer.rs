@@ -842,7 +842,7 @@ impl<'a> OpenCLCWriter<'_> {
                 if debug_call_print {
                     write!(final_string, "\t\tprintf(\"*sfp = %d\\n\", *sfp);\n");
                     write!(final_string, "\t\tprintf(\"*sp = %d\\n\", *sp);\n");
-                    write!(final_string, "\t\tprintf(\"*hypercall_num = %d\\n\", *hypercall_num);\n");
+                    write!(final_string, "\t\tprintf(\"*hypercall_number = %d\\n\", *hypercall_number);\n");
                     write!(final_string, "\t\tprintf(\"*hypercall_continuation = %d\\n\", *hypercall_continuation);\n");
                     write!(final_string, "\t\tprintf(\"read_u32(stack_frames+*sfp) = %d\\n\", read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx));\n");
                     write!(final_string, "\t\tprintf(\"read_u64(call_stack+*sfp) = %d\\n\", read_u64((ulong)(call_stack+*sfp), (ulong)(call_stack), warp_idx));\n");
