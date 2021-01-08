@@ -36,23 +36,25 @@ pub fn generate_read_write_calls(writer: &opencl_writer::OpenCLCWriter, interlea
     let mut result = String::from("");
     // we need the warp id to generate the interleave
     // the write functions
+
+    // TODO: switch between inlined read funcs
     result += &format!("\n{}\n",
                         "void write_u8(ulong addr, ulong mem_start, uchar value, uint warp_id) {");
 
     match interleave {
         0 => {
             result += &format!("\t{}",
-                                "*((uchar*)addr) = value;");
+                                "*((global uchar*)addr) = value;");
         },
         1 => {
             result += &format!("\t{}",
-                                "*((uchar*)((addr-mem_start)*(NUM_THREADS) + warp_id + mem_start)) = value;")
+                                "*((global uchar*)((addr-mem_start)*(NUM_THREADS) + warp_id + mem_start)) = value;")
         }
         _ => panic!("Unsupported read/write interleave"),
     }
-
     result += &format!("\n{}\n",
                         "}");
+
     result += &format!("\n{}\n",
                         "void write_u16(ulong addr, ulong mem_start, ushort value, uint warp_id) {");
     match interleave {
@@ -72,6 +74,7 @@ pub fn generate_read_write_calls(writer: &opencl_writer::OpenCLCWriter, interlea
     }
     result += &format!("\n{}\n",
                         "}");
+
     result += &format!("\n{}\n",
                         "void write_u32(ulong addr, ulong mem_start, uint value, uint warp_id) {");
     match interleave {
@@ -113,21 +116,24 @@ pub fn generate_read_write_calls(writer: &opencl_writer::OpenCLCWriter, interlea
                         "}");
 
     // the read functions
+    
     result += &format!("\n{}\n",
                         "uchar read_u8(ulong addr, ulong mem_start, uint warp_id) {");
     match interleave {
         0 => {
             result += &format!("\t{}",
-                                "return *((uchar*)addr);");
+                                "return *((global uchar*)addr);");
         },
         1 => {
             result += &format!("\t{}",
-                                "return *((uchar*)((addr-mem_start)*NUM_THREADS + warp_id + mem_start));");
+                                "return *((global uchar*)((addr-mem_start)*NUM_THREADS + warp_id + mem_start));");
         }
         _ => panic!("Unsupported read/write interleave"),
     }
     result += &format!("\n{}\n",
                         "}");
+
+
 
     result += &format!("\n{}\n",
                         "ushort read_u16(ulong addr, ulong mem_start, uint warp_id) {");

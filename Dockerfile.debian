@@ -6,7 +6,8 @@ EXPOSE 8080
 
 # Install the OpenCL dev headers
 RUN ["apt-get", "update"]
-RUN ["apt-get", "install", "ocl-icd-libopencl1"]
+RUN ["apt-get", "install", "ocl-icd-libopencl1", "-y"]
+RUN ["apt-get", "install", "ocl-icd-opencl-dev", "-y"]
 RUN ["ln", "-s", "/usr/lib64/libOpenCL.so.1", "/usr/lib/libOpenCL.so"]
 
 # Set the working directory.

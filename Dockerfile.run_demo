@@ -1,0 +1,48 @@
+# Use the official image as a parent image.
+FROM rust:1.48.0-buster AS builder
+
+# Add metadata to the image to describe which port the container is listening on at runtime.
+EXPOSE 8080
+
+# Install the OpenCL dev headers
+RUN ["apt-get", "update"]
+RUN ["apt-get", "install", "ocl-icd-libopencl1"]
+RUN ["apt-get", "install", "ocl-icd-opencl-dev", "-y"]
+RUN ["ln", "-s", "/usr/lib64/libOpenCL.so.1", "/usr/lib/libOpenCL.so"]
+
+# for testing with POCL
+RUN ["apt-get", "install", "pocl-opencl-icd", "-y"]
+
+RUN ["apt-get", "install", "clinfo", "-y"]
+RUN ["apt-get", "install", "oclgrind", "-y"]
+#RUN ["apt-get", "install", "valgrind", "-y"]
+#RUN ["apt-get", "install", "lldb", "-y"]
+
+
+#RUN ["apt-get", "install", "cpio", "-y"]
+
+# Set the working directory.
+WORKDIR /usr/src/wasm-parser
+
+# Copy the files from your host to your current location.
+COPY . .
+
+#RUN [ "ls", "-lah", "intel-ocl"]
+#RUN [ "tar", "-xzvf", "intel-ocl/opencl_intel.tgz"]
+#RUN [ "ls", "-lah", "intel-ocl"]
+#RUN [ "cp", "intel-ocl/silent.cfg", "l_opencl_p_18.1.0.015/silent.cfg"]
+#RUN [ "sh", "l_opencl_p_18.1.0.015/install_GUI.sh", "-s", "l_opencl_p_18.1.0.015/silent.cfg"]
+# Run the specified command within the container.
+RUN [ "clinfo" ]
+RUN [ "cargo", "build" ]
+
+# setup POCL env vars to save intermediate compiler stuff
+ENV POCL_CACHE_DIR=/tmp
+ENV POCL_LEAVE_KERNEL_COMPILER_TEMP_FILES=1
+ENV POCL_VECTORIZER_REMARKS=1
+
+ENTRYPOINT [ "bash" ]
+#ENTRYPOINT [ "cat", "examples/rust_hello.wat"]
+#RUN [ "cargo", "run", "--", "-i examples/rust_hello.wat", "--isgpu=false", "-h=3145728" ]
+#ENTRYPOINT [ "valgrind", "./target/debug/wasm-parser", "-i", "examples/rust_hello.wat", "--isgpu=false", "-h=3145728", "--debugcallprint=false"]
+#ENTRYPOINT [ "clinfo" ]

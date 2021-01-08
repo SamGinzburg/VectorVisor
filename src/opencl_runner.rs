@@ -261,7 +261,7 @@ impl OpenCLRunner {
         let sfp = unsafe {
             ocl::core::create_buffer::<_, u8>(&context,
                                               ocl::core::MEM_READ_WRITE,
-                                              (stack_frame_ptr_size * 4 * self.num_vms) as usize,
+                                              (stack_frame_ptr_size * 8 * self.num_vms) as usize,
                                               None).unwrap()
         };
 
@@ -269,14 +269,14 @@ impl OpenCLRunner {
         let call_stack = unsafe {
             ocl::core::create_buffer::<_, u8>(&context,
                                               ocl::core::MEM_READ_WRITE,
-                                              (call_stack_size * 4 * self.num_vms) as usize,
+                                              (call_stack_size * 8 * self.num_vms) as usize,
                                               None).unwrap()
         };
 
         let call_return_stack = unsafe {
             ocl::core::create_buffer::<_, u8>(&context,
                                               ocl::core::MEM_READ_WRITE,
-                                              (call_stack_size * 4 * self.num_vms) as usize,
+                                              (call_stack_size * 8 * self.num_vms) as usize,
                                               None).unwrap()
         };
 
@@ -411,8 +411,7 @@ impl OpenCLRunner {
 
                 println!("Sucessfully compiled kernel to OpenCL C: saving to: {}", format!("{}.cl", input_filename));
                 let mut file = File::create(format!("{}.cl", input_filename)).unwrap();
-                file.write_all(&program.clone().into_bytes()).unwrap();      
-                
+                file.write_all(&program.clone().into_bytes()).unwrap();
                 println!("Starting kernel compilation...");
                 let compile_start = std::time::Instant::now();
 
@@ -426,7 +425,6 @@ impl OpenCLRunner {
                         panic!("Build failure: {:?}", e);
                     }
                     Ok(_) => {
-                          
                     },
                 };
                 let buildinfo = ocl::core::get_program_build_info(&compiled_program, &device_ids[0], ocl::core::ProgramBuildInfo::BuildLog).unwrap();
@@ -616,7 +614,7 @@ impl OpenCLRunner {
                 println!("setting up VM: {}", idx);
                 // sizeof(ulong) * 8 - NOTE: if we update sp to be 4 bytes, we have to change this too
                 let sp_result = ocl::core::enqueue_write_buffer(&queue, &buffers.sp, true, (idx * 8) as usize, &default_sp, None::<Event>, None::<&mut Event>);
-            
+
                 match sp_result {
                     Err(e) => panic!("sp_result, Error: {}", e),
                     _ => (),
@@ -641,7 +639,7 @@ impl OpenCLRunner {
 
                 // set the default hypercall number to -2
                 let hypercall_num_result = ocl::core::enqueue_write_buffer(&queue, &buffers.hypercall_num, true, (idx * 4) as usize, &default_hypercall_num, None::<Event>, None::<&mut Event>);
-            
+
                 match hypercall_num_result {
                     Err(e) => panic!("hypercall_num_result, Error: {}", e),
                     _ => (),
@@ -658,7 +656,8 @@ impl OpenCLRunner {
         ocl::core::set_kernel_arg(&data_kernel, 2, ArgVal::mem(&buffers.current_mem)).unwrap();
         ocl::core::set_kernel_arg(&data_kernel, 3, ArgVal::mem(&buffers.max_mem)).unwrap();
         ocl::core::set_kernel_arg(&data_kernel, 4, ArgVal::mem(&buffers.is_calling)).unwrap();
-        
+        ocl::core::set_kernel_arg(&data_kernel, 5, ArgVal::mem(&buffers.sfp)).unwrap();
+
         let mut profiling_event = ocl::Event::empty();
         unsafe {
             ocl::core::enqueue_kernel(&queue, &data_kernel, 1, None, &[self.num_vms as usize, 1, 1], None, None::<Event>, Some(&mut profiling_event)).unwrap();
@@ -673,6 +672,7 @@ impl OpenCLRunner {
         let start_data_kernel = profiling_event.profiling_info(ocl::enums::ProfilingInfo::Submit).unwrap().time().unwrap();
         let end_data_kernel = profiling_event.profiling_info(ocl::enums::ProfilingInfo::End).unwrap().time().unwrap();
         total_gpu_execution_time += end_data_kernel-start_data_kernel;
+        println!("Finished data_init kernel");
 
         // set up the clArgs for the wasm_entry kernel
         ocl::core::set_kernel_arg(&start_kernel, 0, ArgVal::mem(&buffers.stack_buffer)).unwrap();
@@ -759,6 +759,7 @@ impl OpenCLRunner {
 
             // now it is time to dispatch hypercalls
             vm_slice.as_slice().par_iter().for_each(|vm_id| {
+                println!("hypercall_num_temp: {}", hypercall_num_temp[*vm_id as usize]);
                 let hypercall_id = match hypercall_num_temp[*vm_id as usize] as i64 {
                     0 => WasiSyscalls::FdWrite,
                     1 => WasiSyscalls::ProcExit,
@@ -768,7 +769,7 @@ impl OpenCLRunner {
                     5 => WasiSyscalls::FdPrestatDirName,
                     _ => WasiSyscalls::InvalidHyperCallNum,
                 };
-
+                println!("hypercall_id: {}", hypercall_id as u64);
                 hypercall_sender[(vm_id % num_threads) as usize].send(
                     HyperCall::new((*vm_id as u32).clone(),
                                    number_vms,
@@ -828,10 +829,10 @@ impl OpenCLRunner {
             // also don't forget to write the hcall buf back
             unsafe {
                 let mut hcall_buf = hcall_read_buffer.lock().unwrap();
-                ocl::core::enqueue_write_buffer(&queue, &hypercall_buffer, false, 0, &mut hcall_buf, None::<Event>, None::<&mut Event>).unwrap();
-                ocl::core::enqueue_write_buffer(&queue, &buffers.entry, false, 0, &mut entry_point_temp, None::<Event>, None::<&mut Event>).unwrap();
-                ocl::core::enqueue_write_buffer(&queue, &buffers.sp, false, 0, &mut stack_pointer_temp, None::<Event>, None::<&mut Event>).unwrap();
-                ocl::core::enqueue_write_buffer(&queue, &buffers.hypercall_num, false, 0, &mut hypercall_num_temp, None::<Event>, None::<&mut Event>).unwrap();
+                ocl::core::enqueue_write_buffer(&queue, &hypercall_buffer, true, 0, &mut hcall_buf, None::<Event>, None::<&mut Event>).unwrap();
+                ocl::core::enqueue_write_buffer(&queue, &buffers.entry, true, 0, &mut entry_point_temp, None::<Event>, None::<&mut Event>).unwrap();
+                ocl::core::enqueue_write_buffer(&queue, &buffers.sp, true, 0, &mut stack_pointer_temp, None::<Event>, None::<&mut Event>).unwrap();
+                ocl::core::enqueue_write_buffer(&queue, &buffers.hypercall_num, true, 0, &mut hypercall_num_temp, None::<Event>, None::<&mut Event>).unwrap();
             }
             let vmm_post_overhead_end = std::time::Instant::now();
             vmm_overhead += (vmm_post_overhead_end - vmm_post_overhead).as_nanos();

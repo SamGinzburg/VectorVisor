@@ -1,6 +1,9 @@
 target/*
 opencl_test_harness/*
 cpu_debug_test_harness/*
+examples/*.cl
+examples/*.bin
+examples/*.bc
 includes/*
 uvwasi/*
 .vscode

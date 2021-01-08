@@ -16,7 +16,6 @@ use opencl_runner::InputProgram;
 use opencl_runner::SeralizedProgram;
 
 fn main() {
-
     // TODO add Clap arg parsing here to get the WASM files from CLI
     // also consider supporting .wasm files as well?
 
