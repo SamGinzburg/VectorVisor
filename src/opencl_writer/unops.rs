@@ -62,3 +62,17 @@ pub fn emit_i64_ctz(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> Strin
 
     ret_str
 }
+
+pub fn emit_i32_popcnt(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> String {
+    let read_val = format!("popcount({})",
+                emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx"));
+    let mut ret_str = String::from("");
+
+    ret_str += &format!("\t{};\n",
+                        emit_write_u32("(ulong)(stack_u32+*sp-1)",
+                                       "(ulong)(stack_u32)",
+                                       &read_val,
+                                       "warp_idx"));
+
+    ret_str
+}

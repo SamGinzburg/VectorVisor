@@ -12,6 +12,7 @@ use wasi_common::wasi::types::CiovecArray;
 use wasi_common::fs::Fd;
 use wasi_common::wasi::types::PrestatDir;
 use wasi_common::wasi::types::Prestat;
+use wasi_common::wasi::types::UserErrorConversion;
 
 use wasmtime::*;
 use wasmtime_wiggle::WasmtimeGuestMemory;
@@ -81,7 +82,6 @@ impl WasiFd {
 
         // we hardcode the ciovec array to start at offset 0
         let ciovec_ptr: &CiovecArray = &GuestPtr::new(&wasm_mem, (0 as u32, 1 as u32));
-
         let result = ctx.fd_write(Fd::from(fd), &ciovec_ptr);
 
         sender.send({
@@ -107,9 +107,11 @@ impl WasiFd {
             fd = LittleEndian::read_u32(&hcall_buf[0..4]);
         }
 
-        let result = match ctx.fd_prestat_get(Fd::from(fd)){
-            Ok(Prestat::Dir(prestat_dir)) => prestat_dir.pr_name_len,
-            Err(e) => 0,
+        let result = match ctx.fd_prestat_get(Fd::from(fd)) {
+            Ok(Prestat::Dir(prestat_dir)) => 0,
+            Err(e) => {
+                UserErrorConversion::errno_from_error(ctx, e) as u32
+            },
         };
 
         if hypercall.is_interleaved_mem {
@@ -119,7 +121,7 @@ impl WasiFd {
         }
 
         sender.send({
-            HyperCallResult::new(0 as i32, hypercall.vm_id, WasiSyscalls::FdPrestatGet)
+            HyperCallResult::new(result as i32, hypercall.vm_id, WasiSyscalls::FdPrestatGet)
         }).unwrap();
     }
     pub fn hypercall_fd_prestat_dir_name(ctx: &WasiCtx, vm_ctx: &VectorizedVM, hypercall: &mut HyperCall, sender: &Sender<HyperCallResult>) -> () {
@@ -146,7 +148,12 @@ impl WasiFd {
         }
 
         let mut str_ptr = &GuestPtr::new(&wasm_mem, 8);
-        let result = ctx.fd_prestat_dir_name(Fd::from(fd), str_ptr, str_len);
+        let result = match ctx.fd_prestat_dir_name(Fd::from(fd), str_ptr, str_len) {
+            Ok(()) => 0,
+            Err(e) => {
+                UserErrorConversion::errno_from_error(ctx, e) as u32
+            },
+        };
 
         let mut index = 0;
         for idx in str_ptr.as_array(str_len).iter() {
@@ -161,7 +168,7 @@ impl WasiFd {
         }
 
         sender.send({
-            HyperCallResult::new(0 as i32, hypercall.vm_id, WasiSyscalls::FdPrestatDirName)
+            HyperCallResult::new(result as i32, hypercall.vm_id, WasiSyscalls::FdPrestatDirName)
         }).unwrap();
     }
 }

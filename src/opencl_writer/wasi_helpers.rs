@@ -204,7 +204,7 @@ pub fn emit_fd_prestat_dir_name_post(writer: &opencl_writer::OpenCLCWriter, debu
 
     // now return the error code
     ret_str += &format!("\t{};\n",
-                        emit_write_u32("(ulong)(stack_u32+*sp-3)", "(ulong)(stack_u32)", "0", "warp_idx"));
+                        emit_write_u32("(ulong)(stack_u32+*sp-3)", "(ulong)(stack_u32)", "hcall_ret_val", "warp_idx"));
 
     ret_str += &format!("\t{};\n",
                         "*sp -= 2");
@@ -230,7 +230,7 @@ pub fn emit_fd_prestat_get_post(writer: &opencl_writer::OpenCLCWriter, debug: bo
     // now return the error code
 
     ret_str += &format!("\t{};\n",
-                        emit_write_u32("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "0", "warp_idx"));
+                        emit_write_u32("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "hcall_ret_val", "warp_idx"));
 
     ret_str += &format!("\t{};\n",
                         "*sp -= 1");
@@ -265,7 +265,7 @@ pub fn emit_environ_sizes_get_post(writer: &opencl_writer::OpenCLCWriter, debug:
 
     // now return the error code
     ret_str += &format!("\t{};\n",
-                        emit_write_u32("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "0", "warp_idx"));
+                        emit_write_u32("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "hcall_ret_val", "warp_idx"));
 
     ret_str += &format!("\t{};\n",
                         "*sp -= 1");
@@ -303,7 +303,7 @@ pub fn emit_environ_get_post(writer: &opencl_writer::OpenCLCWriter, debug: bool)
 
     // now return the error code
     ret_str += &format!("\t{};\n",
-                        emit_write_u32("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "0", "warp_idx"));
+                        emit_write_u32("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "hcall_ret_val", "warp_idx"));
 
     ret_str += &format!("\t{};\n",
                         "*sp -= 1");

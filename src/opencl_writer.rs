@@ -175,7 +175,7 @@ impl<'a> OpenCLCWriter<'_> {
                 // fd_write takes 4 u32 parameters
                 // we just assume that we always succeed
                 ret_str += &format!("\t{};\n",
-                            emit_write_u32("(ulong)(stack_u32+*sp-4)", "(ulong)(stack_u32)", "0", "warp_idx"));
+                            emit_write_u32("(ulong)(stack_u32+*sp-4)", "(ulong)(stack_u32)", "hcall_ret_val", "warp_idx"));
                 ret_str += &format!("\t{}\n",
                                     "*sp -= 3;");
             },
@@ -661,6 +661,11 @@ impl<'a> OpenCLCWriter<'_> {
                 stack_sizes.pop();
                 stack_sizes.push(1);
                 emit_i32_clz(self, debug)
+            },
+            wast::Instruction::I32Popcnt => {
+                stack_sizes.pop();
+                stack_sizes.push(1);
+                emit_i32_popcnt(self, debug)
             },
             wast::Instruction::I64Clz => {
                 stack_sizes.pop();
@@ -1151,7 +1156,8 @@ impl<'a> OpenCLCWriter<'_> {
                     uint   *max_mem_size,
                     uchar  *is_calling,
                     ulong  warp_idx,
-                    uint   *entry_point)", fn_name));
+                    uint   *entry_point,
+                    uint   *hcall_ret_val)", fn_name));
             } else {
                 write!(output, "{}", format!("void {}(uint   *stack_u32,
                     ulong  *stack_u64,
@@ -1172,10 +1178,11 @@ impl<'a> OpenCLCWriter<'_> {
                     uint   *max_mem_size,
                     uchar  *is_calling,
                     ulong  warp_idx,
-                    uint   *entry_point)", fn_name));
+                    uint   *entry_point,
+                    uint   hcall_ret_val)", fn_name));
             }
         } else if is_control_fn {
-            let header = format!("__kernel void {}(__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}) {{\n",
+            let header = format!("__kernel void {}(__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}) {{\n",
                                     fn_name,
                                     "uint   *stack_u32_global,",
                                     "ulong  *stack_u64_global,",
@@ -1195,13 +1202,14 @@ impl<'a> OpenCLCWriter<'_> {
                                     "uint   *current_mem_size_global,",
                                     "uint   *max_mem_size_global,",
                                     "uchar  *is_calling_global,",
-                                    "uint   *entry_point_global");
+                                    "uint   *entry_point_global,",
+                                    "uint   *hcall_ret_val_global");
             // write thread-local private variables before header
 
             write!(output, "{}", header);
             // TODO: for the openCL launcher, pass the memory stride as a function parameter
             if interleave > 0 {
-                write!(output, "\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\n\t{}\n",
+                write!(output, "\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\n\t{}\n",
                 "global uint  *stack_u32    = (global uint*)stack_u32_global;",
                 "global ulong *stack_u64    = (global ulong*)stack_u32;",
                 "global uint  *heap_u32     = (global uint *)heap_u32_global;",
@@ -1225,10 +1233,11 @@ impl<'a> OpenCLCWriter<'_> {
                 "global uint *max_mem_size = (global uint *)max_mem_size_global+(get_global_id(0));",
                 "global uchar *is_calling = (global uchar *)is_calling_global+(get_global_id(0));",
                 "global uint  *entry_point   = (global uint*)entry_point_global+get_global_id(0);",
-                "ulong warp_idx = get_global_id(0);");
+                "ulong warp_idx = get_global_id(0);",
+                "global uint  *hcall_ret_val = (global uint*)hcall_ret_val_global+get_global_id(0);");
             } else {
                 // The pointer math must be calculated in terms of bytes, which is why we cast to (char*) first
-                write!(output, "\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\n\t{}\n",
+                write!(output, "\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\n\t{}\n",
                 format!("global uint  *stack_u32    = (global uint*)((global char*)stack_u32_global+(get_global_id(0) * {}));", stack_size_bytes),
                 "global ulong *stack_u64    = (global ulong*)stack_u32;",
                 format!("global uint  *heap_u32     = (global uint *)((global char*)heap_u32_global+(get_global_id(0) * {}));", heap_size_bytes),
@@ -1253,7 +1262,8 @@ impl<'a> OpenCLCWriter<'_> {
                 "global uint *max_mem_size = (global uint *)max_mem_size_global+(get_global_id(0));",
                 "global uchar *is_calling = (global uchar *)is_calling_global+(get_global_id(0));",
                 "global uint  *entry_point   = (global uint *)entry_point_global+get_global_id(0);",
-                "ulong warp_idx = get_global_id(0);");
+                "ulong warp_idx = get_global_id(0);",
+                "global uint  *hcall_ret_val = (global uint*)hcall_ret_val_global+get_global_id(0);");
             }
         // if we are an OpenCL kernel and we are not the control function, we only need the function header itself
         } else {
@@ -1277,7 +1287,8 @@ void {}(global uint   *stack_u32,
     global uint   *max_mem_size,
     global uchar  *is_calling,
     ulong  warp_idx,
-    global uint   *entry_point)", fn_name));
+    global uint   *entry_point,
+    uint hcall_ret_val)", fn_name));
         }
         output
     }
@@ -1348,7 +1359,7 @@ void {}(global uint   *stack_u32,
                         "global ulong *sfp = (global ulong *)sfp_global+(get_global_id(0))");
 
             result += &format!("\t{};\n",
-                               "*sfp = 1");
+                               "*sfp = 0");
             
     
             result += &self.emit_memcpy_arr(debug);
@@ -1367,7 +1378,7 @@ void {}(global uint   *stack_u32,
                                "global ulong *sfp = (global ulong *)sfp_global+(get_global_id(0))");
 
             result += &format!("\t{};\n",
-                               "*sfp = 1");
+                               "*sfp = 0");
 
             if interleave == 0 {
                 result += &format!("\t{}\n",
@@ -1608,7 +1619,7 @@ void {}(global uint   *stack_u32,
                 write!(output, "\t\tprintf(\"{}\\n\");\n", format!("{}{}", "__", key.replace(".", "")));
             }
             // strip illegal chars from function names
-            write!(output, "\t\t\t{}({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {});\n",
+            write!(output, "\t\t\t{}({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {});\n",
                             format!("{}{}", "__", key.replace(".", "")),
                             "stack_u32",
                             "stack_u64",
@@ -1629,7 +1640,8 @@ void {}(global uint   *stack_u32,
                             "max_mem_size",
                             "is_calling",
                             "warp_idx",
-                            "entry_point");
+                            "entry_point",
+                            "*hcall_ret_val");
             write!(output, "\t\t\tbreak;\n");
         }
         write!(output, "\t\tdefault:\n");

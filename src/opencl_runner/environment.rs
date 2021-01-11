@@ -10,6 +10,7 @@ use crate::opencl_runner::vectorized_vm::VectorizedVM;
 
 use wasi_common::wasi::types::CiovecArray;
 use wasi_common::fs::Fd;
+use wasi_common::wasi::types::UserErrorConversion;
 
 use wasmtime::*;
 use wasmtime_wiggle::WasmtimeGuestMemory;
@@ -24,8 +25,7 @@ pub struct Environment {}
 impl Environment {
     pub fn hypercall_environ_sizes_get(ctx: &WasiCtx, hypercall: &mut HyperCall, sender: &Sender<HyperCallResult>) -> () {
         let mut hcall_buf: &mut [u8] = &mut hypercall.hypercall_buffer.lock().unwrap();
-        
-        match ctx.environ_sizes_get() {
+        let result = match ctx.environ_sizes_get() {
             Ok(tuple) => {
                 // now that we have retreived the sizes
                 // now we copy the result to the hcall buf
@@ -37,12 +37,15 @@ impl Environment {
                     LittleEndian::write_u32(&mut hcall_buf[0..4], tuple.0);
                     LittleEndian::write_u32(&mut hcall_buf[4..8], tuple.1);
                 }
+                0
             },
-            Err(e) => panic!("Unable to execute WASI function environ_sizes_get: {:?}", e),
-        }
+            Err(e) => {
+                UserErrorConversion::errno_from_error(ctx, e) as i32
+            },
+        };
 
         sender.send({
-            HyperCallResult::new(0, hypercall.vm_id, WasiSyscalls::EnvironSizeGet)
+            HyperCallResult::new(result, hypercall.vm_id, WasiSyscalls::EnvironSizeGet)
         }).unwrap();
     }
 

@@ -521,6 +521,7 @@ impl OpenCLRunner {
         let mut stack_pointer_temp = vec![0u64; self.num_vms as usize];
         let mut entry_point_temp = vec![0u32; self.num_vms as usize];
         let mut hypercall_num_temp = vec![0i32; self.num_vms as usize];
+        let mut hypercall_retval_temp = vec![0i32; self.num_vms as usize];
         let mut sp_exit_flag;
         let mut entry_point_exit_flag;
         let vm_slice: Vec<u32> = std::ops::Range { start: 0, end: (self.num_vms) }.collect();
@@ -540,6 +541,16 @@ impl OpenCLRunner {
             ocl::core::create_buffer::<_, u8>(&ctx,
                                               ocl::core::MEM_READ_WRITE,
                                               (hypercall_buffer_size * self.num_vms) as usize,
+                                              None).unwrap()
+        };
+
+        /*
+         * Allocate the buffer to return values
+         */
+        let hcall_retval_buffer = unsafe {
+            ocl::core::create_buffer::<_, u8>(&ctx,
+                                              ocl::core::MEM_READ_WRITE,
+                                              (4 * self.num_vms) as usize,
                                               None).unwrap()
         };
 
@@ -694,6 +705,7 @@ impl OpenCLRunner {
         ocl::core::set_kernel_arg(&start_kernel, 16, ArgVal::mem(&buffers.max_mem)).unwrap();
         ocl::core::set_kernel_arg(&start_kernel, 17, ArgVal::mem(&buffers.is_calling)).unwrap();
         ocl::core::set_kernel_arg(&start_kernel, 18, ArgVal::mem(&buffers.entry)).unwrap();
+        ocl::core::set_kernel_arg(&start_kernel, 19, ArgVal::mem(&hcall_retval_buffer)).unwrap();
 
         // now the data in the program has been initialized, we can run the main loop
         loop {
@@ -759,7 +771,6 @@ impl OpenCLRunner {
 
             // now it is time to dispatch hypercalls
             vm_slice.as_slice().par_iter().for_each(|vm_id| {
-                println!("hypercall_num_temp: {}", hypercall_num_temp[*vm_id as usize]);
                 let hypercall_id = match hypercall_num_temp[*vm_id as usize] as i64 {
                     0 => WasiSyscalls::FdWrite,
                     1 => WasiSyscalls::ProcExit,
@@ -769,7 +780,6 @@ impl OpenCLRunner {
                     5 => WasiSyscalls::FdPrestatDirName,
                     _ => WasiSyscalls::InvalidHyperCallNum,
                 };
-                println!("hypercall_id: {}", hypercall_id as u64);
                 hypercall_sender[(vm_id % num_threads) as usize].send(
                     HyperCall::new((*vm_id as u32).clone(),
                                    number_vms,
@@ -790,18 +800,15 @@ impl OpenCLRunner {
                     WasiSyscalls::ProcExit => entry_point_temp[result.get_vm_id() as usize] = ((-1) as i32) as u32,
                     _ => (),
                 }
+                // after all of the hypercalls are finished, we should update all of the stack pointers
+                hypercall_num_temp[result.get_vm_id() as usize] = -1;
+                hypercall_retval_temp[result.get_vm_id() as usize] = result.get_result();
             }
 
             let end_hcall_dispatch = std::time::Instant::now();
             hcall_execution_time += (end_hcall_dispatch - start_hcall_dispatch).as_nanos();
 
             let vmm_post_overhead = std::time::Instant::now();
-
-            // after all of the hypercalls are finished, we should update all of the stack pointers
-            // also we need to set the hypercall num to -1 to indicate we are resuming the continuation
-            for idx in 0..self.num_vms {
-                hypercall_num_temp[idx as usize] = -1;
-            }
 
             // check again for threads that may be done - this is because
             // proc_exit(...) can actually block off additional threads
@@ -833,6 +840,7 @@ impl OpenCLRunner {
                 ocl::core::enqueue_write_buffer(&queue, &buffers.entry, true, 0, &mut entry_point_temp, None::<Event>, None::<&mut Event>).unwrap();
                 ocl::core::enqueue_write_buffer(&queue, &buffers.sp, true, 0, &mut stack_pointer_temp, None::<Event>, None::<&mut Event>).unwrap();
                 ocl::core::enqueue_write_buffer(&queue, &buffers.hypercall_num, true, 0, &mut hypercall_num_temp, None::<Event>, None::<&mut Event>).unwrap();
+                ocl::core::enqueue_write_buffer(&queue, &hcall_retval_buffer, true, 0, &mut hypercall_retval_temp, None::<Event>, None::<&mut Event>).unwrap();
             }
             let vmm_post_overhead_end = std::time::Instant::now();
             vmm_overhead += (vmm_post_overhead_end - vmm_post_overhead).as_nanos();
@@ -844,13 +852,13 @@ impl OpenCLRunner {
         // only uncomment this out if you need to debug stuff, it will panic if you have too many VMs and too small of a buffer
         dbg!(print_return);
         if print_return {
-            let mut check_results_debug = vec![0u8; (self.num_vms * 4) as usize];
+            let mut check_results_debug = vec![0u8; (self.num_vms * 1024) as usize];
             unsafe {
                 ocl::core::enqueue_read_buffer(&queue, &buffers.stack_buffer, true, 0, &mut check_results_debug, None::<Event>, None::<&mut Event>).unwrap();
             }
             for vm_idx in 0..self.num_vms {
                 if self.is_memory_interleaved {
-                    let result = Interleave::read_u32(&mut check_results_debug, 0, self.num_vms, vm_idx);
+                    let result = Interleave::read_u32(&mut check_results_debug, 32, self.num_vms, vm_idx);
                     dbg!(result as i32);
                 } else {
                     let result = LittleEndian::read_u32(&check_results_debug[vm_idx as usize..(vm_idx+4) as usize]);
