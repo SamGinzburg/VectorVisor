@@ -181,7 +181,7 @@ pub fn emit_fd_prestat_dir_name_helper(writer: &opencl_writer::OpenCLCWriter, de
                                 "(ulong)(hypercall_buffer)",
                                 str_len,
                                 "warp_idx"));
-                                */
+    */
 
     ret_str
 }

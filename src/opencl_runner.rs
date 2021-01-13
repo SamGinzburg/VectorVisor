@@ -858,8 +858,10 @@ impl OpenCLRunner {
             }
             for vm_idx in 0..self.num_vms {
                 if self.is_memory_interleaved {
-                    let result = Interleave::read_u32(&mut check_results_debug, 32, self.num_vms, vm_idx);
-                    dbg!(result as i32);
+                    let result_i32 = Interleave::read_u32(&mut check_results_debug, 32, self.num_vms, vm_idx);
+                    let result_i64 = Interleave::read_u64(&mut check_results_debug, 32, self.num_vms, vm_idx);
+                    dbg!(result_i32 as i32);
+                    dbg!(result_i64 as i64);
                 } else {
                     let result = LittleEndian::read_u32(&check_results_debug[vm_idx as usize..(vm_idx+4) as usize]);
                     dbg!(result as i32);

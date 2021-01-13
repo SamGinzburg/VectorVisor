@@ -32,6 +32,14 @@ impl Interleave {
         temp
     }
 
+    pub fn read_u64(buffer: &mut [u8], offset: u32, num_threads: u32, vm_id: u32) -> u64 {
+        let mut temp: u64 = 0;
+        temp += Interleave::read_u32(buffer, offset+4, num_threads, vm_id) as u64;
+        temp = temp << 32;
+        temp += Interleave::read_u32(buffer, offset, num_threads, vm_id) as u64;
+        temp
+    }
+
     pub fn write_u32(buffer: &mut [u8], offset: u32, num_threads: u32, value: u32, vm_id: u32) {
         Interleave::write_u16(buffer, offset, num_threads, (value & 0xFFFF).try_into().unwrap(), vm_id);
         Interleave::write_u16(buffer, offset+2, num_threads, ((value >> 16) & 0xFFFF).try_into().unwrap(), vm_id);
