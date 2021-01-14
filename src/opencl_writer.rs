@@ -47,12 +47,12 @@ use lazy_static::lazy_static;
 lazy_static! {
     static ref WASI_SNAPSHOT_PREVIEW1: HashMap<&'static str, bool> = {
         let mut m = HashMap::new();
-        m.insert("fd_write", true);          // 0
-        m.insert("proc_exit", true);         // 1
-        m.insert("environ_sizes_get", true); // 2
-        m.insert("environ_get", true);       // 3
-        m.insert("fd_prestat_get", true);    // 4
-        m.insert("fd_prestat_dir_name", true);    // 5
+        m.insert("fd_write", true);             // 0
+        m.insert("proc_exit", true);            // 1
+        m.insert("environ_sizes_get", true);    // 2
+        m.insert("environ_get", true);          // 3
+        m.insert("fd_prestat_get", true);       // 4
+        m.insert("fd_prestat_dir_name", true);  // 5
         m
     };
 }
@@ -68,7 +68,7 @@ enum WasmHypercallId {
 }
 
 pub struct OpenCLCWriter<'a> {
-    types: Vec<wast::Type<'a>>,
+    types: HashMap<String, wast::TypeDef<'a>>,
     imports_map: HashMap<&'a str, (&'a str, Option<&'a str>, wast::ItemSig<'a>)>,
     // map of item.id -> (module, field)
     func_map: HashMap<&'a str, wast::Func<'a>>,
@@ -85,7 +85,7 @@ pub struct OpenCLCWriter<'a> {
 impl<'a> OpenCLCWriter<'_> {
     pub fn new(pb: &'a ParseBuffer) -> OpenCLCWriter<'a> {
         OpenCLCWriter {
-            types: vec!(),
+            types: HashMap::new(),
             imports_map: HashMap::new(),
             func_map: HashMap::new(),
             tables: vec!(),
@@ -100,13 +100,20 @@ impl<'a> OpenCLCWriter<'_> {
     }
 
     pub fn parse_file(&mut self) -> Result<bool, String> {
-        let mut module = parser::parse::<Wat>(self.parse_buffer).unwrap();
-        
+        let module = parser::parse::<Wat>(self.parse_buffer).unwrap();
+        let mut type_count = 0;
         match module.module.kind {
             Text(t) => {
                 for item in t {
                     match item {
-                        wast::ModuleField::Type(t) => self.types.push(t),
+                        wast::ModuleField::Type(t) => {
+                            let id = match t.id {
+                                Some(i) => i.name().to_string(),
+                                _ => format!("t{}", type_count)
+                            };
+                            self.types.insert(id, t.def);
+                            type_count += 1;
+                        },
                         wast::ModuleField::Import(i) => {
                             match i.clone().item.id {
                                 Some(id) => self.imports_map.insert(id.name(), (i.module, i.field, i.item)),
@@ -269,6 +276,11 @@ impl<'a> OpenCLCWriter<'_> {
                 stack_sizes.pop();
                 stack_sizes.push(1);
                 emit_memload_i32_16u(self, memarg, debug)
+            },
+            wast::Instruction::I32Load16s(memarg) => {
+                stack_sizes.pop();
+                stack_sizes.push(1);
+                emit_memload_i32_16s(self, memarg, debug)
             },
             wast::Instruction::I32Load8s(memarg) => {
                 stack_sizes.pop();
@@ -1059,7 +1071,7 @@ impl<'a> OpenCLCWriter<'_> {
 
         for global in &self.globals {
             let (offset, _) = match global.id {
-                Some(id) => global_mappings.get(global.id.unwrap().name()).unwrap(),
+                Some(id) => global_mappings.get(id.name()).unwrap(),
                 None => global_mappings.get(&format!("g{}", global_count)).unwrap(),
             };
             

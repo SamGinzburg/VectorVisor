@@ -59,12 +59,29 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, fn_name: String, idx:
                     (_, _, t) => {
                         parameter_offset += writer.get_size_valtype(&t);
                     },
-                    _ => panic!("Unhandled parameter type")
                 }
             }
         },
-        // if we cannot find the type signature, no-op
-        None => (),
+        // if we cannot find the type signature, we need to look it up to check for the param offset
+        None => {
+            let fn_type_id = match func_type_signature.index.unwrap() {
+                wast::Index::Id(id) => id.name().to_string(),
+                wast::Index::Num(n, _) => format!("t{}", n),
+            };
+            let function_type = writer.types.get(&fn_type_id).unwrap();
+            match function_type {
+                wast::TypeDef::Func(ft) => {
+                    for parameter in ft.params.to_vec() {
+                        match parameter {
+                            (_, _, t) => {
+                                parameter_offset += writer.get_size_valtype(&t);
+                            },
+                        }
+                    }
+                },
+                _ => panic!("Non-function type referenced from function")
+            };
+        },
     }
 
     // for each function call, map the call to an index
@@ -76,7 +93,7 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, fn_name: String, idx:
     // get the return type of the function
     let return_size = get_return_size(writer, &func_type_signature.clone());
 
-    let result = if parameter_offset > 0 {
+    let result = if return_size > 0 {
         format!("\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n{}\n\t{}\n",
         // move the stack pointer back by the offset required by calling parameters
         // the sp should point at the start of the locals for the function
@@ -137,10 +154,11 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, fn_name: String, idx:
 // TODO: this needs to take the function type into account
 pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, fn_name: &str, func_ret_info: &Option<wast::FunctionType>, debug: bool) -> String {
     let mut final_str = String::from("");
-
     let results: Vec<wast::ValType> = match func_ret_info {
         Some(s) => (*s.results).to_vec(),
-        None => vec![]
+        None => {
+            vec![]
+        }
     };
     
     final_str += &format!("\t{}\n", "/* function unwind */");
@@ -164,12 +182,14 @@ pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, fn_name: &str, fun
                     (_, _, t) => {
                         parameter_offset += writer.get_size_valtype(&t);
                     },
-                    _ => panic!("Unhandled parameter type")
                 }
             }
         },
         // if we cannot find the type signature, no-op
-        None => (),
+        // this seems to only come up in cases where there are no parameters
+        None => {
+            ()
+        },
     }
     
     let mut offset;

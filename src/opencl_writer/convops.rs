@@ -26,7 +26,7 @@ pub fn emit_i64_extend_i32_s(writer: &opencl_writer::OpenCLCWriter, debug: bool)
     format!("\t{};\n\t{}\n",
             emit_write_u64("(ulong)(stack_u32+*sp-1)",
                            "(ulong)(stack_u32)",
-                           &format!("(long)({})", extend),
+                           &format!("(int)({})", extend),
                            "warp_idx"),
             // the 64 bit value takes up an extra 4 bytes of space
             "*sp += 1;")

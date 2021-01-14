@@ -38,7 +38,6 @@ pub fn emit_br(writer: &opencl_writer::OpenCLCWriter, idx: wast::Index, fn_name:
     // block = 0, loop = 1
     if *block_type == 0 {
         // If we are targeting a forward branch, just emit the goto
-        ret_str += &format!("printf(\"taking branch: {}_{}\\n\");", format!("{}{}", "__", fn_name.replace(".", "")), block_name);
         ret_str += &format!("\t{}\n", format!("goto {}_{};", format!("{}{}", "__", fn_name.replace(".", "")), block_name));
     } else {
         // If we are targeting a loop, we have to emit a return instead, to convert the iterative loop into a recursive function call
@@ -73,8 +72,6 @@ pub fn emit_br_if(writer: &opencl_writer::OpenCLCWriter, idx: wast::Index, fn_na
     // pop the value first
     ret_str += &format!("\t{}\n",
                         format!("*sp -= {};", stack_sizes.pop().unwrap()));
-    
-    ret_str += &format!("printf(\"branch conditional: %d\\n\", {});", "read_u32((ulong)(stack_u32+*sp), (ulong)(stack_u32), warp_idx)");
 
     ret_str += &format!("\tif ({} != 0) {{\n", "read_u32((ulong)(stack_u32+*sp), (ulong)(stack_u32), warp_idx)");
     ret_str += &emit_br(writer, idx, fn_name, control_stack, function_id_map, debug);
