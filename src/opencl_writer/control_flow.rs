@@ -154,7 +154,7 @@ pub fn emit_block(writer: &opencl_writer::OpenCLCWriter, block: &wast::BlockType
     // sfp = stack frame ptr, idx = branch ID, func_id = the numerical id of the function
 
     result += &format!("\t{}\n",
-                format!("write_u16((ulong)(((global char*)branch_value_stack_state)+(*sfp*128)+({}*4)+({}*4096)), (ulong)(branch_value_stack_state), *sp, warp_idx);",
+                format!("write_u32((ulong)(((global char*)branch_value_stack_state)+(*sfp*128)+({}*4)+({}*4096)), (ulong)(branch_value_stack_state), *sp, warp_idx);",
                         branch_idx_u32, function_id_map.get(fn_name).unwrap()));
 
     // we don't emit a label for block statements here, any br's goto the END of the block
@@ -186,8 +186,6 @@ pub fn emit_br_table(writer: &opencl_writer::OpenCLCWriter, table_indicies: &was
 
     // we add the default index, if label_idx > than length l*
     ret_str += &format!("\t\tdefault:\n");
-    // decrement the stack
-    ret_str += &format!("\t\t\t{}\n", "*sp -= 1;");
     // emit br i
     ret_str += &emit_br(writer, table_indicies.default, fn_name, control_stack, function_id_map, debug);
     ret_str += &format!("\t\t\tbreak;\n");

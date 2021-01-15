@@ -13,6 +13,7 @@ pub fn emit_global_get(writer: &opencl_writer::OpenCLCWriter,
                        debug: bool) -> String {
     let mut ret_str = String::from("");
     let (offset, size) = global_mappings.get(global_id).unwrap();
+
     match size {
         1 => {
             stack_sizes.push(1);
@@ -24,6 +25,11 @@ pub fn emit_global_get(writer: &opencl_writer::OpenCLCWriter,
                                                     "(ulong)(globals_buffer)",
                                                     "warp_idx"),
                             "warp_idx"));
+
+            ret_str += &format!("\t{};\n",
+                            &format!("printf(\"getting global value: %d\\n\", {})", &emit_read_u32(&format!("(ulong)((global char*)globals_buffer+{})", offset*4),
+                            "(ulong)(globals_buffer)",
+                            "warp_idx")));
 
             ret_str += &String::from("\t*sp += 1;\n");
         },
@@ -55,7 +61,7 @@ pub fn emit_global_set(writer: &opencl_writer::OpenCLCWriter,
                        debug: bool) -> String {
     let mut ret_str = String::from("");
     let (offset, size) = global_mappings.get(global_id).unwrap();
-    stack_sizes.pop();
+    stack_sizes.pop().unwrap();
 
     match size {
         1 => {

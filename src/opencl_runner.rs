@@ -715,7 +715,7 @@ impl OpenCLRunner {
             // Unfortunately the OpenCL API doesn't give us a good way to identify what happened - the OS logs (dmesg) do have a record of this though
             profiling_event = ocl::Event::empty();
             unsafe {
-                ocl::core::enqueue_kernel(&queue, &start_kernel, 1, None, &[self.num_vms as usize, 1, 1], None, None::<Event>, Some(&mut profiling_event)).unwrap();
+                ocl::core::enqueue_kernel(&queue, &start_kernel, 1, None, &[self.num_vms as usize, 32, 1], None, None::<Event>, Some(&mut profiling_event)).unwrap();
                 match ocl::core::finish(&queue) {
                     Err(e) => {
                         panic!("Unable to finish waiting on queue for start_kernel\n\n{}", e);

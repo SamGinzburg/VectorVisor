@@ -813,7 +813,9 @@ impl<'a> OpenCLCWriter<'_> {
                         }
         
                     },
-                    None => (),
+                    None => {
+                        ()
+                    },
                 }
 
                 // store the offset of the parameters (for offset computation later)
@@ -1471,6 +1473,7 @@ void {}(global uint   *stack_u32,
         // also return the global mappings: global id -> (global buffer offset, global size)
         let (data_section, global_mappings) = self.generate_data_section(interleave, heap_size_bytes, debug);
         let mut globals_buffer_size = 0;
+
         for (_key, (_offset, size)) in &global_mappings {
             globals_buffer_size += size;
         }
@@ -1621,7 +1624,6 @@ void {}(global uint   *stack_u32,
         write!(output, "\t{}\n", "switch (*entry_point) {");
         for key in function_idx_label.keys() {
 
-            dbg!(key);
             if *key == "__wasm_call_ctors" {
                 //continue;
             }
