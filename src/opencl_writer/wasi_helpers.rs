@@ -310,3 +310,24 @@ pub fn emit_environ_get_post(writer: &opencl_writer::OpenCLCWriter, debug: bool)
 
     ret_str
 }
+
+pub fn emit_fd_write_post(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> String {
+    let mut ret_str = String::from("");
+
+    let nwritten = emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx");
+
+    // fd_write takes 4 u32 parameters
+    // we just assume that we always succeed
+    ret_str += &format!("\t{};\n",
+                emit_write_u32("(ulong)(stack_u32+*sp-4)", "(ulong)(stack_u32)", "0", "warp_idx"));
+
+    // write back nwritten as well
+    ret_str += &format!("\t{};\n",
+                emit_write_u32(&format!("(ulong)((global char*)heap_u32+(int)({}))", nwritten), "(ulong)(heap_u32)", "hcall_ret_val", "warp_idx"));
+
+    ret_str += &format!("\t{}\n",
+                        "*sp -= 3;");
+
+
+    ret_str
+}

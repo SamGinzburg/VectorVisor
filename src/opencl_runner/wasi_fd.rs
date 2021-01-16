@@ -41,7 +41,6 @@ impl WasiFd {
         if hypercall.is_interleaved_mem {
             fd = Interleave::read_u32(hcall_buf, 0, hypercall.num_total_vms, hypercall.vm_id);
             num_iovecs = Interleave::read_u32(hcall_buf, 8, hypercall.num_total_vms, hypercall.vm_id);
-
             // for each iovec, read the buf_len to determine how many bytes to actually copy over
             for idx in 0..num_iovecs {
                 bytes_to_copy += Interleave::read_u32(hcall_buf, 16 + 8 * idx + 4, hypercall.num_total_vms, hypercall.vm_id);
@@ -81,7 +80,7 @@ impl WasiFd {
         //dbg!(&raw_mem[0..64]);
 
         // we hardcode the ciovec array to start at offset 0
-        let ciovec_ptr: &CiovecArray = &GuestPtr::new(&wasm_mem, (0 as u32, 1 as u32));
+        let ciovec_ptr: &CiovecArray = &GuestPtr::new(&wasm_mem, (0 as u32, num_iovecs as u32));
         let result = ctx.fd_write(Fd::from(fd), &ciovec_ptr);
 
         sender.send({
@@ -110,7 +109,7 @@ impl WasiFd {
         let result = match ctx.fd_prestat_get(Fd::from(fd)) {
             Ok(Prestat::Dir(prestat_dir)) => 0,
             Err(e) => {
-                UserErrorConversion::errno_from_error(ctx, e) as u32
+                UserErrorConversion::errno_from_error(ctx, e).unwrap() as u32
             },
         };
 
@@ -151,7 +150,7 @@ impl WasiFd {
         let result = match ctx.fd_prestat_dir_name(Fd::from(fd), str_ptr, str_len) {
             Ok(()) => 0,
             Err(e) => {
-                UserErrorConversion::errno_from_error(ctx, e) as u32
+                UserErrorConversion::errno_from_error(ctx, e).unwrap() as u32
             },
         };
 

@@ -26,11 +26,6 @@ pub fn emit_global_get(writer: &opencl_writer::OpenCLCWriter,
                                                     "warp_idx"),
                             "warp_idx"));
 
-            ret_str += &format!("\t{};\n",
-                            &format!("printf(\"getting global value: %d\\n\", {})", &emit_read_u32(&format!("(ulong)((global char*)globals_buffer+{})", offset*4),
-                            "(ulong)(globals_buffer)",
-                            "warp_idx")));
-
             ret_str += &String::from("\t*sp += 1;\n");
         },
         2 => {

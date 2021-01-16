@@ -179,15 +179,10 @@ impl<'a> OpenCLCWriter<'_> {
         // skipped hypercall entries here are no-ops
         match hypercall_id {
             WasmHypercallId::fd_write => {
-                // fd_write takes 4 u32 parameters
-                // we just assume that we always succeed
-                ret_str += &format!("\t{};\n",
-                            emit_write_u32("(ulong)(stack_u32+*sp-4)", "(ulong)(stack_u32)", "hcall_ret_val", "warp_idx"));
-                ret_str += &format!("\t{}\n",
-                                    "*sp -= 3;");
+                ret_str += &emit_fd_write_post(&self, debug);
             },
             WasmHypercallId::environ_sizes_get => {
-                ret_str += &emit_environ_sizes_get_post(&self ,debug);
+                ret_str += &emit_environ_sizes_get_post(&self, debug);
             },
             WasmHypercallId::environ_get => {
                 ret_str += &emit_environ_get_post(&self, debug);

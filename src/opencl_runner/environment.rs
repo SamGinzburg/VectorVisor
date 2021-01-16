@@ -40,7 +40,7 @@ impl Environment {
                 0
             },
             Err(e) => {
-                UserErrorConversion::errno_from_error(ctx, e) as i32
+                UserErrorConversion::errno_from_error(ctx, e).unwrap() as i32
             },
         };
 
