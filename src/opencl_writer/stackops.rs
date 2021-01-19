@@ -73,7 +73,7 @@ pub fn emit_local_get(writer: &opencl_writer::OpenCLCWriter, parameter_offset: i
                                "warp_idx"),
                 "*sp += 2;")
         },
-        _ => panic!("emit_local_set type not handled")
+        _ => panic!("emit_local_get type not handled")
     }
 }
 
@@ -234,6 +234,25 @@ pub fn emit_i32_const(writer: &opencl_writer::OpenCLCWriter, val: &i32, debug: b
 }
 
 pub fn emit_i64_const(writer: &opencl_writer::OpenCLCWriter, val: &i64, debug: bool) -> String {
+    format!("\t{};\n\t{}\n",
+            &emit_write_u64("(ulong)(stack_u32+*sp)",
+                            "(ulong)(stack_u32)",
+                            &format!("{}", val),
+                            "warp_idx"),
+            "*sp += 2;")
+}
+
+// the float bits are passed as unsigned integer values
+pub fn emit_f32_const(writer: &opencl_writer::OpenCLCWriter, val: &u32, debug: bool) -> String {
+    format!("\t{};\n\t{}\n",
+            &emit_write_u32("(ulong)(stack_u32+*sp)",
+                            "(ulong)(stack_u32)",
+                            &format!("{}", val),
+                            "warp_idx"),
+            "*sp += 1;")
+}
+
+pub fn emit_f64_const(writer: &opencl_writer::OpenCLCWriter, val: &u64, debug: bool) -> String {
     format!("\t{};\n\t{}\n",
             &emit_write_u64("(ulong)(stack_u32+*sp)",
                             "(ulong)(stack_u32)",

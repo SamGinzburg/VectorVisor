@@ -715,7 +715,7 @@ impl OpenCLRunner {
             // Unfortunately the OpenCL API doesn't give us a good way to identify what happened - the OS logs (dmesg) do have a record of this though
             profiling_event = ocl::Event::empty();
             unsafe {
-                ocl::core::enqueue_kernel(&queue, &start_kernel, 1, None, &[self.num_vms as usize, 32, 1], None, None::<Event>, Some(&mut profiling_event)).unwrap();
+                ocl::core::enqueue_kernel(&queue, &start_kernel, 1, None, &[self.num_vms as usize, 1, 1], None, None::<Event>, Some(&mut profiling_event)).unwrap();
                 match ocl::core::finish(&queue) {
                     Err(e) => {
                         panic!("Unable to finish waiting on queue for start_kernel\n\n{}", e);
@@ -862,6 +862,9 @@ impl OpenCLRunner {
                     let result_i64 = Interleave::read_u64(&mut check_results_debug, 32, self.num_vms, vm_idx);
                     dbg!(result_i32 as i32);
                     dbg!(result_i64 as i64);
+                    dbg!(result_i64 as u64);
+                    dbg!(result_i32 as f32);
+                    dbg!(result_i64 as f64);
                 } else {
                     let result = LittleEndian::read_u32(&check_results_debug[vm_idx as usize..(vm_idx+4) as usize]);
                     dbg!(result as i32);

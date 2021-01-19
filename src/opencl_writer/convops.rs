@@ -42,3 +42,24 @@ pub fn emit_i64_extend_i32_u(writer: &opencl_writer::OpenCLCWriter, debug: bool)
             // the 64 bit value takes up an extra 4 bytes of space
             "*sp += 1;")
 }
+
+pub fn emit_f64_convert_i32(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> String {
+    let extend = emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx");
+    format!("\t{};\n\t{}\n",
+            emit_write_u64("(ulong)(stack_u32+*sp-1)",
+                           "(ulong)(stack_u32)",
+                           &format!("(double)({})", extend),
+                           "warp_idx"),
+            // the 64 bit value takes up an extra 4 bytes of space
+            "*sp += 1;")
+}
+
+pub fn emit_f64_convert_i64u(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> String {
+    let extend = emit_read_u64("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx");
+    format!("\t{};\n",
+            emit_write_u64("(ulong)(stack_u32+*sp-2)",
+                           "(ulong)(stack_u32)",
+                           &format!("(double){}", extend),
+                           "warp_idx"))
+}
+

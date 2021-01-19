@@ -40,6 +40,17 @@ pub fn emit_i32_lt_u(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> Stri
             "*sp -= 1;")
 }
 
+pub fn emit_i64_lt_u(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> String {
+    format!("\t{};\n\t{}\n",
+            &emit_write_u32("(ulong)(stack_u32+*sp-4)",
+                            "(ulong)(stack_u32)",
+                            &format!("((ulong)({}) < (ulong)({})) ? 1 : 0",
+                                     &emit_read_u64("(ulong)(stack_u32+*sp-4)", "(ulong)(stack_u32)", "warp_idx"),
+                                     &emit_read_u64("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx")),
+                            "warp_idx"),
+            "*sp -= 3;")
+}
+
 // signed version
 pub fn emit_i32_lt_s(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> String {
     format!("\t{};\n\t{}\n",
@@ -50,6 +61,17 @@ pub fn emit_i32_lt_s(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> Stri
                                      &emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx")),
                             "warp_idx"),
             "*sp -= 1;")
+}
+
+pub fn emit_i64_lt_s(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> String {
+    format!("\t{};\n\t{}\n",
+            &emit_write_u32("(ulong)(stack_u32+*sp-4)",
+                            "(ulong)(stack_u32)",
+                            &format!("((long)({}) < (long)({})) ? 1 : 0",
+                                     &emit_read_u64("(ulong)(stack_u32+*sp-4)", "(ulong)(stack_u32)", "warp_idx"),
+                                     &emit_read_u64("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx")),
+                            "warp_idx"),
+            "*sp -= 3;")
 }
 
 // computes < with unsigned vals
@@ -66,13 +88,24 @@ pub fn emit_i32_gt_u(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> Stri
 
 pub fn emit_i64_gt_u(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> String {
     format!("\t{};\n\t{}\n",
-            &emit_write_u64("(ulong)(stack_u32+*sp-4)",
+            &emit_write_u32("(ulong)(stack_u32+*sp-4)",
                             "(ulong)(stack_u32)",
                             &format!("((ulong)({}) > (ulong)({})) ? 1 : 0",
                                      &emit_read_u64("(ulong)(stack_u32+*sp-4)", "(ulong)(stack_u32)", "warp_idx"),
                                      &emit_read_u64("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx")),
                             "warp_idx"),
-            "*sp -= 2;")
+            "*sp -= 3;")
+}
+
+pub fn emit_i64_gt_s(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> String {
+    format!("\t{};\n\t{}\n",
+            &emit_write_u32("(ulong)(stack_u32+*sp-4)",
+                            "(ulong)(stack_u32)",
+                            &format!("((long)({}) > (long)({})) ? 1 : 0",
+                                     &emit_read_u64("(ulong)(stack_u32+*sp-4)", "(ulong)(stack_u32)", "warp_idx"),
+                                     &emit_read_u64("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx")),
+                            "warp_idx"),
+            "*sp -= 3;")
 }
 
 // signed version
@@ -139,23 +172,69 @@ pub fn emit_i32_le_s(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> Stri
 // computes >= with unsigned vals
 pub fn emit_i64_ge_u(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> String {
     format!("\t{};\n\t{}\n",
-            &emit_write_u64("(ulong)(stack_u32+*sp-4)",
+            &emit_write_u32("(ulong)(stack_u32+*sp-4)",
                             "(ulong)(stack_u32)",
                             &format!("((ulong)({}) >= (ulong)({})) ? 1 : 0",
                                      &emit_read_u64("(ulong)(stack_u32+*sp-4)", "(ulong)(stack_u32)", "warp_idx"),
                                      &emit_read_u64("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx")),
                             "warp_idx"),
-            "*sp -= 2;")
+            "*sp -= 3;")
+}
+
+pub fn emit_i64_le_u(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> String {
+    format!("\t{};\n\t{}\n",
+            &emit_write_u32("(ulong)(stack_u32+*sp-4)",
+                            "(ulong)(stack_u32)",
+                            &format!("((ulong)({}) <= (ulong)({})) ? 1 : 0",
+                                     &emit_read_u64("(ulong)(stack_u32+*sp-4)", "(ulong)(stack_u32)", "warp_idx"),
+                                     &emit_read_u64("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx")),
+                            "warp_idx"),
+            "*sp -= 3;")
+}
+
+pub fn emit_i64_le_s(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> String {
+    format!("\t{};\n\t{}\n",
+            &emit_write_u32("(ulong)(stack_u32+*sp-4)",
+                            "(ulong)(stack_u32)",
+                            &format!("((long)({}) <= (long)({})) ? 1 : 0",
+                                     &emit_read_u64("(ulong)(stack_u32+*sp-4)", "(ulong)(stack_u32)", "warp_idx"),
+                                     &emit_read_u64("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx")),
+                            "warp_idx"),
+            "*sp -= 3;")
 }
 
 // signed version
 pub fn emit_i64_ge_s(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> String {
     format!("\t{};\n\t{}\n",
-            &emit_write_u64("(ulong)(stack_u32+*sp-4)",
+            &emit_write_u32("(ulong)(stack_u32+*sp-4)",
                             "(ulong)(stack_u32)",
                             &format!("((long)({}) >= (long)({})) ? 1 : 0",
                                      &emit_read_u64("(ulong)(stack_u32+*sp-4)", "(ulong)(stack_u32)", "warp_idx"),
                                      &emit_read_u64("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx")),
                             "warp_idx"),
-            "*sp -= 2;")
+            "*sp -= 3;")
+}
+
+pub fn emit_f64_lt(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> String {
+    let mut ret_str = String::from("");
+
+    ret_str += &format!("\t{{\n");
+    ret_str += &format!("\t\t{}\n", "double x;");
+    ret_str += &format!("\t\t{}\n", "double y;");
+    ret_str += &format!("\t\tulong x_old = {};\n", &emit_read_u64("(ulong)(stack_u32+*sp-4)", "(ulong)(stack_u32)", "warp_idx"));
+    ret_str += &format!("\t\tulong y_old = {};\n", &emit_read_u64("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx"));
+    ret_str += &format!("\t\t{}\n", "memcpy(&x, &x_old, sizeof(double));");
+    ret_str += &format!("\t\t{}\n", "memcpy(&y, &y_old, sizeof(double));");
+    ret_str += &format!("\t{}\n", "x_old = x < y;");
+
+    ret_str += &format!("\t{};\n\t{}\n",
+            &emit_write_u32("(ulong)(stack_u32+*sp-4)",
+                            "(ulong)(stack_u32)",
+                            "x_old",
+                            "warp_idx"),
+            "*sp -= 3;");
+
+    ret_str += &format!("\t}}\n");
+
+    ret_str
 }

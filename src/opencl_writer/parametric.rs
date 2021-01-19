@@ -4,12 +4,12 @@ use crate::opencl_writer::mem_interleave::emit_write_u32;
 use crate::opencl_writer::mem_interleave::emit_read_u64;
 use crate::opencl_writer::mem_interleave::emit_write_u64;
 
-pub fn emit_select(writer: &opencl_writer::OpenCLCWriter, stack_sizes: &mut Vec<u32>, debug: bool) -> String {
+pub fn emit_select(writer: &opencl_writer::OpenCLCWriter, stack_sizes: &mut Vec<u32>, fn_name: &str, debug: bool) -> String {
     let mut ret_str = String::from("");
 
     // pop c
     let c = emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx");
-    
+
     stack_sizes.pop().unwrap();
 
     // we have to make sure that the values are the same size
@@ -17,7 +17,7 @@ pub fn emit_select(writer: &opencl_writer::OpenCLCWriter, stack_sizes: &mut Vec<
     let size2 = stack_sizes.pop().unwrap();
 
     if size1 != size2 {
-        panic!("Unequal sizes for select operation!")
+        panic!("Unequal sizes for select operation: {}", fn_name);
     }
 
     let write_val2;

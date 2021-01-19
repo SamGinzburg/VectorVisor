@@ -76,3 +76,24 @@ pub fn emit_i32_popcnt(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> St
 
     ret_str
 }
+
+pub fn emit_f64_neg(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> String {
+    let mut ret_str = String::from("");
+
+    ret_str += &format!("\t{{\n");
+    ret_str += &format!("\t\t{}\n", "double x;");
+    ret_str += &format!("\t\tulong x_old = {};\n", &emit_read_u64("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx"));
+    ret_str += &format!("\t\t{}\n", "memcpy(&x, &x_old, sizeof(double));");
+    ret_str += &format!("\t{}\n", "x = -x;");
+    ret_str += &format!("\t\t{}\n", "memcpy(&x_old, &x, sizeof(double));");
+
+    ret_str += &format!("\t{};\n",
+            &emit_write_u64("(ulong)(stack_u32+*sp-2)",
+                            "(ulong)(stack_u32)",
+                            "x_old",
+                            "warp_idx"));
+
+    ret_str += &format!("\t}}\n");
+
+    ret_str
+}
