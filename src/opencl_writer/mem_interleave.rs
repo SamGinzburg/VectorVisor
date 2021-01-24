@@ -39,7 +39,7 @@ pub fn generate_read_write_calls(writer: &opencl_writer::OpenCLCWriter, interlea
 
     // TODO: switch between inlined read funcs
     result += &format!("\n{}\n",
-                        "void write_u8(ulong addr, ulong mem_start, uchar value, uint warp_id) {");
+                        "inline void write_u8(ulong addr, ulong mem_start, uchar value, uint warp_id) {");
 
     match interleave {
         0 => {
@@ -56,7 +56,7 @@ pub fn generate_read_write_calls(writer: &opencl_writer::OpenCLCWriter, interlea
                         "}");
 
     result += &format!("\n{}\n",
-                        "void write_u16(ulong addr, ulong mem_start, ushort value, uint warp_id) {");
+                        "inline void write_u16(ulong addr, ulong mem_start, ushort value, uint warp_id) {");
     match interleave {
         0 => {
             result += &format!("\t{}",
@@ -76,7 +76,7 @@ pub fn generate_read_write_calls(writer: &opencl_writer::OpenCLCWriter, interlea
                         "}");
 
     result += &format!("\n{}\n",
-                        "void write_u32(ulong addr, ulong mem_start, uint value, uint warp_id) {");
+                        "inline void write_u32(ulong addr, ulong mem_start, uint value, uint warp_id) {");
     match interleave {
         0 => {
             result += &format!("\t{}",
@@ -96,7 +96,7 @@ pub fn generate_read_write_calls(writer: &opencl_writer::OpenCLCWriter, interlea
                         "}");
 
     result += &format!("\n{}\n",
-                        "void write_u64(ulong addr, ulong mem_start, ulong value, uint warp_id) {");
+                        "inline void write_u64(ulong addr, ulong mem_start, ulong value, uint warp_id) {");
     match interleave {
         0 => {
             result += &format!("\t{}",
@@ -118,7 +118,7 @@ pub fn generate_read_write_calls(writer: &opencl_writer::OpenCLCWriter, interlea
     // the read functions
     
     result += &format!("\n{}\n",
-                        "uchar read_u8(ulong addr, ulong mem_start, uint warp_id) {");
+                        "inline uchar read_u8(ulong addr, ulong mem_start, uint warp_id) {");
     match interleave {
         0 => {
             result += &format!("\t{}",
@@ -136,7 +136,7 @@ pub fn generate_read_write_calls(writer: &opencl_writer::OpenCLCWriter, interlea
 
 
     result += &format!("\n{}\n",
-                        "ushort read_u16(ulong addr, ulong mem_start, uint warp_id) {");
+                        "inline ushort read_u16(ulong addr, ulong mem_start, uint warp_id) {");
     match interleave {
         0 => {
             result += &format!("\t{}",
@@ -163,7 +163,7 @@ pub fn generate_read_write_calls(writer: &opencl_writer::OpenCLCWriter, interlea
                         "}");
 
     result += &format!("\n{}\n",
-                        "uint read_u32(ulong addr, ulong mem_start, uint warp_id) {");
+                        "inline uint read_u32(ulong addr, ulong mem_start, uint warp_id) {");
     match interleave {
         0 => {
             result += &format!("\t{}",
@@ -189,7 +189,7 @@ pub fn generate_read_write_calls(writer: &opencl_writer::OpenCLCWriter, interlea
                         "}");
 
     result += &format!("\n{}\n",
-                        "ulong read_u64(ulong addr, ulong mem_start, uint warp_id) {");
+                        "inline ulong read_u64(ulong addr, ulong mem_start, uint warp_id) {");
     match interleave {
         0 => {
             result += &format!("\t{}",
@@ -230,6 +230,20 @@ pub fn generate_read_write_calls(writer: &opencl_writer::OpenCLCWriter, interlea
     
     result += &format!("\n{}\n",
                        "}");
+
+    result += &format!("\n{}\n",
+        "void * ___private_memcpy_nonmmu(void *dest, const void *src, size_t len) {");
+
+    result += &format!("\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n",
+                        "char *d = dest;",
+                        "const char *s = src;",
+                        "while (len--)",
+                        "  *d++ = *s++;",
+                        "return dest;");
+
+    result += &format!("\t{}\n",
+                        "}");
+
     result
 }
 
