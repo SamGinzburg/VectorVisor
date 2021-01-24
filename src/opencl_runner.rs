@@ -489,7 +489,7 @@ impl OpenCLRunner {
                     Ok(binary) => binary,
                     Err(e) => panic!("Unable to create program from given binary: {:?}", e),
                 };
-                ocl::core::build_program(&program_to_run, Some(&[device_ids[0]]), &CString::new(format!("-DNUM_THREADS={}", self.num_vms)).unwrap(), None, None).unwrap();
+                ocl::core::build_program(&program_to_run, Some(&[device_ids[0]]), &CString::new(format!("{} -DNUM_THREADS={}", compile_flags, self.num_vms)).unwrap(), None, None).unwrap();
                 let knames = ocl::core::get_program_info(&program_to_run, ocl::core::ProgramInfo::KernelNames);
                 println!("Loaded kernels: {}", knames.unwrap());
                 let binary_prep_end = std::time::Instant::now();

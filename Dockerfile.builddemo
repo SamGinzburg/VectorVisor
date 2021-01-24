@@ -1,0 +1,57 @@
+# Use the official image as a parent image.
+FROM rust:1.48.0-buster AS builder
+
+# Add metadata to the image to describe which port the container is listening on at runtime.
+EXPOSE 8080
+
+# Install the OpenCL dev headers
+RUN ["apt-get", "update"]
+RUN ["apt-get", "install", "ocl-icd-libopencl1", "-y"]
+RUN ["apt-get", "install", "ocl-icd-opencl-dev", "-y"]
+RUN ["ln", "-s", "/usr/lib64/libOpenCL.so.1", "/usr/lib/libOpenCL.so"]
+
+# Install LLVM toolchain
+RUN ["apt-get", "install", "lsb-release", "-y"]
+RUN ["apt-get", "install", "wget", "-y"]
+RUN ["apt-get", "install", "software-properties-common", "-y"]
+RUN ["bash", "-c", "\"$(wget -O - https://apt.llvm.org/llvm.sh)\""]
+
+# Install Libclc
+RUN ["apt-get", "install", "libclc-dev", "-y"]
+RUN ["apt-get", "install", "libclc-ptx", "-y"]
+
+# install NVIDIA toolchain
+RUN [ "apt-key", "adv", "--fetch-keys", "https://developer.download.nvidia.com/compute/cuda/repos/debian10/"]
+RUN [ "apt-key", "adv", "--fetch-keys", "https://developer.download.nvidia.com/compute/cuda/repos/debian10/x86_64/7fa2af80.pub"]
+RUN [ "add-apt-repository", "adv", "\"deb https://developer.download.nvidia.com/compute/cuda/repos/debian10/x86_64/ /\""]
+RUN [ "add-apt-repository", "contrib"]
+RUN [ "apt-get", "update"]
+RUN [ "apt", "install", "cuda-nvcc-11-2"]
+
+# Set the working directory.
+WORKDIR /usr/src/wasm-parser
+
+# Copy the files from your host to your current location.
+COPY . .
+
+# Run the specified command within the container.
+RUN [ "cargo", "build"]
+
+# Now compile each benchmark
+
+# 1) Invoke the BT, translate WASM -> OpenCL C
+
+# 2) Compile OpenCL C -> LLVM IR
+# clang-11 -DNUM_THREADS=16 -target nvptx64-nvidia-nvcl -cl-std=CL2.0 -Xclang -I/usr/include/clc/clc.h -O2 rust-arr-factorial.wat.cl -emit-llvm -c
+
+# 3) Link against Libclc
+# /usr/lib/clc/nvptx64--nvidiacl.bc
+
+# 4) Emit PTX assembly for the GPU
+
+# 5) Compile cubin file for the GPU (avoid driver side compilation)
+#   /usr/local/cuda-11.2/bin/ptxas
+
+# copy the finished binary back
+FROM scratch AS export-stage
+COPY --from=builder /usr/src/wasm-parser/target/debug/wasm-parser /
