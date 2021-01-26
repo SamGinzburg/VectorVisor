@@ -53,6 +53,30 @@ pub fn emit_f64_add(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> Strin
     ret_str
 }
 
+pub fn emit_f64_ne(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> String {
+    let mut ret_str = String::from("");
+
+ 
+    ret_str += &format!("\t{{\n");
+    ret_str += &format!("\t\t{}\n", "double x;");
+    ret_str += &format!("\t\t{}\n", "double y;");
+    ret_str += &format!("\t\tulong x_old = {};\n", &emit_read_u64("(ulong)(stack_u32+*sp-4)", "(ulong)(stack_u32)", "warp_idx"));
+    ret_str += &format!("\t\tulong y_old = {};\n", &emit_read_u64("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx"));
+    ret_str += &format!("\t\t{}\n", "___private_memcpy_nonmmu(&x, &x_old, sizeof(double));");
+    ret_str += &format!("\t\t{}\n", "___private_memcpy_nonmmu(&y, &y_old, sizeof(double));");
+
+    ret_str += &format!("\t{};\n\t{}\n",
+            &emit_write_u64("(ulong)(stack_u32+*sp-4)",
+                            "(ulong)(stack_u32)",
+                            "x == y ? 1 : 0",
+                            "warp_idx"),
+            "*sp -= 2;");
+
+    ret_str += &format!("\t}}\n");
+
+    ret_str
+}
+
 pub fn emit_f64_div(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> String {
     let mut ret_str = String::from("");
 

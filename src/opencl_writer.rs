@@ -455,6 +455,12 @@ impl<'a> OpenCLCWriter<'_> {
             wast::Instruction::F64Neg => {
                 emit_f64_neg(self, debug)
             },
+            wast::Instruction::F64Ne => {
+                stack_sizes.pop();
+                stack_sizes.pop();
+                stack_sizes.push(1);
+                emit_f64_ne(self, debug)
+            },
             wast::Instruction::F64Lt => {
                 stack_sizes.pop();
                 stack_sizes.pop();
@@ -807,6 +813,18 @@ impl<'a> OpenCLCWriter<'_> {
                 emit_i64_sub(self, debug)
             },
             wast::Instruction::I64ReinterpretF64 => {
+                // no-op
+                format!("")
+            },
+            wast::Instruction::F64ReinterpretI64 => {
+                // no-op
+                format!("")
+            },
+            wast::Instruction::F32ReinterpretI32 => {
+                // no-op
+                format!("")
+            },
+            wast::Instruction::I32ReinterpretF32 => {
                 // no-op
                 format!("")
             },

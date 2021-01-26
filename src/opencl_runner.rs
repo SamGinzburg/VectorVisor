@@ -205,6 +205,8 @@ impl OpenCLRunner {
                           num_compiled_funcs: u32,
                           global_buffers_size: u32,
                           context: ocl::core::Context) -> (OpenCLRunner, ocl::core::Context) {
+        let mut size_tracker: u64 = 0;
+        
         let stack_buffer = unsafe {
             ocl::core::create_buffer::<_, u8>(&context,
                                               //ocl::core::MEM_READ_WRITE | ocl::core::MEM_ALLOC_HOST_PTR,
@@ -212,6 +214,7 @@ impl OpenCLRunner {
                                               (stack_size as u64 * self.num_vms as u64) as usize,
                                               None).unwrap()
         };
+        size_tracker += (stack_size as u64 * self.num_vms as u64) as u64;
 
         let heap_buffer = unsafe {
             ocl::core::create_buffer::<_, u8>(&context,
@@ -220,16 +223,19 @@ impl OpenCLRunner {
                                               (heap_size as u64 * self.num_vms as u64) as usize,
                                               None).unwrap()
         };
+        size_tracker += (heap_size as u64 * self.num_vms as u64) as u64;
 
 
         let globals_buffer = unsafe {
             if global_buffers_size > 0 {
+                size_tracker += (global_buffers_size * 4 * self.num_vms) as u64;
                 ocl::core::create_buffer::<_, u8>(&context,
                     ocl::core::MEM_READ_WRITE,
                     // global_buffers_size is in increments of 4 bytes
                     (global_buffers_size * 4 * self.num_vms) as usize,
                     None).unwrap()
             } else {
+                size_tracker += (1) as u64;
                 // just to get by, create a buffer of size 1 that we will never use
                 ocl::core::create_buffer::<_, u8>(&context,
                     ocl::core::MEM_READ_WRITE,
@@ -248,6 +254,7 @@ impl OpenCLRunner {
                                               (stack_frame_size as u64 * 4 * self.num_vms as u64) as usize,
                                               None).unwrap()
         };
+        size_tracker += (stack_frame_size as u64 * 4 * self.num_vms as u64) as u64;
 
         // TODO: sp is currently 8 bytes? very unecessary - 4 bytes is probably enough
         let sp = unsafe {
@@ -256,6 +263,7 @@ impl OpenCLRunner {
                                               (8 * self.num_vms) as usize,
                                               None).unwrap()
         };
+        size_tracker += (8 * self.num_vms) as u64;
 
         // way, way too big
         let sfp = unsafe {
@@ -264,6 +272,7 @@ impl OpenCLRunner {
                                               (stack_frame_ptr_size * 8 * self.num_vms) as usize,
                                               None).unwrap()
         };
+        size_tracker += (stack_frame_ptr_size * 8 * self.num_vms) as u64;
 
         // 1KB call stack should be way more than enough
         let call_stack = unsafe {
@@ -272,6 +281,7 @@ impl OpenCLRunner {
                                               (call_stack_size * 8 * self.num_vms) as usize,
                                               None).unwrap()
         };
+        size_tracker += (call_stack_size * 8 * self.num_vms) as u64;
 
         let call_return_stack = unsafe {
             ocl::core::create_buffer::<_, u8>(&context,
@@ -279,21 +289,26 @@ impl OpenCLRunner {
                                               (call_stack_size * 8 * self.num_vms) as usize,
                                               None).unwrap()
         };
+        size_tracker += (call_stack_size * 8 * self.num_vms) as u64;
 
+        // max supported call stack depth of 256 calls
+        // TODO: make max call stack depth configurable
+        // we can store up to 128 loops and 128 branches within a func
         let branch_value_stack_state = unsafe {
             ocl::core::create_buffer::<_, u8>(&context,
                                               ocl::core::MEM_READ_WRITE,
-                                              (num_compiled_funcs as u64 * 4096 * self.num_vms as u64) as usize,
+                                              (64 * 512 * self.num_vms) as usize,
                                               None).unwrap()
         };
+        size_tracker += (64 * 512 * self.num_vms) as u64;
 
         let loop_value_stack_state = unsafe {
             ocl::core::create_buffer::<_, u8>(&context,
                                               ocl::core::MEM_READ_WRITE,
-                                              (num_compiled_funcs as u64 * 4096 * self.num_vms as u64) as usize,
+                                              (64 * 512 * self.num_vms) as usize,
                                               None).unwrap()
         };
-
+        size_tracker += (64 * 512 * self.num_vms) as u64;
 
         let hypercall_num = unsafe {
             ocl::core::create_buffer::<_, u8>(&context,
@@ -301,6 +316,7 @@ impl OpenCLRunner {
                                               (4 * self.num_vms) as usize,
                                               None).unwrap()
         };
+        size_tracker += (4 * self.num_vms) as u64;
 
         let hypercall_continuation = unsafe {
             ocl::core::create_buffer::<_, u8>(&context,
@@ -308,6 +324,7 @@ impl OpenCLRunner {
                                               (4 * self.num_vms) as usize,
                                               None).unwrap()
         };
+        size_tracker += (4 * self.num_vms) as u64;
 
         let current_mem = unsafe {
             ocl::core::create_buffer::<_, u8>(&context,
@@ -315,6 +332,7 @@ impl OpenCLRunner {
                                               (4 * self.num_vms) as usize,
                                               None).unwrap()
         };
+        size_tracker += (4 * self.num_vms) as u64;
 
         let max_mem = unsafe {
             ocl::core::create_buffer::<_, u8>(&context,
@@ -322,6 +340,7 @@ impl OpenCLRunner {
                                               (4 * self.num_vms) as usize,
                                               None).unwrap()
         };
+        size_tracker += (4 * self.num_vms) as u64;
 
 
         let entry = unsafe {
@@ -330,14 +349,18 @@ impl OpenCLRunner {
                                               (4 * self.num_vms) as usize,
                                               None).unwrap()
         };
+        size_tracker += (4 * self.num_vms) as u64;
 
         let is_calling = unsafe {
             ocl::core::create_buffer::<_, u8>(&context,
                                               ocl::core::MEM_READ_WRITE,
-                                              (1 * self.num_vms) as usize,
+                                              (self.num_vms) as usize,
                                               None).unwrap()
         };
-        
+        size_tracker += (self.num_vms) as u64;
+
+        println!("Allocated: {:.2} MB in OpenCL Buffers", size_tracker as f64 / 1024.0 / 1024.0);
+
         self.buffers = Some(OpenCLBuffers::new(stack_buffer,
                                                heap_buffer,
                                                stack_frames,

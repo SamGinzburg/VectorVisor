@@ -99,15 +99,15 @@ pub fn emit_end<'a>(writer: &opencl_writer::OpenCLCWriter<'a>, id: &Option<wast:
     // 1-> loop (label was already inserted at the top, this is a no-op here)
     if block_type == 0 {
         format!("\n{}_{}:\n\t{}\n", format!("{}{}", "__", fn_name.replace(".", "")), label,
-            format!("*sp = read_u32((ulong)(((global char*)branch_value_stack_state)+(*sfp*128)+({}*4)+({}*4096)), (ulong)(branch_value_stack_state), warp_idx);",
-                    branch_idx_u32, function_id_map.get(fn_name).unwrap()))
+            format!("*sp = read_u32((ulong)(((global char*)branch_value_stack_state)+(*sfp*512)+({}*4)), (ulong)(branch_value_stack_state), warp_idx);",
+                    branch_idx_u32))
     } else {
         let mut result = String::from("");
         result += &format!("\t/* END (loop: {}_{}) */\n", format!("{}{}", "__", fn_name.replace(".", "")), label);
         
         // pop the control flow stack entry (reset the stack to the state it was in before the loop)
-        result += &format!("\t*sp = read_u32((ulong)(((global char*)loop_value_stack_state)+(*sfp*128)+({}*4)+({}*4096)), (ulong)(loop_value_stack_state), warp_idx);\n",
-                    branch_idx_u32, function_id_map.get(fn_name).unwrap());
+        result += &format!("\t*sp = read_u32((ulong)(((global char*)loop_value_stack_state)+(*sfp*512)+({}*4)), (ulong)(loop_value_stack_state), warp_idx);\n",
+                    branch_idx_u32);
 
         result
     }
@@ -119,25 +119,20 @@ pub fn emit_loop(writer: &opencl_writer::OpenCLCWriter, block: &wast::BlockType,
     let mut result: String = String::from("");
 
     // we have to emulate a 2-D array, since openCL does not support double pts in v1.2
-    // the format is (64 x 64 * number of functions),
-    // so [..........] 4096 entries per function consecutively
-    // lookups are done as: loop_value_stack_state[(*sfp * 64) + idx + (func_id * 4096)]
-    // sfp = stack frame ptr, idx = branch ID, func_id = the numerical id of the function
+    // For each stack frame, we store a max of 32 loop stack values
+    // As of now, this value is hardcoded (can be easily expanded later), but in practice it is rare to see more than 32 loops inside the same function
 
     result += &format!("\t{}\n",
-                        format!("write_u32((ulong)(((global char*)loop_value_stack_state)+(*sfp*128)+({}*4)+({}*4096)), (ulong)(loop_value_stack_state), *sp, warp_idx);",
-                        branch_idx_u32, function_id_map.get(fn_name).unwrap()));
+                        format!("write_u32((ulong)(((global char*)loop_value_stack_state)+(*sfp*512)+({}*4)), (ulong)(loop_value_stack_state), *sp, warp_idx);",
+                        branch_idx_u32));
 
-    // emit a label here for the END instruction to jump back here to restart the loop
-    //result += &format!("{}_{}:\n", format!("{}{}", "__", fn_name.replace(".", "")), label);
 
     // we convert our loop into a recursive call here - the loop header is treated as a function call re-entry point
-
     result += &format!("{}_call_return_stub_{}:\n", format!("{}{}", "__", fn_name.replace(".", "")), *call_ret_idx);
 
     // pop the control flow stack entry (reset the stack to the state it was in before the loop)
-    result += &format!("\t*sp = read_u32((ulong)(((global char*)loop_value_stack_state)+(*sfp*128)+({}*4)+({}*4096)), (ulong)(loop_value_stack_state), warp_idx);\n",
-                branch_idx_u32, function_id_map.get(fn_name).unwrap());
+    result += &format!("\t*sp = read_u32((ulong)(((global char*)loop_value_stack_state)+(*sfp*512)+({}*4)), (ulong)(loop_value_stack_state), warp_idx);\n",
+                branch_idx_u32);
 
     *call_ret_idx += 1;
 
@@ -154,8 +149,8 @@ pub fn emit_block(writer: &opencl_writer::OpenCLCWriter, block: &wast::BlockType
     // sfp = stack frame ptr, idx = branch ID, func_id = the numerical id of the function
 
     result += &format!("\t{}\n",
-                format!("write_u32((ulong)(((global char*)branch_value_stack_state)+(*sfp*128)+({}*4)+({}*4096)), (ulong)(branch_value_stack_state), *sp, warp_idx);",
-                        branch_idx_u32, function_id_map.get(fn_name).unwrap()));
+                format!("write_u32((ulong)(((global char*)branch_value_stack_state)+(*sfp*512)+({}*4)), (ulong)(branch_value_stack_state), *sp, warp_idx);",
+                        branch_idx_u32));
 
     // we don't emit a label for block statements here, any br's goto the END of the block
     // we don't need to modify the sp here, we will do all stack unwinding in the br instr

@@ -169,7 +169,7 @@ pub fn emit_local_tee(writer: &opencl_writer::OpenCLCWriter, parameter_offset: i
 
             stack_sizes.push(2);
 
-            format!("\t{}\n\t{}\n{}",
+            format!("\t{};\n\t{}\n{}",
                     &emit_write_u64("(ulong)(stack_u32+*sp)",
                                     "(ulong)(stack_u32)",
                                     &emit_read_u64("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx"),
