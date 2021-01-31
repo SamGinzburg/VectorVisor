@@ -1117,7 +1117,7 @@
                             i32.load8_u
                             i32.const 1
                             i32.eq
-                            br_if $B9
+                            br_if $B9 ;; test
                             i32.const 1048960
                             i32.const 43
                             i32.const 1049604
@@ -5230,7 +5230,7 @@
       local.get $p0
       i32.const 2
       i32.ne
-      br_if $B0
+      br_if $B0 ;; test2
       block $B1
         block $B2
           local.get $l3

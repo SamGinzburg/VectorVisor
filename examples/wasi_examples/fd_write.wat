@@ -12,7 +12,11 @@
     i32.const 8
     i32.const 1
     i32.const 12
-    call $wasi_unstable.fd_write)
+    call $wasi_unstable.fd_write
+    drop
+    i32.const 12
+    i32.load
+    )
   (memory $memory 1)
   (export "memory" (memory 0))
   (export "_start" (func $_start))

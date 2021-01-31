@@ -1451,7 +1451,7 @@ impl<'a> OpenCLCWriter<'_> {
         // if we are an OpenCL kernel and we are not the control function, we only need the function header itself
         } else {
             write!(output, "{}", format!("
-void {}(global uint   *stack_u32,
+inline void {}(global uint   *stack_u32,
     global ulong  *stack_u64,
     global uint   *heap_u32,
     global ulong  *heap_u64,
@@ -1600,6 +1600,93 @@ void {}(global uint   *stack_u32,
         result
     }
 
+    fn emit_wasm_control_fn(&self,
+                            interleave: u32,
+                            stack_size_bytes: u32,
+                            heap_size_bytes: u32,
+                            call_stack_size_bytes: u32,
+                            stack_frames_size_bytes: u32,
+                            stack_frame_ptr_size_bytes: u32, 
+                            predictor_size_bytes: u32,
+                            debug_print_function_calls: bool,
+                            globals_buffer_size: u32,
+                            function_idx_label: HashMap<&str, u32>,
+                            debug: bool) -> String {
+        let mut ret_str = String::from("");
+        write!(ret_str, "{}",
+                self.generate_function_prelude("wasm_entry",
+                                               interleave,
+                                               stack_size_bytes,
+                                               heap_size_bytes,
+                                               stack_frames_size_bytes,
+                                               call_stack_size_bytes,
+                                               predictor_size_bytes,
+                                               globals_buffer_size,
+                                               stack_frame_ptr_size_bytes,
+                                               true,
+                                               debug));
+        write!(ret_str, "\tstack_u32 += {};\n", 128);
+        if debug_print_function_calls {
+            write!(ret_str, "\tprintf(\"stack_u32: %p\\n\", stack_u32);\n");
+            write!(ret_str, "\tprintf(\"heap_u32: %p\\n\", heap_u32);\n");
+            write!(ret_str, "\tprintf(\"is_calling: %p\\n\", is_calling);\n");
+            write!(ret_str, "\tprintf(\"hypercall_buffer: %p\\n\", hypercall_buffer);\n");
+            write!(ret_str, "\tprintf(\"call_stack: %p\\n\", call_stack);\n");
+            write!(ret_str, "\tprintf(\"stack_frames: %p\\n\", stack_frames);\n");
+            write!(ret_str, "\tprintf(\"call_return_stack: %p\\n\", call_return_stack);\n");
+            write!(ret_str, "\tprintf(\"branch_value_stack_state: %p\\n\", branch_value_stack_state);\n");
+            write!(ret_str, "\tprintf(\"loop_value_stack_state: %p\\n\", loop_value_stack_state);\n");
+            write!(ret_str, "\tprintf(\"hypercall_number: %p\\n\", hypercall_number);\n");
+            write!(ret_str, "\tprintf(\"hypercall_continuation: %p\\n\", hypercall_continuation);\n");
+            write!(ret_str, "\tprintf(\"current_mem_size: %p\\n\", current_mem_size);\n");
+            write!(ret_str, "\tprintf(\"max_mem_size: %p\\n\", max_mem_size);\n");
+        }
+
+        write!(ret_str, "\t{}\n", "do {");
+        write!(ret_str, "\t{}\n", "switch (*entry_point) {");
+        for key in function_idx_label.keys() {
+            write!(ret_str, "\t\tcase {}:\n", function_idx_label.get(key).unwrap());
+            if debug_print_function_calls {
+                write!(ret_str, "\t\tprintf(\"{}\\n\");\n", format!("{}{}", "__", key.replace(".", "")));
+            }
+            // strip illegal chars from function names
+            write!(ret_str, "\t\t\t{}({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {});\n",
+                            format!("{}{}", "__", key.replace(".", "")),
+                            "stack_u32",
+                            "stack_u64",
+                            "heap_u32",
+                            "heap_u64",
+                            "hypercall_buffer",
+                            "globals_buffer",
+                            "stack_frames",
+                            "sp",
+                            "sfp",
+                            "call_stack",
+                            "call_return_stack",
+                            "branch_value_stack_state",
+                            "loop_value_stack_state",
+                            "hypercall_number",
+                            "hypercall_continuation",
+                            "current_mem_size",
+                            "max_mem_size",
+                            "is_calling",
+                            "warp_idx",
+                            "entry_point",
+                            "*hcall_ret_val");
+            write!(ret_str, "\t\t\tbreak;\n");
+        }
+        write!(ret_str, "\t\tdefault:\n");
+            write!(ret_str, "\t\t\treturn;\n");
+        write!(ret_str, "\t}}\n");
+
+        // if we reset the hypercall_number, that means we need to exit back to the VMM
+        write!(ret_str, "\t{}\n", "} while (*sfp != 0 && *hypercall_number == -2);");
+
+        write!(ret_str, "}}\n");
+
+        ret_str
+    }
+
     pub fn write_opencl_file(&self,
                              interleave: u32,
                              stack_size_bytes: u32,
@@ -1611,10 +1698,11 @@ void {}(global uint   *stack_u32,
                              debug_print_function_calls: bool,
                              force_inline: bool,
                              is_gpu: bool,
-                             debug: bool) -> (String, u32, u32, u32) {
+                             debug: bool) -> (String, u32, u32, u32, HashMap<u32, String>) {
         let mut output = String::new();
         let mut header = String::new();
         let mut func_vec = Vec::new();
+        let mut kernel_hashmap: HashMap<u32, String> = HashMap::new();
         //let mut output = File::create(filename).unwrap();
 
         // if we are running in debug C-mode, we must define the openCL types
@@ -1640,7 +1728,7 @@ r#"
 "#);
 
         // generate the read/write functions
-        // we support 0, 1, 4, 8 byte interleaves
+        // we support only either a 1 byte interleave, or no interleave
         // 0 = no interleave
         write!(output, "{}", generate_read_write_calls(&self, interleave, debug));
         write!(header, "{}", generate_read_write_calls(&self, interleave, debug));
@@ -1648,6 +1736,8 @@ r#"
         // generate the hypercall helper section
         write!(output, "{}", self.generate_hypercall_helpers(debug));
         write!(header, "{}", self.generate_hypercall_helpers(debug));
+
+        let prelude_header = output.clone();
 
         // generate the data loading function
         // also return the global mappings: global id -> (global buffer offset, global size)
@@ -1658,8 +1748,9 @@ r#"
             globals_buffer_size += size;
         }
 
+        let data_program = format!("{}\n{}", prelude_header, data_section.clone());
+        kernel_hashmap.insert(99999, data_program);
         write!(output, "{}", data_section);
-
 
         // for each function, assign an ID -> index mapping
         let mut function_idx_label: HashMap<&str, u32> = HashMap::new();
@@ -1687,6 +1778,7 @@ r#"
         // generate the indirect call mapping T0, refer to openclwriter/functions.rs:emit_call_indirect
         // for notes on why we are doing this statically at compile time
         let indirect_call_mapping: &HashMap<u32, &wast::Index> = &self.process_elements(debug);
+
         for function in funcs.clone() {
             let func = self.emit_function(function,
                                           call_ret_map,
@@ -1703,7 +1795,7 @@ r#"
             if debug {
                 //write!(output, "{}", func);
             }
-
+            
             write!(output, "{}", func);
 
             let fname = match (&function.kind, &function.id, &function.ty) {
@@ -1715,6 +1807,24 @@ r#"
                 },
                 (_, _, _) => panic!("Inline function must always have a valid identifier in wasm")
             };
+
+            let mut function_idx_label_temp: HashMap<&str, u32> = HashMap::new();
+            let fname_idx = function_idx_label.get(fname).unwrap();
+            function_idx_label_temp.insert(fname, *fname_idx);
+            let control_function = self.emit_wasm_control_fn(interleave,
+                                                            stack_size_bytes,
+                                                            heap_size_bytes,
+                                                            call_stack_size_bytes,
+                                                            stack_frames_size_bytes,
+                                                            stack_frame_ptr_size_bytes, 
+                                                            predictor_size_bytes,
+                                                            debug_print_function_calls,
+                                                            globals_buffer_size,
+                                                            function_idx_label_temp,
+                                                            debug);
+            let func_full = format!("{}\n{}\n{}\n", prelude_header.clone(), func.clone(), control_function); 
+            dbg!(func_full.clone());
+            kernel_hashmap.insert(*fname_idx, func_full);
 
             // if we are going to try linking a lib
             //write!(output, "{};", self.generate_function_prelude(&format!("{}{}", "__", fname.replace(".", "")), interleave, 0, 0, 0, 0, 0, 0, 0, false, false));
@@ -1803,11 +1913,6 @@ r#"
         write!(output, "\t{}\n", "do {");
         write!(output, "\t{}\n", "switch (*entry_point) {");
         for key in function_idx_label.keys() {
-
-            if *key == "__wasm_call_ctors" {
-                //continue;
-            }
-
             write!(output, "\t\tcase {}:\n", function_idx_label.get(key).unwrap());
             if debug_print_function_calls {
                 write!(output, "\t\tprintf(\"{}\\n\");\n", format!("{}{}", "__", key.replace(".", "")));
@@ -1921,7 +2026,8 @@ r#"
 
             write!(output, "}}\n\n");
         }
-        (output, *function_idx_label.get("_start").unwrap(), globals_buffer_size, funcs.len().try_into().unwrap())
+
+        (output, *function_idx_label.get("_start").unwrap(), globals_buffer_size, funcs.len().try_into().unwrap(), kernel_hashmap)
     }
 }
 

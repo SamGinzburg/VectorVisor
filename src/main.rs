@@ -7,6 +7,7 @@ use std::fs;
 use std::path::Path;
 use std::fs::File;
 use std::io::Write;
+use std::collections::HashMap;
 
 use wast::parser::{ParseBuffer};
 use rayon::prelude::*;
@@ -161,6 +162,15 @@ fn main() {
             .multiple(false)
             .number_of_values(1)
             .takes_value(true))
+        // experimental parameter for fast loading of programs
+        .arg(Arg::with_name("partition")
+            .long("partition")
+            .value_name("Partition the program into multiple kernels for faster JIT compilation")
+            .default_value("false")
+            .help("This flag breaks up a given input program into many OpenCL kernels for faster JIT compilation of kernels")
+            .multiple(false)
+            .number_of_values(1)
+            .takes_value(true))
         .arg(Arg::with_name("forceinline")
             .long("forceinline")
             .value_name("Force the compiler to inline all functions")
@@ -189,6 +199,7 @@ fn main() {
     let compile_args = value_t!(matches.value_of("cflags"), String).unwrap_or_else(|e| e.exit());
     let link_args = value_t!(matches.value_of("ldflags"), String).unwrap_or_else(|e| e.exit());
     let force_inline = value_t!(matches.value_of("forceinline"), bool).unwrap_or_else(|e| e.exit());
+    let partition = value_t!(matches.value_of("partition"), bool).unwrap_or_else(|e| e.exit());
 
     dbg!(compile_args.clone());
 
@@ -204,7 +215,7 @@ fn main() {
         let mut ast_debug = opencl_writer::OpenCLCWriter::new(&pb_debug);
         let result = ast.parse_file().unwrap();
         let result_debug = ast_debug.parse_file().unwrap();
-        let (compiled_kernel, entry_point, globals_buffer_size, num_compiled_funcs) = ast.write_opencl_file(interleaved as u32,
+        let (compiled_kernel, entry_point, globals_buffer_size, num_compiled_funcs, _) = ast.write_opencl_file(interleaved as u32,
                                                                                                             stack_size,
                                                                                                             heap_size, 
                                                                                                             call_stack_size, 
@@ -234,8 +245,8 @@ fn main() {
 
     dbg!(extension);
 
-    let (file, entry_point, num_compiled_funcs, globals_buffer_size, interleaved) = match extension {
-        "wat" => {
+    let (file, entry_point, num_compiled_funcs, globals_buffer_size, interleaved) = match (extension, partition) {
+        ("wat", false) => {
             let filedata = match fs::read_to_string(file_path.clone()) {
                 Ok(text) => text,
                 Err(e) => panic!(e),
@@ -248,7 +259,7 @@ fn main() {
             let result_debug = ast_debug.parse_file().unwrap();
         
             // apply our compilation pass to the source WASM 
-            let (compiled_kernel, entry_point, globals_buffer_size, num_compiled_funcs) = ast.write_opencl_file(interleaved as u32,
+            let (compiled_kernel, entry_point, globals_buffer_size, num_compiled_funcs, kernel_hashmap) = ast.write_opencl_file(interleaved as u32,
                                                                                                                 stack_size,
                                                                                                                 heap_size, 
                                                                                                                 call_stack_size, 
@@ -266,10 +277,41 @@ fn main() {
 
             (InputProgram::text(compiled_kernel.clone()), entry_point, num_compiled_funcs, globals_buffer_size, interleaved)
         },
-        "wasm" => {
+        ("wat", true) => {
+            let filedata = match fs::read_to_string(file_path.clone()) {
+                Ok(text) => text,
+                Err(e) => panic!(e),
+            };
+            let pb = ParseBuffer::new(&filedata).unwrap();
+            let pb_debug = ParseBuffer::new(&filedata).unwrap();
+            let mut ast = opencl_writer::OpenCLCWriter::new(&pb);
+            let mut ast_debug = opencl_writer::OpenCLCWriter::new(&pb_debug);
+            let result = ast.parse_file().unwrap();
+            let result_debug = ast_debug.parse_file().unwrap();
+        
+            // apply our compilation pass to the source WASM 
+            let (compiled_kernel, entry_point, globals_buffer_size, num_compiled_funcs, kernel_hashmap) = ast.write_opencl_file(interleaved as u32,
+                                                                                                                stack_size,
+                                                                                                                heap_size, 
+                                                                                                                call_stack_size, 
+                                                                                                                stack_frames_size, 
+                                                                                                                sfp_size, 
+                                                                                                                predictor_size,
+                                                                                                                debug_call_print,
+                                                                                                                force_inline,
+                                                                                                                is_gpu,
+                                                                                                                false);
+            println!("Compiled: {} functions", num_compiled_funcs);
+            println!("Entry point: {}", entry_point);
+            println!("Globals buffer: {}", globals_buffer_size);
+            println!("interleaved: {}", interleaved);
+
+            (InputProgram::partitioned(kernel_hashmap.clone()), entry_point, num_compiled_funcs, globals_buffer_size, interleaved)
+        },
+        ("wasm", _) => {
             panic!(".wasm files not supported yet")
         },
-        "bin" => {
+        ("bin", _) => {
             // read the binary file as a Vec<u8>
             let filedata = match fs::read(file_path.clone()) {
                 Ok(text) => text,
@@ -281,7 +323,7 @@ fn main() {
             (InputProgram::binary(program.program_data), program.entry_point, program.num_compiled_funcs, program.globals_buffer_size, program.interleaved)
         },
         // nvidia specific assembly code, prebuilt
-        "ptx" => {
+        ("ptx", _) => {
             // read the binary file as a Vec<u8>
             let filedata = match fs::read(file_path.clone()) {
                 Ok(text) => text,
@@ -294,7 +336,7 @@ fn main() {
             println!("Loaded program with entry point: {}, num_compiled_funcs: {}, globals_buffer_size: {}, is_interleaved: {}", entry, numfuncs, globals_buffer_size, interleaved);
             (InputProgram::binary(filedata), entry, numfuncs, globals_buffer_size, interleaved)
         }
-        _ => panic!("Unrecognized input filetype: {}", extension),
+        _ => panic!("Unrecognized input filetype: {:?}", (extension, partition)),
     };
 
     let fname = &file_path.as_str();

@@ -12,7 +12,7 @@
   )
  (func $_print100 (local $x i32)
   ;; x = 0
-  (i32.const 100)
+  (i32.const 1)
   (set_local $x)
   (block $B0
   (block $B1

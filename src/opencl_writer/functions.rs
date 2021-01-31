@@ -69,13 +69,16 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, fn_name: String, idx:
         },
         // if we cannot find the type signature, we need to look it up to check for the param offset
         None => {
-            let fn_type_id = match func_type_signature.index.unwrap() {
-                wast::Index::Id(id) => id.name().to_string(),
-                wast::Index::Num(n, _) => format!("t{}", n),
+            dbg!(func_type_signature);
+            let fn_type_id = match func_type_signature.index {
+                Some(wast::Index::Id(id)) => id.name().to_string(),
+                Some(wast::Index::Num(n, _)) => format!("t{}", n),
+                None => format!(""),
             };
-            let function_type = writer.types.get(&fn_type_id).unwrap();
+
+            let function_type = writer.types.get(&fn_type_id);
             match function_type {
-                wast::TypeDef::Func(ft) => {
+                Some(wast::TypeDef::Func(ft)) => {
                     for parameter in ft.params.to_vec() {
                         match parameter {
                             (_, _, t) => {
@@ -87,6 +90,7 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, fn_name: String, idx:
                         }
                     }
                 },
+                None => (),
                 _ => panic!("Non-function type referenced from function")
             };
         },
