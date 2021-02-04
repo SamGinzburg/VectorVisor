@@ -976,7 +976,6 @@ impl OpenCLRunner {
         let mut entry_point_temp = vec![0u32; self.num_vms as usize];
         let mut hypercall_num_temp = vec![0i32; self.num_vms as usize];
         let mut hypercall_retval_temp = vec![0i32; self.num_vms as usize];
-        let mut sp_exit_flag;
         let mut entry_point_exit_flag;
         let vm_slice: Vec<u32> = std::ops::Range { start: 0, end: (self.num_vms) }.collect();
         let mut hypercall_sender = vec![];
@@ -1200,17 +1199,6 @@ impl OpenCLRunner {
                 ocl::core::enqueue_read_buffer(&queue, &buffers.hypercall_num, true, 0, &mut hypercall_num_temp, None::<Event>, None::<&mut Event>).unwrap();
             }
 
-
-            sp_exit_flag = true;
-            for sp in &stack_pointer_temp {
-                sp_exit_flag = (*sp == (0 as u64)) & sp_exit_flag;
-            }
-
-            // if all (sp) == 0, exit
-            if sp_exit_flag {
-                //break;
-            }
-
             // if all entry_point == -1, also exit
             entry_point_exit_flag = true;
             for e in &entry_point_temp {
@@ -1253,15 +1241,15 @@ impl OpenCLRunner {
                     found = true;
                     break;
                 } else {
+                    println!("blocked on hcall!");
                     // VMs that are set to run a hypercall need to be blocked off so they do not run
-                    // BUT, we need to save all of the kernels 
+                    // BUT, we need to save all of the kernels
                 }
             }
 
             // if we found a VM that needs to run another function, we do that first
             if found {
                 dbg!("found VM calling func");
-                dbg!(stack_pointer_temp.clone());
                 continue;
             } else {
                 dbg!(stack_pointer_temp.clone());
@@ -1270,13 +1258,10 @@ impl OpenCLRunner {
                 dbg!(start_kernel);
                 //panic!("test");
 
-                /*
                 dbg!(hcall_idx as usize);
-                panic!("test");
                 // if we don't have any VMs to run, reset the next function to run to be that of the hcall
                 // we are returning to and dispatch the calls
                 start_kernel = kernels.get(&entry_point_temp[hcall_idx as usize]).unwrap();
-                */
             }
 
             // read the hypercall_buffer

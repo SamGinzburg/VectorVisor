@@ -1174,6 +1174,11 @@ impl<'a> OpenCLCWriter<'_> {
                                                             !is_gpu || debug);
                 }
 
+                // If we are emitting the start function, just emit a proc_exit here
+                if id.name().to_string() == "_start" {
+                    final_string += &self.emit_hypercall(WasmHypercallId::proc_exit, hypercall_id_count, id.name().to_string(), debug);
+                }
+
                 // to unwind from the function we unwind the call stack by moving the stack pointer
                 // and returning the last value on the stack 
                 final_string += &function_unwind(&self, id.name(), &typeuse.inline, debug);
@@ -1676,7 +1681,10 @@ inline void {}(global uint   *stack_u32,
             write!(ret_str, "\t\t\tbreak;\n");
         }
         write!(ret_str, "\t\tdefault:\n");
-            write!(ret_str, "\t\t\treturn;\n");
+        if debug_print_function_calls {
+            write!(ret_str, "\t\t\tprintf(\"{}\\n\");\n", "taking default case");
+        }
+        write!(ret_str, "\t\t\treturn;\n");
         write!(ret_str, "\t}}\n");
 
         // if we reset the hypercall_number, that means we need to exit back to the VMM
@@ -1823,7 +1831,7 @@ r#"
                                                             function_idx_label_temp,
                                                             debug);
             let func_full = format!("{}\n{}\n{}\n", prelude_header.clone(), func.clone(), control_function); 
-            dbg!(func_full.clone());
+
             kernel_hashmap.insert(*fname_idx, func_full);
 
             // if we are going to try linking a lib
