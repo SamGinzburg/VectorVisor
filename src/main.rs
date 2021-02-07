@@ -342,7 +342,7 @@ fn main() {
     let fname = &file_path.as_str();
     //let mut spawned_threads = Vec::new();
 
-    (0..num_vm_groups).map(|_idx| {
+    (0..num_vm_groups).collect::<Vec<u32>>().par_iter().map(|_idx| {
         let runner = opencl_runner::OpenCLRunner::new(num_vms, interleaved, is_gpu, entry_point, file.clone());
         runner.run(fname,
                    stack_size,

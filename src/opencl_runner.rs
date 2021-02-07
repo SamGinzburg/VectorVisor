@@ -40,6 +40,9 @@ use bincode;
 use byteorder::LittleEndian;
 use byteorder::ByteOrder;
 
+use chrono::{Datelike, Timelike, Utc};
+
+
 pub enum VMMRuntimeStatus {
     StatusOkay,
     StatusUnknownError,
@@ -159,8 +162,8 @@ impl OpenCLRunner {
                compile_flags: String,
                link_flags: String,
                print_return: bool) -> JoinHandle<()> {
-        let (program, context, device_id) = self.setup_kernel(input_filename, num_compiled_funcs, globals_buffer_size, compile_flags, link_flags);
         let num_vms = self.num_vms.clone();
+        let (program, context, device_id) = self.setup_kernel(input_filename, num_compiled_funcs, globals_buffer_size, compile_flags, link_flags);
 
         // create the buffers
         let (new_runner, context) = self.create_buffers(stack_size,
@@ -540,18 +543,53 @@ impl OpenCLRunner {
                 let mut final_hashmap: HashMap<u32, ocl::core::Program> = HashMap::new();
                 let kernel_compile = std::time::Instant::now();
 
-                // for each function, compile it into a unique kernel
-                for (key, value) in map.iter() {
-                    let fn_compile = std::time::Instant::now();
+                // Spin up N threads (n = ncpus)
+                // Evenly divide workload between threads
+                let num_threads = num_cpus::get();
+                let num_vms = self.num_vms.clone();
+                let device_id = device_ids[0];
+                
+                let (finished_sender, finished_receiver): (Sender<(u32, ocl::core::Program)>, Receiver<(u32, ocl::core::Program)>) = unbounded();
 
-                    println!("Loading function: {}", key);
+                let mut submit_compile_job = vec![];
+
+                for _idx in 0..num_threads {
+                    let (compile_sender, compile_receiver): (Sender<(u32, ocl::core::Program)>, Receiver<(u32, ocl::core::Program)>) = unbounded();
+                    let cflags = compile_flags.clone();
+                    let sender = finished_sender.clone();
+                    submit_compile_job.push(compile_sender);
+
+                    thread::spawn(move || {
+                        let receiver = compile_receiver.clone();
+                        loop {
+                            // receive the function to compile
+                            let (key, program_to_build) = match receiver.recv() {
+                                Ok(m) => m,
+                                _ => {
+                                    // if the main sending thread is closed, we will get an error
+                                    // we are handling that error elsewhere, so we can just exit the thread in that case
+                                    break;
+                                },
+                            };
+                            ocl::core::build_program(&program_to_build, Some(&[device_id]), &CString::new(format!("{} -DNUM_THREADS={}", cflags.clone(), num_vms)).unwrap(), None, None).unwrap();
+                            sender.send((key, program_to_build)).unwrap();
+                        }
+                    });
+                }
+
+                // for each function, submit it to be compiled
+                let mut counter = 0;
+                for (key, value) in map.iter() {
                     let src_cstring = CString::new(value.clone()).unwrap();    
                     let compiled_program = ocl::core::create_program_with_source(&context, &[src_cstring.clone()]).unwrap();
-                    ocl::core::build_program(&compiled_program, Some(&[device_ids[0]]), &CString::new(format!("{} -DNUM_THREADS={}", compile_flags, self.num_vms)).unwrap(), None, None).unwrap();
-                    final_hashmap.insert(*key, compiled_program);
-                    let fn_compile_end = std::time::Instant::now();
-                    println!("Time to compile function {}: {:?}", key, fn_compile_end-fn_compile);
 
+                    submit_compile_job[counter].send((*key, compiled_program)).unwrap();
+                    counter += 1;
+                }
+
+                for _idx in 0..map.len() {
+                    let (key, compiled_program) = finished_receiver.recv().unwrap();
+                    final_hashmap.insert(key, compiled_program);
                 }
 
                 let kernel_compile_end = std::time::Instant::now();
@@ -633,7 +671,7 @@ impl OpenCLRunner {
          * 
          */
         let number_vms = self.num_vms.clone();
-        let num_threads = 1;
+        let num_threads = num_cpus::get() as u32;
         let (result_sender, result_receiver): (Sender<HyperCallResult>, Receiver<HyperCallResult>) = bounded(0);
         for _idx in 0..num_threads {
             let (sender, recv): (Sender<HyperCall>, Receiver<HyperCall>) = unbounded();
@@ -737,14 +775,9 @@ impl OpenCLRunner {
         let mut profiling_event = ocl::Event::empty();
         unsafe {
             ocl::core::enqueue_kernel(&queue, &data_kernel, 1, None, &[self.num_vms as usize, 1, 1], None, None::<Event>, Some(&mut profiling_event)).unwrap();
-            match ocl::core::finish(&queue) {
-                Err(e) => {
-                    panic!("Unable to finish waiting on queue for data_kernel\n\n{}", e);
-                },
-                Ok(_) => (),
-            }
         }
 
+        ocl::core::wait_for_event(&profiling_event).unwrap();
         let start_data_kernel = profiling_event.profiling_info(ocl::enums::ProfilingInfo::Submit).unwrap().time().unwrap();
         let end_data_kernel = profiling_event.profiling_info(ocl::enums::ProfilingInfo::End).unwrap().time().unwrap();
         total_gpu_execution_time += end_data_kernel-start_data_kernel;
@@ -773,6 +806,7 @@ impl OpenCLRunner {
         ocl::core::set_kernel_arg(&start_kernel, 19, ArgVal::mem(&hcall_retval_buffer)).unwrap();
 
         // now the data in the program has been initialized, we can run the main loop
+        println!("start: {}", Utc::now().timestamp());
         loop {
             // run the kernel!
             // warning - bugged kernels can cause GPU driver hangs! Will result in the driver restarting...
@@ -781,14 +815,9 @@ impl OpenCLRunner {
             profiling_event = ocl::Event::empty();
             unsafe {
                 ocl::core::enqueue_kernel(&queue, &start_kernel, 1, None, &[self.num_vms as usize, 1, 1], None, None::<Event>, Some(&mut profiling_event)).unwrap();
-                match ocl::core::finish(&queue) {
-                    Err(e) => {
-                        panic!("Unable to finish waiting on queue for start_kernel\n\n{}", e);
-                    },
-                    Ok(_) => (),
-                }
             }
 
+            ocl::core::wait_for_event(&profiling_event).unwrap();
             let queue_start_kernel = profiling_event.profiling_info(ocl::enums::ProfilingInfo::Queued).unwrap().time().unwrap();
             let start_start_kernel = profiling_event.profiling_info(ocl::enums::ProfilingInfo::Start).unwrap().time().unwrap();
             let end_start_kernel = profiling_event.profiling_info(ocl::enums::ProfilingInfo::End).unwrap().time().unwrap();
@@ -915,7 +944,7 @@ impl OpenCLRunner {
 
         // To get final results back from the stack if we want for debugging stuff
         // only uncomment this out if you need to debug stuff, it will panic if you have too many VMs and too small of a buffer
-        dbg!(print_return);
+
         if print_return {
             let mut check_results_debug = vec![0u8; (self.num_vms * 1024) as usize];
             unsafe {
@@ -937,6 +966,7 @@ impl OpenCLRunner {
             }
         }
 
+        println!("end: {}", Utc::now().timestamp());
         println!("E2E execution time in nanoseconds: {}", (e2e_time_end - e2e_time_start).as_nanos());
         println!("On device time in nanoseconds: {}", total_gpu_execution_time);
         println!("Device Start-Queue overhead in nanoseconds: {}", queue_submit_delta);
@@ -1021,7 +1051,7 @@ impl OpenCLRunner {
          * 
          */
         let number_vms = self.num_vms.clone();
-        let num_threads = 1;
+        let num_threads = num_cpus::get() as u32;
         let (result_sender, result_receiver): (Sender<HyperCallResult>, Receiver<HyperCallResult>) = bounded(0);
         for _idx in 0..num_threads {
             let (sender, recv): (Sender<HyperCall>, Receiver<HyperCall>) = unbounded();
@@ -1124,16 +1154,12 @@ impl OpenCLRunner {
         ocl::core::set_kernel_arg(&data_kernel, 5, ArgVal::mem(&buffers.sfp)).unwrap();
 
         let mut profiling_event = ocl::Event::empty();
+
         unsafe {
             ocl::core::enqueue_kernel(&queue, &data_kernel, 1, None, &[self.num_vms as usize, 1, 1], None, None::<Event>, Some(&mut profiling_event)).unwrap();
-            match ocl::core::finish(&queue) {
-                Err(e) => {
-                    panic!("Unable to finish waiting on queue for data_kernel\n\n{}", e);
-                },
-                Ok(_) => (),
-            }
         }
 
+        ocl::core::wait_for_event(&profiling_event).unwrap();
         let start_data_kernel = profiling_event.profiling_info(ocl::enums::ProfilingInfo::Submit).unwrap().time().unwrap();
         let end_data_kernel = profiling_event.profiling_info(ocl::enums::ProfilingInfo::End).unwrap().time().unwrap();
         total_gpu_execution_time += end_data_kernel-start_data_kernel;
@@ -1169,6 +1195,7 @@ impl OpenCLRunner {
         let mut start_kernel = kernels.get(&self.entry_point).unwrap();
 
         // now the data in the program has been initialized, we can run the main loop
+        println!("start: {}", Utc::now().timestamp());
         loop {
             // run the kernel!
             // warning - bugged kernels can cause GPU driver hangs! Will result in the driver restarting...
@@ -1177,14 +1204,18 @@ impl OpenCLRunner {
             profiling_event = ocl::Event::empty();
             unsafe {
                 ocl::core::enqueue_kernel(&queue, &start_kernel, 1, None, &[self.num_vms as usize, 1, 1], None, None::<Event>, Some(&mut profiling_event)).unwrap();
+                
+                /*
                 match ocl::core::finish(&queue) {
                     Err(e) => {
                         panic!("Unable to finish waiting on queue for start_kernel\n\n{}", e);
                     },
                     Ok(_) => (),
                 }
+                */
             }
 
+            ocl::core::wait_for_event(&profiling_event).unwrap();
             let queue_start_kernel = profiling_event.profiling_info(ocl::enums::ProfilingInfo::Queued).unwrap().time().unwrap();
             let start_start_kernel = profiling_event.profiling_info(ocl::enums::ProfilingInfo::Start).unwrap().time().unwrap();
             let end_start_kernel = profiling_event.profiling_info(ocl::enums::ProfilingInfo::End).unwrap().time().unwrap();
@@ -1241,7 +1272,7 @@ impl OpenCLRunner {
                     found = true;
                     break;
                 } else {
-                    println!("blocked on hcall!");
+                    //println!("blocked on hcall!");
                     // VMs that are set to run a hypercall need to be blocked off so they do not run
                     // BUT, we need to save all of the kernels
                 }
@@ -1249,9 +1280,10 @@ impl OpenCLRunner {
 
             // if we found a VM that needs to run another function, we do that first
             if found {
-                dbg!("found VM calling func");
+                //dbg!("found VM calling func");
                 continue;
             } else {
+                /*
                 dbg!(stack_pointer_temp.clone());
                 dbg!(entry_point_temp.clone());
                 dbg!(hypercall_num_temp.clone());
@@ -1259,6 +1291,7 @@ impl OpenCLRunner {
                 //panic!("test");
 
                 dbg!(hcall_idx as usize);
+                */
                 // if we don't have any VMs to run, reset the next function to run to be that of the hcall
                 // we are returning to and dispatch the calls
                 start_kernel = kernels.get(&entry_point_temp[hcall_idx as usize]).unwrap();
@@ -1374,6 +1407,7 @@ impl OpenCLRunner {
             }
         }
 
+        println!("end: {}", Utc::now().timestamp());
         println!("E2E execution time in nanoseconds: {}", (e2e_time_end - e2e_time_start).as_nanos());
         println!("On device time in nanoseconds: {}", total_gpu_execution_time);
         println!("Device Start-Queue overhead in nanoseconds: {}", queue_submit_delta);

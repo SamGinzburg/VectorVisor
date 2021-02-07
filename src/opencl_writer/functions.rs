@@ -69,7 +69,6 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, fn_name: String, idx:
         },
         // if we cannot find the type signature, we need to look it up to check for the param offset
         None => {
-            dbg!(func_type_signature);
             let fn_type_id = match func_type_signature.index {
                 Some(wast::Index::Id(id)) => id.name().to_string(),
                 Some(wast::Index::Num(n, _)) => format!("t{}", n),
