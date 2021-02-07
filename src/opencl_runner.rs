@@ -583,7 +583,7 @@ impl OpenCLRunner {
                     let src_cstring = CString::new(value.clone()).unwrap();    
                     let compiled_program = ocl::core::create_program_with_source(&context, &[src_cstring.clone()]).unwrap();
 
-                    submit_compile_job[counter].send((*key, compiled_program)).unwrap();
+                    submit_compile_job[counter % submit_compile_job.len() as usize].send((*key, compiled_program)).unwrap();
                     counter += 1;
                 }
 
