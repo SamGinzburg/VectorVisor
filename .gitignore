@@ -8,3 +8,12 @@ opencl_test_harness/opencl_launcher
 wasm-parser
 wasm-parser.d
 *.c
+wasm-serverless-invoke/target/*
+benchmarks/json-compression/target/*
+benchmarks/json-encryption/target/*
+*.rlib
+*.rmeta
+*.d
+*.cl
+*.wat.bin
+*.wat.cl

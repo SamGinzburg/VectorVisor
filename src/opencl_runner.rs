@@ -1264,6 +1264,7 @@ impl OpenCLRunner {
 
             let mut found = false;
             let mut hcall_idx = 0;
+            // for each VM, add to the set of kernels that we need to run next
             for idx in 0..self.num_vms {
                 // if we find a VM that isn't blocked on a hypercall
                 if !found && hypercall_num_temp[idx as usize] == -2 {
