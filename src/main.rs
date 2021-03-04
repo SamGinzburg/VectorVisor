@@ -1,13 +1,24 @@
 extern crate ocl;
+#[macro_use]
+extern crate rouille;
 
 mod opencl_writer;
 mod opencl_runner;
+mod batch_submit;
 
 use std::fs;
 use std::path::Path;
 use std::fs::File;
 use std::io::Write;
 use std::collections::HashMap;
+use std::sync::Mutex;
+use std::sync::Condvar;
+use std::sync::Arc;
+use std::convert::TryInto;
+
+use crossbeam::channel::Sender;
+use crossbeam::channel::Receiver;
+use crossbeam::channel::bounded;
 
 use wast::parser::{ParseBuffer};
 use rayon::prelude::*;
@@ -15,6 +26,7 @@ use rayon::prelude::*;
 use clap::{Arg, App, value_t};
 use opencl_runner::InputProgram;
 use opencl_runner::SeralizedProgram;
+use batch_submit::BatchSubmitServer;
 
 fn main() {
     // TODO add Clap arg parsing here to get the WASM files from CLI
@@ -339,9 +351,20 @@ fn main() {
         _ => panic!("Unrecognized input filetype: {:?}", (extension, partition)),
     };
 
+
+    // start an HTTP endpoint for submitting batch jobs/
+    // pass in the channels we use to send requests back and forth
+    let (server_sender, vm_recv): (Sender<u32>, Receiver<u32>) = bounded(num_vms.try_into().unwrap());
+    let (vm_sender, server_recv): (Sender<u32>, Receiver<u32>) = bounded(num_vms.try_into().unwrap());
+
+    let vm_recv_condvar = Arc::new(Condvar::new());
+    let join_handle = BatchSubmitServer::start_server(server_sender, server_recv, vm_recv_condvar.clone(), num_vms);
+
+    let vm_sender_mutex = Arc::new(Mutex::new(vm_sender));
+    let vm_recv_mutex = Arc::new(Mutex::new(vm_recv));
+
     let fname = &file_path.as_str();
     //let mut spawned_threads = Vec::new();
-
     (0..num_vm_groups).collect::<Vec<u32>>().par_iter().map(|_idx| {
         let runner = opencl_runner::OpenCLRunner::new(num_vms, interleaved, is_gpu, entry_point, file.clone());
         runner.run(fname,
@@ -352,11 +375,16 @@ fn main() {
                    sfp_size, 
                    num_compiled_funcs,
                    globals_buffer_size,
+                   vm_sender_mutex.clone(),
+                   vm_recv_mutex.clone(),
+                   vm_recv_condvar.clone(),
                    compile_args.clone(),
                    link_args.clone(),
                    print_return)
     }).for_each(|handler| {
         handler.join().unwrap();
     });
+
+    join_handle.join().unwrap();
 }
  

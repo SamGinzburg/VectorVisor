@@ -331,3 +331,59 @@ pub fn emit_fd_write_post(writer: &opencl_writer::OpenCLCWriter, debug: bool) ->
 
     ret_str
 }
+
+pub fn emit_serverless_invoke_pre(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> String {
+    let mut ret_str = String::from("");
+
+    let json_buf_ptr = emit_read_u32("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx");
+    let json_buf_len = emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx");
+
+    ret_str
+}
+
+pub fn emit_serverless_invoke_post(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> String {
+    let mut ret_str = String::from("");
+
+    let json_buf_ptr = emit_read_u32("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx");
+    let json_buf_len = emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx");
+
+    // we need to copy the data stored in the hcall buffer, to the json_buf_ptr
+    ret_str += &format!("\t___private_memcpy((ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), warp_idx);\n",
+                        "(ulong)((global char *)hypercall_buffer)",
+                        "hypercall_buffer", // mem_start_src
+                        &format!("(global char *)heap_u32+{}", json_buf_ptr), //dst
+                        "heap_u32", // mem_start_dst
+                        &json_buf_len); // buf_len_bytes;
+
+    // this function does not return any values
+
+    ret_str += &format!("\t{}\n",
+                        "*sp -= 2;");
+
+    ret_str
+}
+
+pub fn emit_serverless_response_pre(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> String {
+    let mut ret_str = String::from("");
+
+    let json_buf_ptr = emit_read_u32("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx");
+    let json_buf_len = emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx");
+
+    // copy the buffer to the hcall buf
+
+
+    ret_str
+}
+
+pub fn emit_serverless_response_post(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> String {
+    let mut ret_str = String::from("");
+
+    let json_buf_ptr = emit_read_u32("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx");
+    let json_buf_len = emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx");
+    // this function does not return any values
+
+    ret_str += &format!("\t{}\n",
+                        "*sp -= 2;");
+
+    ret_str
+}

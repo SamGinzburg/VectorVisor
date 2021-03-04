@@ -47,24 +47,28 @@ use lazy_static::lazy_static;
 lazy_static! {
     static ref WASI_SNAPSHOT_PREVIEW1: HashMap<&'static str, bool> = {
         let mut m = HashMap::new();
-        m.insert("fd_write", true);             // 0
-        m.insert("proc_exit", true);            // 1
-        m.insert("environ_sizes_get", true);    // 2
-        m.insert("environ_get", true);          // 3
-        m.insert("fd_prestat_get", true);       // 4
-        m.insert("fd_prestat_dir_name", true);  // 5
+        m.insert("fd_write", true);               // 0
+        m.insert("proc_exit", true);              // 1
+        m.insert("environ_sizes_get", true);      // 2
+        m.insert("environ_get", true);            // 3
+        m.insert("fd_prestat_get", true);         // 4
+        m.insert("fd_prestat_dir_name", true);    // 5
+        m.insert("serverless_invoke", true);      // 9999
+        m.insert("serverless_response", true);    // 10000
         m
     };
 }
 
 #[derive(Clone)]
 enum WasmHypercallId {
-    fd_write            = 0,
-    proc_exit           = 1,
-    environ_sizes_get   = 2,
-    environ_get         = 3,
-    fd_prestat_get      = 4,
-    fd_prestat_dir_name = 5,
+    fd_write              = 0,
+    proc_exit             = 1,
+    environ_sizes_get     = 2,
+    environ_get           = 3,
+    fd_prestat_get        = 4,
+    fd_prestat_dir_name   = 5,
+    serverless_invoke     = 9999,
+    serverless_response   = 10000,
 }
 
 pub struct OpenCLCWriter<'a> {
@@ -166,6 +170,8 @@ impl<'a> OpenCLCWriter<'_> {
             WasmHypercallId::fd_write => ret_str += &emit_fd_write_call_helper(self, debug),
             WasmHypercallId::fd_prestat_get => ret_str += &emit_fd_prestat_get_helper(self, debug),
             WasmHypercallId::fd_prestat_dir_name => ret_str += &emit_fd_prestat_dir_name_helper(self, debug),
+            WasmHypercallId::serverless_invoke => ret_str += &emit_serverless_invoke_pre(self, debug),
+            WasmHypercallId::serverless_response => ret_str += &emit_serverless_response_pre(self, debug),
             _ => (),
         }
         // insert return (we exit back to the VMM)
@@ -192,6 +198,12 @@ impl<'a> OpenCLCWriter<'_> {
             },
             WasmHypercallId::fd_prestat_dir_name => {
                 ret_str += &emit_fd_prestat_dir_name_post(&self, debug);
+            },
+            WasmHypercallId::serverless_invoke => {
+                ret_str += &emit_serverless_invoke_post(&self, debug);
+            },
+            WasmHypercallId::serverless_response => {
+                ret_str += &emit_serverless_response_post(&self, debug);
             },
             _ => (),
         }
@@ -650,6 +662,7 @@ impl<'a> OpenCLCWriter<'_> {
                         Some((wasi_api, Some(wasi_fn_name), _)) => {
                             // okay, now we check to see if the WASI call is supported by the compiler
                             // if not -> panic, else, emit the call
+
                             match (wasi_api, WASI_SNAPSHOT_PREVIEW1.get(wasi_fn_name)) {
                                 // ignore WASI API scoping for now
                                 (_, Some(true)) => {
@@ -660,6 +673,8 @@ impl<'a> OpenCLCWriter<'_> {
                                         &"environ_get"            => self.emit_hypercall(WasmHypercallId::environ_get, hypercall_id_count, fn_name.to_string(), debug),
                                         &"fd_prestat_get"         => self.emit_hypercall(WasmHypercallId::fd_prestat_get, hypercall_id_count, fn_name.to_string(), debug),
                                         &"fd_prestat_dir_name"    => self.emit_hypercall(WasmHypercallId::fd_prestat_dir_name, hypercall_id_count, fn_name.to_string(), debug),
+                                        &"serverless_invoke"      => self.emit_hypercall(WasmHypercallId::serverless_invoke, hypercall_id_count, fn_name.to_string(), debug),
+                                        &"serverless_response"    => self.emit_hypercall(WasmHypercallId::serverless_response, hypercall_id_count, fn_name.to_string(), debug),
                                         _ => panic!("Unidentified WASI fn name: {:?}", wasi_fn_name),
                                     }
                                 },

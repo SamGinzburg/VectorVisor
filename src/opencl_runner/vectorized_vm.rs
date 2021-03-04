@@ -9,13 +9,19 @@ use crate::opencl_runner::OpenCLBuffers;
 
 use crate::opencl_runner::WasiFd;
 use crate::opencl_runner::environment::Environment;
+use crate::opencl_runner::serverless::Serverless;
 
 use ocl::core::CommandQueue;
 
 use crossbeam::channel::Sender;
+use crossbeam::channel::Receiver;
 
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::sync::Condvar;
+use std::sync::Barrier;
+
+use std::convert::TryInto;
 use std::fs::File;
 use std::path::Path;
 
@@ -27,6 +33,8 @@ pub enum WasiSyscalls {
     EnvironGet            =  3,
     FdPrestatGet          =  4,
     FdPrestatDirName      =  5,
+    ServerlessInvoke      =  9999,
+    ServerlessResponse    =  10000,
     InvalidHyperCallNum   = -1,
 }
 
@@ -114,10 +122,14 @@ pub struct VectorizedVM {
     pub enviroment_size: Option<u32>,
     pub environment_str_size: Option<u32>,
     vm_id: u32,
+    pub vm_sender: Arc<Mutex<Sender<u32>>>,
+    pub vm_recv:   Arc<Mutex<Receiver<u32>>>,
+    pub vm_recv_condvar: Arc<Condvar>,
+    pub vm_barrier: Arc<Barrier>
 }
 
 impl VectorizedVM {
-    pub fn new(vm_id: u32) -> VectorizedVM {
+    pub fn new(vm_id: u32, num_total_vms: u32, vm_sender: Arc<Mutex<Sender<u32>>>, vm_recv: Arc<Mutex<Receiver<u32>>>, vm_recv_condvar: Arc<Condvar>) -> VectorizedVM {
         // default context with no args yet - we can inherit arguments from the CLI if we want
         // or we can pass them in some other config file
         let wasi_ctx = WasiCtxBuilder::new()
@@ -133,6 +145,8 @@ impl VectorizedVM {
         let memory_ty = MemoryType::new(Limits::new(1, None));
         let memory = Memory::new(&store, memory_ty);
 
+        let barrier = Arc::new(Barrier::new(num_total_vms.try_into().unwrap()));
+
         VectorizedVM {
             ctx: wasi_ctx,
             engine: engine,
@@ -146,6 +160,10 @@ impl VectorizedVM {
             enviroment_size: None,
             environment_str_size: None,
             vm_id: vm_id,
+            vm_sender: vm_sender,
+            vm_recv: vm_recv,
+            vm_recv_condvar: vm_recv_condvar,
+            vm_barrier: barrier
         }
     }
 
@@ -179,6 +197,12 @@ impl VectorizedVM {
             },
             WasiSyscalls::FdPrestatDirName => {
                 WasiFd::hypercall_fd_prestat_dir_name(&self.ctx, self, hypercall, sender);
+            },
+            WasiSyscalls::ServerlessInvoke => {
+                Serverless::hypercall_serverless_invoke(&self.ctx, self, hypercall, sender);
+            },
+            WasiSyscalls::ServerlessResponse => {
+                Serverless::hypercall_serverless_response(&self.ctx, self, hypercall, sender);
             },
             _ => panic!("Unsupported hypercall invoked! {:?}", hypercall),
         }
