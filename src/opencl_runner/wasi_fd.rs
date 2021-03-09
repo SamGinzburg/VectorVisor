@@ -1,6 +1,6 @@
 use wasi_common::WasiCtx;
 // this provides the needed traits for the WASI calls
-use wasi_common::wasi::wasi_snapshot_preview1::WasiSnapshotPreview1;
+use wasi_common::snapshots::preview_1::wasi_snapshot_preview1::WasiSnapshotPreview1;
 
 use crate::opencl_runner::vectorized_vm::HyperCall;
 use crate::opencl_runner::vectorized_vm::HyperCallResult;
@@ -8,11 +8,13 @@ use crate::opencl_runner::vectorized_vm::WasiSyscalls;
 use crate::opencl_runner::vectorized_vm::VectorizedVM;
 use crate::opencl_runner::interleave_offsets::Interleave;
 
-use wasi_common::wasi::types::CiovecArray;
-use wasi_common::fs::Fd;
-use wasi_common::wasi::types::PrestatDir;
-use wasi_common::wasi::types::Prestat;
-use wasi_common::wasi::types::UserErrorConversion;
+use wasi_common::snapshots::preview_1::types::CiovecArray;
+use wasi_common::snapshots::preview_1::types::Fd;
+use wasi_common::snapshots::preview_1::types::PrestatDir;
+use wasi_common::snapshots::preview_1::types::Prestat;
+use wasi_common::snapshots::preview_1::types::UserErrorConversion;
+
+//use wasi_common::wasi::types::UserErrorConversion;
 
 use wasmtime::*;
 use wasmtime_wiggle::WasmtimeGuestMemory;

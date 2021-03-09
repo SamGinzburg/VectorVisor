@@ -1,9 +1,12 @@
 use wasi_common::WasiCtx;
-use wasi_common::WasiCtxBuilder;
+use wasi_cap_std_sync::WasiCtxBuilder;
+use wasi_cap_std_sync::file::*;
 
 use std::fmt;
 use wasmtime::*;
 use wasmtime_wiggle::WasmtimeGuestMemory;
+use wasi_cap_std_sync::dir::Dir as WasiDir;
+use cap_std::fs::Dir as CapDir;
 
 use crate::opencl_runner::OpenCLBuffers;
 
@@ -132,14 +135,18 @@ impl VectorizedVM {
     pub fn new(vm_id: u32, num_total_vms: u32, vm_sender: Arc<Mutex<Sender<u32>>>, vm_recv: Arc<Mutex<Receiver<u32>>>, vm_recv_condvar: Arc<Condvar>) -> VectorizedVM {
         // default context with no args yet - we can inherit arguments from the CLI if we want
         // or we can pass them in some other config file
+
+        let opendir = unsafe { CapDir::from_std_file(File::open(".").unwrap()) };
+
         let wasi_ctx = WasiCtxBuilder::new()
-                        .inherit_args()
+                        .inherit_args().unwrap()
                         .inherit_stdio()
-                        .inherit_env()
+                        .inherit_env().unwrap()
                         // preopen whatever the current directory is
                         // TODO: pass this via CLI somehow
-                        .preopened_dir(File::open(".").unwrap(), Path::new("."))
+                        .preopened_dir(opendir, Path::new(".")).unwrap()
                         .build().unwrap();
+
         let engine = Engine::default();
         let store = Store::new(&engine);
         let memory_ty = MemoryType::new(Limits::new(1, None));

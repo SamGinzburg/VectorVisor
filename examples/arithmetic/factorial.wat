@@ -140,10 +140,11 @@
     local.get 32
     return)
 
-  (func $_start (result i32)
+  (func $_start
     (local $l2 i64)
     (i32.const 10)
     (call $_factorial)
+    (drop)
   )
   (memory (;0;) 17)
   (global (;0;) (mut i32) (i32.const 1048576))

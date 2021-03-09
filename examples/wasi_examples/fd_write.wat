@@ -7,15 +7,13 @@
   (import "wasi_unstable" "fd_write" (func $wasi_unstable.fd_write (type $t0)))
   (import "wasi_unstable" "proc_exit" (func $wasi_unstable.proc_exit (type $t1)))
 
-  (func $_start (type $t2)
+  (func $_start
     i32.const 1
     i32.const 8
     i32.const 1
     i32.const 12
     call $wasi_unstable.fd_write
     drop
-    i32.const 12
-    i32.load
     )
   (memory $memory 1)
   (export "memory" (memory 0))
