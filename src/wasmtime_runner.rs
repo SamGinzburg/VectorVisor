@@ -22,8 +22,30 @@ impl WasmtimeRunner {
                vm_recv_condvar: Arc<Condvar>) -> Result<(), Box<dyn Error>> {
 
         let store = Store::default();
+
+        // serverless_invoke
+        let serverless_invoke = Func::wrap(&store, move |buf_ptr: i32, buf_len: i32| -> () {
+            //dbg!(buf_ptr);
+            //dbg!(buf_len);
+
+            let chan = vm_recv.clone();
+            let msg = chan.lock().unwrap().recv().unwrap();
+            dbg!(msg);
+        });
+
+        // serverless_invoke
+        let serverless_response = Func::wrap(&store, move |buf_ptr: i32, buf_len: i32| -> () {
+            //dbg!(buf_ptr);
+            //dbg!(buf_len);
+
+            let chan = vm_sender.clone();
+            chan.lock().unwrap().send(0).unwrap();
+        });
+
         let mut linker = Linker::new(&store);
-    
+        linker.define("env", "serverless_invoke", serverless_invoke)?;
+        linker.define("env", "serverless_response", serverless_response)?;
+
         let wasi = Wasi::new(
             &store,
             WasiCtxBuilder::new()

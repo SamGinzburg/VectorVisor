@@ -11,7 +11,7 @@
   (import "env" "serverless_invoke" (func $serverless_invoke (type $t3)))
   (import "env" "serverless_response" (func $serverless_response (type $t3)))
 
-  (func $_start (type $t2)
+  (func $_start
     loop $loop1
   
       i32.const 100 ;; buf_ptr
@@ -31,8 +31,6 @@
 
       br $loop1
     end
-    i32.const 12
-    i32.load
     )
   (memory $memory 1)
   (export "memory" (memory 0))
