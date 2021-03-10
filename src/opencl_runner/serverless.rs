@@ -71,7 +71,9 @@ impl Serverless {
     pub fn hypercall_serverless_response(ctx: &WasiCtx, vm_ctx: &VectorizedVM, hypercall: &mut HyperCall, sender: &Sender<HyperCallResult>) -> () {
         let mut hcall_buf: &mut [u8] = &mut hypercall.hypercall_buffer.lock().unwrap();
 
-        (*vm_ctx.vm_sender).lock().unwrap().send(0).unwrap();
+        let mut test = [0u8; 16384];
+
+        //(*vm_ctx.vm_sender).lock().unwrap().send(test).unwrap();
 
         sender.send({
             HyperCallResult::new(0, hypercall.vm_id, WasiSyscalls::ServerlessResponse)

@@ -2,6 +2,9 @@ use std::thread;
 use std::thread::JoinHandle;
 use std::sync::Condvar;
 use std::sync::Arc;
+use std::str::from_utf8;
+use std::collections::HashMap;
+use std::convert::TryInto;
 
 use crossbeam::channel::Sender;
 use crossbeam::channel::Receiver;
@@ -10,6 +13,7 @@ use crossbeam::channel::bounded;
 use rouille::input::json;
 
 use serde::Deserialize;
+use serde::Serialize;
 
 pub struct BatchSubmitServer {}
 
@@ -24,8 +28,13 @@ struct BatchInput {
     requests: Vec<FunctionInput>
 }
 
+#[derive(Debug, Serialize)]
+struct BatchResponse {
+    requests: HashMap<u32, String>
+}
+
 impl BatchSubmitServer {
-    pub fn start_server(sender: Sender<u32>, receiver: Receiver<u32>, vm_recv_condvar: Arc<Condvar>, num_vms: u32) -> JoinHandle<()> {
+    pub fn start_server(sender: Sender<([u8; 16384], usize)>, receiver: Receiver<([u8; 16384], usize)>, vm_recv_condvar: Arc<Condvar>, num_vms: u32) -> JoinHandle<()> {
         let thandle = thread::spawn(move || {
             rouille::start_server("localhost:8000", move |request| {
                 router!(request,
@@ -33,28 +42,33 @@ impl BatchSubmitServer {
                         let json: BatchInput = try_or_400!(rouille::input::json_input(request));
                         println! ("json: {:?}", json);
                         dbg!(num_vms);
-                        // after receiving a batch of requests, send the requests to the waiting VMs
-                        for _idx in 0..num_vms {
+                        dbg!(json.requests.len());
+
+                        for req in &json.requests {
                             // each request has an ID and a string (containing the json body)
-                            sender.send(0).unwrap();
-                            vm_recv_condvar.notify_one();
+                            let mut test = [0u8; 16384];
+
+                            // copy the string to the buffer
+                            let inc_req_as_bytes = req.req.as_bytes();
+                            test[0..inc_req_as_bytes.len()].clone_from_slice(inc_req_as_bytes);
+
+                            sender.send((test, inc_req_as_bytes.len())).unwrap();
                         }
 
                         dbg!("requests sent out!");
-
+                        let mut responses: HashMap<u32, String> = HashMap::new();
                         // wait for the requests to complete
-                        for _idx in 0..num_vms {
+                        for _idx in 0..json.requests.len() {
                             dbg!("receiving!");
                             // each request has an ID and a string (containing the json body)
-                            let resp = receiver.recv().unwrap();
-                            println!("recv response: {:?}, idx: {:?}", resp, _idx);
+                            let (resp, len) = receiver.recv().unwrap();
+                            // TODO: replace _idx with real req number
+                            responses.insert(_idx.try_into().unwrap(), from_utf8(&resp[0..len]).unwrap().to_string());
                         }
 
                         dbg!("serving response!");
-                        rouille::Response::text(format!("hello, {}", 1))
+                        rouille::Response::json(&BatchResponse{requests: responses})
                     },
-                    // The code block is called if none of the other blocks matches the request.
-                    // We return an empty response with a 404 status code.
                     _ => rouille::Response::empty_404()
                 )
             });

@@ -14,7 +14,7 @@ pub struct WasmHandler {
 extern "C" {
     // Our syscall will write directly to a buffer of 16KiB in size
     // which we will cast to a json input
-    fn serverless_invoke(input_arr: *mut u8, input_arr_len: u32) -> ();
+    fn serverless_invoke(input_arr: *mut u8, input_arr_len: u32) -> u32;
 
     // return the json response back to the VMM
     fn serverless_response(input_arr: *mut u8, input_arr_len: u32) -> ();
@@ -36,23 +36,23 @@ impl WasmHandler {
         // if this is the first invocation, then we skip sending the buffer back
         loop {
             // block until we get a request, which we will populate into the buffer
-            unsafe {
-                serverless_invoke(buffer.as_mut_ptr(), buffer.len() as u32);
-            }
+            let incoming_req_size = unsafe {
+                serverless_invoke(buffer.as_mut_ptr(), buffer.len() as u32)
+            };
 
             // now that we have the input in the buffer, parse the json
-            let json: Value = serde_json::from_slice(&buffer).unwrap();
+            let json: Value = serde_json::from_slice(&buffer[..incoming_req_size as usize]).unwrap();
 
             // run the function, get the response
             func_ret_val = (self.function)(json);
 
             // copy the response to the buffer
             let func_ret_val_as_buffer = to_string(&func_ret_val).unwrap();
-            buffer[..].clone_from_slice(func_ret_val_as_buffer.as_bytes());
+            buffer[..func_ret_val_as_buffer.len()].clone_from_slice(func_ret_val_as_buffer.as_bytes());
 
             // return the response
             unsafe {
-                serverless_response(buffer.as_mut_ptr(), buffer.len() as u32);
+                serverless_response(buffer.as_mut_ptr(), func_ret_val_as_buffer.len() as u32);
             }
         }
     }

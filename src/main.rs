@@ -264,8 +264,8 @@ fn main() {
 
     // start an HTTP endpoint for submitting batch jobs/
     // pass in the channels we use to send requests back and forth
-    let (server_sender, vm_recv): (Sender<u32>, Receiver<u32>) = bounded(num_vms.try_into().unwrap());
-    let (vm_sender, server_recv): (Sender<u32>, Receiver<u32>) = bounded(num_vms.try_into().unwrap());
+    let (server_sender, vm_recv): (Sender<([u8; 16384], usize)>, Receiver<([u8; 16384], usize)>) = bounded(num_vms.try_into().unwrap());
+    let (vm_sender, server_recv): (Sender<([u8; 16384], usize)>, Receiver<([u8; 16384], usize)>) = bounded(num_vms.try_into().unwrap());
 
     let vm_recv_condvar = Arc::new(Condvar::new());
     let join_handle = BatchSubmitServer::start_server(server_sender, server_recv, vm_recv_condvar.clone(), num_vms);
@@ -394,7 +394,7 @@ fn main() {
             handler.join().unwrap();
         });
     } else {
-        // If we are running the wasmtime 
+        // If we are running the wasmtime runtime
         let num_threads = num_cpus::get();
         let thread_pool = rayon::ThreadPoolBuilder::new().num_threads(num_threads.try_into().unwrap()).build().unwrap();
 
@@ -410,7 +410,9 @@ fn main() {
             thread_pool.spawn(move || {
                 // run the WASM VM...
                 match WasmtimeRunner::run(filedata.clone(), vm_sender_mutex_clone, vm_recv_mutex_clone, vm_recv_condvar_clone) {
-                    Ok(()) => (),
+                    Ok(()) => {
+                        println!("Wasmtime VM: {:?} finished running!", idx);
+                    },
                     Err(e) => {
                         println!("An error occured while running VM: {:?}, error: {:?}", idx, e);
                     }
