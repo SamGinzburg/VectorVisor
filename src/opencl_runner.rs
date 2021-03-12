@@ -118,11 +118,21 @@ pub struct SeralizedProgram {
     pub interleaved: bool,
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct PartitionedSeralizedProgram {
+    pub program_data: HashMap<u32, Vec<u8>>,
+    pub entry_point: u32,
+    pub num_compiled_funcs: u32,
+    pub globals_buffer_size: u32,
+    pub interleaved: bool,
+}
+
 #[derive(Clone)]
 pub enum InputProgram {
     binary(Vec<u8>),
     text(String),
     partitioned(HashMap<u32, String>),
+    PartitionedBinary(HashMap<u32, Vec<u8>>),
 }
 
 #[derive(Clone)]
@@ -547,6 +557,8 @@ impl OpenCLRunner {
             },
             InputProgram::partitioned(map) => {
                 let mut final_hashmap: HashMap<u32, ocl::core::Program> = HashMap::new();
+                let mut final_binarized_hashmap: HashMap<u32, Vec<u8>> = HashMap::new();
+
                 let kernel_compile = std::time::Instant::now();
 
                 // Spin up N threads (n = ncpus)
@@ -595,6 +607,14 @@ impl OpenCLRunner {
 
                 for _idx in 0..map.len() {
                     let (key, compiled_program) = finished_receiver.recv().unwrap();
+
+                    // extract the binary and save that as well
+                    let binary_to_save = ocl::core::get_program_info(&compiled_program, ocl::core::ProgramInfo::Binaries);
+                    let binary = match binary_to_save.unwrap() {
+                        ocl::core::types::enums::ProgramInfoResult::Binaries(binary_vec) => binary_vec.get(0).unwrap().clone(),
+                        _ => panic!("Incorrect result from get_program_info"),
+                    };
+                    final_binarized_hashmap.insert(key, binary);
                     final_hashmap.insert(key, compiled_program);
                 }
 
@@ -602,7 +622,40 @@ impl OpenCLRunner {
 
                 println!("Time to compile all functions: {:?}", kernel_compile_end-kernel_compile);
 
+                let program_to_serialize = PartitionedSeralizedProgram {
+                    program_data: final_binarized_hashmap,
+                    globals_buffer_size: globals_buffer_size,
+                    entry_point: self.entry_point,
+                    num_compiled_funcs: num_compiled_funcs,
+                    interleaved: self.is_memory_interleaved,
+                };
 
+                let serialized_program = bincode::serialize(&program_to_serialize).unwrap();
+                let mut file = File::create(format!("{}.partbin", input_filename)).unwrap();
+                file.write_all(&serialized_program).unwrap();
+
+                ProgramType::Partitioned(final_hashmap)
+            },
+            InputProgram::PartitionedBinary(map) => {
+                let mut final_hashmap: HashMap<u32, ocl::core::Program> = HashMap::new();
+
+                // map contains a mapping of u32 (function ID) -> program
+                let binary_start = std::time::Instant::now();
+
+                for (id, program_binary) in map.iter() {
+                    let program_to_run = match ocl::core::create_program_with_binary(&context, &[device_ids[0]], &[&program_binary]) {
+                        Ok(binary) => binary,
+                        Err(e) => panic!("Unable to create program from given binary: {:?}", e),
+                    };
+                    ocl::core::build_program(&program_to_run, Some(&[device_ids[0]]), &CString::new(format!("{} -DNUM_THREADS={}", compile_flags, self.num_vms)).unwrap(), None, None).unwrap();
+                    let knames = ocl::core::get_program_info(&program_to_run, ocl::core::ProgramInfo::KernelNames);
+                    println!("Loaded kernels: {}", knames.unwrap());
+                    final_hashmap.insert(*id, program_to_run);
+                }
+
+                let binary_prep_end = std::time::Instant::now();
+                println!("Time to load program from binary: {:?}", binary_prep_end-binary_start);
+                
                 ProgramType::Partitioned(final_hashmap)
             }
         };

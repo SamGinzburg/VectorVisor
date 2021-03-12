@@ -374,7 +374,7 @@ pub fn emit_serverless_response_pre(writer: &opencl_writer::OpenCLCWriter, debug
 
     // copy the buffer to the hcall buf so we can return it back via our middleware setup
     ret_str += &format!("\t___private_memcpy((ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), warp_idx);\n",
-                        &format!("(global char *)heap_u32+{}", json_buf_ptr).
+                        &format!("(global char *)heap_u32+{}", json_buf_ptr),
                         "heap_u32", // mem_start_src
                         "(ulong)((global char *)hypercall_buffer)", //dst
                         "hypercall_buffer", // mem_start_dst

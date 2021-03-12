@@ -28,6 +28,8 @@ use clap::{Arg, App, value_t};
 
 use opencl_runner::InputProgram;
 use opencl_runner::SeralizedProgram;
+use opencl_runner::PartitionedSeralizedProgram;
+
 use batch_submit::BatchSubmitServer;
 use wasmtime_runner::WasmtimeRunner;
 
@@ -202,6 +204,14 @@ fn main() {
             .multiple(false)
             .number_of_values(1)
             .takes_value(true))
+        .arg(Arg::with_name("serverless")
+            .long("serverless")
+            .value_name("Enable listening on the HTTP endpoint for incoming requests")
+            .default_value("false")
+            .help("This flag leaves the VMM running while waiting for inputs for serverless functions")
+            .multiple(false)
+            .number_of_values(1)
+            .takes_value(true))
         .get_matches();
 
     dbg!(matches.clone());
@@ -224,6 +234,7 @@ fn main() {
     let force_inline = value_t!(matches.value_of("forceinline"), bool).unwrap_or_else(|e| e.exit());
     let partition = value_t!(matches.value_of("partition"), bool).unwrap_or_else(|e| e.exit());
     let wasmtime = value_t!(matches.value_of("wasmtime"), bool).unwrap_or_else(|e| e.exit());
+    let serverless = value_t!(matches.value_of("serverless"), bool).unwrap_or_else(|e| e.exit());
 
     dbg!(compile_args.clone());
 
@@ -351,10 +362,22 @@ fn main() {
                     Ok(text) => text,
                     Err(e) => panic!(e),
                 };
-    
+
                 let program: SeralizedProgram = bincode::deserialize(&filedata).unwrap();
                 println!("Loaded program with entry point: {}, num_compiled_funcs: {}, globals_buffer_size: {}, is_interleaved: {}", program.entry_point, program.num_compiled_funcs, program.globals_buffer_size, program.interleaved);
                 (InputProgram::binary(program.program_data), program.entry_point, program.num_compiled_funcs, program.globals_buffer_size, program.interleaved)
+            },
+            ("partbin", _) => {
+                // read the binary file as a Vec<u8>
+                let filedata = match fs::read(file_path.clone()) {
+                    Ok(text) => text,
+                    Err(e) => panic!(e),
+                };
+    
+                let program: PartitionedSeralizedProgram = bincode::deserialize(&filedata).unwrap();
+                println!("Loaded partitioned program with entry point: {}, num_compiled_funcs: {}, globals_buffer_size: {}, is_interleaved: {}", program.entry_point, program.num_compiled_funcs, program.globals_buffer_size, program.interleaved);
+
+                (InputProgram::PartitionedBinary(program.program_data), program.entry_point, program.num_compiled_funcs, program.globals_buffer_size, program.interleaved)
             },
             // nvidia specific assembly code, prebuilt
             ("ptx", _) => {
@@ -421,6 +444,8 @@ fn main() {
         }
     }
 
-    join_handle.join().unwrap();
+    if serverless {
+        join_handle.join().unwrap();
+    }
 }
  
