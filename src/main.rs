@@ -447,10 +447,24 @@ fn main() {
 
         for idx in 0..num_threads {
             println!("Starting Wasmtime VM: {:?}", idx);
-            let filedata = match fs::read_to_string(file_path.clone()) {
-                Ok(text) => text,
-                Err(e) => panic!(e),
+
+            let extension = match Path::new(&file_path).extension() {
+                Some(ext) => ext.to_str().unwrap(),
+                None => "none",
+            };    
+
+            let filedata = match extension {
+                "wat" => {
+                    fs::read_to_string(file_path.clone()).unwrap()
+                },
+                "wasm" => {
+                    wasmprinter::print_file(file_path.clone()).unwrap()
+                },
+                _ => {
+                    panic!("Unknown file type for input WASM")
+                }
             };
+
             let vm_sender_mutex_clone = vm_sender_mutex.clone();
             let vm_recv_mutex_clone = vm_recv_mutex.clone();
             let vm_recv_condvar_clone = vm_recv_condvar.clone();
