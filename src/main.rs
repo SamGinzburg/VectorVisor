@@ -279,8 +279,6 @@ fn main() {
     let (vm_sender, server_recv): (Sender<([u8; 16384], usize)>, Receiver<([u8; 16384], usize)>) = bounded(num_vms.try_into().unwrap());
 
     let vm_recv_condvar = Arc::new(Condvar::new());
-    let join_handle = BatchSubmitServer::start_server(server_sender, server_recv, vm_recv_condvar.clone(), num_vms);
-
     let vm_sender_mutex = Arc::new(Mutex::new(vm_sender));
     let vm_recv_mutex = Arc::new(Mutex::new(vm_recv));
 
@@ -445,6 +443,7 @@ fn main() {
     }
 
     if serverless {
+        let join_handle = BatchSubmitServer::start_server(server_sender, server_recv, vm_recv_condvar.clone(), num_vms);
         join_handle.join().unwrap();
     }
 }

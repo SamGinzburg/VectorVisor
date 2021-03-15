@@ -1043,7 +1043,7 @@ impl OpenCLRunner {
         println!("E2E execution time in nanoseconds: {}", (e2e_time_end - e2e_time_start).as_nanos());
         println!("On device time in nanoseconds: {}", total_gpu_execution_time);
         println!("Device Start-Queue overhead in nanoseconds: {}", queue_submit_delta);
-        println!("Device Overhead / Device Execution Time: {}", queue_submit_delta as f64 / total_gpu_execution_time as f64);
+        println!("fraction of time on device overhead: {}", queue_submit_delta as f64 / (e2e_time_end - e2e_time_start).as_nanos() as f64);
         println!("fraction of time on device: {}", total_gpu_execution_time as f64 / (e2e_time_end - e2e_time_start).as_nanos() as f64);
         println!("fraction of time on hcall dispatch: {}", hcall_execution_time as f64 / (e2e_time_end - e2e_time_start).as_nanos() as f64);
         println!("fraction of time on VMM overhead: {}", vmm_overhead as f64 / (e2e_time_end - e2e_time_start).as_nanos() as f64);
@@ -1227,8 +1227,6 @@ impl OpenCLRunner {
             }
         }
 
-        // start counting only when all VM init is finished
-        let e2e_time_start = std::time::Instant::now();
 
         // run the data kernel to init the memory
         let data_kernel = kernels.get(&99999).unwrap();
@@ -1239,6 +1237,9 @@ impl OpenCLRunner {
         ocl::core::set_kernel_arg(&data_kernel, 4, ArgVal::mem(&buffers.is_calling)).unwrap();
         ocl::core::set_kernel_arg(&data_kernel, 5, ArgVal::mem(&buffers.sfp)).unwrap();
 
+        // start counting only when all VM init is finished
+        let e2e_time_start = std::time::Instant::now();
+
         let mut profiling_event = ocl::Event::empty();
 
         unsafe {
@@ -1246,10 +1247,14 @@ impl OpenCLRunner {
         }
 
         ocl::core::wait_for_event(&profiling_event).unwrap();
-        let start_data_kernel = profiling_event.profiling_info(ocl::enums::ProfilingInfo::Submit).unwrap().time().unwrap();
-        let end_data_kernel = profiling_event.profiling_info(ocl::enums::ProfilingInfo::End).unwrap().time().unwrap();
-        total_gpu_execution_time += end_data_kernel-start_data_kernel;
+        let queue_start_kernel = profiling_event.profiling_info(ocl::enums::ProfilingInfo::Queued).unwrap().time().unwrap();
+        let start_start_kernel = profiling_event.profiling_info(ocl::enums::ProfilingInfo::Start).unwrap().time().unwrap();
+        let end_start_kernel = profiling_event.profiling_info(ocl::enums::ProfilingInfo::End).unwrap().time().unwrap();
+        total_gpu_execution_time += end_start_kernel-start_start_kernel;
+        queue_submit_delta += start_start_kernel-queue_start_kernel;
+
         println!("Finished data_init kernel");
+        let data_init_setup = std::time::Instant::now();
 
         // set up the clArgs for the wasm_entry kernel
         for (key, value) in kernels.iter() {
@@ -1280,6 +1285,19 @@ impl OpenCLRunner {
         dbg!(self.entry_point);
         let mut start_kernel = kernels.get(&self.entry_point).unwrap();
 
+        let mut max_queue_time: u64 = 0;
+        let mut min_queue_time: u64 = std::u64::MAX;
+        let mut num_queue_submits: u64 = 0;
+        
+        let mut is_first: HashMap<u32, bool> = HashMap::new();
+        let mut first_invokes: Vec<u64> = vec![];
+        let mut repeat_invokes: Vec<u64> = vec![];
+        let mut curr_func_id = self.entry_point;
+        is_first.insert(curr_func_id, true);
+
+        let end_data_init_setup = std::time::Instant::now();
+        vmm_overhead += (end_data_init_setup - data_init_setup).as_nanos();
+
         // now the data in the program has been initialized, we can run the main loop
         println!("start: {}", Utc::now().timestamp());
         loop {
@@ -1289,23 +1307,39 @@ impl OpenCLRunner {
             // Unfortunately the OpenCL API doesn't give us a good way to identify what happened - the OS logs (dmesg) do have a record of this though
             profiling_event = ocl::Event::empty();
             unsafe {
+                num_queue_submits += 1;
                 ocl::core::enqueue_kernel(&queue, &start_kernel, 1, None, &[self.num_vms as usize, 1, 1], None, None::<Event>, Some(&mut profiling_event)).unwrap();
-                
-                /*
-                match ocl::core::finish(&queue) {
-                    Err(e) => {
-                        panic!("Unable to finish waiting on queue for start_kernel\n\n{}", e);
-                    },
-                    Ok(_) => (),
-                }
-                */
             }
 
             ocl::core::wait_for_event(&profiling_event).unwrap();
             let queue_start_kernel = profiling_event.profiling_info(ocl::enums::ProfilingInfo::Queued).unwrap().time().unwrap();
             let start_start_kernel = profiling_event.profiling_info(ocl::enums::ProfilingInfo::Start).unwrap().time().unwrap();
             let end_start_kernel = profiling_event.profiling_info(ocl::enums::ProfilingInfo::End).unwrap().time().unwrap();
-            total_gpu_execution_time += end_start_kernel-queue_start_kernel;
+
+            total_gpu_execution_time += end_start_kernel-start_start_kernel;
+
+            if (start_start_kernel-queue_start_kernel > max_queue_time) {
+                max_queue_time = start_start_kernel-queue_start_kernel;
+            }
+
+            if (start_start_kernel-queue_start_kernel < min_queue_time) {
+                min_queue_time = start_start_kernel-queue_start_kernel;
+            }
+
+            match is_first.get(&curr_func_id) {
+                Some(true) => {
+                    first_invokes.push(start_start_kernel-queue_start_kernel);
+                    is_first.insert(curr_func_id, false);
+                },
+                Some(false) => {
+                    repeat_invokes.push(start_start_kernel-queue_start_kernel);
+                },
+                None => {
+                    first_invokes.push(start_start_kernel-queue_start_kernel);
+                    is_first.insert(curr_func_id, false);
+                },
+            }
+
             queue_submit_delta += start_start_kernel-queue_start_kernel;
             // upon exiting we check the stack pointer for each VM
             let vmm_pre_overhead = std::time::Instant::now();
@@ -1323,11 +1357,10 @@ impl OpenCLRunner {
             }
 
             if entry_point_exit_flag {
+                let vmm_pre_overhead_end = std::time::Instant::now();
+                vmm_overhead += (vmm_pre_overhead_end - vmm_pre_overhead).as_nanos();
                 break;
             }
-
-            let vmm_pre_overhead_end = std::time::Instant::now();
-            vmm_overhead += (vmm_pre_overhead_end - vmm_pre_overhead).as_nanos();
 
             /*
              * When we reach this point divergence may have occured!
@@ -1356,6 +1389,7 @@ impl OpenCLRunner {
                 if !found && hypercall_num_temp[idx as usize] == -2 {
                     // set the next function to run to be this targeted function
                     start_kernel = kernels.get(&entry_point_temp[idx as usize]).unwrap();
+                    curr_func_id = entry_point_temp[idx as usize];
                     found = true;
                     break;
                 } else {
@@ -1368,20 +1402,18 @@ impl OpenCLRunner {
             // if we found a VM that needs to run another function, we do that first
             if found {
                 //dbg!("found VM calling func");
+
+                let vmm_pre_overhead_end = std::time::Instant::now();
+                vmm_overhead += (vmm_pre_overhead_end - vmm_pre_overhead).as_nanos();
                 continue;
             } else {
-                /*
-                dbg!(stack_pointer_temp.clone());
-                dbg!(entry_point_temp.clone());
-                dbg!(hypercall_num_temp.clone());
-                dbg!(start_kernel);
-                //panic!("test");
-
-                dbg!(hcall_idx as usize);
-                */
                 // if we don't have any VMs to run, reset the next function to run to be that of the hcall
                 // we are returning to and dispatch the calls
                 start_kernel = kernels.get(&entry_point_temp[hcall_idx as usize]).unwrap();
+                curr_func_id = entry_point_temp[hcall_idx as usize];
+
+                let vmm_pre_overhead_end = std::time::Instant::now();
+                vmm_overhead += (vmm_pre_overhead_end - vmm_pre_overhead).as_nanos();
             }
 
             // read the hypercall_buffer
@@ -1443,6 +1475,8 @@ impl OpenCLRunner {
             }
 
             if entry_point_exit_flag {
+                let vmm_post_overhead_end = std::time::Instant::now();
+                vmm_overhead += (vmm_post_overhead_end - vmm_post_overhead).as_nanos();    
                 break;
             }
 
@@ -1460,11 +1494,17 @@ impl OpenCLRunner {
             // also don't forget to write the hcall buf back
             unsafe {
                 let mut hcall_buf = hcall_read_buffer.lock().unwrap();
-                ocl::core::enqueue_write_buffer(&queue, &hypercall_buffer, true, 0, &mut hcall_buf, None::<Event>, None::<&mut Event>).unwrap();
-                ocl::core::enqueue_write_buffer(&queue, &buffers.entry, true, 0, &mut entry_point_temp, None::<Event>, None::<&mut Event>).unwrap();
-                ocl::core::enqueue_write_buffer(&queue, &buffers.sp, true, 0, &mut stack_pointer_temp, None::<Event>, None::<&mut Event>).unwrap();
-                ocl::core::enqueue_write_buffer(&queue, &buffers.hypercall_num, true, 0, &mut hypercall_num_temp, None::<Event>, None::<&mut Event>).unwrap();
-                ocl::core::enqueue_write_buffer(&queue, &hcall_retval_buffer, true, 0, &mut hypercall_retval_temp, None::<Event>, None::<&mut Event>).unwrap();
+                ocl::core::enqueue_write_buffer(&queue, &hypercall_buffer, false, 0, &mut hcall_buf, None::<Event>, None::<&mut Event>).unwrap();
+                ocl::core::enqueue_write_buffer(&queue, &buffers.entry, false, 0, &mut entry_point_temp, None::<Event>, None::<&mut Event>).unwrap();
+                ocl::core::enqueue_write_buffer(&queue, &buffers.sp, false, 0, &mut stack_pointer_temp, None::<Event>, None::<&mut Event>).unwrap();
+                ocl::core::enqueue_write_buffer(&queue, &buffers.hypercall_num, false, 0, &mut hypercall_num_temp, None::<Event>, None::<&mut Event>).unwrap();
+                ocl::core::enqueue_write_buffer(&queue, &hcall_retval_buffer, false, 0, &mut hypercall_retval_temp, None::<Event>, None::<&mut Event>).unwrap();
+                match ocl::core::finish(&queue) {
+                    Err(e) => {
+                        panic!("Unable to finish waiting on queue for kernel writes...\n\n{}", e);
+                    },
+                    Ok(_) => (),
+                }
             }
             let vmm_post_overhead_end = std::time::Instant::now();
             vmm_overhead += (vmm_post_overhead_end - vmm_post_overhead).as_nanos();
@@ -1500,10 +1540,28 @@ impl OpenCLRunner {
         println!("E2E execution time in nanoseconds: {}", (e2e_time_end - e2e_time_start).as_nanos());
         println!("On device time in nanoseconds: {}", total_gpu_execution_time);
         println!("Device Start-Queue overhead in nanoseconds: {}", queue_submit_delta);
-        println!("Device Overhead / Device Execution Time: {}", queue_submit_delta as f64 / total_gpu_execution_time as f64);
+        println!("Max Device Start-Queue overhead in nanoseconds: {}", max_queue_time);
+        println!("Min Device Start-Queue overhead in nanoseconds: {}", min_queue_time);
+        println!("Average Device Start-Queue overhead in nanoseconds: {}", queue_submit_delta / num_queue_submits);
+        println!("Number of queue submits: {}", num_queue_submits);
+        println!("fraction of time on device overhead: {}", queue_submit_delta as f64 / (e2e_time_end - e2e_time_start).as_nanos() as f64);
         println!("fraction of time on device: {}", total_gpu_execution_time as f64 / (e2e_time_end - e2e_time_start).as_nanos() as f64);
         println!("fraction of time on hcall dispatch: {}", hcall_execution_time as f64 / (e2e_time_end - e2e_time_start).as_nanos() as f64);
         println!("fraction of time on VMM overhead: {}", vmm_overhead as f64 / (e2e_time_end - e2e_time_start).as_nanos() as f64);
+        println!("sanity check: {}", (vmm_overhead + total_gpu_execution_time as u128 + hcall_execution_time + vmm_overhead));
+
+        //dbg!(&first_invokes);
+        let mut avg = 0;
+        for val in &first_invokes {
+            avg += val;
+        }
+        println!("Average of first invokes: {:?}", avg / first_invokes.len() as u64);
+        //dbg!(&repeat_invokes);
+        avg = 0;
+        for val in &repeat_invokes {
+            avg += val;
+        }
+        println!("Average of repeat invokes: {:?}", avg / repeat_invokes.len() as u64);
 
         return VMMRuntimeStatus::StatusOkay;
     }
