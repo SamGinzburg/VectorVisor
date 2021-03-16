@@ -40,10 +40,6 @@ impl WasmHandler {
                 serverless_invoke(buffer.as_mut_ptr(), buffer.len() as u32)
             };
 
-            println!("simple println! test");
-            println!("incoming req size: {:?}", incoming_req_size);
-            println!("{:?}", &buffer[..incoming_req_size as usize]);
-
             // now that we have the input in the buffer, parse the json
             let json: Value = serde_json::from_slice(&buffer[..incoming_req_size as usize]).unwrap();
 
