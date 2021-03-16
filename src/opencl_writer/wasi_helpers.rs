@@ -346,9 +346,12 @@ pub fn emit_serverless_invoke_post(writer: &opencl_writer::OpenCLCWriter, debug:
 
     let json_buf_ptr = emit_read_u32("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx");
     let json_buf_len = emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx");
-    
+
+    ret_str += &format!("\tprintf(\"json_buf_ptr: %d\\n\", {});\n", json_buf_ptr);
+    ret_str += &format!("\tprintf(\"json_buf_len: %d\\n\", {});\n", json_buf_len);
 
     // we need to copy the data stored in the hcall buffer, to the json_buf_ptr
+    /*
     ret_str += &format!("\t___private_memcpy((ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), warp_idx);\n",
                         "(ulong)((global char *)hypercall_buffer)", // src
                         "hypercall_buffer", // mem_start_src
@@ -356,9 +359,13 @@ pub fn emit_serverless_invoke_post(writer: &opencl_writer::OpenCLCWriter, debug:
                         "heap_u32", // mem_start_dst
                         "hcall_ret_val"); // hcall_ret_val is the number of bytes read;
 
+    */
+
     // this function returns the length of the message in bytes
     ret_str += &format!("\t{};\n",
                         emit_write_u32("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "hcall_ret_val", "warp_idx"));
+
+    ret_str += &format!("\tprintf(\"serverless invoke hcall ret val: %d\\n\", hcall_ret_val);\n");
 
     ret_str += &format!("\t{}\n",
                         "*sp -= 1;");

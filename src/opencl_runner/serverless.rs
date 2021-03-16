@@ -35,11 +35,13 @@ impl Serverless {
         // copy the incoming request into the hcall_buffer
         if hypercall.is_interleaved_mem {
             for offset in 0..msg_len {
-                Interleave::write_u8(hcall_buf, offset.try_into().unwrap(), hypercall.num_total_vms, msg[msg_len], hypercall.vm_id);
+                Interleave::write_u8(hcall_buf, offset.try_into().unwrap(), hypercall.num_total_vms, msg[offset], hypercall.vm_id);
             }
         } else {
             hcall_buf[0..msg_len].copy_from_slice(&msg[0..msg_len]);
         }
+
+        dbg!("finished serverless invoke");
 
         // return msg_len
         sender.send({
@@ -53,6 +55,8 @@ impl Serverless {
 
         let mut resp_buf = [0u8; 16384];
 
+        dbg!("serverless response");
+
         // the first 4 bytes are the length as a u32, the remainder is the buffer containing the json
         let msg_len = if hypercall.is_interleaved_mem {
             Interleave::read_u32(hcall_buf, 0, hypercall.num_total_vms, hypercall.vm_id)
@@ -64,7 +68,7 @@ impl Serverless {
 
         // copy the data from the hcall_buffer
         if hypercall.is_interleaved_mem {
-            for offset in 0..(msg_len as usize) {
+            for offset in 0..resp_buf_len {
                 resp_buf[offset] = Interleave::read_u8(hcall_buf, offset.try_into().unwrap(), hypercall.num_total_vms, hypercall.vm_id);
             }
         } else {

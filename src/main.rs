@@ -283,6 +283,12 @@ fn main() {
     let vm_sender_mutex = Arc::new(Mutex::new(vm_sender));
     let vm_recv_mutex = Arc::new(Mutex::new(vm_recv));
 
+    let join_handle = if serverless {
+        Some(BatchSubmitServer::start_server(server_sender, server_recv, vm_recv_condvar.clone(), num_vms))
+    } else {
+        None
+    };
+
     if !wasmtime {
         let extension = match Path::new(&file_path).extension() {
             Some(ext) => ext.to_str().unwrap(),
@@ -480,11 +486,10 @@ fn main() {
                 }
             });
         }
-    }
 
-    if serverless {
-        let join_handle = BatchSubmitServer::start_server(server_sender, server_recv, vm_recv_condvar.clone(), num_vms);
-        join_handle.join().unwrap();
+        if serverless {
+            join_handle.unwrap().join().unwrap();
+        }
     }
 }
  

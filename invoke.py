@@ -20,7 +20,7 @@ sample_req = {
 }
 
 req_list = []
-for x in range(256):
+for x in range(64):
     req_list.append(sample_req)
 
 t0 = time()
