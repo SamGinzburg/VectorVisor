@@ -64,12 +64,14 @@ impl Serverless {
             LittleEndian::read_u32(&hcall_buf[0..4])
         };
 
+        dbg!(msg_len);
+
         let resp_buf_len: usize = msg_len.try_into().unwrap();
 
         // copy the data from the hcall_buffer
         if hypercall.is_interleaved_mem {
             for offset in 0..resp_buf_len {
-                resp_buf[offset] = Interleave::read_u8(hcall_buf, offset.try_into().unwrap(), hypercall.num_total_vms, hypercall.vm_id);
+                resp_buf[offset] = Interleave::read_u8(hcall_buf, (4 + offset).try_into().unwrap(), hypercall.num_total_vms, hypercall.vm_id);
             }
         } else {
             resp_buf[0..resp_buf_len].copy_from_slice(&hcall_buf[4..4+resp_buf_len]);
