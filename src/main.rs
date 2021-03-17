@@ -327,6 +327,34 @@ fn main() {
     
                 (InputProgram::text(compiled_kernel.clone()), entry_point, num_compiled_funcs, globals_buffer_size, interleaved)
             },
+            ("wasm", false) => {
+                let filedata_text = wasmprinter::print_file(file_path.clone()).unwrap();
+                let pb = ParseBuffer::new(&filedata_text).unwrap();
+                let pb_debug = ParseBuffer::new(&filedata_text).unwrap();
+                let mut ast = opencl_writer::OpenCLCWriter::new(&pb);
+                let mut ast_debug = opencl_writer::OpenCLCWriter::new(&pb_debug);
+                let result = ast.parse_file().unwrap();
+                let result_debug = ast_debug.parse_file().unwrap();
+            
+                // apply our compilation pass to the source WASM 
+                let (compiled_kernel, entry_point, globals_buffer_size, num_compiled_funcs, kernel_hashmap) = ast.write_opencl_file(interleaved as u32,
+                                                                                                                    stack_size,
+                                                                                                                    heap_size, 
+                                                                                                                    call_stack_size, 
+                                                                                                                    stack_frames_size, 
+                                                                                                                    sfp_size, 
+                                                                                                                    predictor_size,
+                                                                                                                    debug_call_print,
+                                                                                                                    force_inline,
+                                                                                                                    is_gpu,
+                                                                                                                    false);
+                println!("Compiled: {} functions", num_compiled_funcs);
+                println!("Entry point: {}", entry_point);
+                println!("Globals buffer: {}", globals_buffer_size);
+                println!("interleaved: {}", interleaved);
+    
+                (InputProgram::text(compiled_kernel.clone()), entry_point, num_compiled_funcs, globals_buffer_size, interleaved)
+            },
             ("wat", true) => {
                 let filedata = match fs::read_to_string(file_path.clone()) {
                     Ok(text) => text,
