@@ -241,10 +241,18 @@ fn main() {
 
     let compile = value_t!(matches.value_of("compile"), bool).unwrap_or_else(|e| e.exit());
     if compile {
-        let filedata = match fs::read_to_string(file_path.clone()) {
-            Ok(text) => text,
-            Err(e) => panic!(e),
+
+        let extension = match Path::new(&file_path).extension() {
+            Some(ext) => ext.to_str().unwrap(),
+            None => "none",
         };
+
+        let filedata = match extension {
+            "wat" => fs::read_to_string(file_path.clone()).unwrap(),
+            "wasm" => wasmprinter::print_file(file_path.clone()).unwrap(),
+            _ => panic!("Unknown file extension for compilation!"),
+        };
+
         let pb = ParseBuffer::new(&filedata).unwrap();
         let pb_debug = ParseBuffer::new(&filedata).unwrap();
         let mut ast = opencl_writer::OpenCLCWriter::new(&pb);
