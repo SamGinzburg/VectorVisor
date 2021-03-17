@@ -18,8 +18,6 @@ pub fn emit_select(writer: &opencl_writer::OpenCLCWriter, stack_sizes: &mut Vec<
     let size1 = stack_sizes.pop().unwrap();
     let size2 = stack_sizes.pop().unwrap();
 
-    println!("select sizes: {:?}, {:?} in fn: {:?}, stack_sizes: {:?}", size1, size2, fn_name, &stack_sizes);
-
     if size1 != size2 {
         panic!("Unequal sizes for select operation: {}", fn_name);
     }

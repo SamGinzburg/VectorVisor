@@ -1560,7 +1560,7 @@ impl OpenCLRunner {
             avg += val;
         }
         if first_invokes.len() > 0 {
-            println!("Average of first invokes: {:?}, # repeats: {:?}", avg / first_invokes.len() as u64, first_invokes.len());
+            println!("Average of first invokes: {:?}, # first invokes: {:?}", avg / first_invokes.len() as u64, first_invokes.len());
         }
 
         avg = 0;
