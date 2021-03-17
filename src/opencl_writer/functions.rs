@@ -5,6 +5,9 @@ use crate::opencl_writer::mem_interleave::emit_write_u32;
 use crate::opencl_writer::mem_interleave::emit_read_u64;
 use crate::opencl_writer::mem_interleave::emit_write_u64;
 
+use wast::Index::*;
+use wast::TypeDef::*;
+
 /*
  * Notes on Irreducible Control Flow (ICF):
  * 
@@ -305,11 +308,49 @@ pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, fn_name: &str, fun
  *  each other, so we must process them sequentially.
  * 
  */
-pub fn emit_call_indirect(writer: &opencl_writer::OpenCLCWriter, fn_name: String, arameter_offset: i32, table: &HashMap<u32, &wast::Index>, call_ret_map: &mut HashMap<&str, u32>, call_ret_idx: &mut u32, function_id_map: HashMap<&str, u32>, stack_sizes: &mut Vec<u32>, debug: bool) -> String {
+pub fn emit_call_indirect(writer: &opencl_writer::OpenCLCWriter, call_indirect: &wast::CallIndirect, fn_name: String, arameter_offset: i32, table: &HashMap<u32, &wast::Index>, call_ret_map: &mut HashMap<&str, u32>, call_ret_idx: &mut u32, function_id_map: HashMap<&str, u32>, stack_sizes: &mut Vec<u32>, debug: bool) -> String {
     let mut result = String::from("");
     // set up a switch case statement, we read the last value on the stack and determine what function we are going to call
     // this adds code bloat, but it reduces the complexity of the compiler.
     // It is worth revisiting this later, but not urgent. 
+
+    // the index into the function table
+    if stack_sizes.pop().unwrap() != 1 {
+        panic!("Function table index for indirect call must be of type i32");
+    }
+
+    // Get the type information for the indirect call! We need this to handle parametric
+    // statements after a call such as select
+    match (call_indirect.ty.index.as_ref(), call_indirect.ty.inline.as_ref()) {
+        (Some(index), _) => {
+            // if we have an index, we need to look it up in the global structure
+            let type_index = match index {
+                Num(n, _) => format!("t{}", n),
+                Id(i) => i.name().to_string(),
+            };
+
+            let func_type = match writer.types.get(&type_index).unwrap() {
+                Func(ft) => ft,
+                _ => panic!("Indirect call cannot have a type of something other than a func"),
+            };
+
+            // First, pop off the parameters
+            for (_, _, param_type) in func_type.params.iter() {
+                let stack_param = stack_sizes.pop().unwrap();
+                if stack_param != writer.get_size_valtype(param_type) {
+                    panic!("Parameters on the stack don't match required function parameters!");
+                }
+            }
+
+            // Next, push the result(s) back
+            for return_type in func_type.results.iter() {
+                stack_sizes.push(writer.get_size_valtype(return_type));
+            }
+        },
+        (_, Some(inline)) => panic!("Inline types for call_indirect not implemented yet"),
+        _ => (),
+    };
+
 
     result += &format!("\t{}\n",
                        &format!("switch({}) {{", emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx")));

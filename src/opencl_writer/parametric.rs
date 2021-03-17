@@ -10,11 +10,15 @@ pub fn emit_select(writer: &opencl_writer::OpenCLCWriter, stack_sizes: &mut Vec<
     // pop c
     let c = emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx");
 
-    stack_sizes.pop().unwrap();
+    if stack_sizes.pop().unwrap() != 1 {
+        panic!("select in fn: {}, the top of the stack must be of type i32", fn_name);
+    }
 
     // we have to make sure that the values are the same size
     let size1 = stack_sizes.pop().unwrap();
     let size2 = stack_sizes.pop().unwrap();
+
+    println!("select sizes: {:?}, {:?} in fn: {:?}, stack_sizes: {:?}", size1, size2, fn_name, &stack_sizes);
 
     if size1 != size2 {
         panic!("Unequal sizes for select operation: {}", fn_name);

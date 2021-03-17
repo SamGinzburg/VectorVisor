@@ -245,7 +245,6 @@ impl<'a> OpenCLCWriter<'_> {
                          loop_name_count: &mut u32,
                          // emit OpenCL C (False) or standard C for debugging on the CPU (True)
                          debug: bool) -> String {
-
         match instr {
             wast::Instruction::Drop => {
                 // based on the previous stack size, decrement sp
@@ -697,7 +696,7 @@ impl<'a> OpenCLCWriter<'_> {
                     }
                 }
             },
-            wast::Instruction::CallIndirect(_call_indirect) => {
+            wast::Instruction::CallIndirect(call_indirect) => {
                 // we don't need to do table lookups because we are assuming that there can be at most 1 table
                 /*
                 let table: &str = match call_indirect.table {
@@ -705,7 +704,7 @@ impl<'a> OpenCLCWriter<'_> {
                     wast::Index::Num(_, _) => panic!(""),
                 };
                 */
-                emit_call_indirect(&self, fn_name.to_string(), parameter_offset, indirect_call_mapping, call_ret_map, call_ret_idx, function_id_map, stack_sizes, debug)
+                emit_call_indirect(&self, call_indirect, fn_name.to_string(), parameter_offset, indirect_call_mapping, call_ret_map, call_ret_idx, function_id_map, stack_sizes, debug)
             },
             wast::Instruction::I32Eq => {
                 stack_sizes.pop();
