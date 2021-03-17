@@ -16,6 +16,10 @@ pub fn emit_memload_i32_8u(writer: &opencl_writer::OpenCLCWriter, args: &MemArg,
     let i_load = &format!("(int){}", emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx"));
     let read = format!("(uchar)({})", emit_read_u8(&format!("(ulong)((global char*)heap_u32+{}+{})", args.offset, i_load), "(ulong)(heap_u32)", "warp_idx"));
 
+    ret_str += &format!("\tprintf(\"i32.load_8u: i_load: %d\", {});\n", i_load);
+    ret_str += &format!("\tprintf(\"i32.load_8u: args: %d\", {});\n", args.offset);
+    ret_str += &format!("\tprintf(\"i32.load_8u: read addr: %d\", {});\n", read);
+
     ret_str += &format!("\t{};\n", &emit_write_u32("(ulong)(stack_u32+*sp-1)",
                         "(ulong)(stack_u32)",
                         &read,

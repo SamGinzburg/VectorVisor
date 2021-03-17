@@ -1931,6 +1931,7 @@ r#"
             write!(output, "\tprintf(\"hypercall_continuation: %p\\n\", hypercall_continuation);\n");
             write!(output, "\tprintf(\"current_mem_size: %p\\n\", current_mem_size);\n");
             write!(output, "\tprintf(\"max_mem_size: %p\\n\", max_mem_size);\n");
+            write!(output, "\tprintf(\"globals_buffer: %p\\n\", globals_buffer);\n");
         }
 
         write!(output, "\t{}\n", "do {");

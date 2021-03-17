@@ -5,6 +5,17 @@ use serde_json::json;
 
 fn compress_json(event: Value) -> Value {
     println!("{:?}", event);
+    /*
+    match event.get("text") {
+        Value::String(str) => {
+
+        },
+        _ => {
+            // input is not a string we can compress!, no-op
+            Value
+        }
+    }
+    */
     json!(null)
 }
 
