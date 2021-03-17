@@ -1025,10 +1025,11 @@ impl OpenCLRunner {
             unsafe {
                 ocl::core::enqueue_read_buffer(&queue, &buffers.stack_buffer, true, 0, &mut check_results_debug, None::<Event>, None::<&mut Event>).unwrap();
             }
+
             for vm_idx in 0..self.num_vms {
                 if self.is_memory_interleaved {
-                    let result_i32 = Interleave::read_u32(&mut check_results_debug, 32, self.num_vms, vm_idx);
-                    let result_i64 = Interleave::read_u64(&mut check_results_debug, 32, self.num_vms, vm_idx);
+                    let result_i32 = Interleave::read_u32(&mut check_results_debug[640..], 0, self.num_vms, vm_idx);
+                    let result_i64 = Interleave::read_u64(&mut check_results_debug[640..], 0, self.num_vms, vm_idx);
                     dbg!(result_i32 as i32);
                     dbg!(result_i64 as i64);
                     dbg!(result_i64 as u64);
@@ -1525,8 +1526,8 @@ impl OpenCLRunner {
             }
             for vm_idx in 0..self.num_vms {
                 if self.is_memory_interleaved {
-                    let result_i32 = Interleave::read_u32(&mut check_results_debug, 32, self.num_vms, vm_idx);
-                    let result_i64 = Interleave::read_u64(&mut check_results_debug, 32, self.num_vms, vm_idx);
+                    let result_i32 = Interleave::read_u32(&mut check_results_debug[640..], 0, self.num_vms, vm_idx);
+                    let result_i64 = Interleave::read_u64(&mut check_results_debug[640..], 0, self.num_vms, vm_idx);
                     dbg!(result_i32 as i32);
                     dbg!(result_i64 as i64);
                     dbg!(result_i64 as u64);
@@ -1558,14 +1559,18 @@ impl OpenCLRunner {
         for val in &first_invokes {
             avg += val;
         }
-        println!("Average of first invokes: {:?}", avg / first_invokes.len() as u64);
-        //dbg!(&repeat_invokes);
+        if first_invokes.len() > 0 {
+            println!("Average of first invokes: {:?}, # repeats: {:?}", avg / first_invokes.len() as u64, first_invokes.len());
+        }
+
         avg = 0;
         for val in &repeat_invokes {
             avg += val;
         }
-        println!("Average of repeat invokes: {:?}", avg / repeat_invokes.len() as u64);
 
+        if repeat_invokes.len() > 0 {
+            println!("Average of repeat invokes: {:?}, # repeats: {:?}", avg / repeat_invokes.len() as u64, repeat_invokes.len());
+        }
         return VMMRuntimeStatus::StatusOkay;
     }
 }
