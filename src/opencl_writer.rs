@@ -1508,7 +1508,7 @@ inline void {}(global uint   *stack_u32,
 
         // zero the heap next
         ret_str += &format!("{}{}{}",
-                            "\tfor (uint idx = 0; idx < (VMM_STACK_SIZE_BYTES / 4); idx++) {\n",
+                            "\tfor (uint idx = 0; idx < (VMM_HEAP_SIZE_BYTES / 4); idx++) {\n",
                             format!("\t\t{};\n", &emit_write_u32("(ulong)(heap_u32+idx)", "(ulong)(heap_u32)", "0", "warp_idx")),
                             "\t}\n");
 
