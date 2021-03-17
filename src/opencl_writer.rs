@@ -1496,6 +1496,25 @@ inline void {}(global uint   *stack_u32,
         output
     }
 
+    // WASM expects all memory (stack, heap) to be zero initialized
+    fn zero_init_memory(&self) -> String {
+        let mut ret_str = String::from("");
+
+        // zero the stack first
+        ret_str += &format!("{}{}{}",
+                            "\tfor (uint idx = 0; idx < (VMM_STACK_SIZE_BYTES / 4); idx++) {\n",
+                            format!("\t\t{};\n", &emit_write_u32("(ulong)(stack_u32+idx)", "(ulong)(stack_u32)", "0", "warp_idx")),
+                            "\t}\n");
+
+        // zero the heap next
+        ret_str += &format!("{}{}{}",
+                            "\tfor (uint idx = 0; idx < (VMM_HEAP_SIZE_BYTES / 4); idx++) {\n",
+                            format!("\t\t{};\n", &emit_write_u32("(ulong)(heap_u32+idx)", "(ulong)(stack_u32)", "0", "warp_idx")),
+                            "\t}\n");
+
+        ret_str
+    }
+
     /*
      * This function generates the helper kernel that loads the data sections
      * It is also ressponsible for loading globals into memory id -> (offset, size)
@@ -1552,7 +1571,7 @@ inline void {}(global uint   *stack_u32,
         dbg!(program_start_max_pages);
 
         if debug {
-            result += &String::from("\nvoid data_init(uint *heap_u32, uint *globals_buffer, uint *curr_mem, uint *max_mem, uchar *is_calling, ulong *sfp) {\n");
+            result += &String::from("\nvoid data_init(uint *stack_u32, uint *heap_u32, uint *globals_buffer, uint *curr_mem, uint *max_mem, uchar *is_calling, ulong *sfp) {\n");
             result += &String::from("\tulong warp_idx = 0;\n");
             // each page = 64KiB
             result += &format!("\tcurr_mem[warp_idx] = {};\n", program_start_mem_pages);
@@ -1564,13 +1583,13 @@ inline void {}(global uint   *stack_u32,
             result += &format!("\t{};\n",
                                "*sfp = 0");
             
-    
+            result += &self.zero_init_memory();
             result += &self.emit_memcpy_arr(debug);
             result += &self.emit_global_init(&mapping, debug);
 
             result += &String::from("}\n\n");
         } else {
-            result += &String::from("\n__kernel void data_init(__global uint *heap_u32_global, __global uint *globals_buffer_global, __global uint *curr_mem_global, __global uint *max_mem_global, __global uchar *is_calling_global, __global ulong *sfp_global) {\n");
+            result += &String::from("\n__kernel void data_init(__global uint *stack_u32_global, __global uint *heap_u32_global, __global uint *globals_buffer_global, __global uint *curr_mem_global, __global uint *max_mem_global, __global uchar *is_calling_global, __global ulong *sfp_global) {\n");
             result += &String::from("\tulong warp_idx = get_global_id(0);\n");
             // these structures are not interleaved, so its fine to just read/write them as is
             // they are already implicitly interleaved (like sp for example)
@@ -1587,15 +1606,22 @@ inline void {}(global uint   *stack_u32,
                 result += &format!("\t{}\n",
                                    format!("global uint *heap_u32 = (global uint *)((global char*)heap_u32_global+(get_global_id(0) * {}));", heap_size));
                 result += &format!("\t{}\n",
+                                   format!("global uint *stack_u32 = (global uint *)((global char*)stack_u32_global+(get_global_id(0) * VMM_STACK_SIZE_BYTES));"));
+
+                result += &format!("\t{}\n",
                                    format!("global uint *globals_buffer = (global uint *)((global char*)globals_buffer_global+(get_global_id(0) * {}));", offset * 4));
             
                 } else {
                 result += &format!("\t{}\n",
                                     format!("global uint *heap_u32 = (global uint *)(heap_u32_global);"));
                 result += &format!("\t{}\n",
+                                    format!("global uint *stack_u32 = (global uint *)(stack_u32_global);"));
+
+                result += &format!("\t{}\n",
                                     format!("global uint *globals_buffer = (global uint *)(globals_buffer_global);"));
             }
 
+            result += &self.zero_init_memory();
             result += &self.emit_memcpy_arr(debug);
             result += &self.emit_global_init(&mapping, debug);
 

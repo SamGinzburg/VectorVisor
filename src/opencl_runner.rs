@@ -179,7 +179,7 @@ impl OpenCLRunner {
                link_flags: String,
                print_return: bool) -> JoinHandle<()> {
         let num_vms = self.num_vms.clone();
-        let (program, context, device_id) = self.setup_kernel(input_filename, num_compiled_funcs, globals_buffer_size, compile_flags, link_flags);
+        let (program, context, device_id) = self.setup_kernel(input_filename, stack_size, heap_size, num_compiled_funcs, globals_buffer_size, compile_flags, link_flags);
 
         // create the buffers
         let (new_runner, context) = self.create_buffers(stack_size,
@@ -422,7 +422,7 @@ impl OpenCLRunner {
      * It returns a sending channel for the HTTP Endpoint to send requests to be processed with.
      * 
      */
-    pub fn setup_kernel(&self, input_filename: &str, num_compiled_funcs: u32, globals_buffer_size: u32, compile_flags: String, link_flags: String) -> (ProgramType, ocl::core::Context, ocl::core::DeviceId) {
+    pub fn setup_kernel(&self, input_filename: &str, stack_size: u32, heap_size: u32, num_compiled_funcs: u32, globals_buffer_size: u32, compile_flags: String, link_flags: String) -> (ProgramType, ocl::core::Context, ocl::core::DeviceId) {
         let platform_id = ocl::core::default_platform().unwrap();
         let device_type = if self.is_gpu_backend {
             Some(ocl::core::DEVICE_TYPE_GPU)
@@ -475,7 +475,7 @@ impl OpenCLRunner {
                 let compile_start = std::time::Instant::now();
 
                 let compiled_program = ocl::core::create_program_with_source(&context, &[src_cstring.clone()]).unwrap();
-                let build_result = ocl::core::compile_program(&compiled_program, Some(&[device_ids[0]]), &CString::new(format!("{} -DNUM_THREADS={}", compile_flags, self.num_vms)).unwrap(), &[], &[], None, None, None);
+                let build_result = ocl::core::compile_program(&compiled_program, Some(&[device_ids[0]]), &CString::new(format!("{} -DNUM_THREADS={} -DVMM_STACK_SIZE_BYTES={} -DVMM_HEAP_SIZE_BYTES={}", compile_flags, self.num_vms, stack_size, heap_size)).unwrap(), &[], &[], None, None, None);
                 match build_result {
                     Err(e) => {
                         println!("Build error:\n{}", e);
@@ -548,7 +548,7 @@ impl OpenCLRunner {
                     Ok(binary) => binary,
                     Err(e) => panic!("Unable to create program from given binary: {:?}", e),
                 };
-                ocl::core::build_program(&program_to_run, Some(&[device_ids[0]]), &CString::new(format!("{} -DNUM_THREADS={}", compile_flags, self.num_vms)).unwrap(), None, None).unwrap();
+                ocl::core::build_program(&program_to_run, Some(&[device_ids[0]]), &CString::new(format!("{} -DNUM_THREADS={} -DVMM_STACK_SIZE_BYTES={} -DVMM_HEAP_SIZE_BYTES={}", compile_flags, self.num_vms, stack_size, heap_size)).unwrap(), None, None).unwrap();
                 let knames = ocl::core::get_program_info(&program_to_run, ocl::core::ProgramInfo::KernelNames);
                 println!("Loaded kernels: {}", knames.unwrap());
                 let binary_prep_end = std::time::Instant::now();
@@ -575,6 +575,7 @@ impl OpenCLRunner {
                     let (compile_sender, compile_receiver): (Sender<(u32, ocl::core::Program)>, Receiver<(u32, ocl::core::Program)>) = unbounded();
                     let cflags = compile_flags.clone();
                     let sender = finished_sender.clone();
+                    let num_vms_clone = self.num_vms.clone();
                     submit_compile_job.push(compile_sender);
 
                     thread::spawn(move || {
@@ -589,7 +590,7 @@ impl OpenCLRunner {
                                     break;
                                 },
                             };
-                            ocl::core::build_program(&program_to_build, Some(&[device_id]), &CString::new(format!("{} -DNUM_THREADS={}", cflags.clone(), num_vms)).unwrap(), None, None).unwrap();
+                            ocl::core::build_program(&program_to_build, Some(&[device_id]), &CString::new(format!("{} -DNUM_THREADS={} -DVMM_STACK_SIZE_BYTES={} -DVMM_HEAP_SIZE_BYTES={}", cflags, num_vms_clone, stack_size.clone(), heap_size.clone())).unwrap(), None, None).unwrap();
                             sender.send((key, program_to_build)).unwrap();
                         }
                     });
@@ -647,7 +648,7 @@ impl OpenCLRunner {
                         Ok(binary) => binary,
                         Err(e) => panic!("Unable to create program from given binary: {:?}", e),
                     };
-                    ocl::core::build_program(&program_to_run, Some(&[device_ids[0]]), &CString::new(format!("{} -DNUM_THREADS={}", compile_flags, self.num_vms)).unwrap(), None, None).unwrap();
+                    ocl::core::build_program(&program_to_run, Some(&[device_ids[0]]), &CString::new(format!("{} -DNUM_THREADS={} -DVMM_STACK_SIZE_BYTES={} -DVMM_HEAP_SIZE_BYTES={}", compile_flags, self.num_vms, stack_size, heap_size)).unwrap(), None, None).unwrap();
                     let knames = ocl::core::get_program_info(&program_to_run, ocl::core::ProgramInfo::KernelNames);
                     println!("Loaded kernels: {}", knames.unwrap());
                     final_hashmap.insert(*id, program_to_run);
@@ -836,12 +837,13 @@ impl OpenCLRunner {
         let e2e_time_start = std::time::Instant::now();
 
         // run the data kernel to init the memory
-        ocl::core::set_kernel_arg(&data_kernel, 0, ArgVal::mem(&buffers.heap_buffer)).unwrap();
-        ocl::core::set_kernel_arg(&data_kernel, 1, ArgVal::mem(&buffers.globals_buffer)).unwrap();
-        ocl::core::set_kernel_arg(&data_kernel, 2, ArgVal::mem(&buffers.current_mem)).unwrap();
-        ocl::core::set_kernel_arg(&data_kernel, 3, ArgVal::mem(&buffers.max_mem)).unwrap();
-        ocl::core::set_kernel_arg(&data_kernel, 4, ArgVal::mem(&buffers.is_calling)).unwrap();
-        ocl::core::set_kernel_arg(&data_kernel, 5, ArgVal::mem(&buffers.sfp)).unwrap();
+        ocl::core::set_kernel_arg(&data_kernel, 0, ArgVal::mem(&buffers.stack_buffer)).unwrap();
+        ocl::core::set_kernel_arg(&data_kernel, 1, ArgVal::mem(&buffers.heap_buffer)).unwrap();
+        ocl::core::set_kernel_arg(&data_kernel, 2, ArgVal::mem(&buffers.globals_buffer)).unwrap();
+        ocl::core::set_kernel_arg(&data_kernel, 3, ArgVal::mem(&buffers.current_mem)).unwrap();
+        ocl::core::set_kernel_arg(&data_kernel, 4, ArgVal::mem(&buffers.max_mem)).unwrap();
+        ocl::core::set_kernel_arg(&data_kernel, 5, ArgVal::mem(&buffers.is_calling)).unwrap();
+        ocl::core::set_kernel_arg(&data_kernel, 6, ArgVal::mem(&buffers.sfp)).unwrap();
 
         let mut profiling_event = ocl::Event::empty();
         unsafe {
@@ -1230,12 +1232,13 @@ impl OpenCLRunner {
 
         // run the data kernel to init the memory
         let data_kernel = kernels.get(&99999).unwrap();
-        ocl::core::set_kernel_arg(&data_kernel, 0, ArgVal::mem(&buffers.heap_buffer)).unwrap();
-        ocl::core::set_kernel_arg(&data_kernel, 1, ArgVal::mem(&buffers.globals_buffer)).unwrap();
-        ocl::core::set_kernel_arg(&data_kernel, 2, ArgVal::mem(&buffers.current_mem)).unwrap();
-        ocl::core::set_kernel_arg(&data_kernel, 3, ArgVal::mem(&buffers.max_mem)).unwrap();
-        ocl::core::set_kernel_arg(&data_kernel, 4, ArgVal::mem(&buffers.is_calling)).unwrap();
-        ocl::core::set_kernel_arg(&data_kernel, 5, ArgVal::mem(&buffers.sfp)).unwrap();
+        ocl::core::set_kernel_arg(&data_kernel, 0, ArgVal::mem(&buffers.stack_buffer)).unwrap();
+        ocl::core::set_kernel_arg(&data_kernel, 1, ArgVal::mem(&buffers.heap_buffer)).unwrap();
+        ocl::core::set_kernel_arg(&data_kernel, 2, ArgVal::mem(&buffers.globals_buffer)).unwrap();
+        ocl::core::set_kernel_arg(&data_kernel, 3, ArgVal::mem(&buffers.current_mem)).unwrap();
+        ocl::core::set_kernel_arg(&data_kernel, 4, ArgVal::mem(&buffers.max_mem)).unwrap();
+        ocl::core::set_kernel_arg(&data_kernel, 5, ArgVal::mem(&buffers.is_calling)).unwrap();
+        ocl::core::set_kernel_arg(&data_kernel, 6, ArgVal::mem(&buffers.sfp)).unwrap();
 
         // start counting only when all VM init is finished
         let e2e_time_start = std::time::Instant::now();
