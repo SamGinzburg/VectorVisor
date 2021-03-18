@@ -70,13 +70,14 @@ impl WasmtimeRunner {
                     let chan = vm_sender.clone();
                     unsafe {
                         let arr = memory.data_unchecked_mut();
-                        let mut resp_buf = vec![];
+                        let mut resp_buf = vec![0u8; 16384];
                         let resp_buf_len: usize = buf_len.try_into().unwrap();
                         let main_mem_start = buf_ptr.try_into().unwrap();
 
-                        resp_buf[0..resp_buf_len].copy_from_slice(&arr[main_mem_start..main_mem_start+resp_buf_len]);
+                        let resp_buf_as_slice: &mut [u8] = resp_buf.as_mut_slice();
+                        resp_buf_as_slice[0..resp_buf_len].copy_from_slice(&arr[main_mem_start..main_mem_start+resp_buf_len]);
 
-                        chan.lock().unwrap().send((resp_buf.to_vec(), resp_buf_len)).unwrap();
+                        chan.lock().unwrap().send((resp_buf, resp_buf_len)).unwrap();
                     }
                 },
                 Err(e) => {
