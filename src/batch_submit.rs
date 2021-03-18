@@ -34,7 +34,7 @@ struct BatchResponse {
 }
 
 impl BatchSubmitServer {
-    pub fn start_server(sender: Sender<([u8; 16384], usize)>, receiver: Receiver<([u8; 16384], usize)>, vm_recv_condvar: Arc<Condvar>, num_vms: u32) -> JoinHandle<()> {
+    pub fn start_server(sender: Sender<(Vec<u8>, usize)>, receiver: Receiver<(Vec<u8>, usize)>, vm_recv_condvar: Arc<Condvar>, num_vms: u32) -> JoinHandle<()> {
         let thandle = thread::spawn(move || {
             rouille::start_server("localhost:8000", move |request| {
                 router!(request,
@@ -52,7 +52,7 @@ impl BatchSubmitServer {
                             let inc_req_as_bytes = req.req.as_bytes();
                             test[0..inc_req_as_bytes.len()].clone_from_slice(inc_req_as_bytes);
 
-                            sender.send((test, inc_req_as_bytes.len())).unwrap();
+                            sender.send((test.to_vec(), inc_req_as_bytes.len())).unwrap();
                         }
 
                         dbg!("requests sent out!");

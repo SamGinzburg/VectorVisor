@@ -125,14 +125,14 @@ pub struct VectorizedVM {
     pub enviroment_size: Option<u32>,
     pub environment_str_size: Option<u32>,
     vm_id: u32,
-    pub vm_sender: Arc<Mutex<Sender<([u8; 16384], usize)>>>,
-    pub vm_recv:   Arc<Mutex<Receiver<([u8; 16384], usize)>>>,
+    pub vm_sender: Arc<Mutex<Sender<(Vec<u8>, usize)>>>,
+    pub vm_recv:   Arc<Mutex<Receiver<(Vec<u8>, usize)>>>,
     pub vm_recv_condvar: Arc<Condvar>,
     pub vm_barrier: Arc<Barrier>
 }
 
 impl VectorizedVM {
-    pub fn new(vm_id: u32, num_total_vms: u32, vm_sender: Arc<Mutex<Sender<([u8; 16384], usize)>>>, vm_recv: Arc<Mutex<Receiver<([u8; 16384], usize)>>>, vm_recv_condvar: Arc<Condvar>) -> VectorizedVM {
+    pub fn new(vm_id: u32, num_total_vms: u32, vm_sender: Arc<Mutex<Sender<(Vec<u8>, usize)>>>, vm_recv: Arc<Mutex<Receiver<(Vec<u8>, usize)>>>, vm_recv_condvar: Arc<Condvar>) -> VectorizedVM {
         // default context with no args yet - we can inherit arguments from the CLI if we want
         // or we can pass them in some other config file
 

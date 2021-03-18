@@ -77,7 +77,7 @@ impl Serverless {
             resp_buf[0..resp_buf_len].copy_from_slice(&hcall_buf[4..4+resp_buf_len]);
         }
 
-        (*vm_ctx.vm_sender).lock().unwrap().send((resp_buf, resp_buf_len)).unwrap();
+        (*vm_ctx.vm_sender).lock().unwrap().send((resp_buf.to_vec(), resp_buf_len)).unwrap();
 
         sender.send({
             HyperCallResult::new(0, hypercall.vm_id, WasiSyscalls::ServerlessResponse)

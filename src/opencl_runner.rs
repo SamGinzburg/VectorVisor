@@ -172,8 +172,8 @@ impl OpenCLRunner {
                // needed for the size of the loop/branch data structures
                num_compiled_funcs: u32,
                globals_buffer_size: u32,
-               vm_sender: Arc<Mutex<Sender<([u8; 16384], usize)>>>,
-               vm_recv: Arc<Mutex<Receiver<([u8; 16384], usize)>>>,
+               vm_sender: Arc<Mutex<Sender<(Vec<u8>, usize)>>>,
+               vm_recv: Arc<Mutex<Receiver<(Vec<u8>, usize)>>>,
                vm_recv_condvar: Arc<Condvar>,
                compile_flags: String,
                link_flags: String,
@@ -677,8 +677,8 @@ impl OpenCLRunner {
                          hypercall_buffer_size: u32,
                          ctx: ocl::core::Context,
                          print_return: bool,
-                         vm_sender: Arc<Mutex<Sender<([u8; 16384], usize)>>>,
-                         vm_recv: Arc<Mutex<Receiver<([u8; 16384], usize)>>>,
+                         vm_sender: Arc<Mutex<Sender<(Vec<u8>, usize)>>>,
+                         vm_recv: Arc<Mutex<Receiver<(Vec<u8>, usize)>>>,
                          vm_recv_condvar: Arc<Condvar>) -> VMMRuntimeStatus {
         // we have the compiled program & context, we now can set up the kernels...
         let data_kernel = ocl::core::create_kernel(&program, "data_init").unwrap();
@@ -1065,8 +1065,8 @@ impl OpenCLRunner {
                                     hypercall_buffer_size: u32,
                                     ctx: ocl::core::Context,
                                     print_return: bool,
-                                    vm_sender: Arc<Mutex<Sender<([u8; 16384], usize)>>>,
-                                    vm_recv: Arc<Mutex<Receiver<([u8; 16384], usize)>>>,
+                                    vm_sender: Arc<Mutex<Sender<(Vec<u8>, usize)>>>,
+                                    vm_recv: Arc<Mutex<Receiver<(Vec<u8>, usize)>>>,
                                     vm_recv_condvar: Arc<Condvar>) -> VMMRuntimeStatus {
         let mut kernels: HashMap<u32, ocl::core::Kernel> = HashMap::new();
 

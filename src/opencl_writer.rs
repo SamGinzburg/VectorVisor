@@ -847,6 +847,11 @@ impl<'a> OpenCLCWriter<'_> {
                 stack_sizes.push(2);
                 emit_f64_convert_i32(self, debug)
             },
+            wast::Instruction::F64ConvertI32U => {
+                stack_sizes.pop();
+                stack_sizes.push(2);
+                emit_f64_convert_i32u(self, debug)
+            },
             wast::Instruction::F64ConvertI64U => {
                 stack_sizes.pop();
                 stack_sizes.push(2);
