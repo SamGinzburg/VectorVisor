@@ -332,8 +332,6 @@ pub fn emit_mem_grow(writer: &opencl_writer::OpenCLCWriter, arg: &MemoryArg, deb
     
     ret_str += &format!("\t\t*current_mem_size += temp;\n");
 
-    ret_str += &format!("\tprintf(\"current_mem_size after grow: %d\", *current_mem_size);\n");
-
     ret_str += &format!("\t{}\n",
                         "} else {");
     // the grow failed, push an error onto the stack
