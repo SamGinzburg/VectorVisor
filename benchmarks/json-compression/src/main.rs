@@ -10,7 +10,6 @@ use base64::encode;
 
 
 fn compress_json(event: Value) -> Value {
-    println!("{:?}", event);
     let response = match event.get("text") {
         Some(Value::String(str)) => {
             let compressed_str = str.as_bytes()

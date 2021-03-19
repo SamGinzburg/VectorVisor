@@ -213,6 +213,14 @@ fn main() {
             .multiple(false)
             .number_of_values(1)
             .takes_value(true))
+        .arg(Arg::with_name("hcallsize")
+            .long("hcallsize")
+            .value_name("Size of the hypercall buffer used for serverless inputs & system calls")
+            .default_value("16384") // default val is 16KiB, this value cannot be larger than the size of the heap
+            .help("The size of the hypercall buffer to allocate")
+            .multiple(false)
+            .number_of_values(1)
+            .takes_value(true))
         .get_matches();
 
     dbg!(matches.clone());
@@ -236,6 +244,7 @@ fn main() {
     let partition = value_t!(matches.value_of("partition"), bool).unwrap_or_else(|e| e.exit());
     let wasmtime = value_t!(matches.value_of("wasmtime"), bool).unwrap_or_else(|e| e.exit());
     let serverless = value_t!(matches.value_of("serverless"), bool).unwrap_or_else(|e| e.exit());
+    let hcall_size = value_t!(matches.value_of("hcallsize"), u32).unwrap_or_else(|e| e.exit());
 
     dbg!(compile_args.clone());
 

@@ -41,8 +41,6 @@ impl Serverless {
             hcall_buf[0..msg_len].copy_from_slice(&msg[0..msg_len]);
         }
 
-        dbg!("finished serverless invoke");
-
         // return msg_len
         sender.send({
             HyperCallResult::new(msg_len.try_into().unwrap(), hypercall.vm_id, WasiSyscalls::ServerlessInvoke)
@@ -54,9 +52,6 @@ impl Serverless {
         let mut hcall_buf: &mut [u8] = &mut hypercall.hypercall_buffer.lock().unwrap();
 
         let mut resp_buf = [0u8; 16384];
-
-        dbg!("serverless response");
-
         // the first 4 bytes are the length as a u32, the remainder is the buffer containing the json
         let msg_len = if hypercall.is_interleaved_mem {
             Interleave::read_u32(hcall_buf, 0, hypercall.num_total_vms, hypercall.vm_id)

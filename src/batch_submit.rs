@@ -40,9 +40,6 @@ impl BatchSubmitServer {
                 router!(request,
                     (GET) (/batch_submit/) => {
                         let json: BatchInput = try_or_400!(rouille::input::json_input(request));
-                        println! ("json: {:?}", json);
-                        dbg!(num_vms);
-                        dbg!(json.requests.len());
 
                         for req in &json.requests {
                             // each request has an ID and a string (containing the json body)
@@ -55,18 +52,15 @@ impl BatchSubmitServer {
                             sender.send((test.to_vec(), inc_req_as_bytes.len())).unwrap();
                         }
 
-                        dbg!("requests sent out!");
                         let mut responses: HashMap<u32, String> = HashMap::new();
                         // wait for the requests to complete
                         for _idx in 0..json.requests.len() {
-                            dbg!("receiving!");
                             // each request has an ID and a string (containing the json body)
                             let (resp, len) = receiver.recv().unwrap();
                             // TODO: replace _idx with real req number
                             responses.insert(_idx.try_into().unwrap(), from_utf8(&resp[0..len]).unwrap().to_string());
                         }
 
-                        dbg!("serving response!");
                         rouille::Response::json(&BatchResponse{requests: responses})
                     },
                     _ => rouille::Response::empty_404()
