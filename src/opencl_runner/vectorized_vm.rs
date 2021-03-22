@@ -13,6 +13,7 @@ use crate::opencl_runner::OpenCLBuffers;
 use crate::opencl_runner::WasiFd;
 use crate::opencl_runner::environment::Environment;
 use crate::opencl_runner::serverless::Serverless;
+use crate::opencl_runner::random::Random;
 
 use ocl::core::CommandQueue;
 
@@ -36,6 +37,7 @@ pub enum WasiSyscalls {
     EnvironGet            =  3,
     FdPrestatGet          =  4,
     FdPrestatDirName      =  5,
+    RandomGet             =  6,
     ServerlessInvoke      =  9999,
     ServerlessResponse    =  10000,
     InvalidHyperCallNum   = -1,
@@ -51,6 +53,8 @@ pub struct HyperCall<'a> {
     pub vm_id: u32,
     pub num_total_vms: u32,
     pub sp: u64,
+    pub timestamp_counter: u64,
+    pub queue_submit_delta: u64,
     pub syscall: WasiSyscalls,
     pub is_interleaved_mem: bool,
     pub ocl_buffers: &'a OpenCLBuffers,
@@ -62,6 +66,8 @@ impl<'a> HyperCall<'a> {
     pub fn new(vm_id: u32,
                num_total_vms: u32,
                sp: u64,
+               timestamp_counter: u64,
+               queue_submit_delta: u64,
                syscall: WasiSyscalls,
                is_interleaved_mem: bool,
                ocl_buffers: &'a OpenCLBuffers,
@@ -75,6 +81,8 @@ impl<'a> HyperCall<'a> {
             is_interleaved_mem: is_interleaved_mem,
             ocl_buffers: ocl_buffers,
             hypercall_buffer: hypercall_buffer,
+            timestamp_counter: timestamp_counter,
+            queue_submit_delta: queue_submit_delta,
             queue: queue,
         }
     }
@@ -125,14 +133,14 @@ pub struct VectorizedVM {
     pub enviroment_size: Option<u32>,
     pub environment_str_size: Option<u32>,
     vm_id: u32,
-    pub vm_sender: Arc<Mutex<Sender<(Vec<u8>, usize)>>>,
+    pub timestamp_counter: Arc<u64>,
+    pub queue_submit_counter: Arc<u64>,
+    pub vm_sender: Arc<Mutex<Sender<(Vec<u8>, usize, u64, u64)>>>,
     pub vm_recv:   Arc<Mutex<Receiver<(Vec<u8>, usize)>>>,
-    pub vm_recv_condvar: Arc<Condvar>,
-    pub vm_barrier: Arc<Barrier>
 }
 
 impl VectorizedVM {
-    pub fn new(vm_id: u32, num_total_vms: u32, vm_sender: Arc<Mutex<Sender<(Vec<u8>, usize)>>>, vm_recv: Arc<Mutex<Receiver<(Vec<u8>, usize)>>>, vm_recv_condvar: Arc<Condvar>) -> VectorizedVM {
+    pub fn new(vm_id: u32, num_total_vms: u32, vm_sender: Arc<Mutex<Sender<(Vec<u8>, usize, u64, u64)>>>, vm_recv: Arc<Mutex<Receiver<(Vec<u8>, usize)>>>) -> VectorizedVM {
         // default context with no args yet - we can inherit arguments from the CLI if we want
         // or we can pass them in some other config file
 
@@ -152,8 +160,6 @@ impl VectorizedVM {
         let memory_ty = MemoryType::new(Limits::new(1, None));
         let memory = Memory::new(&store, memory_ty);
 
-        let barrier = Arc::new(Barrier::new(num_total_vms.try_into().unwrap()));
-
         VectorizedVM {
             ctx: wasi_ctx,
             engine: engine,
@@ -167,10 +173,10 @@ impl VectorizedVM {
             enviroment_size: None,
             environment_str_size: None,
             vm_id: vm_id,
+            timestamp_counter: Arc::new(0),
+            queue_submit_counter: Arc::new(0),
             vm_sender: vm_sender,
             vm_recv: vm_recv,
-            vm_recv_condvar: vm_recv_condvar,
-            vm_barrier: barrier
         }
     }
 
@@ -180,7 +186,7 @@ impl VectorizedVM {
      * For non interleaved memory, we must perform concurrent reads on the openCL context
      * using the given buffers.
      */
-    pub fn dispatch_hypercall(&self,
+    pub fn dispatch_hypercall(&mut self,
                               hypercall: &mut HyperCall,
                               sender: &Sender<HyperCallResult>) -> () {
         match hypercall.syscall {
@@ -206,10 +212,13 @@ impl VectorizedVM {
                 WasiFd::hypercall_fd_prestat_dir_name(&self.ctx, self, hypercall, sender);
             },
             WasiSyscalls::ServerlessInvoke => {
-                Serverless::hypercall_serverless_invoke(&self.ctx, self, hypercall, sender);
+                Serverless::hypercall_serverless_invoke(self, hypercall, sender);
             },
             WasiSyscalls::ServerlessResponse => {
                 Serverless::hypercall_serverless_response(&self.ctx, self, hypercall, sender);
+            },
+            WasiSyscalls::RandomGet => {
+                Random::hypercall_random_get(&self.ctx, self, hypercall, sender);
             },
             _ => panic!("Unsupported hypercall invoked! {:?}", hypercall),
         }

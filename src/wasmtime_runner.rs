@@ -13,16 +13,23 @@ use wasi_common::WasiCtx;
 use wasi_cap_std_sync::WasiCtxBuilder;
 use wasmtime_wasi::Wasi;
 
+use chrono::prelude::*;
+
 pub struct WasmtimeRunner {}
 
 impl WasmtimeRunner {
     // this is run once for each thread/VM
     pub fn run(program: String,
-               vm_sender: Arc<Mutex<Sender<(Vec<u8>, usize)>>>,
+               vm_sender: Arc<Mutex<Sender<(Vec<u8>, usize, u64, u64)>>>,
                vm_recv: Arc<Mutex<Receiver<(Vec<u8>, usize)>>>,
                vm_recv_condvar: Arc<Condvar>) -> Result<(), Box<dyn Error>> {
 
+        let curr_time = Arc::new(Mutex::<i64>::new(0));
+
         let store = Store::default();
+
+        let curr_time_invoke = curr_time.clone();
+        let curr_time_response = curr_time.clone();
 
         // serverless_invoke
         let serverless_invoke = Func::wrap(&store, move |caller: Caller<'_>, buf_ptr: u32, buf_len: u32| -> u32 {
@@ -31,13 +38,8 @@ impl WasmtimeRunner {
                 _ => Err(Trap::new("failed to find host memory")),
             };
 
-            println!("test - blocked on input!");
-
             let chan = vm_recv.clone();
             let (msg, msg_len) = chan.lock().unwrap().recv().unwrap();
-
-            //dbg!(msg);
-            dbg!(msg_len);
 
             // copy the input to the VM
             match mem {
@@ -53,6 +55,9 @@ impl WasmtimeRunner {
                     panic!("Unable to find memory for WASM VM");
                 }
             }
+
+            let tsc = curr_time_invoke.clone();
+            *tsc.lock().unwrap() = Utc::now().timestamp_nanos();
 
             msg_len.try_into().unwrap()
         });
@@ -77,7 +82,10 @@ impl WasmtimeRunner {
                         let resp_buf_as_slice: &mut [u8] = resp_buf.as_mut_slice();
                         resp_buf_as_slice[0..resp_buf_len].copy_from_slice(&arr[main_mem_start..main_mem_start+resp_buf_len]);
 
-                        chan.lock().unwrap().send((resp_buf, resp_buf_len)).unwrap();
+                        let tsc = curr_time_response.clone();
+                        let device_execution_time = Utc::now().timestamp_nanos() - *tsc.lock().unwrap();
+
+                        chan.lock().unwrap().send((resp_buf, resp_buf_len, device_execution_time.try_into().unwrap(), 0)).unwrap();
                     }
                 },
                 Err(e) => {

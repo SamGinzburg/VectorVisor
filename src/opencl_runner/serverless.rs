@@ -20,11 +20,12 @@ use byteorder::ByteOrder;
 use crossbeam::channel::Sender;
 
 use std::convert::TryInto;
+use std::sync::Arc;
 
 pub struct Serverless {}
 
 impl Serverless {
-    pub fn hypercall_serverless_invoke(ctx: &WasiCtx, vm_ctx: &VectorizedVM, hypercall: &mut HyperCall, sender: &Sender<HyperCallResult>) -> () {
+    pub fn hypercall_serverless_invoke(vm_ctx: &mut VectorizedVM, hypercall: &mut HyperCall, sender: &Sender<HyperCallResult>) -> () {
         let mut hcall_buf: &mut [u8] = &mut hypercall.hypercall_buffer.lock().unwrap();
 
         // block until we get an incoming request
@@ -40,6 +41,10 @@ impl Serverless {
         } else {
             hcall_buf[0..msg_len].copy_from_slice(&msg[0..msg_len]);
         }
+
+        // store this in the vmctx for when we return
+        *Arc::make_mut(&mut vm_ctx.timestamp_counter) = hypercall.timestamp_counter;
+        *Arc::make_mut(&mut vm_ctx.queue_submit_counter) = hypercall.queue_submit_delta;
 
         // return msg_len
         sender.send({
@@ -59,8 +64,6 @@ impl Serverless {
             LittleEndian::read_u32(&hcall_buf[0..4])
         };
 
-        dbg!(msg_len);
-
         let resp_buf_len: usize = msg_len.try_into().unwrap();
 
         // copy the data from the hcall_buffer
@@ -72,7 +75,11 @@ impl Serverless {
             resp_buf[0..resp_buf_len].copy_from_slice(&hcall_buf[4..4+resp_buf_len]);
         }
 
-        (*vm_ctx.vm_sender).lock().unwrap().send((resp_buf.to_vec(), resp_buf_len)).unwrap();
+        // calculate on device time and queue submit times
+        let on_device_time = hypercall.timestamp_counter - *vm_ctx.timestamp_counter;
+        let queue_submit_time = hypercall.queue_submit_delta - *vm_ctx.queue_submit_counter;
+
+        (*vm_ctx.vm_sender).lock().unwrap().send((resp_buf.to_vec(), resp_buf_len, on_device_time, queue_submit_time)).unwrap();
 
         sender.send({
             HyperCallResult::new(0, hypercall.vm_id, WasiSyscalls::ServerlessResponse)

@@ -398,3 +398,41 @@ pub fn emit_serverless_response_post(writer: &opencl_writer::OpenCLCWriter, debu
 
     ret_str
 }
+
+pub fn emit_random_get_pre(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> String {
+    let mut ret_str = String::from("");
+
+    let random_buf_ptr = emit_read_u32("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx");
+    let random_buf_len = emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx");
+
+    // copy the buf len over so we know how many random bytes to generate
+    ret_str += &format!("\t{};\n", emit_write_u32("(ulong)(hypercall_buffer)", "(ulong)(hypercall_buffer)", &random_buf_len, "warp_idx"));
+
+    // the buf_ptr isn't needed for setup, only for returning
+
+    ret_str
+}
+
+
+pub fn emit_random_get_post(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> String {
+    let mut ret_str = String::from("");
+
+    let random_buf_ptr = emit_read_u32("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx");
+    let random_buf_len = emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx");
+
+    // Copy the random bytes back from the hcall_buf to the heap
+    ret_str += &format!("\t___private_memcpy((ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), warp_idx);\n",
+                        "(ulong)((global char *)hypercall_buffer)", // src
+                        "hypercall_buffer", // mem_start_src
+                        &format!("(global char *)heap_u32+{}", random_buf_ptr), //dst
+                        "heap_u32", // mem_start_dst
+                        &random_buf_len);
+
+    // return the error code associated with random_get
+    ret_str += &format!("\t{};\n", emit_write_u32("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "hcall_ret_val", "warp_idx"));
+
+    ret_str += &format!("\t{}\n",
+                        "*sp -= 1;");
+
+    ret_str
+}

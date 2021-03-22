@@ -213,6 +213,22 @@ fn main() {
             .multiple(false)
             .number_of_values(1)
             .takes_value(true))
+        .arg(Arg::with_name("ip")
+            .long("ip")
+            .value_name("Listen on this IP for incoming requests")
+            .default_value("localhost")
+            .help("Listen on different IPs locally")
+            .multiple(false)
+            .number_of_values(1)
+            .takes_value(true))
+        .arg(Arg::with_name("port")
+            .long("port")
+            .value_name("Listen on this port for incoming requests")
+            .default_value("8000")
+            .help("Listen on different ports locally")
+            .multiple(false)
+            .number_of_values(1)
+            .takes_value(true))
         .arg(Arg::with_name("hcallsize")
             .long("hcallsize")
             .value_name("Size of the hypercall buffer used for serverless inputs & system calls")
@@ -245,6 +261,9 @@ fn main() {
     let wasmtime = value_t!(matches.value_of("wasmtime"), bool).unwrap_or_else(|e| e.exit());
     let serverless = value_t!(matches.value_of("serverless"), bool).unwrap_or_else(|e| e.exit());
     let hcall_size = value_t!(matches.value_of("hcallsize"), u32).unwrap_or_else(|e| e.exit());
+    
+    let batch_submit_ip = value_t!(matches.value_of("ip"), String).unwrap_or_else(|e| e.exit());
+    let batch_submit_port = value_t!(matches.value_of("port"), String).unwrap_or_else(|e| e.exit());
 
     dbg!(compile_args.clone());
 
@@ -294,14 +313,14 @@ fn main() {
     // start an HTTP endpoint for submitting batch jobs/
     // pass in the channels we use to send requests back and forth
     let (server_sender, vm_recv): (Sender<(Vec<u8>, usize)>, Receiver<(Vec<u8>, usize)>) = bounded(num_vms.try_into().unwrap());
-    let (vm_sender, server_recv): (Sender<(Vec<u8>, usize)>, Receiver<(Vec<u8>, usize)>) = bounded(num_vms.try_into().unwrap());
+    let (vm_sender, server_recv): (Sender<(Vec<u8>, usize, u64, u64)>, Receiver<(Vec<u8>, usize, u64, u64)>) = bounded(num_vms.try_into().unwrap());
 
     let vm_recv_condvar = Arc::new(Condvar::new());
     let vm_sender_mutex = Arc::new(Mutex::new(vm_sender));
     let vm_recv_mutex = Arc::new(Mutex::new(vm_recv));
 
     let join_handle = if serverless {
-        Some(BatchSubmitServer::start_server(server_sender, server_recv, vm_recv_condvar.clone(), num_vms))
+        Some(BatchSubmitServer::start_server(server_sender, server_recv, num_vms, batch_submit_ip, batch_submit_port))
     } else {
         None
     };
@@ -484,7 +503,6 @@ fn main() {
                        globals_buffer_size,
                        vm_sender_mutex.clone(),
                        vm_recv_mutex.clone(),
-                       vm_recv_condvar.clone(),
                        compile_args.clone(),
                        link_args.clone(),
                        print_return)

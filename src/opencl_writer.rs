@@ -53,6 +53,7 @@ lazy_static! {
         m.insert("environ_get", true);            // 3
         m.insert("fd_prestat_get", true);         // 4
         m.insert("fd_prestat_dir_name", true);    // 5
+        m.insert("random_get", true);             // 6
         m.insert("serverless_invoke", true);      // 9999
         m.insert("serverless_response", true);    // 10000
         m
@@ -67,6 +68,7 @@ enum WasmHypercallId {
     environ_get           = 3,
     fd_prestat_get        = 4,
     fd_prestat_dir_name   = 5,
+    random_get            = 6,
     serverless_invoke     = 9999,
     serverless_response   = 10000,
 }
@@ -172,6 +174,7 @@ impl<'a> OpenCLCWriter<'_> {
             WasmHypercallId::fd_prestat_dir_name => ret_str += &emit_fd_prestat_dir_name_helper(self, debug),
             WasmHypercallId::serverless_invoke => ret_str += &emit_serverless_invoke_pre(self, debug),
             WasmHypercallId::serverless_response => ret_str += &emit_serverless_response_pre(self, debug),
+            WasmHypercallId::random_get => ret_str += &emit_random_get_pre(self, debug),
             _ => (),
         }
         // insert return (we exit back to the VMM)
@@ -204,6 +207,9 @@ impl<'a> OpenCLCWriter<'_> {
             },
             WasmHypercallId::serverless_response => {
                 ret_str += &emit_serverless_response_post(&self, debug);
+            },
+            WasmHypercallId::random_get => {
+                ret_str += &emit_random_get_post(&self, debug);
             },
             _ => (),
         }
@@ -672,6 +678,7 @@ impl<'a> OpenCLCWriter<'_> {
                                         &"environ_get"            => self.emit_hypercall(WasmHypercallId::environ_get, hypercall_id_count, fn_name.to_string(), debug),
                                         &"fd_prestat_get"         => self.emit_hypercall(WasmHypercallId::fd_prestat_get, hypercall_id_count, fn_name.to_string(), debug),
                                         &"fd_prestat_dir_name"    => self.emit_hypercall(WasmHypercallId::fd_prestat_dir_name, hypercall_id_count, fn_name.to_string(), debug),
+                                        &"random_get"             => self.emit_hypercall(WasmHypercallId::random_get, hypercall_id_count, fn_name.to_string(), debug),
                                         &"serverless_invoke"      => self.emit_hypercall(WasmHypercallId::serverless_invoke, hypercall_id_count, fn_name.to_string(), debug),
                                         &"serverless_response"    => self.emit_hypercall(WasmHypercallId::serverless_response, hypercall_id_count, fn_name.to_string(), debug),
                                         _ => panic!("Unidentified WASI fn name: {:?}", wasi_fn_name),

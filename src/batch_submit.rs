@@ -29,14 +29,21 @@ struct BatchInput {
 }
 
 #[derive(Debug, Serialize)]
+struct BatchReply {
+    response: String,
+    on_device_execution_time_ns: u64,
+    device_queue_overhead_time_ns: u64,
+}
+
+#[derive(Debug, Serialize)]
 struct BatchResponse {
-    requests: HashMap<u32, String>
+    requests: HashMap<u32, BatchReply>
 }
 
 impl BatchSubmitServer {
-    pub fn start_server(sender: Sender<(Vec<u8>, usize)>, receiver: Receiver<(Vec<u8>, usize)>, vm_recv_condvar: Arc<Condvar>, num_vms: u32) -> JoinHandle<()> {
+    pub fn start_server(sender: Sender<(Vec<u8>, usize)>, receiver: Receiver<(Vec<u8>, usize, u64, u64)>, num_vms: u32, server_ip: String, server_port: String) -> JoinHandle<()> {
         let thandle = thread::spawn(move || {
-            rouille::start_server("localhost:8000", move |request| {
+            rouille::start_server(format!("{}:{}", server_ip, server_port), move |request| {
                 router!(request,
                     (GET) (/batch_submit/) => {
                         let json: BatchInput = try_or_400!(rouille::input::json_input(request));
@@ -52,16 +59,23 @@ impl BatchSubmitServer {
                             sender.send((test.to_vec(), inc_req_as_bytes.len())).unwrap();
                         }
 
-                        let mut responses: HashMap<u32, String> = HashMap::new();
+                        let mut responses: HashMap<u32, BatchReply> = HashMap::new();
+
                         // wait for the requests to complete
                         for _idx in 0..json.requests.len() {
                             // each request has an ID and a string (containing the json body)
-                            let (resp, len) = receiver.recv().unwrap();
+                            let (resp, len, on_dev_time, queue_submit_time) = receiver.recv().unwrap();
                             // TODO: replace _idx with real req number
-                            responses.insert(_idx.try_into().unwrap(), from_utf8(&resp[0..len]).unwrap().to_string());
+                            responses.insert(_idx.try_into().unwrap(), BatchReply {
+                                response: from_utf8(&resp[0..len]).unwrap().to_string(),
+                                on_device_execution_time_ns: on_dev_time,
+                                device_queue_overhead_time_ns: queue_submit_time,
+                            });
                         }
 
-                        rouille::Response::json(&BatchResponse{requests: responses})
+                        rouille::Response::json(&BatchResponse{
+                            requests: responses,
+                        })
                     },
                     _ => rouille::Response::empty_404()
                 )

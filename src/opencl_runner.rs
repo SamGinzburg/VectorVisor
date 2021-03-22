@@ -3,6 +3,7 @@ mod wasi_fd;
 mod interleave_offsets;
 mod environment;
 mod serverless;
+mod random;
 
 use wasi_fd::WasiFd;
 use vectorized_vm::VectorizedVM;
@@ -172,9 +173,8 @@ impl OpenCLRunner {
                // needed for the size of the loop/branch data structures
                num_compiled_funcs: u32,
                globals_buffer_size: u32,
-               vm_sender: Arc<Mutex<Sender<(Vec<u8>, usize)>>>,
+               vm_sender: Arc<Mutex<Sender<(Vec<u8>, usize, u64, u64)>>>,
                vm_recv: Arc<Mutex<Receiver<(Vec<u8>, usize)>>>,
-               vm_recv_condvar: Arc<Condvar>,
                compile_flags: String,
                link_flags: String,
                print_return: bool) -> JoinHandle<()> {
@@ -209,10 +209,10 @@ impl OpenCLRunner {
             // decide which vector runner to use based off the compiled program enum...
             let status = match program {
                 ProgramType::Standard(program) => {
-                    final_runner.run_vector_vms(stack_frames_size, program, &leaked_command_queue, hypercall_buffer_read_buffer, 1024*16, context, print_return, vm_sender, vm_recv, vm_recv_condvar)
+                    final_runner.run_vector_vms(stack_frames_size, program, &leaked_command_queue, hypercall_buffer_read_buffer, 1024*16, context, print_return, vm_sender, vm_recv)
                 },
                 ProgramType::Partitioned(program_map) => {
-                    final_runner.run_partitioned_vector_vms(stack_frames_size, program_map, &leaked_command_queue, hypercall_buffer_read_buffer, 1024*16, context, print_return, vm_sender, vm_recv, vm_recv_condvar)
+                    final_runner.run_partitioned_vector_vms(stack_frames_size, program_map, &leaked_command_queue, hypercall_buffer_read_buffer, 1024*16, context, print_return, vm_sender, vm_recv)
                 }
             };
 
@@ -677,9 +677,8 @@ impl OpenCLRunner {
                          hypercall_buffer_size: u32,
                          ctx: ocl::core::Context,
                          print_return: bool,
-                         vm_sender: Arc<Mutex<Sender<(Vec<u8>, usize)>>>,
-                         vm_recv: Arc<Mutex<Receiver<(Vec<u8>, usize)>>>,
-                         vm_recv_condvar: Arc<Condvar>) -> VMMRuntimeStatus {
+                         vm_sender: Arc<Mutex<Sender<(Vec<u8>, usize, u64, u64)>>>,
+                         vm_recv: Arc<Mutex<Receiver<(Vec<u8>, usize)>>>) -> VMMRuntimeStatus {
         // we have the compiled program & context, we now can set up the kernels...
         let data_kernel = ocl::core::create_kernel(&program, "data_init").unwrap();
         let start_kernel = ocl::core::create_kernel(&program, "wasm_entry").unwrap();
@@ -744,7 +743,6 @@ impl OpenCLRunner {
             hypercall_sender.push(sender.clone());
             let vm_sender_clone1 = vm_sender.clone();
             let vm_recv_clone1 = vm_recv.clone();
-            let vm_recv_condvar_clone1 = vm_recv_condvar.clone();
 
             thread_pool.spawn(move || {
                 let receiver = recv.clone();
@@ -754,8 +752,7 @@ impl OpenCLRunner {
                 for vm in 0..(number_vms/num_threads) {
                     let vm_sender_copy = vm_sender_clone1.clone();
                     let vm_recv_copy = vm_recv_clone1.clone();
-                    let vm_recv_condvar_copy = vm_recv_condvar_clone1.clone();
-                    wasi_ctxs.push(VectorizedVM::new(vm, number_vms, vm_sender_copy, vm_recv_copy, vm_recv_condvar_copy));
+                    wasi_ctxs.push(VectorizedVM::new(vm, number_vms, vm_sender_copy, vm_recv_copy));
                 }
 
                 loop {
@@ -770,7 +767,7 @@ impl OpenCLRunner {
                         },
                     };
                     // get the WASI context
-                    let wasi_context = &wasi_ctxs[(incoming_msg.vm_id % (number_vms/num_threads)) as usize];
+                    let wasi_context = &mut wasi_ctxs[(incoming_msg.vm_id % (number_vms/num_threads)) as usize];
 
                     wasi_context.dispatch_hypercall(&mut incoming_msg, &sender_copy.clone());
                 }
@@ -945,6 +942,7 @@ impl OpenCLRunner {
                     3 => WasiSyscalls::EnvironGet,
                     4 => WasiSyscalls::FdPrestatGet,
                     5 => WasiSyscalls::FdPrestatDirName,
+                    6 => WasiSyscalls::RandomGet,
                     9999 => WasiSyscalls::ServerlessInvoke,
                     10000 => WasiSyscalls::ServerlessResponse,
                     _ => WasiSyscalls::InvalidHyperCallNum,
@@ -953,6 +951,8 @@ impl OpenCLRunner {
                     HyperCall::new((*vm_id as u32).clone(),
                                    number_vms,
                                    stack_pointer_temp[*vm_id as usize],
+                                   total_gpu_execution_time,
+                                   queue_submit_delta,
                                    hypercall_id,
                                    self.is_memory_interleaved.clone(),
                                    &buffers,
@@ -1028,8 +1028,8 @@ impl OpenCLRunner {
 
             for vm_idx in 0..self.num_vms {
                 if self.is_memory_interleaved {
-                    let result_i32 = Interleave::read_u32(&mut check_results_debug[640..], 0, self.num_vms, vm_idx);
-                    let result_i64 = Interleave::read_u64(&mut check_results_debug[640..], 0, self.num_vms, vm_idx);
+                    let result_i32 = Interleave::read_u32(&mut check_results_debug[512..], 0, self.num_vms, vm_idx);
+                    let result_i64 = Interleave::read_u64(&mut check_results_debug[512..], 0, self.num_vms, vm_idx);
                     dbg!(result_i32 as i32);
                     dbg!(result_i64 as i64);
                     dbg!(result_i64 as u64);
@@ -1065,9 +1065,8 @@ impl OpenCLRunner {
                                     hypercall_buffer_size: u32,
                                     ctx: ocl::core::Context,
                                     print_return: bool,
-                                    vm_sender: Arc<Mutex<Sender<(Vec<u8>, usize)>>>,
-                                    vm_recv: Arc<Mutex<Receiver<(Vec<u8>, usize)>>>,
-                                    vm_recv_condvar: Arc<Condvar>) -> VMMRuntimeStatus {
+                                    vm_sender: Arc<Mutex<Sender<(Vec<u8>, usize, u64, u64)>>>,
+                                    vm_recv: Arc<Mutex<Receiver<(Vec<u8>, usize)>>>) -> VMMRuntimeStatus {
         let mut kernels: HashMap<u32, ocl::core::Kernel> = HashMap::new();
 
         // setup the data kernel
@@ -1141,7 +1140,6 @@ impl OpenCLRunner {
 
             let vm_sender_clone1 = vm_sender.clone();
             let vm_recv_clone1 = vm_recv.clone();
-            let vm_recv_condvar_clone1 = vm_recv_condvar.clone();
 
             thread_pool.spawn(move || {
                 let receiver = recv.clone();
@@ -1151,8 +1149,7 @@ impl OpenCLRunner {
                 for vm in 0..(number_vms/num_threads) {
                     let vm_sender_copy = vm_sender_clone1.clone();
                     let vm_recv_copy = vm_recv_clone1.clone();
-                    let vm_recv_condvar_copy = vm_recv_condvar_clone1.clone();
-                    wasi_ctxs.push(VectorizedVM::new(vm, number_vms, vm_sender_copy, vm_recv_copy, vm_recv_condvar_copy));
+                    wasi_ctxs.push(VectorizedVM::new(vm, number_vms, vm_sender_copy, vm_recv_copy));
                 }
 
                 loop {
@@ -1167,7 +1164,7 @@ impl OpenCLRunner {
                         },
                     };
                     // get the WASI context
-                    let wasi_context = &wasi_ctxs[(incoming_msg.vm_id % (number_vms/num_threads)) as usize];
+                    let wasi_context = &mut wasi_ctxs[(incoming_msg.vm_id % (number_vms/num_threads)) as usize];
 
                     wasi_context.dispatch_hypercall(&mut incoming_msg, &sender_copy.clone());
                 }
@@ -1436,6 +1433,7 @@ impl OpenCLRunner {
                     3 => WasiSyscalls::EnvironGet,
                     4 => WasiSyscalls::FdPrestatGet,
                     5 => WasiSyscalls::FdPrestatDirName,
+                    6 => WasiSyscalls::RandomGet,
                     9999 => WasiSyscalls::ServerlessInvoke,
                     10000 => WasiSyscalls::ServerlessResponse,
                     _ => WasiSyscalls::InvalidHyperCallNum,
@@ -1444,6 +1442,8 @@ impl OpenCLRunner {
                     HyperCall::new((*vm_id as u32).clone(),
                                    number_vms,
                                    stack_pointer_temp[*vm_id as usize],
+                                   total_gpu_execution_time,
+                                   queue_submit_delta,
                                    hypercall_id,
                                    self.is_memory_interleaved.clone(),
                                    &buffers,
@@ -1524,10 +1524,11 @@ impl OpenCLRunner {
             unsafe {
                 ocl::core::enqueue_read_buffer(&queue, &buffers.stack_buffer, true, 0, &mut check_results_debug, None::<Event>, None::<&mut Event>).unwrap();
             }
+
             for vm_idx in 0..self.num_vms {
                 if self.is_memory_interleaved {
-                    let result_i32 = Interleave::read_u32(&mut check_results_debug[640..], 0, self.num_vms, vm_idx);
-                    let result_i64 = Interleave::read_u64(&mut check_results_debug[640..], 0, self.num_vms, vm_idx);
+                    let result_i32 = Interleave::read_u32(&mut check_results_debug[512..], 0, self.num_vms, vm_idx);
+                    let result_i64 = Interleave::read_u64(&mut check_results_debug[512..], 0, self.num_vms, vm_idx);
                     dbg!(result_i32 as i32);
                     dbg!(result_i64 as i64);
                     dbg!(result_i64 as u64);
