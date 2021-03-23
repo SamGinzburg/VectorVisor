@@ -47,6 +47,8 @@ use byteorder::ByteOrder;
 
 use chrono::{Datelike, Timelike, Utc};
 
+use indicatif::{ProgressBar, ProgressStyle};
+
 pub enum VMMRuntimeStatus {
     StatusOkay,
     StatusUnknownError,
@@ -605,8 +607,12 @@ impl OpenCLRunner {
                     submit_compile_job[counter % submit_compile_job.len() as usize].send((*key, compiled_program)).unwrap();
                     counter += 1;
                 }
+                let pb = ProgressBar::new(map.len().try_into().unwrap());
+                pb.set_style(ProgressStyle::default_bar()
+                    .template("{spinner:.green} [{elapsed_precise}] [{wide_bar.cyan/blue}] (Compiled functions: {pos}) / (Total functions in program {len}) ({eta})")
+                    .progress_chars("#>-"));
 
-                for _idx in 0..map.len() {
+                for idx in 0..map.len() {
                     let (key, compiled_program) = finished_receiver.recv().unwrap();
 
                     // extract the binary and save that as well
@@ -615,13 +621,15 @@ impl OpenCLRunner {
                         ocl::core::types::enums::ProgramInfoResult::Binaries(binary_vec) => binary_vec.get(0).unwrap().clone(),
                         _ => panic!("Incorrect result from get_program_info"),
                     };
+
+                    pb.set_position(idx.try_into().unwrap());
                     final_binarized_hashmap.insert(key, binary);
                     final_hashmap.insert(key, compiled_program);
                 }
 
                 let kernel_compile_end = std::time::Instant::now();
 
-                println!("Time to compile all functions: {:?}", kernel_compile_end-kernel_compile);
+                pb.finish_with_message(&format!("Finished, time to compile all functions: {:?}", kernel_compile_end-kernel_compile));
 
                 let program_to_serialize = PartitionedSeralizedProgram {
                     program_data: final_binarized_hashmap,
@@ -643,6 +651,12 @@ impl OpenCLRunner {
                 // map contains a mapping of u32 (function ID) -> program
                 let binary_start = std::time::Instant::now();
 
+                let pb = ProgressBar::new(map.len().try_into().unwrap());
+                pb.set_style(ProgressStyle::default_bar()
+                    .template("{spinner:.green} [{elapsed_precise}] [{wide_bar.cyan/blue}] (Loaded functions: {pos}) / (Total functions in program {len}) ({eta})")
+                    .progress_chars("#>-"));
+
+                let mut count: u64 = 0;
                 for (id, program_binary) in map.iter() {
                     let program_to_run = match ocl::core::create_program_with_binary(&context, &[device_ids[0]], &[&program_binary]) {
                         Ok(binary) => binary,
@@ -651,12 +665,14 @@ impl OpenCLRunner {
                     ocl::core::build_program(&program_to_run, Some(&[device_ids[0]]), &CString::new(format!("{} -DNUM_THREADS={} -DVMM_STACK_SIZE_BYTES={} -DVMM_HEAP_SIZE_BYTES={}", compile_flags, self.num_vms, stack_size, heap_size)).unwrap(), None, None).unwrap();
                     let knames = ocl::core::get_program_info(&program_to_run, ocl::core::ProgramInfo::KernelNames);
                     println!("Loaded kernels: {}", knames.unwrap());
+                    pb.set_position(count);
+                    count += 1;
                     final_hashmap.insert(*id, program_to_run);
                 }
 
                 let binary_prep_end = std::time::Instant::now();
-                println!("Time to load program from binary: {:?}", binary_prep_end-binary_start);
-                
+                pb.finish_with_message(&format!("Time to load program from binary: {:?}", binary_prep_end-binary_start));
+
                 ProgramType::Partitioned(final_hashmap)
             }
         };
