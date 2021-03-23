@@ -67,11 +67,11 @@ if __name__ == '__main__':
         req_list = []
         for x in range(BATCH_SIZE):
             # generate random string
-            random_str = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(random.randint(15,32)))
+            random_str = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(random.randint(4096*2,4096*4)))
 
             # what we are sending the serverless function
             payload = {
-                "password": random_str,
+                "text": random_str,
             }
 
             # some formatting stuff for the runtime
