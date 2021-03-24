@@ -74,3 +74,26 @@ pub fn emit_f64_convert_i64u(writer: &opencl_writer::OpenCLCWriter, debug: bool)
                            "warp_idx"))
 }
 
+pub fn emit_i32_trunc_f64_u(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> String {
+    let mut ret_str = String::from("");
+    let trunc = &emit_read_u64("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx");
+
+    ret_str += &format!("\t{{\n");
+    ret_str += &format!("\t\t{}\n", "double x;");
+    // read the old f64
+    ret_str += &format!("\t\tulong x_old = {};\n", trunc);
+    ret_str += &format!("\t\t{}\n", "___private_memcpy_nonmmu(&x, &x_old, sizeof(double));");
+
+    ret_str += &format!("\t{};\n",
+        emit_write_u32("(ulong)(stack_u32+*sp-2)",
+                    "(ulong)(stack_u32)",
+                    &format!("x_old"),
+                    "warp_idx"));
+
+    ret_str += &format!("\t{}\n", "*sp -= 1;");
+
+    ret_str += &format!("\t}}\n");
+
+
+    ret_str
+}

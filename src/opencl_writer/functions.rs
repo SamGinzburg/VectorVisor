@@ -169,7 +169,7 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, fn_name: String, idx:
 }
 
 // TODO: this needs to take the function type into account
-pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, fn_name: &str, func_ret_info: &Option<wast::FunctionType>, debug: bool) -> String {
+pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, fn_name: &str, func_ret_info: &Option<wast::FunctionType>, is_start_fn: bool, debug: bool) -> String {
     let mut final_str = String::from("");
     let results: Vec<wast::ValType> = match func_ret_info {
         Some(s) => (*s.results).to_vec(),
@@ -280,17 +280,20 @@ pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, fn_name: &str, fun
         }
     }
 
-    // load the entry point to return to in the control function
-    final_str += &format!("\t*entry_point = {};\n", emit_read_u32("(ulong)(call_return_stack+*sfp)", "(ulong)(call_return_stack)", "warp_idx"));
+    // If we aren't the start function we need to properly unwind
+    if !is_start_fn {
+        // load the entry point to return to in the control function
+        final_str += &format!("\t*entry_point = {};\n", emit_read_u32("(ulong)(call_return_stack+*sfp)", "(ulong)(call_return_stack)", "warp_idx"));
 
-    final_str += &format!("\t{}\n",
-                            // reset the stack pointer to point at the end of the previous frame
-                            &format!("*sp = {};", emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)(stack_frames)", "warp_idx")));
+        final_str += &format!("\t{}\n",
+                                // reset the stack pointer to point at the end of the previous frame
+                                &format!("*sp = {};", emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)(stack_frames)", "warp_idx")));
 
-    // set the is_calling parameter to 0, to indicate that we are unwinding the call stack
-    final_str += &format!("\t{}\n", "*is_calling = 0;");
+        // set the is_calling parameter to 0, to indicate that we are unwinding the call stack
+        final_str += &format!("\t{}\n", "*is_calling = 0;");
 
-    final_str += &format!("\t{}\n", "return;");
+        final_str += &format!("\t{}\n", "return;");
+    }
 
     final_str
 }

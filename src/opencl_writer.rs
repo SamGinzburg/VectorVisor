@@ -160,7 +160,7 @@ impl<'a> OpenCLCWriter<'_> {
         }
     }
 
-    fn emit_hypercall(&self, hypercall_id: WasmHypercallId, hypercall_id_count: &mut u32, fn_name: String, debug: bool) -> String {
+    fn emit_hypercall(&self, hypercall_id: WasmHypercallId, hypercall_id_count: &mut u32, fn_name: String, is_proc_exit_start: bool, debug: bool) -> String {
         let mut ret_str = String::from("");
         // set the hypercall ret flag flag + r
         ret_str += &format!("\t{}\n", format!("*hypercall_number = {};", hypercall_id.clone() as u32));
@@ -181,8 +181,12 @@ impl<'a> OpenCLCWriter<'_> {
         ret_str += &format!("\t{}\n\t{}\n",
                             format!("*hypercall_continuation = {};", hypercall_id_count),
                             "return;");
-        // insert return label, the VMM will return to right after the return
-        ret_str += &format!("{}_hypercall_return_stub_{}:\n", format!("{}{}", "__", fn_name.replace(".", "")), hypercall_id_count);
+
+        // proc_exit in _start is special cased since we add it ourselves
+        if !is_proc_exit_start {
+            // insert return label, the VMM will return to right after the return
+            ret_str += &format!("{}_hypercall_return_stub_{}:\n", format!("{}{}", "__", fn_name.replace(".", "")), hypercall_id_count);
+        }
 
         // after the hypercall, we need to reset values on re-entry, and possible copy data back from the hcall buf
         // skipped hypercall entries here are no-ops
@@ -484,6 +488,12 @@ impl<'a> OpenCLCWriter<'_> {
                 stack_sizes.push(1);
                 emit_f64_lt(self, debug)
             },
+            wast::Instruction::F64Le => {
+                stack_sizes.pop();
+                stack_sizes.pop();
+                stack_sizes.push(1);
+                emit_f64_le(self, debug)
+            },
             wast::Instruction::I64LtU => {
                 stack_sizes.pop();
                 stack_sizes.pop();
@@ -501,6 +511,11 @@ impl<'a> OpenCLCWriter<'_> {
                 stack_sizes.pop();
                 stack_sizes.push(1);
                 emit_f64_eq(self, debug)
+            },
+            wast::Instruction::I32TruncF64U => {
+                stack_sizes.pop();
+                stack_sizes.push(1);
+                emit_i32_trunc_f64_u(self, debug)
             },
             wast::Instruction::I64Ne => {
                 stack_sizes.pop();
@@ -672,15 +687,15 @@ impl<'a> OpenCLCWriter<'_> {
                                 // ignore WASI API scoping for now
                                 (_, Some(true)) => {
                                     match wasi_fn_name {
-                                        &"fd_write"               => self.emit_hypercall(WasmHypercallId::fd_write, hypercall_id_count, fn_name.to_string(), debug),
-                                        &"proc_exit"              => self.emit_hypercall(WasmHypercallId::proc_exit, hypercall_id_count, fn_name.to_string(), debug),
-                                        &"environ_sizes_get"      => self.emit_hypercall(WasmHypercallId::environ_sizes_get, hypercall_id_count, fn_name.to_string(), debug),
-                                        &"environ_get"            => self.emit_hypercall(WasmHypercallId::environ_get, hypercall_id_count, fn_name.to_string(), debug),
-                                        &"fd_prestat_get"         => self.emit_hypercall(WasmHypercallId::fd_prestat_get, hypercall_id_count, fn_name.to_string(), debug),
-                                        &"fd_prestat_dir_name"    => self.emit_hypercall(WasmHypercallId::fd_prestat_dir_name, hypercall_id_count, fn_name.to_string(), debug),
-                                        &"random_get"             => self.emit_hypercall(WasmHypercallId::random_get, hypercall_id_count, fn_name.to_string(), debug),
-                                        &"serverless_invoke"      => self.emit_hypercall(WasmHypercallId::serverless_invoke, hypercall_id_count, fn_name.to_string(), debug),
-                                        &"serverless_response"    => self.emit_hypercall(WasmHypercallId::serverless_response, hypercall_id_count, fn_name.to_string(), debug),
+                                        &"fd_write"               => self.emit_hypercall(WasmHypercallId::fd_write, hypercall_id_count, fn_name.to_string(), false, debug),
+                                        &"proc_exit"              => self.emit_hypercall(WasmHypercallId::proc_exit, hypercall_id_count, fn_name.to_string(), false, debug),
+                                        &"environ_sizes_get"      => self.emit_hypercall(WasmHypercallId::environ_sizes_get, hypercall_id_count, fn_name.to_string(), false, debug),
+                                        &"environ_get"            => self.emit_hypercall(WasmHypercallId::environ_get, hypercall_id_count, fn_name.to_string(), false, debug),
+                                        &"fd_prestat_get"         => self.emit_hypercall(WasmHypercallId::fd_prestat_get, hypercall_id_count, fn_name.to_string(), false, debug),
+                                        &"fd_prestat_dir_name"    => self.emit_hypercall(WasmHypercallId::fd_prestat_dir_name, hypercall_id_count, fn_name.to_string(), false, debug),
+                                        &"random_get"             => self.emit_hypercall(WasmHypercallId::random_get, hypercall_id_count, fn_name.to_string(), false, debug),
+                                        &"serverless_invoke"      => self.emit_hypercall(WasmHypercallId::serverless_invoke, hypercall_id_count, fn_name.to_string(), false, debug),
+                                        &"serverless_response"    => self.emit_hypercall(WasmHypercallId::serverless_response, hypercall_id_count, fn_name.to_string(), false, debug),
                                         _ => panic!("Unidentified WASI fn name: {:?}", wasi_fn_name),
                                     }
                                 },
@@ -933,7 +948,7 @@ impl<'a> OpenCLCWriter<'_> {
             wast::Instruction::Br(idx) => emit_br(self, *idx, fn_name, control_stack, function_id_map, debug),
             wast::Instruction::BrIf(idx) => emit_br_if(self, *idx, fn_name, stack_sizes, control_stack, function_id_map, debug),
             wast::Instruction::BrTable(table_idxs) => emit_br_table(self, table_idxs, fn_name, stack_sizes, control_stack, function_id_map, debug),
-            wast::Instruction::Unreachable => self.emit_hypercall(WasmHypercallId::proc_exit, hypercall_id_count, fn_name.to_string(), debug),
+            wast::Instruction::Unreachable => self.emit_hypercall(WasmHypercallId::proc_exit, hypercall_id_count, fn_name.to_string(), true, debug),
             _ => panic!("Instruction {:?} not yet implemented, in func: {:?}", instr, func.id)
         }
     }
@@ -1112,34 +1127,40 @@ impl<'a> OpenCLCWriter<'_> {
 
                 write!(final_string, "\t{}\n", "if (*hypercall_number == -1) {");
                 write!(final_string, "\t\t{}\n", "*hypercall_number = -2;");
-                write!(final_string, "\t\t{}\n", "switch (*hypercall_continuation) {");
-                for count in 0..*num_hypercalls {
-                    write!(final_string, "\t\t\tcase {}:\n", count);
-                    if debug_call_print {
-                        write!(final_string, "\t\t\t\tprintf(\"goto: {}_hypercall_return_stub_{}\\n\");\n", format!("{}{}", "__", id.name().replace(".", "")), count);
+                if *num_hypercalls > 0 {
+                    write!(final_string, "\t\t{}\n", "switch (*hypercall_continuation) {");
+                    for count in 0..*num_hypercalls {
+                        write!(final_string, "\t\t\tcase {}:\n", count);
+                        if debug_call_print {
+                            write!(final_string, "\t\t\t\tprintf(\"goto: {}_hypercall_return_stub_{}\\n\");\n", format!("{}{}", "__", id.name().replace(".", "")), count);
+                        }
+                        write!(final_string, "\t\t\t\tgoto {}_hypercall_return_stub_{};\n", format!("{}{}", "__", id.name().replace(".", "")), count);
+                        write!(final_string, "\t\t\t\tbreak;\n");
                     }
-                    write!(final_string, "\t\t\t\tgoto {}_hypercall_return_stub_{};\n", format!("{}{}", "__", id.name().replace(".", "")), count);
-                    write!(final_string, "\t\t\t\tbreak;\n");
-                } 
-                write!(final_string, "\t\t}}\n");
+                    write!(final_string, "\t\t}}\n");
+                }
+
                 write!(final_string, "\t}}\n");
 
                 // after checking for hypercalls, check if we are unwinding the call stack
                 // (returning from another function)
 
                 write!(final_string, "\t{}\n", "if (!*is_calling) {");
-                write!(final_string, "\t\t{}\n",
-                    format!("switch ({}) {{", emit_read_u64("(ulong)(call_stack+*sfp)", "(ulong)(call_stack)", "warp_idx")));
-                for count in 0..*num_function_calls {
-                    write!(final_string, "\t\t\tcase {}:\n", count);
-                    write!(final_string, "\t\t\t\t*sfp -= 1;\n");
-                    if debug_call_print {
-                        write!(final_string, "\t\t\t\tprintf(\"goto: {}_call_return_stub_{}\\n\");\n", format!("{}{}", "__", id.name().replace(".", "")), count);
+                if *num_function_calls > 0 {
+                    write!(final_string, "\t\t{}\n",
+                        format!("switch ({}) {{", emit_read_u64("(ulong)(call_stack+*sfp)", "(ulong)(call_stack)", "warp_idx")));
+                    for count in 0..*num_function_calls {
+                        write!(final_string, "\t\t\tcase {}:\n", count);
+                        write!(final_string, "\t\t\t\t*sfp -= 1;\n");
+                        if debug_call_print {
+                            write!(final_string, "\t\t\t\tprintf(\"goto: {}_call_return_stub_{}\\n\");\n", format!("{}{}", "__", id.name().replace(".", "")), count);
+                        }
+                        write!(final_string, "\t\t\t\tgoto {}_call_return_stub_{};\n", format!("{}{}", "__", id.name().replace(".", "")), count);
+                        //write!(final_string, "\t\t\t\tbreak;\n");
                     }
-                    write!(final_string, "\t\t\t\tgoto {}_call_return_stub_{};\n", format!("{}{}", "__", id.name().replace(".", "")), count);
-                    //write!(final_string, "\t\t\t\tbreak;\n");
+                    write!(final_string, "\t\t}}\n");
                 }
-                write!(final_string, "\t\t}}\n");
+
                 write!(final_string, "\t}}\n");
 
                 /*
@@ -1202,12 +1223,14 @@ impl<'a> OpenCLCWriter<'_> {
 
                 // If we are emitting the start function, just emit a proc_exit here
                 if id.name().to_string() == "_start" {
-                    final_string += &self.emit_hypercall(WasmHypercallId::proc_exit, hypercall_id_count, id.name().to_string(), debug);
+                    // emit modified func unwind for _start
+                    final_string += &function_unwind(&self, id.name(), &typeuse.inline, true, debug);
+                    final_string += &self.emit_hypercall(WasmHypercallId::proc_exit, hypercall_id_count, id.name().to_string(), true, debug);
+                } else {
+                    // to unwind from the function we unwind the call stack by moving the stack pointer
+                    // and returning the last value on the stack 
+                    final_string += &function_unwind(&self, id.name(), &typeuse.inline, false, debug);
                 }
-
-                // to unwind from the function we unwind the call stack by moving the stack pointer
-                // and returning the last value on the stack 
-                final_string += &function_unwind(&self, id.name(), &typeuse.inline, debug);
             },
             (_, _, _) => panic!("Inline function must always have a valid identifier in wasm")
         };
@@ -1927,6 +1950,7 @@ r#"
                 Some(name) => {
                     if name.name() == "_start" {
                         // move stack_u32 by the total size of all parameters
+                        /*
                         let mut offset = 0;
                         match function.ty.clone().inline {
                             Some(params) => {
@@ -1946,6 +1970,7 @@ r#"
                             },
                             None => (),
                         }
+                        */
                         write!(output, "\tstack_u32 += {};\n", 128);
                         break;
                     }

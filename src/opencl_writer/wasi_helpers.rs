@@ -30,7 +30,6 @@ pub fn emit_hypercall_helpers(writer: &opencl_writer::OpenCLCWriter, call_name: 
     result
 }
 
-
 /*
  * This emits the helpers that set up fd_write before exiting.
  * 
