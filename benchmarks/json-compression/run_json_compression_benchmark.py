@@ -30,7 +30,7 @@ def send_request_batch(req_list_ip_tuple):
         average_queue_times.append(sum(device_queue_times) / len(device_queue_times))
 
     #print (r.status_code)
-    #print (r.json())
+    print (r.json())
     #print ('Request took: %f seconds' %(t1-t0))
     return (e2e_times, average_on_device_times, average_queue_times)
 
@@ -67,7 +67,7 @@ if __name__ == '__main__':
         req_list = []
         for x in range(BATCH_SIZE):
             # generate random string
-            random_str = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(random.randint(4096*2,4096*4)))
+            random_str = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(random.randint(4096,4096)))
 
             # what we are sending the serverless function
             payload = {

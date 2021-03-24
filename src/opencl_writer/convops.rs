@@ -84,10 +84,13 @@ pub fn emit_i32_trunc_f64_u(writer: &opencl_writer::OpenCLCWriter, debug: bool) 
     ret_str += &format!("\t\tulong x_old = {};\n", trunc);
     ret_str += &format!("\t\t{}\n", "___private_memcpy_nonmmu(&x, &x_old, sizeof(double));");
 
+
+    ret_str += &format!("\t{}\n", format!("printf(\"ulong: %lu\\n\", {});", "x"));
+
     ret_str += &format!("\t{};\n",
         emit_write_u32("(ulong)(stack_u32+*sp-2)",
                     "(ulong)(stack_u32)",
-                    &format!("x_old"),
+                    &format!("x"),
                     "warp_idx"));
 
     ret_str += &format!("\t{}\n", "*sp -= 1;");
