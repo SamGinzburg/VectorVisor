@@ -1111,8 +1111,9 @@ impl<'a> OpenCLCWriter<'_> {
                             }
                         },
                         wast::Instruction::Unreachable => {
-                            *num_hypercalls += 1;
-                        }
+                            // We no longer count unreachable statements as a proc_exit hypercall
+                            // no-op
+                        },
                         wast::Instruction::Loop(_) => {
                             // if we find a loop, we will treat the back-branch of each loop
                             // as a function call, see opencl_writer/control_flow.rs for more details on why we do this
