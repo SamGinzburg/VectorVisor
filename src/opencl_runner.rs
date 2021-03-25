@@ -1305,7 +1305,9 @@ impl OpenCLRunner {
         let mut max_queue_time: u64 = 0;
         let mut min_queue_time: u64 = std::u64::MAX;
         let mut num_queue_submits: u64 = 0;
-        
+       
+        let mut backup_entry_point_temp = 0;
+
         let mut is_first: HashMap<u32, bool> = HashMap::new();
         let mut first_invokes: Vec<u64> = vec![];
         let mut repeat_invokes: Vec<u64> = vec![];
@@ -1401,24 +1403,32 @@ impl OpenCLRunner {
             let mut found = false;
             let mut hcall_idx = 0;
             // for each VM, add to the set of kernels that we need to run next
-            for idx in 0..self.num_vms {
+            for idx in 0..(self.num_vms as usize) {
                 // if we find a VM that isn't blocked on a hypercall
-                if !found && hypercall_num_temp[idx as usize] == -2 {
+                if !found && hypercall_num_temp[idx] == -2 {
                     // set the next function to run to be this targeted function
-                    start_kernel = kernels.get(&entry_point_temp[idx as usize]).unwrap();
-                    curr_func_id = entry_point_temp[idx as usize];
+                    start_kernel = kernels.get(&entry_point_temp[idx]).unwrap();
+                    curr_func_id = entry_point_temp[idx];
                     found = true;
-                    break;
-                } else {
-                    //println!("blocked on hcall!");
-                    // VMs that are set to run a hypercall need to be blocked off so they do not run
-                    // BUT, we need to save all of the kernels
+                    //break;
+                } if hypercall_num_temp[idx] != -2 && entry_point_temp[idx] != ((-1) as i32) as u32 {
+                    /*
+                     * We need to block off all VMs blocked on a hypercall to prevent double
+                     * execution of their functions. We don't need to track the entry point for
+                     * each VM because we guarantee that all VMs will serialize on the same
+                     * hypercall.
+                     */
+                    backup_entry_point_temp = entry_point_temp[idx];
+                    entry_point_temp[idx] = ((-1) as i32) as u32;
                 }
             }
 
             // if we found a VM that needs to run another function, we do that first
             if found {
                 //dbg!("found VM calling func");
+                unsafe {
+                    ocl::core::enqueue_write_buffer(&queue, &buffers.entry, false, 0, &mut entry_point_temp, None::<Event>, None::<&mut Event>).unwrap();
+                }
 
                 let vmm_pre_overhead_end = std::time::Instant::now();
                 vmm_overhead += (vmm_pre_overhead_end - vmm_pre_overhead).as_nanos();
@@ -1426,8 +1436,16 @@ impl OpenCLRunner {
             } else {
                 // if we don't have any VMs to run, reset the next function to run to be that of the hcall
                 // we are returning to and dispatch the calls
-                start_kernel = kernels.get(&entry_point_temp[hcall_idx as usize]).unwrap();
-                curr_func_id = entry_point_temp[hcall_idx as usize];
+                start_kernel = kernels.get(&backup_entry_point_temp).unwrap();
+                curr_func_id = backup_entry_point_temp;
+                
+                for idx in 0..(self.num_vms as usize) {
+                    entry_point_temp[idx] = backup_entry_point_temp;
+                }
+
+                unsafe {
+                    ocl::core::enqueue_write_buffer(&queue, &buffers.entry, false, 0, &mut entry_point_temp, None::<Event>, None::<&mut Event>).unwrap();
+                }
 
                 let vmm_pre_overhead_end = std::time::Instant::now();
                 vmm_overhead += (vmm_pre_overhead_end - vmm_pre_overhead).as_nanos();
