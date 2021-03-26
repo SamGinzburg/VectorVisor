@@ -948,7 +948,14 @@ impl<'a> OpenCLCWriter<'_> {
             wast::Instruction::Br(idx) => emit_br(self, *idx, fn_name, control_stack, function_id_map, debug),
             wast::Instruction::BrIf(idx) => emit_br_if(self, *idx, fn_name, stack_sizes, control_stack, function_id_map, debug),
             wast::Instruction::BrTable(table_idxs) => emit_br_table(self, table_idxs, fn_name, stack_sizes, control_stack, function_id_map, debug),
-            wast::Instruction::Unreachable => self.emit_hypercall(WasmHypercallId::proc_exit, hypercall_id_count, fn_name.to_string(), true, debug),
+            wast::Instruction::Unreachable => {
+                let skip_label = if debug {
+                    false
+                } else {
+                    true
+                };
+                self.emit_hypercall(WasmHypercallId::proc_exit, hypercall_id_count, fn_name.to_string(), skip_label, debug)
+            },
             _ => panic!("Instruction {:?} not yet implemented, in func: {:?}", instr, func.id)
         }
     }
@@ -1111,8 +1118,10 @@ impl<'a> OpenCLCWriter<'_> {
                             }
                         },
                         wast::Instruction::Unreachable => {
-                            // We no longer count unreachable statements as a proc_exit hypercall
-                            // no-op
+                            // the POCL compiler seems to want this, NVIDIA compiler doesn't?
+                            if !is_gpu {
+                                *num_hypercalls += 1;
+                            }
                         },
                         wast::Instruction::Loop(_) => {
                             // if we find a loop, we will treat the back-branch of each loop
