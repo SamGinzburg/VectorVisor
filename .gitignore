@@ -6,6 +6,7 @@ opencl_test_harness/opencl_launcher.dSYM/*
 opencl_test_harness/opencl_launcher
 .DS_Store
 wasm-parser
+wasm2opencl
 wasm-parser.d
 *.c
 wasm-serverless-invoke/target/*
