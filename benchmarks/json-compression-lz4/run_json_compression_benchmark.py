@@ -6,6 +6,7 @@ from multiprocessing import Pool
 import sys
 import random
 import string
+import numpy as np
 
 def send_request_batch(req_list_ip_tuple):
     req_list = req_list_ip_tuple[0]
@@ -13,6 +14,7 @@ def send_request_batch(req_list_ip_tuple):
     num_batches_to_run = req_list_ip_tuple[2]
     # do 100 batches
     e2e_times = []
+    all_device_times = []
     average_on_device_times = []
     average_queue_times = []
     average_queue_submit_count = []
@@ -38,7 +40,8 @@ def send_request_batch(req_list_ip_tuple):
         average_queue_times.append(sum(device_queue_times) / len(device_queue_times))
         average_queue_submit_count.append(sum(queue_submit_count) / len(queue_submit_count))
         average_num_unique_fns_called.append(sum(num_unique_fns_called) / len(num_unique_fns_called))
-
+        all_device_times.extend(on_device_times)
+    return (e2e_times, average_on_device_times, average_queue_times, average_queue_submit_count, average_num_unique_fns_called, all_device_times)
 
 if __name__ == '__main__':
     # batch size
@@ -103,12 +106,14 @@ if __name__ == '__main__':
         queue = vmm[2]
         average_queue_submit_count = vmm[3]
         num_unique_fns_called = vmm[4]
+        total_on_dev_times = vmm[5]
 
         print ("VMM: ", idx)
         print ("Total E2E (s): ", sum(e2e_times))
         print ("Requests Per Second: ", (BATCH_SIZE * NUM_BATCHES_TO_RUN) / sum(e2e_times))
         print ("Average E2E (s): ", sum(e2e_times) / len(e2e_times))
         print ("Average on device time (ns): ", sum(on_device_time) / len(on_device_time))
+        print ("Stddev of device times (ns): ", np.std(total_on_dev_times))
         print ("Average queue submit overhead (ns): ", sum(queue) / len(queue))
         print ("Average # queue submits: ", sum(average_queue_submit_count) / len(average_queue_submit_count))
         print ("Average # num_unique_fns_called: ", sum(num_unique_fns_called) / len(num_unique_fns_called))
