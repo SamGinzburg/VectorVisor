@@ -33,6 +33,8 @@ struct BatchReply {
     response: String,
     on_device_execution_time_ns: u64,
     device_queue_overhead_time_ns: u64,
+    queue_submit_count: u64,
+    num_unique_fns_called: u64,
 }
 
 #[derive(Debug, Serialize)]
@@ -41,7 +43,7 @@ struct BatchResponse {
 }
 
 impl BatchSubmitServer {
-    pub fn start_server(sender: Sender<(Vec<u8>, usize)>, receiver: Receiver<(Vec<u8>, usize, u64, u64)>, num_vms: u32, server_ip: String, server_port: String) -> JoinHandle<()> {
+    pub fn start_server(sender: Sender<(Vec<u8>, usize)>, receiver: Receiver<(Vec<u8>, usize, u64, u64, u64, u64)>, num_vms: u32, server_ip: String, server_port: String) -> JoinHandle<()> {
         let thandle = thread::spawn(move || {
             rouille::start_server(format!("{}:{}", server_ip, server_port), move |request| {
                 router!(request,
@@ -64,12 +66,14 @@ impl BatchSubmitServer {
                         // wait for the requests to complete
                         for _idx in 0..json.requests.len() {
                             // each request has an ID and a string (containing the json body)
-                            let (resp, len, on_dev_time, queue_submit_time) = receiver.recv().unwrap();
+                            let (resp, len, on_dev_time, queue_submit_time, num_queue_submits, num_unique_fns) = receiver.recv().unwrap();
                             // TODO: replace _idx with real req number
                             responses.insert(_idx.try_into().unwrap(), BatchReply {
                                 response: from_utf8(&resp[0..len]).unwrap().to_string(),
                                 on_device_execution_time_ns: on_dev_time,
                                 device_queue_overhead_time_ns: queue_submit_time,
+                                queue_submit_count: num_queue_submits,
+                                num_unique_fns_called: num_unique_fns,
                             });
                         }
 

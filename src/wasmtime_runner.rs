@@ -20,7 +20,7 @@ pub struct WasmtimeRunner {}
 impl WasmtimeRunner {
     // this is run once for each thread/VM
     pub fn run(program: String,
-               vm_sender: Arc<Mutex<Sender<(Vec<u8>, usize, u64, u64)>>>,
+               vm_sender: Arc<Mutex<Sender<(Vec<u8>, usize, u64, u64, u64, u64)>>>,
                vm_recv: Arc<Mutex<Receiver<(Vec<u8>, usize)>>>,
                vm_recv_condvar: Arc<Condvar>) -> Result<(), Box<dyn Error>> {
 
@@ -85,7 +85,7 @@ impl WasmtimeRunner {
                         let tsc = curr_time_response.clone();
                         let device_execution_time = Utc::now().timestamp_nanos() - *tsc.lock().unwrap();
 
-                        chan.lock().unwrap().send((resp_buf, resp_buf_len, device_execution_time.try_into().unwrap(), 0)).unwrap();
+                        chan.lock().unwrap().send((resp_buf, resp_buf_len, device_execution_time.try_into().unwrap(), 0, 0, 0)).unwrap();
                     }
                 },
                 Err(e) => {

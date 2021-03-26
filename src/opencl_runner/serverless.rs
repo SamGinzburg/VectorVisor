@@ -7,14 +7,6 @@ use crate::opencl_runner::vectorized_vm::WasiSyscalls;
 use crate::opencl_runner::interleave_offsets::Interleave;
 use crate::opencl_runner::vectorized_vm::VectorizedVM;
 
-use wasi_common::snapshots::preview_1::types::CiovecArray;
-use wasi_common::snapshots::preview_1::types::Fd;
-use wasi_common::snapshots::preview_1::types::UserErrorConversion;
-
-use wasmtime::*;
-use wasmtime_wiggle::WasmtimeGuestMemory;
-use wiggle::GuestPtr;
-
 use byteorder::LittleEndian;
 use byteorder::ByteOrder;
 use crossbeam::channel::Sender;
@@ -26,10 +18,10 @@ pub struct Serverless {}
 
 impl Serverless {
     pub fn hypercall_serverless_invoke(vm_ctx: &mut VectorizedVM, hypercall: &mut HyperCall, sender: &Sender<HyperCallResult>) -> () {
-        let mut hcall_buf: &mut [u8] = &mut hypercall.hypercall_buffer.lock().unwrap();
+        let hcall_buf: &mut [u8] = &mut hypercall.hypercall_buffer.lock().unwrap();
 
         // block until we get an incoming request
-        let mut recv_chan = (vm_ctx.vm_recv).clone();
+        let recv_chan = (vm_ctx.vm_recv).clone();
 
         let (msg, msg_len) = recv_chan.lock().unwrap().recv().unwrap();
 
@@ -45,6 +37,14 @@ impl Serverless {
         // store this in the vmctx for when we return
         *Arc::make_mut(&mut vm_ctx.timestamp_counter) = hypercall.timestamp_counter;
         *Arc::make_mut(&mut vm_ctx.queue_submit_counter) = hypercall.queue_submit_delta;
+        *Arc::make_mut(&mut vm_ctx.queue_submit_qty) = hypercall.num_queue_submits;
+
+        // only on first invoke do we want to update this
+        if vm_ctx.called_fns_set.len() == 0 {
+            for item in &hypercall.called_fns {
+                Arc::make_mut(&mut vm_ctx.called_fns_set).insert(*item);
+            }
+        }
 
         // return msg_len
         sender.send({
@@ -54,7 +54,7 @@ impl Serverless {
 
 
     pub fn hypercall_serverless_response(ctx: &WasiCtx, vm_ctx: &VectorizedVM, hypercall: &mut HyperCall, sender: &Sender<HyperCallResult>) -> () {
-        let mut hcall_buf: &mut [u8] = &mut hypercall.hypercall_buffer.lock().unwrap();
+        let hcall_buf: &mut [u8] = &mut hypercall.hypercall_buffer.lock().unwrap();
 
         let mut resp_buf = [0u8; 16384];
         // the first 4 bytes are the length as a u32, the remainder is the buffer containing the json
@@ -78,8 +78,15 @@ impl Serverless {
         // calculate on device time and queue submit times
         let on_device_time = hypercall.timestamp_counter - *vm_ctx.timestamp_counter;
         let queue_submit_time = hypercall.queue_submit_delta - *vm_ctx.queue_submit_counter;
+        let queue_submit_count = hypercall.num_queue_submits - *vm_ctx.queue_submit_qty;
 
-        (*vm_ctx.vm_sender).lock().unwrap().send((resp_buf.to_vec(), resp_buf_len, on_device_time, queue_submit_time)).unwrap();
+        // compute set difference for the called fns
+        let mut count = 0;
+        for _idx in vm_ctx.called_fns_set.intersection(&hypercall.called_fns) {
+            count += 1;
+        }
+
+        (*vm_ctx.vm_sender).lock().unwrap().send((resp_buf.to_vec(), resp_buf_len, on_device_time, queue_submit_time, queue_submit_count, count)).unwrap();
 
         sender.send({
             HyperCallResult::new(0, hypercall.vm_id, WasiSyscalls::ServerlessResponse)

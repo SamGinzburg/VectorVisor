@@ -313,7 +313,7 @@ fn main() {
     // start an HTTP endpoint for submitting batch jobs/
     // pass in the channels we use to send requests back and forth
     let (server_sender, vm_recv): (Sender<(Vec<u8>, usize)>, Receiver<(Vec<u8>, usize)>) = bounded(num_vms.try_into().unwrap());
-    let (vm_sender, server_recv): (Sender<(Vec<u8>, usize, u64, u64)>, Receiver<(Vec<u8>, usize, u64, u64)>) = bounded(num_vms.try_into().unwrap());
+    let (vm_sender, server_recv): (Sender<(Vec<u8>, usize, u64, u64, u64, u64)>, Receiver<(Vec<u8>, usize, u64, u64, u64, u64)>) = bounded(num_vms.try_into().unwrap());
 
     let vm_recv_condvar = Arc::new(Condvar::new());
     let vm_sender_mutex = Arc::new(Mutex::new(vm_sender));

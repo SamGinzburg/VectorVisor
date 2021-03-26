@@ -35,7 +35,7 @@ use std::fs::File;
 use std::io::Write;
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::sync::Condvar;
+use std::collections::BTreeSet;
 
 use std::convert::TryInto;
 use std::thread::JoinHandle;
@@ -45,7 +45,7 @@ use bincode;
 use byteorder::LittleEndian;
 use byteorder::ByteOrder;
 
-use chrono::{Datelike, Timelike, Utc};
+use chrono::{Utc};
 
 use indicatif::{ProgressBar, ProgressStyle};
 
@@ -175,7 +175,7 @@ impl OpenCLRunner {
                // needed for the size of the loop/branch data structures
                num_compiled_funcs: u32,
                globals_buffer_size: u32,
-               vm_sender: Arc<Mutex<Sender<(Vec<u8>, usize, u64, u64)>>>,
+               vm_sender: Arc<Mutex<Sender<(Vec<u8>, usize, u64, u64, u64, u64)>>>,
                vm_recv: Arc<Mutex<Receiver<(Vec<u8>, usize)>>>,
                compile_flags: String,
                link_flags: String,
@@ -693,7 +693,7 @@ impl OpenCLRunner {
                          hypercall_buffer_size: u32,
                          ctx: ocl::core::Context,
                          print_return: bool,
-                         vm_sender: Arc<Mutex<Sender<(Vec<u8>, usize, u64, u64)>>>,
+                         vm_sender: Arc<Mutex<Sender<(Vec<u8>, usize, u64, u64, u64, u64)>>>,
                          vm_recv: Arc<Mutex<Receiver<(Vec<u8>, usize)>>>) -> VMMRuntimeStatus {
         // we have the compiled program & context, we now can set up the kernels...
         let data_kernel = ocl::core::create_kernel(&program, "data_init").unwrap();
@@ -891,6 +891,10 @@ impl OpenCLRunner {
         ocl::core::set_kernel_arg(&start_kernel, 18, ArgVal::mem(&buffers.entry)).unwrap();
         ocl::core::set_kernel_arg(&start_kernel, 19, ArgVal::mem(&hcall_retval_buffer)).unwrap();
 
+        // this isn't used here at all, just needed for constructing hypercalls
+        // for tracking profiling information
+        let mut called_funcs = BTreeSet::new();
+
         // now the data in the program has been initialized, we can run the main loop
         println!("start: {}", Utc::now().timestamp());
         loop {
@@ -969,6 +973,8 @@ impl OpenCLRunner {
                                    stack_pointer_temp[*vm_id as usize],
                                    total_gpu_execution_time,
                                    queue_submit_delta,
+                                   0,
+                                   called_funcs.clone(),
                                    hypercall_id,
                                    self.is_memory_interleaved.clone(),
                                    &buffers,
@@ -1081,7 +1087,7 @@ impl OpenCLRunner {
                                     hypercall_buffer_size: u32,
                                     ctx: ocl::core::Context,
                                     print_return: bool,
-                                    vm_sender: Arc<Mutex<Sender<(Vec<u8>, usize, u64, u64)>>>,
+                                    vm_sender: Arc<Mutex<Sender<(Vec<u8>, usize, u64, u64, u64, u64)>>>,
                                     vm_recv: Arc<Mutex<Receiver<(Vec<u8>, usize)>>>) -> VMMRuntimeStatus {
         let mut kernels: HashMap<u32, ocl::core::Kernel> = HashMap::new();
 
@@ -1308,11 +1314,14 @@ impl OpenCLRunner {
        
         let mut backup_entry_point_temp = 0;
 
+        let mut called_funcs = BTreeSet::new();
+
         let mut is_first: HashMap<u32, bool> = HashMap::new();
         let mut first_invokes: Vec<u64> = vec![];
         let mut repeat_invokes: Vec<u64> = vec![];
         let mut curr_func_id = self.entry_point;
         is_first.insert(curr_func_id, true);
+        called_funcs.insert(curr_func_id);
 
         let end_data_init_setup = std::time::Instant::now();
         vmm_overhead += (end_data_init_setup - data_init_setup).as_nanos();
@@ -1337,11 +1346,11 @@ impl OpenCLRunner {
 
             total_gpu_execution_time += end_start_kernel-start_start_kernel;
 
-            if (start_start_kernel-queue_start_kernel > max_queue_time) {
+            if start_start_kernel-queue_start_kernel > max_queue_time {
                 max_queue_time = start_start_kernel-queue_start_kernel;
             }
 
-            if (start_start_kernel-queue_start_kernel < min_queue_time) {
+            if start_start_kernel-queue_start_kernel < min_queue_time {
                 min_queue_time = start_start_kernel-queue_start_kernel;
             }
 
@@ -1401,7 +1410,6 @@ impl OpenCLRunner {
              */
 
             let mut found = false;
-            let mut hcall_idx = 0;
             // for each VM, add to the set of kernels that we need to run next
             for idx in 0..(self.num_vms as usize) {
                 // if we find a VM that isn't blocked on a hypercall
@@ -1410,7 +1418,6 @@ impl OpenCLRunner {
                     start_kernel = kernels.get(&entry_point_temp[idx]).unwrap();
                     curr_func_id = entry_point_temp[idx];
                     found = true;
-                    //break;
                 } if hypercall_num_temp[idx] != -2 && entry_point_temp[idx] != ((-1) as i32) as u32 {
                     /*
                      * We need to block off all VMs blocked on a hypercall to prevent double
@@ -1425,10 +1432,11 @@ impl OpenCLRunner {
 
             // if we found a VM that needs to run another function, we do that first
             if found {
-                //dbg!("found VM calling func");
                 unsafe {
                     ocl::core::enqueue_write_buffer(&queue, &buffers.entry, false, 0, &mut entry_point_temp, None::<Event>, None::<&mut Event>).unwrap();
                 }
+
+                called_funcs.insert(curr_func_id);
 
                 let vmm_pre_overhead_end = std::time::Instant::now();
                 vmm_overhead += (vmm_pre_overhead_end - vmm_pre_overhead).as_nanos();
@@ -1438,7 +1446,8 @@ impl OpenCLRunner {
                 // we are returning to and dispatch the calls
                 start_kernel = kernels.get(&backup_entry_point_temp).unwrap();
                 curr_func_id = backup_entry_point_temp;
-                
+                called_funcs.insert(curr_func_id);
+
                 for idx in 0..(self.num_vms as usize) {
                     entry_point_temp[idx] = backup_entry_point_temp;
                 }
@@ -1478,6 +1487,8 @@ impl OpenCLRunner {
                                    stack_pointer_temp[*vm_id as usize],
                                    total_gpu_execution_time,
                                    queue_submit_delta,
+                                   num_queue_submits,
+                                   called_funcs.clone(),
                                    hypercall_id,
                                    self.is_memory_interleaved.clone(),
                                    &buffers,

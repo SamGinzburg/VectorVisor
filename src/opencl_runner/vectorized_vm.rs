@@ -22,8 +22,8 @@ use crossbeam::channel::Receiver;
 
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::sync::Condvar;
-use std::sync::Barrier;
+use std::collections::BTreeSet;
+
 
 use std::convert::TryInto;
 use std::fs::File;
@@ -55,6 +55,8 @@ pub struct HyperCall<'a> {
     pub sp: u64,
     pub timestamp_counter: u64,
     pub queue_submit_delta: u64,
+    pub num_queue_submits: u64,
+    pub called_fns: BTreeSet<u32>,
     pub syscall: WasiSyscalls,
     pub is_interleaved_mem: bool,
     pub ocl_buffers: &'a OpenCLBuffers,
@@ -68,6 +70,8 @@ impl<'a> HyperCall<'a> {
                sp: u64,
                timestamp_counter: u64,
                queue_submit_delta: u64,
+               num_queue_submits: u64,
+               called_funcs: BTreeSet<u32>,
                syscall: WasiSyscalls,
                is_interleaved_mem: bool,
                ocl_buffers: &'a OpenCLBuffers,
@@ -83,6 +87,8 @@ impl<'a> HyperCall<'a> {
             hypercall_buffer: hypercall_buffer,
             timestamp_counter: timestamp_counter,
             queue_submit_delta: queue_submit_delta,
+            num_queue_submits: num_queue_submits,
+            called_fns: called_funcs,
             queue: queue,
         }
     }
@@ -135,12 +141,14 @@ pub struct VectorizedVM {
     vm_id: u32,
     pub timestamp_counter: Arc<u64>,
     pub queue_submit_counter: Arc<u64>,
-    pub vm_sender: Arc<Mutex<Sender<(Vec<u8>, usize, u64, u64)>>>,
+    pub queue_submit_qty: Arc<u64>,
+    pub called_fns_set: Arc<BTreeSet<u32>>,
+    pub vm_sender: Arc<Mutex<Sender<(Vec<u8>, usize, u64, u64, u64, u64)>>>,
     pub vm_recv:   Arc<Mutex<Receiver<(Vec<u8>, usize)>>>,
 }
 
 impl VectorizedVM {
-    pub fn new(vm_id: u32, num_total_vms: u32, vm_sender: Arc<Mutex<Sender<(Vec<u8>, usize, u64, u64)>>>, vm_recv: Arc<Mutex<Receiver<(Vec<u8>, usize)>>>) -> VectorizedVM {
+    pub fn new(vm_id: u32, num_total_vms: u32, vm_sender: Arc<Mutex<Sender<(Vec<u8>, usize, u64, u64, u64, u64)>>>, vm_recv: Arc<Mutex<Receiver<(Vec<u8>, usize)>>>) -> VectorizedVM {
         // default context with no args yet - we can inherit arguments from the CLI if we want
         // or we can pass them in some other config file
 
@@ -175,6 +183,8 @@ impl VectorizedVM {
             vm_id: vm_id,
             timestamp_counter: Arc::new(0),
             queue_submit_counter: Arc::new(0),
+            queue_submit_qty: Arc::new(0),
+            called_fns_set: Arc::new(BTreeSet::new()),
             vm_sender: vm_sender,
             vm_recv: vm_recv,
         }
