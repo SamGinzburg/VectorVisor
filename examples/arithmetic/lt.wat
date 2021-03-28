@@ -1,4 +1,5 @@
 (module
+  (type $t1 (func (param i32 i32) (result i32)))
 
   (func $_lt (param $p0 i32) (param $p1 i32) (result i32)
     (local.get $p0)
@@ -6,15 +7,15 @@
     (i32.lt_s)
   )
 
-  (func $_main (param $p0 i32) (result i32)
-    (local $l2 i64)
-    
+  (func $_start (result i32)
+    (local $l2 i32)
+    (i32.const 1)
     (i32.const 5)
     (call $_lt)
     (local.set $l2)
-    (i32.const 100)
+    (i32.const 0)
     (local.get $l2)
     (call $_lt)
   )
-  (export "main" (func $_main))
+  (export "_start" (func $_start))
 )

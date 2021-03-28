@@ -11,6 +11,7 @@ mod testops;
 mod convops;
 mod parametric;
 mod unops;
+mod vstack;
 
 use relops::*;
 use mem_interleave::*;
@@ -25,6 +26,7 @@ use testops::*;
 use convops::*;
 use parametric::*;
 use unops::*;
+use vstack::*;
 
 use wast::Wat;
 use wast::parser::{self, ParseBuffer};
@@ -988,24 +990,6 @@ impl<'a> OpenCLCWriter<'_> {
                 panic!("InlineImport functions not yet implemented");
             },
             (wast::FuncKind::Inline{locals, expression}, Some(id), typeuse) => {
-                /*
-                 * __wasm_call_ctors is added by the wasm-linker:
-                 * see: https://github.com/emscripten-core/emscripten/issues/10742#issuecomment-602068989
-                 * and also see: https://iandouglasscott.com/2019/07/18/experimenting-with-webassembly-dynamic-linking-with-clang/
-                 * This function is called externally from JS to perform dynamic linking of WASM modules
-                 * It internally calls "__wasm_apply_relocs", which relocates imports specified within the module so
-                 * that they can be called.
-                 * 
-                 * 
-                 *  We have a more complex situation, since we can't actually modify the GPU kernel after it is created,
-                 *  So instead we have to statically link the functions.
-                 */
-                /*
-                if id.name() == "__wasm_call_ctors" {
-                    return "".to_string()
-                }
-                */
-
                 let mut offset = 0;
                 let mut param_idx: u32 = 0;
                 // get offsets for parameters, we record offsets from the start of the stack frame
@@ -1053,6 +1037,14 @@ impl<'a> OpenCLCWriter<'_> {
                     offset += self.get_size_valtype(&local.ty);
                     param_idx += 1;
                 }
+
+                // Now that we have the type info for the parameters and locals, we can generate the stack context
+
+                // First, generate the stack context for the function
+                let stack_ctx = StackCtx::initialize_context(&self, &expression.instrs, &local_type_info);
+
+                // emit the necessary intermediate values
+                final_string += &stack_ctx.emit_intermediates();
 
                 // function entry point
                 // strip illegal chars from function name
