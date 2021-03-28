@@ -1,5 +1,5 @@
- use crate::opencl_writer;
- 
+use crate::opencl_writer;
+
 /*
  * All reads and writes are abstracted through these calls
  * We want to support no interleave, as well as 1 byte, 4 byte, and 8 byte interleaves

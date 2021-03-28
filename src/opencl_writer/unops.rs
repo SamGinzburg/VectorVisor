@@ -3,9 +3,11 @@ use crate::opencl_writer::mem_interleave::emit_read_u32;
 use crate::opencl_writer::mem_interleave::emit_write_u32;
 use crate::opencl_writer::mem_interleave::emit_read_u64;
 use crate::opencl_writer::mem_interleave::emit_write_u64;
+use crate::opencl_writer::StackCtx;
+use crate::opencl_writer::StackType;
 
 // binops have both values popped off the stack
-pub fn emit_i32_clz(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> String {
+pub fn emit_i32_clz(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, debug: bool) -> String {
     let read_val = format!("clz({})", emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx"));
 
     let mut ret_str = String::from("");
@@ -19,7 +21,7 @@ pub fn emit_i32_clz(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> Strin
     ret_str
 }
 
-pub fn emit_i64_clz(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> String {
+pub fn emit_i64_clz(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, debug: bool) -> String {
     let read_val = format!("clz({})", emit_read_u64("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx"));
     let mut ret_str = String::from("");
 
@@ -32,7 +34,7 @@ pub fn emit_i64_clz(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> Strin
     ret_str
 }
 
-pub fn emit_i32_ctz(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> String {
+pub fn emit_i32_ctz(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, debug: bool) -> String {
     let read_val = format!("31-clz({}&-{})",
                 emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx"),
                 emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx"));
@@ -48,7 +50,7 @@ pub fn emit_i32_ctz(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> Strin
     ret_str
 }
 
-pub fn emit_i64_ctz(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> String {
+pub fn emit_i64_ctz(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, debug: bool) -> String {
     let read_val = format!("63-clz({}&-{})",
                 emit_read_u64("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx"),
                 emit_read_u64("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx"));
@@ -63,7 +65,7 @@ pub fn emit_i64_ctz(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> Strin
     ret_str
 }
 
-pub fn emit_i32_popcnt(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> String {
+pub fn emit_i32_popcnt(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, debug: bool) -> String {
     let read_val = format!("popcount({})",
                 emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx"));
     let mut ret_str = String::from("");
@@ -77,7 +79,7 @@ pub fn emit_i32_popcnt(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> St
     ret_str
 }
 
-pub fn emit_f64_neg(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> String {
+pub fn emit_f64_neg(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, debug: bool) -> String {
     let mut ret_str = String::from("");
 
     ret_str += &format!("\t{{\n");

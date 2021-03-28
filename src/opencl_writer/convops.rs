@@ -3,14 +3,15 @@ use crate::opencl_writer::mem_interleave::emit_read_u32;
 use crate::opencl_writer::mem_interleave::emit_write_u32;
 use crate::opencl_writer::mem_interleave::emit_read_u64;
 use crate::opencl_writer::mem_interleave::emit_write_u64;
-
+use crate::opencl_writer::StackCtx;
+use crate::opencl_writer::StackType;
 
 /*
  * This file contains conversion operators
  */
 
 
-pub fn emit_i32_wrap_i64(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> String {
+pub fn emit_i32_wrap_i64(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, debug: bool) -> String {
     let wrap = emit_read_u64("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx");
     format!("\t{};\n\t{}\n",
             emit_write_u32("(ulong)(stack_u32+*sp-2)",
@@ -21,7 +22,7 @@ pub fn emit_i32_wrap_i64(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> 
 }
 
 
-pub fn emit_i64_extend_i32_s(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> String {
+pub fn emit_i64_extend_i32_s(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, debug: bool) -> String {
     let extend = emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx");
     format!("\t{};\n\t{}\n",
             emit_write_u64("(ulong)(stack_u32+*sp-1)",
@@ -32,7 +33,7 @@ pub fn emit_i64_extend_i32_s(writer: &opencl_writer::OpenCLCWriter, debug: bool)
             "*sp += 1;")
 }
 
-pub fn emit_i64_extend_i32_u(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> String {
+pub fn emit_i64_extend_i32_u(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, debug: bool) -> String {
     let extend = emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx");
     format!("\t{};\n\t{}\n",
             emit_write_u64("(ulong)(stack_u32+*sp-1)",
@@ -43,7 +44,7 @@ pub fn emit_i64_extend_i32_u(writer: &opencl_writer::OpenCLCWriter, debug: bool)
             "*sp += 1;")
 }
 
-pub fn emit_f64_convert_i32(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> String {
+pub fn emit_f64_convert_i32(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, debug: bool) -> String {
     let extend = emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx");
     format!("\t{};\n\t{}\n",
             emit_write_u64("(ulong)(stack_u32+*sp-1)",
@@ -54,7 +55,7 @@ pub fn emit_f64_convert_i32(writer: &opencl_writer::OpenCLCWriter, debug: bool) 
             "*sp += 1;")
 }
 
-pub fn emit_f64_convert_i32u(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> String {
+pub fn emit_f64_convert_i32u(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, debug: bool) -> String {
     let extend = emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx");
     format!("\t{};\n\t{}\n",
             emit_write_u64("(ulong)(stack_u32+*sp-1)",
@@ -65,7 +66,7 @@ pub fn emit_f64_convert_i32u(writer: &opencl_writer::OpenCLCWriter, debug: bool)
             "*sp += 1;")
 }
 
-pub fn emit_f64_convert_i64u(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> String {
+pub fn emit_f64_convert_i64u(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, debug: bool) -> String {
     let extend = emit_read_u64("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx");
     format!("\t{};\n",
             emit_write_u64("(ulong)(stack_u32+*sp-2)",
@@ -74,7 +75,7 @@ pub fn emit_f64_convert_i64u(writer: &opencl_writer::OpenCLCWriter, debug: bool)
                            "warp_idx"))
 }
 
-pub fn emit_i32_trunc_f64_u(writer: &opencl_writer::OpenCLCWriter, debug: bool) -> String {
+pub fn emit_i32_trunc_f64_u(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, debug: bool) -> String {
     let mut ret_str = String::from("");
     let trunc = &emit_read_u64("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx");
 

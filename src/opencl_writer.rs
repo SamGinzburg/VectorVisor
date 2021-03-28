@@ -230,6 +230,8 @@ impl<'a> OpenCLCWriter<'_> {
                          instr: &wast::Instruction,
                          // sizes of current stack items
                          stack_sizes: &mut Vec<u32>,
+                         // the stack context (needed for stack allocs)
+                         stack_ctx: &mut StackCtx,
                          // the offset of parameters on the current callstack
                          parameter_offset: i32,
                          // map of local/parameter IDs to offset from stack frame start
@@ -269,158 +271,158 @@ impl<'a> OpenCLCWriter<'_> {
             wast::Instruction::I32Store(memarg) => {
                 stack_sizes.pop();
                 stack_sizes.pop();
-                emit_memstore_i32(self, memarg, debug)
+                emit_memstore_i32(self, stack_ctx, memarg, debug)
             },
             wast::Instruction::I32Store8(memarg) => {
                 stack_sizes.pop();
                 stack_sizes.pop();
-                emit_memstore8_i32(self, memarg, debug)
+                emit_memstore8_i32(self, stack_ctx, memarg, debug)
             },
             wast::Instruction::I64Store8(memarg) => {
                 stack_sizes.pop();
                 stack_sizes.pop();
-                emit_memstore8_i64(self, memarg, debug)
+                emit_memstore8_i64(self, stack_ctx, memarg, debug)
             },
             wast::Instruction::I64Store16(memarg) => {
                 stack_sizes.pop();
                 stack_sizes.pop();
-                emit_memstore16_i64(self, memarg, debug)
+                emit_memstore16_i64(self, stack_ctx, memarg, debug)
             },
             wast::Instruction::I32Store16(memarg) => {
                 stack_sizes.pop();
                 stack_sizes.pop();
-                emit_memstore16_i32(self, memarg, debug)
+                emit_memstore16_i32(self, stack_ctx, memarg, debug)
             },
             wast::Instruction::I64Store32(memarg) => {
                 stack_sizes.pop();
                 stack_sizes.pop();
-                emit_memstore32_i64(self, memarg, debug)
+                emit_memstore32_i64(self, stack_ctx, memarg, debug)
             },
             wast::Instruction::I32Load(memarg) => {
                 stack_sizes.pop();
                 stack_sizes.push(1);
-                emit_memload_i32(self, memarg, debug)
+                emit_memload_i32(self, stack_ctx, memarg, debug)
             },
             wast::Instruction::I32Load8u(memarg) => {
                 stack_sizes.pop();
                 stack_sizes.push(1);
-                emit_memload_i32_8u(self, memarg, debug)
+                emit_memload_i32_8u(self, stack_ctx, memarg, debug)
             },
             wast::Instruction::I64Load16u(memarg) => {
                 stack_sizes.pop();
                 stack_sizes.push(2);
-                emit_memload_i64_16u(self, memarg, debug)
+                emit_memload_i64_16u(self, stack_ctx, memarg, debug)
             },
             wast::Instruction::I32Load16u(memarg) => {
                 stack_sizes.pop();
                 stack_sizes.push(1);
-                emit_memload_i32_16u(self, memarg, debug)
+                emit_memload_i32_16u(self, stack_ctx, memarg, debug)
             },
             wast::Instruction::I32Load16s(memarg) => {
                 stack_sizes.pop();
                 stack_sizes.push(1);
-                emit_memload_i32_16s(self, memarg, debug)
+                emit_memload_i32_16s(self, stack_ctx, memarg, debug)
             },
             wast::Instruction::I32Load8s(memarg) => {
                 stack_sizes.pop();
                 stack_sizes.push(1);
-                emit_memload_i32_8s(self, memarg, debug)
+                emit_memload_i32_8s(self, stack_ctx, memarg, debug)
             },
             wast::Instruction::I64Load8u(memarg) => {
                 stack_sizes.pop();
                 stack_sizes.push(2);
-                emit_memload_i64_8u(self, memarg, debug)
+                emit_memload_i64_8u(self, stack_ctx, memarg, debug)
             },
             wast::Instruction::I64Load32u(memarg) => {
                 stack_sizes.pop();
                 stack_sizes.push(2);
-                emit_memload_i64_32u(self, memarg, debug)
+                emit_memload_i64_32u(self, stack_ctx, memarg, debug)
             },
             wast::Instruction::I64Load(memarg) => {
                 stack_sizes.pop();
                 stack_sizes.push(2);
-                emit_memload_i64(self, memarg, debug)
+                emit_memload_i64(self, stack_ctx, memarg, debug)
             },
             wast::Instruction::F64Load(memarg) => {
                 stack_sizes.pop();
                 stack_sizes.push(2);
                 // we can reuse the i64 load code
-                emit_memload_i64(self, memarg, debug)
+                emit_memload_i64(self, stack_ctx, memarg, debug)
             },
             wast::Instruction::I64Store(memarg) => {
                 stack_sizes.pop();
                 stack_sizes.pop();
-                emit_memstore_i64(self, memarg, debug)
+                emit_memstore_i64(self, stack_ctx, memarg, debug)
             },
             wast::Instruction::F64Store(memarg) => {
                 stack_sizes.pop();
                 stack_sizes.pop();
                 // we can reuse the i64 code for f64
-                emit_memstore_i64(self, memarg, debug)
+                emit_memstore_i64(self, stack_ctx, memarg, debug)
             },
             wast::Instruction::GlobalGet(idx) => {
                 match idx {
                     wast::Index::Id(id) => {
-                        emit_global_get(self, id.name(), global_mappings, stack_sizes, debug)
+                        emit_global_get(self, stack_ctx, id.name(), global_mappings, stack_sizes, debug)
                     },
                     wast::Index::Num(value, _) => {
-                        emit_global_get(self, &format!("g{}", value), global_mappings, stack_sizes, debug)
+                        emit_global_get(self, stack_ctx, &format!("g{}", value), global_mappings, stack_sizes, debug)
                     },
                 }
             },
             wast::Instruction::GlobalSet(idx) => {
                 match idx {
                     wast::Index::Id(id) => {
-                        emit_global_set(self, id.name(), global_mappings, stack_sizes, debug)
+                        emit_global_set(self, stack_ctx, id.name(), global_mappings, stack_sizes, debug)
                     },
                     wast::Index::Num(value, _) => {
-                        emit_global_set(self, &format!("g{}", value), global_mappings, stack_sizes, debug)
+                        emit_global_set(self, stack_ctx, &format!("g{}", value), global_mappings, stack_sizes, debug)
                     },
                 }
             },
             wast::Instruction::I32Const(val) => {
                 stack_sizes.push(1);
-                emit_i32_const(self, val, debug)
+                emit_i32_const(self, stack_ctx, val, debug)
             },
             wast::Instruction::I64Const(val) => {
                 stack_sizes.push(2);
-                emit_i64_const(self, val, debug)
+                emit_i64_const(self, stack_ctx, val, debug)
             },
             wast::Instruction::F32Const(val) => {
                 stack_sizes.push(1);
-                emit_f32_const(self, &val.bits, debug)
+                emit_f32_const(self, stack_ctx, &val.bits, debug)
             },
             wast::Instruction::F64Const(val) => {
                 stack_sizes.push(2);
-                emit_f64_const(self, &val.bits, debug)
+                emit_f64_const(self, stack_ctx, &val.bits, debug)
             },
             wast::Instruction::LocalGet(idx) => {
                 match idx {
                     wast::Index::Id(id) => {
-                        emit_local_get(self, parameter_offset, id.name(), offsets, type_info, stack_sizes, debug)
+                        emit_local_get(self, stack_ctx, parameter_offset, id.name(), offsets, type_info, stack_sizes, debug)
                     },
                     wast::Index::Num(value, _) => {
-                        emit_local_get(self, parameter_offset, &format!("{}", value), offsets, type_info, stack_sizes, debug)
+                        emit_local_get(self, stack_ctx, parameter_offset, &format!("{}", value), offsets, type_info, stack_sizes, debug)
                     },
                 }
             },
             wast::Instruction::LocalSet(idx) => {
                 match idx {
                     wast::Index::Id(id) => {
-                        emit_local_set(self, parameter_offset, id.name(), offsets, type_info, stack_sizes, debug)
+                        emit_local_set(self, stack_ctx, parameter_offset, id.name(), offsets, type_info, stack_sizes, debug)
                     },
                     wast::Index::Num(value, _) => {
-                        emit_local_set(self, parameter_offset, &format!("{}", value), offsets, type_info, stack_sizes, debug)
+                        emit_local_set(self, stack_ctx, parameter_offset, &format!("{}", value), offsets, type_info, stack_sizes, debug)
                     },
                 }
             },
             wast::Instruction::LocalTee(idx) => {
                 match idx {
                     wast::Index::Id(id) => {
-                        emit_local_tee(self, parameter_offset, id.name(), offsets, type_info, stack_sizes, debug)
+                        emit_local_tee(self, stack_ctx, parameter_offset, id.name(), offsets, type_info, stack_sizes, debug)
                     },
                     wast::Index::Num(value, _) => {
-                        emit_local_tee(self, parameter_offset, &format!("{}", value), offsets, type_info, stack_sizes, debug)
+                        emit_local_tee(self, stack_ctx, parameter_offset, &format!("{}", value), offsets, type_info, stack_sizes, debug)
                     },
                 }
             },
@@ -431,244 +433,244 @@ impl<'a> OpenCLCWriter<'_> {
                 stack_sizes.pop();
                 stack_sizes.pop();
                 stack_sizes.push(1);
-                emit_i32_add(self, debug)
+                emit_i32_add(self, stack_ctx, debug)
             },
             wast::Instruction::I32Mul => {
                 stack_sizes.pop();
                 stack_sizes.pop();
                 stack_sizes.push(1);
-                emit_i32_mul(self, debug)
+                emit_i32_mul(self, stack_ctx, debug)
             },
             wast::Instruction::I64Mul => {
                 stack_sizes.pop();
                 stack_sizes.pop();
                 stack_sizes.push(2);
-                emit_i64_mul(self, debug)
+                emit_i64_mul(self, stack_ctx, debug)
             },
             wast::Instruction::I32Sub => {
                 stack_sizes.pop();
                 stack_sizes.pop();
                 stack_sizes.push(1);
-                emit_i32_sub(self, debug)
+                emit_i32_sub(self, stack_ctx, debug)
             },
             wast::Instruction::I64Add => {
                 stack_sizes.pop();
                 stack_sizes.pop();
                 stack_sizes.push(2);
-                emit_i64_add(self, debug)
+                emit_i64_add(self, stack_ctx, debug)
             },
             wast::Instruction::F64Add => {
                 stack_sizes.pop();
                 stack_sizes.pop();
                 stack_sizes.push(2);
-                emit_f64_add(self, debug)
+                emit_f64_add(self, stack_ctx, debug)
             },
             wast::Instruction::F64Div => {
                 stack_sizes.pop();
                 stack_sizes.pop();
                 stack_sizes.push(2);
-                emit_f64_div(self, debug)
+                emit_f64_div(self, stack_ctx, debug)
             },
             wast::Instruction::F64Mul => {
                 stack_sizes.pop();
                 stack_sizes.pop();
                 stack_sizes.push(2);
-                emit_f64_mul(self, debug)
+                emit_f64_mul(self, stack_ctx, debug)
             },
             wast::Instruction::F64Neg => {
-                emit_f64_neg(self, debug)
+                emit_f64_neg(self, stack_ctx, debug)
             },
             wast::Instruction::F64Ne => {
                 stack_sizes.pop();
                 stack_sizes.pop();
                 stack_sizes.push(1);
-                emit_f64_ne(self, debug)
+                emit_f64_ne(self, stack_ctx, debug)
             },
             wast::Instruction::F64Lt => {
                 stack_sizes.pop();
                 stack_sizes.pop();
                 stack_sizes.push(1);
-                emit_f64_lt(self, debug)
+                emit_f64_lt(self, stack_ctx, debug)
             },
             wast::Instruction::F64Le => {
                 stack_sizes.pop();
                 stack_sizes.pop();
                 stack_sizes.push(1);
-                emit_f64_le(self, debug)
+                emit_f64_le(self, stack_ctx, debug)
             },
             wast::Instruction::I64LtU => {
                 stack_sizes.pop();
                 stack_sizes.pop();
                 stack_sizes.push(1);
-                emit_i64_lt_u(self, debug)
+                emit_i64_lt_u(self, stack_ctx, debug)
             },
             wast::Instruction::I64Eq => {
                 stack_sizes.pop();
                 stack_sizes.pop();
                 stack_sizes.push(1);
-                emit_i64_eq(self, debug)
+                emit_i64_eq(self, stack_ctx, debug)
             },
             wast::Instruction::F64Eq => {
                 stack_sizes.pop();
                 stack_sizes.pop();
                 stack_sizes.push(1);
-                emit_f64_eq(self, debug)
+                emit_f64_eq(self, stack_ctx, debug)
             },
             wast::Instruction::I32TruncF64U => {
                 stack_sizes.pop();
                 stack_sizes.push(1);
-                emit_i32_trunc_f64_u(self, debug)
+                emit_i32_trunc_f64_u(self, stack_ctx, debug)
             },
             wast::Instruction::I64Ne => {
                 stack_sizes.pop();
                 stack_sizes.pop();
                 stack_sizes.push(1);
-                emit_i64_ne(self, debug)
+                emit_i64_ne(self, stack_ctx, debug)
             },
             wast::Instruction::I64DivU => {
                 stack_sizes.pop();
                 stack_sizes.pop();
                 stack_sizes.push(2);
-                emit_i64_div_u(self, debug)
+                emit_i64_div_u(self, stack_ctx, debug)
             },
             wast::Instruction::I32Eqz => {
                 stack_sizes.pop();
                 stack_sizes.push(1);
-                emit_i32_eqz(self, debug)
+                emit_i32_eqz(self, stack_ctx, debug)
             },
             wast::Instruction::I64Eqz => {
                 stack_sizes.pop();
                 stack_sizes.push(1);
-                emit_i64_eqz(self, debug)
+                emit_i64_eqz(self, stack_ctx, debug)
             },
             wast::Instruction::I32And => {
                 stack_sizes.pop();
                 stack_sizes.pop();
                 stack_sizes.push(1);
-                emit_i32_and(self, debug)
+                emit_i32_and(self, stack_ctx, debug)
             },
             wast::Instruction::I64And => {
                 stack_sizes.pop();
                 stack_sizes.pop();
                 stack_sizes.push(2);
-                emit_i64_and(self, debug)
+                emit_i64_and(self, stack_ctx, debug)
             },
             wast::Instruction::I32Ne => {
                 stack_sizes.pop();
                 stack_sizes.pop();
                 stack_sizes.push(1);
-                emit_i32_ne(self, debug)
+                emit_i32_ne(self, stack_ctx, debug)
             },
             wast::Instruction::I32LtU => {
                 stack_sizes.pop();
                 stack_sizes.pop();
                 stack_sizes.push(1);
-                emit_i32_lt_u(self, debug)
+                emit_i32_lt_u(self, stack_ctx, debug)
             },
             wast::Instruction::I32LtS => {
                 stack_sizes.pop();
                 stack_sizes.pop();
                 stack_sizes.push(1);
-                emit_i32_lt_s(self, debug)
+                emit_i32_lt_s(self, stack_ctx, debug)
             },
             wast::Instruction::I64LtS => {
                 stack_sizes.pop();
                 stack_sizes.pop();
                 stack_sizes.push(1);
-                emit_i64_lt_s(self, debug)
+                emit_i64_lt_s(self, stack_ctx, debug)
             },
             wast::Instruction::I32GtU => {
                 stack_sizes.pop();
                 stack_sizes.pop();
                 stack_sizes.push(1);
-                emit_i32_gt_u(self, debug)
+                emit_i32_gt_u(self, stack_ctx, debug)
             },
             wast::Instruction::I64GtU => {
                 stack_sizes.pop();
                 stack_sizes.pop();
                 stack_sizes.push(1);
-                emit_i64_gt_u(self, debug)
+                emit_i64_gt_u(self, stack_ctx, debug)
             },
             wast::Instruction::I64GtS => {
                 stack_sizes.pop();
                 stack_sizes.pop();
                 stack_sizes.push(1);
-                emit_i64_gt_s(self, debug)
+                emit_i64_gt_s(self, stack_ctx, debug)
             },
             wast::Instruction::I32GtS => {
                 stack_sizes.pop();
                 stack_sizes.pop();
                 stack_sizes.push(1);
-                emit_i32_gt_s(self, debug)
+                emit_i32_gt_s(self, stack_ctx, debug)
             },
             wast::Instruction::I32LeU => {
                 stack_sizes.pop();
                 stack_sizes.pop();
                 stack_sizes.push(1);
-                emit_i32_le_u(self, debug)
+                emit_i32_le_u(self, stack_ctx, debug)
             },
             wast::Instruction::I32LeS => {
                 stack_sizes.pop();
                 stack_sizes.pop();
                 stack_sizes.push(1);
-                emit_i32_le_s(self, debug)
+                emit_i32_le_s(self, stack_ctx, debug)
             },
             wast::Instruction::I64LeU => {
                 stack_sizes.pop();
                 stack_sizes.pop();
                 stack_sizes.push(1);
-                emit_i64_le_u(self, debug)
+                emit_i64_le_u(self, stack_ctx, debug)
             },
             wast::Instruction::I64LeS => {
                 stack_sizes.pop();
                 stack_sizes.pop();
                 stack_sizes.push(1);
-                emit_i64_le_s(self, debug)
+                emit_i64_le_s(self, stack_ctx, debug)
             },
             wast::Instruction::I32GeU => {
                 stack_sizes.pop();
                 stack_sizes.pop();
                 stack_sizes.push(1);
-                emit_i32_ge_u(self, debug)
+                emit_i32_ge_u(self, stack_ctx, debug)
             },
             wast::Instruction::I32GeS => {
                 stack_sizes.pop();
                 stack_sizes.pop();
                 stack_sizes.push(1);
-                emit_i32_ge_s(self, debug)
+                emit_i32_ge_s(self, stack_ctx, debug)
             },
             wast::Instruction::I64GeU => {
                 stack_sizes.pop();
                 stack_sizes.pop();
                 stack_sizes.push(1);
-                emit_i64_ge_u(self, debug)
+                emit_i64_ge_u(self, stack_ctx, debug)
             },
             wast::Instruction::I64GeS => {
                 stack_sizes.pop();
                 stack_sizes.pop();
                 stack_sizes.push(1);
-                emit_i64_ge_s(self, debug)
+                emit_i64_ge_s(self, stack_ctx, debug)
             },
             wast::Instruction::I32Xor => {
                 stack_sizes.pop();
                 stack_sizes.pop();
                 stack_sizes.push(1);
-                emit_i32_xor(self, debug)
+                emit_i32_xor(self, stack_ctx, debug)
             },
             wast::Instruction::I32WrapI64 => {
                 stack_sizes.pop();
                 stack_sizes.push(1);
-                emit_i32_wrap_i64(self, debug)
+                emit_i32_wrap_i64(self, stack_ctx, debug)
             },
             wast::Instruction::I64ExtendI32S => {
                 stack_sizes.pop();
                 stack_sizes.push(2);
-                emit_i64_extend_i32_s(self, debug)
+                emit_i64_extend_i32_s(self, stack_ctx, debug)
             },
             wast::Instruction::I64ExtendI32U => {
                 stack_sizes.pop();
                 stack_sizes.push(2);
-                emit_i64_extend_i32_u(self, debug)
+                emit_i64_extend_i32_u(self, stack_ctx, debug)
             },
             wast::Instruction::Call(idx) => {
                 let id = match idx {
@@ -713,7 +715,7 @@ impl<'a> OpenCLCWriter<'_> {
                     match self.func_map.get(id) {
                         Some(_) => {
                             let func_type_signature = &self.func_map.get(id).unwrap().ty;
-                            emit_fn_call(&self, fn_name.to_string(), *idx, call_ret_map, call_ret_idx, &function_id_map, stack_sizes, false, debug)
+                            emit_fn_call(&self, stack_ctx, fn_name.to_string(), *idx, call_ret_map, call_ret_idx, &function_id_map, stack_sizes, false, debug)
                         },
                         // we have an import that isn't a system call...
                         None => String::from("")
@@ -728,127 +730,127 @@ impl<'a> OpenCLCWriter<'_> {
                     wast::Index::Num(_, _) => panic!(""),
                 };
                 */
-                emit_call_indirect(&self, call_indirect, fn_name.to_string(), parameter_offset, indirect_call_mapping, call_ret_map, call_ret_idx, function_id_map, stack_sizes, debug)
+                emit_call_indirect(&self, stack_ctx, call_indirect, fn_name.to_string(), parameter_offset, indirect_call_mapping, call_ret_map, call_ret_idx, function_id_map, stack_sizes, debug)
             },
             wast::Instruction::I32Eq => {
                 stack_sizes.pop();
                 stack_sizes.pop();
                 stack_sizes.push(1);
-                emit_i32_eq(self, debug)
+                emit_i32_eq(self, stack_ctx, debug)
             },
             wast::Instruction::I32Or => {
                 stack_sizes.pop();
                 stack_sizes.pop();
                 stack_sizes.push(1);
-                emit_i32_or(self, debug)
+                emit_i32_or(self, stack_ctx, debug)
             },
             wast::Instruction::I32ShrU => {
                 stack_sizes.pop();
                 stack_sizes.pop();
                 stack_sizes.push(1);
-                emit_i32_shr_u(self, debug)
+                emit_i32_shr_u(self, stack_ctx, debug)
             },
             wast::Instruction::I64ShrU => {
                 stack_sizes.pop();
                 stack_sizes.pop();
                 stack_sizes.push(2);
-                emit_i64_shr_u(self, debug)
+                emit_i64_shr_u(self, stack_ctx, debug)
             },
             wast::Instruction::I32ShrS => {
                 stack_sizes.pop();
                 stack_sizes.pop();
                 stack_sizes.push(1);
-                emit_i32_shr_s(self, debug)
+                emit_i32_shr_s(self, stack_ctx, debug)
             },
             wast::Instruction::I32Shl => {
                 stack_sizes.pop();
                 stack_sizes.pop();
                 stack_sizes.push(1);
-                emit_i32_shl(self, debug)
+                emit_i32_shl(self, stack_ctx, debug)
             },
             wast::Instruction::I64Shl => {
                 stack_sizes.pop();
                 stack_sizes.pop();
                 stack_sizes.push(2);
-                emit_i64_shl(self, debug)
+                emit_i64_shl(self, stack_ctx, debug)
             },
             wast::Instruction::I32DivU => {
                 stack_sizes.pop();
                 stack_sizes.pop();
                 stack_sizes.push(1);
-                emit_i32_div_u(self, debug)
+                emit_i32_div_u(self, stack_ctx, debug)
             },
             wast::Instruction::I32DivS => {
                 stack_sizes.pop();
                 stack_sizes.pop();
                 stack_sizes.push(1);
-                emit_i32_div_s(self, debug)
+                emit_i32_div_s(self, stack_ctx, debug)
             },
             wast::Instruction::I64DivS => {
                 stack_sizes.pop();
                 stack_sizes.pop();
                 stack_sizes.push(2);
-                emit_i64_div_s(self, debug)
+                emit_i64_div_s(self, stack_ctx, debug)
             },
             wast::Instruction::I32RemU => {
                 stack_sizes.pop();
                 stack_sizes.pop();
                 stack_sizes.push(1);
-                emit_i32_rem_u(self, debug)
+                emit_i32_rem_u(self, stack_ctx, debug)
             },
             wast::Instruction::I64RemU => {
                 stack_sizes.pop();
                 stack_sizes.pop();
                 stack_sizes.push(2);
-                emit_i64_rem_u(self, debug)
+                emit_i64_rem_u(self, stack_ctx, debug)
             },
             wast::Instruction::I32RemS => {
                 stack_sizes.pop();
                 stack_sizes.pop();
                 stack_sizes.push(1);
-                emit_i32_rem_s(self, debug)
+                emit_i32_rem_s(self, stack_ctx, debug)
             },
             wast::Instruction::I64RemS => {
                 stack_sizes.pop();
                 stack_sizes.pop();
                 stack_sizes.push(2);
-                emit_i64_rem_s(self, debug)
+                emit_i64_rem_s(self, stack_ctx, debug)
             },
             wast::Instruction::I64ShrS => {
                 stack_sizes.pop();
                 stack_sizes.pop();
                 stack_sizes.push(2);
-                emit_i64_shr_s(self, debug)
+                emit_i64_shr_s(self, stack_ctx, debug)
             },
             wast::Instruction::I64Xor => {
                 stack_sizes.pop();
                 stack_sizes.pop();
                 stack_sizes.push(2);
-                emit_i64_xor(self, debug)
+                emit_i64_xor(self, stack_ctx, debug)
             },
             wast::Instruction::I64Or => {
                 stack_sizes.pop();
                 stack_sizes.pop();
                 stack_sizes.push(2);
-                emit_i64_or(self, debug)
+                emit_i64_or(self, stack_ctx, debug)
             },
             wast::Instruction::I32Rotl => {
                 stack_sizes.pop();
                 stack_sizes.pop();
                 stack_sizes.push(1);
-                emit_i32_rotl(self, debug)
+                emit_i32_rotl(self, stack_ctx, debug)
             },
             wast::Instruction::I64Rotl => {
                 stack_sizes.pop();
                 stack_sizes.pop();
                 stack_sizes.push(2);
-                emit_i64_rotl(self, debug)
+                emit_i64_rotl(self, stack_ctx, debug)
             },
             wast::Instruction::I64Sub => {
                 stack_sizes.pop();
                 stack_sizes.pop();
                 stack_sizes.push(2);
-                emit_i64_sub(self, debug)
+                emit_i64_sub(self, stack_ctx, debug)
             },
             wast::Instruction::I64ReinterpretF64 => {
                 // no-op
@@ -869,42 +871,42 @@ impl<'a> OpenCLCWriter<'_> {
             wast::Instruction::F64ConvertI32S => {
                 stack_sizes.pop();
                 stack_sizes.push(2);
-                emit_f64_convert_i32(self, debug)
+                emit_f64_convert_i32(self, stack_ctx, debug)
             },
             wast::Instruction::F64ConvertI32U => {
                 stack_sizes.pop();
                 stack_sizes.push(2);
-                emit_f64_convert_i32u(self, debug)
+                emit_f64_convert_i32u(self, stack_ctx, debug)
             },
             wast::Instruction::F64ConvertI64U => {
                 stack_sizes.pop();
                 stack_sizes.push(2);
-                emit_f64_convert_i64u(self, debug)
+                emit_f64_convert_i64u(self, stack_ctx, debug)
             },
             wast::Instruction::I32Clz => {
                 stack_sizes.pop();
                 stack_sizes.push(1);
-                emit_i32_clz(self, debug)
+                emit_i32_clz(self, stack_ctx, debug)
             },
             wast::Instruction::I32Popcnt => {
                 stack_sizes.pop();
                 stack_sizes.push(1);
-                emit_i32_popcnt(self, debug)
+                emit_i32_popcnt(self, stack_ctx, debug)
             },
             wast::Instruction::I64Clz => {
                 stack_sizes.pop();
                 stack_sizes.push(2);
-                emit_i64_clz(self, debug)
+                emit_i64_clz(self, stack_ctx, debug)
             },
             wast::Instruction::I32Ctz => {
                 stack_sizes.pop();
                 stack_sizes.push(1);
-                emit_i32_ctz(self, debug)
+                emit_i32_ctz(self, stack_ctx, debug)
             },
             wast::Instruction::I64Ctz => {
                 stack_sizes.pop();
                 stack_sizes.push(2);
-                emit_i64_ctz(self, debug)
+                emit_i64_ctz(self, stack_ctx, debug)
             },
             // control flow instructions
             wast::Instruction::Block(b) => {
@@ -935,16 +937,16 @@ impl<'a> OpenCLCWriter<'_> {
                 emit_end(&self, id, &label, t, fn_name, function_id_map, debug)
             },
             wast::Instruction::Select(_) => {
-                emit_select(self, stack_sizes, fn_name, debug)
+                emit_select(self, stack_ctx, stack_sizes, fn_name, debug)
             },
             wast::Instruction::MemoryGrow(arg) => {
                 stack_sizes.pop();
                 stack_sizes.push(1);
-                emit_mem_grow(self, arg, debug)
+                emit_mem_grow(self, stack_ctx, arg, debug)
             },
             wast::Instruction::MemorySize(arg) => {
                 stack_sizes.push(1);
-                emit_mem_size(self, arg, debug)
+                emit_mem_size(self, stack_ctx, arg, debug)
             },
             wast::Instruction::Return => emit_return(self, fn_name, debug),
             wast::Instruction::Br(idx) => emit_br(self, *idx, fn_name, control_stack, function_id_map, debug),
@@ -1041,10 +1043,7 @@ impl<'a> OpenCLCWriter<'_> {
                 // Now that we have the type info for the parameters and locals, we can generate the stack context
 
                 // First, generate the stack context for the function
-                let stack_ctx = StackCtx::initialize_context(&self, &expression.instrs, &local_type_info);
-
-                // emit the necessary intermediate values
-                final_string += &stack_ctx.emit_intermediates();
+                let mut stack_ctx = StackCtx::initialize_context(&self, &expression.instrs, &local_type_info);
 
                 // function entry point
                 // strip illegal chars from function name
@@ -1066,6 +1065,9 @@ impl<'a> OpenCLCWriter<'_> {
                                                         0,
                                                         false,
                                                         debug));
+
+                // emit the necessary intermediate values
+                final_string += &stack_ctx.emit_intermediates();
 
                 if debug_call_print {
                     write!(final_string, "\t\tprintf(\"*sfp = %d\\n\", *sfp);\n");
@@ -1185,6 +1187,11 @@ impl<'a> OpenCLCWriter<'_> {
                     final_string += &emit_local(&self, local.clone(), debug);
                 }
 
+                // now that space for the locals have been allocated, allocate space for the rest
+                // of our stack frame (we can statically determine this from the stack context!)
+                let stack_frame_size = &stack_ctx.stack_frame_size();
+                final_string += &format!("\t*sp += {};\n", stack_frame_size);
+
                 // keep a stack of control-flow labels
                 // for blocks we need to put the label at the "end" statement, while loops always jump back
                 let mut control_stack: Vec<(String, u32, i32)> = vec![];
@@ -1203,6 +1210,7 @@ impl<'a> OpenCLCWriter<'_> {
                 for instruction in expression.instrs.iter() {
                     final_string += &self.emit_instructions(instruction,
                                                             stack_sizes,
+                                                            &mut stack_ctx,
                                                             param_offset,
                                                             &local_parameter_stack_offset,
                                                             &local_type_info,
@@ -1226,12 +1234,12 @@ impl<'a> OpenCLCWriter<'_> {
                 // If we are emitting the start function, just emit a proc_exit here
                 if id.name().to_string() == "_start" {
                     // emit modified func unwind for _start
-                    final_string += &function_unwind(&self, id.name(), &typeuse.inline, true, debug);
+                    final_string += &function_unwind(&self, &mut stack_ctx, id.name(), &typeuse.inline, true, debug);
                     final_string += &self.emit_hypercall(WasmHypercallId::proc_exit, hypercall_id_count, id.name().to_string(), true, debug);
                 } else {
                     // to unwind from the function we unwind the call stack by moving the stack pointer
                     // and returning the last value on the stack 
-                    final_string += &function_unwind(&self, id.name(), &typeuse.inline, false, debug);
+                    final_string += &function_unwind(&self, &mut stack_ctx, id.name(), &typeuse.inline, false, debug);
                 }
             },
             (_, _, _) => panic!("Inline function must always have a valid identifier in wasm")

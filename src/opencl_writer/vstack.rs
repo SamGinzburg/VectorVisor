@@ -25,17 +25,18 @@ pub enum StackType {
 /*
  * The stacks are generated during the first compilation pass
  * Indicies are tracked during execution
- */ 
+ */
+#[derive(Debug)]
 pub struct StackCtx {
     // Track each intermediate type separately
     i32_stack: Vec<String>,
-    i32_idx: u32,
+    i32_idx: usize,
     i64_stack: Vec<String>,
-    i64_idx: u32,
+    i64_idx: usize,
     f32_stack: Vec<String>,
-    f32_idx: u32,
+    f32_idx: usize,
     f64_stack: Vec<String>,
-    f64_idx: u32,
+    f64_idx: usize,
     // Track the whole stack too
     // Note: this is updated in vstack_pop/vstack_alloc and not initialize_context
     pub stack_sizes: Vec<u32>,
@@ -818,50 +819,143 @@ impl<'a> StackCtx {
         println!("max_f32_count: {}", max_f32_count);
         println!("max_f64_count: {}", max_f64_count);
 
+        let mut i32_stack = vec![];
+        for idx in 0..max_i32_count {
+            i32_stack.push(format!("i32_{}", idx));
+        }
+
+        let mut i64_stack = vec![];
+        for idx in 0..max_i64_count {
+            i64_stack.push(format!("i64_{}", idx));
+        }
+
+        let mut f32_stack = vec![];
+        for idx in 0..max_f32_count {
+            f32_stack.push(format!("f32_{}", idx));
+        }
+
+        let mut f64_stack = vec![];
+        for idx in 0..max_f64_count {
+            f64_stack.push(format!("f64_{}", idx));
+        }
+
         StackCtx {
-            i32_stack: vec![],
+            i32_stack: i32_stack,
             i32_idx: 0,
-            i64_stack: vec![],
+            i64_stack: i64_stack,
             i64_idx: 0,
-            f32_stack: vec![],
+            f32_stack: f32_stack,
             f32_idx: 0,
-            f64_stack: vec![],
+            f64_stack: f64_stack,
             f64_idx: 0,
             // this is intentionally empty, because we actually track this during the *main* compilation pass
             stack_sizes: vec![]
         }
     }
 
-    pub fn emit_intermediates(self) -> String {
-        String::from("")
+    pub fn convert_wast_types(ty: &wast::ValType) -> StackType {
+        match ty {
+            wast::ValType::I32 => StackType::i32,
+            wast::ValType::F32 => StackType::f32,
+            wast::ValType::I64 => StackType::i64,
+            wast::ValType::F64 => StackType::f64,
+            _ => panic!("Unknown stack type (vstack)"),
+        }
+    }
+
+    pub fn emit_intermediates(&self) -> String {
+        let mut ret_str = String::from("");
+
+        let mut counter = 0;
+        for intermediate in &self.i32_stack {
+            ret_str += &format!("\tuint {} = 0;\n", intermediate);
+        }
+
+        for intermediate in &self.i64_stack {
+            ret_str += &format!("\tulong {} = 0;\n", intermediate);
+        }
+
+        for intermediate in &self.f32_stack {
+            ret_str += &format!("\tfloat {} = 0.0;\n", intermediate);
+        }
+
+        for intermediate in &self.f64_stack {
+            ret_str += &format!("\tdouble {} = 0.0;\n", intermediate);
+        }
+
+        ret_str
     }
 
     /*
      * Get the most recent intermediate value from the stack
      */
-    pub fn vstack_pop(self, t: StackType) -> String {
-        String::from("")
+    pub fn vstack_pop(&mut self, t: StackType) -> String {
+        match t {
+            StackType::i32 => {
+                self.i32_idx -= 1;
+                format!("{}", self.i32_stack.get(self.i32_idx).unwrap())
+            },
+            StackType::i64 => {
+                self.i64_idx -= 1;
+                format!("{}", self.i64_stack.get(self.i64_idx).unwrap())
+            },
+            StackType::f32 => {
+                self.f32_idx -= 1;
+                format!("{}", self.f32_stack.get(self.f32_idx).unwrap())
+
+            },
+            StackType::f64 => {
+                self.f64_idx -= 1;
+                format!("{}", self.f64_stack.get(self.f64_idx).unwrap())
+            },
+        }
     }
 
     /*
      * Save the result of a computation to an intermediate value
      */
-    pub fn vstack_alloc(self, t: StackType) -> String {
-        String::from("")
+    pub fn vstack_alloc(&mut self, t: StackType) -> String {
+        match t {
+            StackType::i32 => {
+                println!("{:?}", self.i32_stack);
+                let alloc_val = self.i32_stack.get(self.i32_idx).unwrap();
+                self.i32_idx += 1;
+                format!("{}", alloc_val)
+            },
+            StackType::i64 => {
+                let alloc_val = self.i64_stack.get(self.i64_idx).unwrap();
+                self.i64_idx += 1;
+                format!("{}", alloc_val)
+            },
+            StackType::f32 => {
+                let alloc_val = self.f32_stack.get(self.f32_idx).unwrap();
+                self.f32_idx += 1;
+                format!("{}", alloc_val)
+            },
+            StackType::f64 => {
+                let alloc_val = self.f64_stack.get(self.f64_idx).unwrap();
+                self.f64_idx += 1;
+                format!("{}", alloc_val)
+            },
+        }
+    }
+
+    pub fn stack_frame_size(&self) -> usize {
+        self.i32_stack.len() + (self.i64_stack.len()*2) + self.f32_stack.len() + (self.f64_stack.len()*2)
     }
 
     /*
      * Generate the code to save the context of the current function
      * We can statically determine the minimum
      */
-    pub fn save_context(self) -> String {
+    pub fn save_context(&self) -> String {
         String::from("")
     }
 
     /*
      * Generate the code to restore the context of the current function
      */
-    pub fn restore_context(self) -> String {
+    pub fn restore_context(&self) -> String {
         String::from("")
     }
 }

@@ -1,4 +1,6 @@
 use crate::opencl_writer;
+use crate::opencl_writer::StackCtx;
+use crate::opencl_writer::StackType;
 
 use std::collections::HashMap;
 use crate::opencl_writer::mem_interleave::*;
@@ -8,7 +10,7 @@ use wast::MemoryArg;
 
 // Functions for loading from memory
 
-pub fn emit_memload_i32_8u(writer: &opencl_writer::OpenCLCWriter, args: &MemArg, debug: bool) -> String {
+pub fn emit_memload_i32_8u(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, args: &MemArg, debug: bool) -> String {
     let mut ret_str = String::from("");
 
     // pop the previous value i off of the stack, we load from i+offset
@@ -24,7 +26,7 @@ pub fn emit_memload_i32_8u(writer: &opencl_writer::OpenCLCWriter, args: &MemArg,
     ret_str
 }
 
-pub fn emit_memload_i32_16u(writer: &opencl_writer::OpenCLCWriter, args: &MemArg, debug: bool) -> String {
+pub fn emit_memload_i32_16u(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, args: &MemArg, debug: bool) -> String {
     let mut ret_str = String::from("");
 
     // pop the previous value i off of the stack, we load from i+offset
@@ -40,7 +42,7 @@ pub fn emit_memload_i32_16u(writer: &opencl_writer::OpenCLCWriter, args: &MemArg
     ret_str
 }
 
-pub fn emit_memload_i32_16s(writer: &opencl_writer::OpenCLCWriter, args: &MemArg, debug: bool) -> String {
+pub fn emit_memload_i32_16s(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, args: &MemArg, debug: bool) -> String {
     let mut ret_str = String::from("");
 
     // pop the previous value i off of the stack, we load from i+offset
@@ -56,7 +58,7 @@ pub fn emit_memload_i32_16s(writer: &opencl_writer::OpenCLCWriter, args: &MemArg
     ret_str
 }
 
-pub fn emit_memload_i32_8s(writer: &opencl_writer::OpenCLCWriter, args: &MemArg, debug: bool) -> String {
+pub fn emit_memload_i32_8s(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, args: &MemArg, debug: bool) -> String {
     let mut ret_str = String::from("");
 
     // pop the previous value i off of the stack, we load from i+offset
@@ -73,7 +75,7 @@ pub fn emit_memload_i32_8s(writer: &opencl_writer::OpenCLCWriter, args: &MemArg,
 }
 
 
-pub fn emit_memload_i32(writer: &opencl_writer::OpenCLCWriter, args: &MemArg, debug: bool) -> String {
+pub fn emit_memload_i32(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, args: &MemArg, debug: bool) -> String {
     let mut ret_str = String::from("");
 
     // pop the previous value i off of the stack, we load from i+offset
@@ -86,7 +88,7 @@ pub fn emit_memload_i32(writer: &opencl_writer::OpenCLCWriter, args: &MemArg, de
     ret_str
 }
 
-pub fn emit_memload_i64(writer: &opencl_writer::OpenCLCWriter, args: &MemArg, debug: bool) -> String {
+pub fn emit_memload_i64(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, args: &MemArg, debug: bool) -> String {
     let mut ret_str = String::from("");
 
     // i_load is always a i32 const
@@ -102,7 +104,7 @@ pub fn emit_memload_i64(writer: &opencl_writer::OpenCLCWriter, args: &MemArg, de
     ret_str
 }
 
-pub fn emit_memload_i64_8u(writer: &opencl_writer::OpenCLCWriter, args: &MemArg, debug: bool) -> String {
+pub fn emit_memload_i64_8u(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, args: &MemArg, debug: bool) -> String {
     let mut ret_str = String::from("");
 
     // i_load is always a i32 const
@@ -120,7 +122,7 @@ pub fn emit_memload_i64_8u(writer: &opencl_writer::OpenCLCWriter, args: &MemArg,
     ret_str
 }
 
-pub fn emit_memload_i64_32u(writer: &opencl_writer::OpenCLCWriter, args: &MemArg, debug: bool) -> String {
+pub fn emit_memload_i64_32u(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, args: &MemArg, debug: bool) -> String {
     let mut ret_str = String::from("");
 
     // i_load is always a i32 const
@@ -138,7 +140,7 @@ pub fn emit_memload_i64_32u(writer: &opencl_writer::OpenCLCWriter, args: &MemArg
     ret_str
 }
 
-pub fn emit_memload_i64_16u(writer: &opencl_writer::OpenCLCWriter, args: &MemArg, debug: bool) -> String {
+pub fn emit_memload_i64_16u(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, args: &MemArg, debug: bool) -> String {
     let mut ret_str = String::from("");
 
     // i_load is always a i32 const
@@ -158,7 +160,7 @@ pub fn emit_memload_i64_16u(writer: &opencl_writer::OpenCLCWriter, args: &MemArg
 
 // Functions for loading from memory
 
-pub fn emit_memstore_i32(writer: &opencl_writer::OpenCLCWriter, args: &MemArg, debug: bool) -> String {
+pub fn emit_memstore_i32(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, args: &MemArg, debug: bool) -> String {
     let mut ret_str = String::from("");
 
     // pop the i value we use to compute the offset: ea=i+offset
@@ -181,7 +183,7 @@ pub fn emit_memstore_i32(writer: &opencl_writer::OpenCLCWriter, args: &MemArg, d
 }
 
 
-pub fn emit_memstore8_i32(writer: &opencl_writer::OpenCLCWriter, args: &MemArg, debug: bool) -> String {
+pub fn emit_memstore8_i32(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, args: &MemArg, debug: bool) -> String {
     let mut ret_str = String::from("");
 
     // pop the i value we use to compute the offset: ea=i+offset
@@ -203,7 +205,7 @@ pub fn emit_memstore8_i32(writer: &opencl_writer::OpenCLCWriter, args: &MemArg, 
     ret_str
 }
 
-pub fn emit_memstore8_i64(writer: &opencl_writer::OpenCLCWriter, args: &MemArg, debug: bool) -> String {
+pub fn emit_memstore8_i64(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, args: &MemArg, debug: bool) -> String {
     let mut ret_str = String::from("");
 
     // pop the i value we use to compute the offset: ea=i+offset
@@ -224,7 +226,7 @@ pub fn emit_memstore8_i64(writer: &opencl_writer::OpenCLCWriter, args: &MemArg, 
     ret_str
 }
 
-pub fn emit_memstore16_i64(writer: &opencl_writer::OpenCLCWriter, args: &MemArg, debug: bool) -> String {
+pub fn emit_memstore16_i64(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, args: &MemArg, debug: bool) -> String {
     let mut ret_str = String::from("");
 
     // pop the i value we use to compute the offset: ea=i+offset
@@ -245,7 +247,7 @@ pub fn emit_memstore16_i64(writer: &opencl_writer::OpenCLCWriter, args: &MemArg,
     ret_str
 }
 
-pub fn emit_memstore16_i32(writer: &opencl_writer::OpenCLCWriter, args: &MemArg, debug: bool) -> String {
+pub fn emit_memstore16_i32(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, args: &MemArg, debug: bool) -> String {
     let mut ret_str = String::from("");
 
     // pop the i value we use to compute the offset: ea=i+offset
@@ -266,7 +268,7 @@ pub fn emit_memstore16_i32(writer: &opencl_writer::OpenCLCWriter, args: &MemArg,
     ret_str
 }
 
-pub fn emit_memstore_i64(writer: &opencl_writer::OpenCLCWriter, args: &MemArg, debug: bool) -> String {
+pub fn emit_memstore_i64(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, args: &MemArg, debug: bool) -> String {
     let mut ret_str = String::from("");
 
     // pop the i value we use to compute the offset: ea=i+offset (always i32)
@@ -287,7 +289,7 @@ pub fn emit_memstore_i64(writer: &opencl_writer::OpenCLCWriter, args: &MemArg, d
     ret_str
 }
 
-pub fn emit_memstore32_i64(writer: &opencl_writer::OpenCLCWriter, args: &MemArg, debug: bool) -> String {
+pub fn emit_memstore32_i64(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, args: &MemArg, debug: bool) -> String {
     let mut ret_str = String::from("");
 
     // pop the i value we use to compute the offset: ea=i+offset (always i32)
@@ -312,7 +314,7 @@ pub fn emit_memstore32_i64(writer: &opencl_writer::OpenCLCWriter, args: &MemArg,
  * This function is essentially a no-op, since we pre-allocate the heaps for all procs!
  * All we do is update the metadata saying that the heap has grown by N pages
  */
-pub fn emit_mem_grow(writer: &opencl_writer::OpenCLCWriter, arg: &MemoryArg, debug: bool) -> String {
+pub fn emit_mem_grow(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, arg: &MemoryArg, debug: bool) -> String {
     // arg is the index of the memory space, however we are assuming that there is only 1 so it doesn't matter
     let num_pages_to_grow_by = emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx");
     let mut ret_str = String::from("");
@@ -347,7 +349,7 @@ pub fn emit_mem_grow(writer: &opencl_writer::OpenCLCWriter, arg: &MemoryArg, deb
     ret_str
 }
 
-pub fn emit_mem_size(writer: &opencl_writer::OpenCLCWriter, arg: &MemoryArg, debug: bool) -> String {
+pub fn emit_mem_size(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, arg: &MemoryArg, debug: bool) -> String {
     let mut ret_str = String::from("");
 
     let current_mem_size = emit_write_u32("(ulong)(stack_u32+*sp)", "(ulong)(stack_u32)", "*current_mem_size", "warp_idx");
