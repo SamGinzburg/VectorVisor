@@ -2,6 +2,8 @@ use crate::opencl_writer;
 use crate::opencl_writer::Regex;
 use crate::opencl_writer::mem_interleave::emit_read_u32;
 use crate::opencl_writer::mem_interleave::emit_write_u64;
+use crate::opencl_writer::StackCtx;
+use crate::opencl_writer::StackType;
 
 use std::collections::HashMap;
 
@@ -65,15 +67,12 @@ pub fn emit_br(writer: &opencl_writer::OpenCLCWriter, idx: wast::Index, fn_name:
     ret_str
 }
 
-pub fn emit_br_if(writer: &opencl_writer::OpenCLCWriter, idx: wast::Index, fn_name: &str, stack_sizes: &mut Vec<u32>, control_stack: &mut Vec<(String, u32, i32)>, function_id_map: HashMap<&str, u32>, debug: bool) -> String {
+pub fn emit_br_if(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, idx: wast::Index, fn_name: &str, stack_sizes: &mut Vec<u32>, control_stack: &mut Vec<(String, u32, i32)>, function_id_map: HashMap<&str, u32>, debug: bool) -> String {
     let mut ret_str = String::from("");
-
-    // br_if is just an if statement, if cond is true => br l else continue
-    // pop the value first
-    ret_str += &format!("\t{}\n",
-                        format!("*sp -= {};", stack_sizes.pop().unwrap()));
-
-    ret_str += &format!("\tif ({} != 0) {{\n", "read_u32((ulong)(stack_u32+*sp), (ulong)(stack_u32), warp_idx)");
+    
+    stack_sizes.pop().unwrap();
+    let reg = stack_ctx.vstack_pop(StackType::i32);
+    ret_str += &format!("\tif ({} != 0) {{\n", reg);
     ret_str += &emit_br(writer, idx, fn_name, control_stack, function_id_map, debug);
     ret_str += &format!("\t}}\n");
 

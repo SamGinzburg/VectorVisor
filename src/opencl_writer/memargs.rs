@@ -13,15 +13,11 @@ use wast::MemoryArg;
 pub fn emit_memload_i32_8u(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, args: &MemArg, debug: bool) -> String {
     let mut ret_str = String::from("");
 
-    // pop the previous value i off of the stack, we load from i+offset
-
-    let i_load = &format!("(int){}", emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx"));
+    let i_load = stack_ctx.vstack_pop(StackType::i32);
     let read = format!("(uchar)({})", emit_read_u8(&format!("(ulong)((global char*)heap_u32+{}+{})", args.offset, i_load), "(ulong)(heap_u32)", "warp_idx"));
+    let result_register = stack_ctx.vstack_alloc(StackType::i32);
 
-    ret_str += &format!("\t{};\n", &emit_write_u32("(ulong)(stack_u32+*sp-1)",
-                        "(ulong)(stack_u32)",
-                        &read,
-                        "warp_idx"));
+    ret_str += &format!("\t{} = {};\n", result_register, read);
 
     ret_str
 }
@@ -29,15 +25,11 @@ pub fn emit_memload_i32_8u(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mu
 pub fn emit_memload_i32_16u(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, args: &MemArg, debug: bool) -> String {
     let mut ret_str = String::from("");
 
-    // pop the previous value i off of the stack, we load from i+offset
+    let i_load = stack_ctx.vstack_pop(StackType::i32);
+    let read = format!("(uint)({})", emit_read_u8(&format!("(ulong)((global char*)heap_u32+{}+{})", args.offset, i_load), "(ulong)(heap_u32)", "warp_idx"));
+    let result_register = stack_ctx.vstack_alloc(StackType::i32);
 
-    let i_load = &format!("(int){}", emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx"));
-    let read = format!("(uint)({})", &emit_read_u16(&format!("(ulong)((global char*)heap_u32+{}+{})", args.offset, i_load), "(ulong)(heap_u32)", "warp_idx"));
-
-    ret_str += &format!("\t{};\n", &emit_write_u32("(ulong)(stack_u32+*sp-1)",
-                        "(ulong)(stack_u32)",
-                        &read,
-                        "warp_idx"));
+    ret_str += &format!("\t{} = {};\n", result_register, read);
 
     ret_str
 }
@@ -45,15 +37,11 @@ pub fn emit_memload_i32_16u(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &m
 pub fn emit_memload_i32_16s(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, args: &MemArg, debug: bool) -> String {
     let mut ret_str = String::from("");
 
-    // pop the previous value i off of the stack, we load from i+offset
+    let i_load = stack_ctx.vstack_pop(StackType::i32);
+    let read = format!("(short)({})", emit_read_u16(&format!("(ulong)((global char*)heap_u32+{}+{})", args.offset, i_load), "(ulong)(heap_u32)", "warp_idx"));
+    let result_register = stack_ctx.vstack_alloc(StackType::i32);
 
-    let i_load = &format!("(int){}", emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx"));
-    let read = format!("(short)({})", &emit_read_u16(&format!("(ulong)((global char*)heap_u32+{}+{})", args.offset, i_load), "(ulong)(heap_u32)", "warp_idx"));
-
-    ret_str += &format!("\t{};\n", &emit_write_u32("(ulong)(stack_u32+*sp-1)",
-                        "(ulong)(stack_u32)",
-                        &read,
-                        "warp_idx"));
+    ret_str += &format!("\t{} = {};\n", result_register, read);
 
     ret_str
 }
@@ -61,15 +49,11 @@ pub fn emit_memload_i32_16s(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &m
 pub fn emit_memload_i32_8s(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, args: &MemArg, debug: bool) -> String {
     let mut ret_str = String::from("");
 
-    // pop the previous value i off of the stack, we load from i+offset
+    let i_load = stack_ctx.vstack_pop(StackType::i32);
+    let read = format!("(char)({})", emit_read_u8(&format!("(ulong)((global char*)heap_u32+{}+{})", args.offset, i_load), "(ulong)(heap_u32)", "warp_idx"));
+    let result_register = stack_ctx.vstack_alloc(StackType::i32);
 
-    let i_load = &format!("(int){}", emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx"));
-    let read = format!("(char)({})", &emit_read_u8(&format!("(ulong)((global char*)heap_u32+{}+{})", args.offset, i_load), "(ulong)(heap_u32)", "warp_idx"));
-
-    ret_str += &format!("\t{};\n", &emit_write_u32("(ulong)(stack_u32+*sp-1)",
-                                                   "(ulong)(stack_u32)",
-                                                   &read,
-                                                   "warp_idx"));
+    ret_str += &format!("\t{} = {};\n", result_register, read);
 
     ret_str
 }
@@ -78,12 +62,11 @@ pub fn emit_memload_i32_8s(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mu
 pub fn emit_memload_i32(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, args: &MemArg, debug: bool) -> String {
     let mut ret_str = String::from("");
 
-    // pop the previous value i off of the stack, we load from i+offset
-    let i_load = &format!("(int){}", emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx"));
-    ret_str += &format!("\t{};\n", &emit_write_u32("(ulong)(stack_u32+*sp-1)",
-                        "(ulong)(stack_u32)",
-                        &emit_read_u32(&format!("(ulong)((global char*)heap_u32+{}+{})", args.offset, i_load), "(ulong)(heap_u32)", "warp_idx"),
-                        "warp_idx"));
+    let i_load = stack_ctx.vstack_pop(StackType::i32);
+    let read = format!("({})", emit_read_u32(&format!("(ulong)((global char*)heap_u32+{}+{})", args.offset, i_load), "(ulong)(heap_u32)", "warp_idx"));
+    let result_register = stack_ctx.vstack_alloc(StackType::i32);
+
+    ret_str += &format!("\t{} = {};\n", result_register, read);
 
     ret_str
 }
@@ -91,15 +74,11 @@ pub fn emit_memload_i32(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut S
 pub fn emit_memload_i64(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, args: &MemArg, debug: bool) -> String {
     let mut ret_str = String::from("");
 
-    // i_load is always a i32 const
-    let i_load = &format!("(int){}", emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx"));
-    ret_str += &format!("\t{};\n", &emit_write_u64("(ulong)(stack_u32+*sp-1)",
-                        "(ulong)(stack_u32)",
-                        &emit_read_u64(&format!("(ulong)((global char*)heap_u32+{}+{})", args.offset, i_load), "(ulong)(heap_u32)", "warp_idx"),
-                        "warp_idx"));
+    let i_load = stack_ctx.vstack_pop(StackType::i32);
+    let read = format!("({})", emit_read_u64(&format!("(ulong)((global char*)heap_u32+{}+{})", args.offset, i_load), "(ulong)(heap_u32)", "warp_idx"));
+    let result_register = stack_ctx.vstack_alloc(StackType::i64);
 
-    ret_str += &format!("\t{};\n",
-                        "*sp += 1");
+    ret_str += &format!("\t{} = {};\n", result_register, read);
 
     ret_str
 }
@@ -107,17 +86,11 @@ pub fn emit_memload_i64(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut S
 pub fn emit_memload_i64_8u(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, args: &MemArg, debug: bool) -> String {
     let mut ret_str = String::from("");
 
-    // i_load is always a i32 const
-    let i_load = &format!("(int){}", emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx"));
+    let i_load = stack_ctx.vstack_pop(StackType::i32);
     let read = format!("(ulong)({})", &emit_read_u8(&format!("(ulong)((global char*)heap_u32+{}+{})", args.offset, i_load), "(ulong)(heap_u32)", "warp_idx"));
-    
-    ret_str += &format!("\t{};\n", &emit_write_u64("(ulong)(stack_u32+*sp-1)",
-                                                   "(ulong)(stack_u32)",
-                                                   &read,
-                                                   "warp_idx"));
+    let result_register = stack_ctx.vstack_alloc(StackType::i64);
 
-    ret_str += &format!("\t{};\n",
-                        "*sp += 1");
+    ret_str += &format!("\t{} = {};\n", result_register, read);
 
     ret_str
 }
@@ -125,17 +98,11 @@ pub fn emit_memload_i64_8u(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mu
 pub fn emit_memload_i64_32u(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, args: &MemArg, debug: bool) -> String {
     let mut ret_str = String::from("");
 
-    // i_load is always a i32 const
-    let i_load = &format!("(int){}", emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx"));
+    let i_load = stack_ctx.vstack_pop(StackType::i32);
     let read = format!("(ulong)({})", &emit_read_u32(&format!("(ulong)((global char*)heap_u32+{}+{})", args.offset, i_load), "(ulong)(heap_u32)", "warp_idx"));
+    let result_register = stack_ctx.vstack_alloc(StackType::i64);
 
-    ret_str += &format!("\t{};\n", &emit_write_u64("(ulong)(stack_u32+*sp-1)",
-                                                   "(ulong)(stack_u32)",
-                                                   &read,
-                                                   "warp_idx"));
-
-    ret_str += &format!("\t{};\n",
-                        "*sp += 1");
+    ret_str += &format!("\t{} = {};\n", result_register, read);
 
     ret_str
 }
@@ -143,17 +110,11 @@ pub fn emit_memload_i64_32u(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &m
 pub fn emit_memload_i64_16u(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, args: &MemArg, debug: bool) -> String {
     let mut ret_str = String::from("");
 
-    // i_load is always a i32 const
-    let i_load = &format!("(int){}", emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx"));
+    let i_load = stack_ctx.vstack_pop(StackType::i32);
     let read = format!("(ulong)({})", &emit_read_u16(&format!("(ulong)((global char*)heap_u32+{}+{})", args.offset, i_load), "(ulong)(heap_u32)", "warp_idx"));
+    let result_register = stack_ctx.vstack_alloc(StackType::i64);
 
-    ret_str += &format!("\t{};\n", &emit_write_u64("(ulong)(stack_u32+*sp-1)",
-                                                   "(ulong)(stack_u32)",
-                                                   &read,
-                                                   "warp_idx"));
-
-    ret_str += &format!("\t{};\n",
-                        "*sp += 1");
+    ret_str += &format!("\t{} = {};\n", result_register, read);
 
     ret_str
 }

@@ -354,7 +354,7 @@ pub fn emit_i32_rotl(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stac
         let reg2 = stack_ctx.vstack_pop(StackType::i32);
         let result_register = stack_ctx.vstack_alloc(StackType::i32);
     
-        format!("\t{} = ({x}<<{n}) | ({x}>>(32-{n}));\n", result_register, reg2, reg1)
+        format!("\t{} = ({x}<<{n}) | ({x}>>(32-{n}));\n", result_register, x=reg2, n=reg1)
     }
 }
 
@@ -370,6 +370,6 @@ pub fn emit_i64_rotl(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stac
         let reg2 = stack_ctx.vstack_pop(StackType::i64);
         let result_register = stack_ctx.vstack_alloc(StackType::i64);
     
-        format!("\t{} = ({x}<<{n}) | ({x}>>(64-{n}));\n", result_register, reg2, reg1)
+        format!("\t{} = ({x}<<{n}) | ({x}>>(64-{n}));\n", result_register, x=reg2, n=reg1)
     }
 }

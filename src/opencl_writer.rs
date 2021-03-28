@@ -237,6 +237,8 @@ impl<'a> OpenCLCWriter<'_> {
                          // map of local/parameter IDs to offset from stack frame start
                          offsets: &HashMap<String, u32>,
                          type_info: &HashMap<String, ValType>,
+                         // keeps track of local vs. parameter
+                         is_param: &HashMap<String, bool>,
                          call_ret_map: &mut HashMap<&str, u32>,
                          call_ret_idx: &mut u32,
                          // function name
@@ -402,7 +404,14 @@ impl<'a> OpenCLCWriter<'_> {
                         emit_local_get(self, stack_ctx, parameter_offset, id.name(), offsets, type_info, stack_sizes, debug)
                     },
                     wast::Index::Num(value, _) => {
-                        emit_local_get(self, stack_ctx, parameter_offset, &format!("{}", value), offsets, type_info, stack_sizes, debug)
+                        let id = match is_param.get(&format!("l{}", value)) {
+                            Some(false) => {
+                                format!("l{}", value)
+                            },
+                            Some(true) => format!("p{}", value),
+                            _ => format!("p{}", value),
+                        };
+                        emit_local_get(self, stack_ctx, parameter_offset, &id, offsets, type_info, stack_sizes, debug)
                     },
                 }
             },
@@ -412,7 +421,14 @@ impl<'a> OpenCLCWriter<'_> {
                         emit_local_set(self, stack_ctx, parameter_offset, id.name(), offsets, type_info, stack_sizes, debug)
                     },
                     wast::Index::Num(value, _) => {
-                        emit_local_set(self, stack_ctx, parameter_offset, &format!("{}", value), offsets, type_info, stack_sizes, debug)
+                        let id = match is_param.get(&format!("l{}", value)) {
+                            Some(false) => {
+                                format!("l{}", value)
+                            },
+                            Some(true) => format!("p{}", value),
+                            _ => format!("p{}", value),
+                        };
+                        emit_local_set(self, stack_ctx, parameter_offset, &id, offsets, type_info, stack_sizes, debug)
                     },
                 }
             },
@@ -422,7 +438,14 @@ impl<'a> OpenCLCWriter<'_> {
                         emit_local_tee(self, stack_ctx, parameter_offset, id.name(), offsets, type_info, stack_sizes, debug)
                     },
                     wast::Index::Num(value, _) => {
-                        emit_local_tee(self, stack_ctx, parameter_offset, &format!("{}", value), offsets, type_info, stack_sizes, debug)
+                        let id = match is_param.get(&format!("l{}", value)) {
+                            Some(false) => {
+                                format!("l{}", value)
+                            },
+                            Some(true) => format!("p{}", value),
+                            _ => format!("p{}", value),
+                        };
+                        emit_local_tee(self, stack_ctx, parameter_offset, &id, offsets, type_info, stack_sizes, debug)
                     },
                 }
             },
@@ -950,7 +973,7 @@ impl<'a> OpenCLCWriter<'_> {
             },
             wast::Instruction::Return => emit_return(self, fn_name, debug),
             wast::Instruction::Br(idx) => emit_br(self, *idx, fn_name, control_stack, function_id_map, debug),
-            wast::Instruction::BrIf(idx) => emit_br_if(self, *idx, fn_name, stack_sizes, control_stack, function_id_map, debug),
+            wast::Instruction::BrIf(idx) => emit_br_if(self, stack_ctx, *idx, fn_name, stack_sizes, control_stack, function_id_map, debug),
             wast::Instruction::BrTable(table_idxs) => emit_br_table(self, table_idxs, fn_name, stack_sizes, control_stack, function_id_map, debug),
             wast::Instruction::Unreachable => {
                 let skip_label = if debug {
@@ -983,6 +1006,7 @@ impl<'a> OpenCLCWriter<'_> {
         // store the stack offset for all parameters and locals
         let mut local_parameter_stack_offset: HashMap<String, u32> = HashMap::new();
         let mut local_type_info: HashMap<String, ValType> = HashMap::new();
+        let mut is_param: HashMap<String, bool> = HashMap::new();
 
         // Function header
         match (&func.kind, &func.id, &func.ty) {
@@ -1002,12 +1026,14 @@ impl<'a> OpenCLCWriter<'_> {
                                 (Some(id), _, t) => {
                                     local_parameter_stack_offset.insert(id.name().to_string(), offset);
                                     local_type_info.insert(id.name().to_string(), t.clone());
+                                    is_param.insert(id.name().to_string(), true);
                                     offset += self.get_size_valtype(&t);
                                 },
                                 // if there is no id, we have to name the parameter ourselves!
                                 (None, _, t) => {
-                                    local_parameter_stack_offset.insert(format!("{}", param_idx), offset);
-                                    local_type_info.insert(format!("{}", param_idx), t.clone());
+                                    local_parameter_stack_offset.insert(format!("p{}", param_idx), offset);
+                                    local_type_info.insert(format!("p{}", param_idx), t.clone());
+                                    is_param.insert(format!("p{}", param_idx), true);
                                     offset += self.get_size_valtype(&t);
                                 },
                                 _ => panic!("Unhandled parameter type")
@@ -1031,11 +1057,12 @@ impl<'a> OpenCLCWriter<'_> {
                 for local in locals {
                     let local_id = match local.id {
                         Some(name) => name.name().to_string(),
-                        None => format!("{}", param_idx),
+                        None => format!("l{}", param_idx),
                     };
                     local_parameter_stack_offset.insert(local_id.clone(), offset);
                     local_type_info.insert(local_id.clone(), local.ty.clone());
-                    
+                    is_param.insert(local_id.clone(), false);
+
                     offset += self.get_size_valtype(&local.ty);
                     param_idx += 1;
                 }
@@ -1043,7 +1070,7 @@ impl<'a> OpenCLCWriter<'_> {
                 // Now that we have the type info for the parameters and locals, we can generate the stack context
 
                 // First, generate the stack context for the function
-                let mut stack_ctx = StackCtx::initialize_context(&self, &expression.instrs, &local_type_info);
+                let mut stack_ctx = StackCtx::initialize_context(&self, &expression.instrs, &local_type_info, &local_parameter_stack_offset, &is_param, param_offset);
 
                 // function entry point
                 // strip illegal chars from function name
@@ -1165,6 +1192,9 @@ impl<'a> OpenCLCWriter<'_> {
                     write!(final_string, "\t\t}}\n");
                 }
 
+                write!(final_string, "\t}} else {{\n");
+                // If we are running the func for the first time, init param intermediates
+                final_string += &stack_ctx.emit_load_params();
                 write!(final_string, "\t}}\n");
 
                 /*
@@ -1214,6 +1244,7 @@ impl<'a> OpenCLCWriter<'_> {
                                                             param_offset,
                                                             &local_parameter_stack_offset,
                                                             &local_type_info,
+                                                            &is_param,
                                                             call_ret_map,
                                                             call_ret_idx,
                                                             id.name(),
