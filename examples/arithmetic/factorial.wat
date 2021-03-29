@@ -142,8 +142,10 @@
 
   (func $_start (result i32)
     (local $l2 i64)
-    (i32.const 10)
+    (i32.const 1)
+    (i32.const 12)
     (call $_factorial)
+    (i32.add)
   )
   (memory (;0;) 17)
   (global (;0;) (mut i32) (i32.const 1048576))

@@ -11,20 +11,11 @@ use crate::opencl_writer::StackType;
  */
 
 pub fn emit_i32_eqz(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, debug: bool) -> String {
-    let read_prev = &format!("((int)({}) == (int)0) ? 1 : 0", emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx"));
-    format!("\t{};\n",
-            &emit_write_u32("(ulong)(stack_u32+*sp-1)",
-                            "(ulong)(stack_u32)",
-                            read_prev,
-                            "warp_idx"))
+    let reg = stack_ctx.vstack_peak(StackType::i32);
+    format!("\t{} = ((int)({}) == (int)0) ? 1 : 0;\n", reg, reg)
 }
 
 pub fn emit_i64_eqz(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, debug: bool) -> String {
-    let read_prev = &format!("((long)({}) == (long)0) ? 1 : 0", emit_read_u64("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx"));
-    format!("\t{};\n\t{}\n",
-            &emit_write_u32("(ulong)(stack_u32+*sp-2)",
-                            "(ulong)(stack_u32)",
-                            read_prev,
-                            "warp_idx"),
-            "*sp -= 1;")
+    let reg = stack_ctx.vstack_peak(StackType::i64);
+    format!("\t{} = ((int)({}) == (int)0) ? 1 : 0;\n", reg, reg)
 }

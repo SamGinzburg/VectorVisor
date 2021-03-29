@@ -12,6 +12,8 @@ use crate::opencl_writer::OpenCLCWriter;
 use crate::opencl_writer::WASI_SNAPSHOT_PREVIEW1;
 use crate::opencl_writer::emit_read_u32;
 use crate::opencl_writer::emit_read_u64;
+use crate::opencl_writer::emit_write_u32;
+use crate::opencl_writer::emit_write_u64;
 
 use wast::Instruction;
 use wast::ValType;
@@ -41,6 +43,7 @@ pub struct StackCtx {
     f64_stack: Vec<String>,
     f64_idx: usize,
     // Local & Parameter information
+    stack_frame_offset: u32,
     local_offsets: HashMap<String, u32>,
     local_types: HashMap<String, StackType>,
     param_offset: i32,
@@ -965,6 +968,22 @@ impl<'a> StackCtx {
             local_types_converted.insert(name.clone(), StackCtx::convert_wast_types(ty));
         }
 
+        let mut max_offset: u32 = 0;
+        let mut max_offset_type_size = 0;
+        for (name, offsets) in local_offsets {
+            let param_found = match is_param.get(name) {
+                Some(false) => false,
+                Some(true) => true,
+                _ => panic!("Local offset name not found (vstack)"),
+            };
+
+            if !param_found {
+                if *offsets > max_offset {
+                    max_offset = *offsets;
+                    max_offset_type_size = writer_ctx.get_size_valtype(&local_param_types.get(name).unwrap());
+                }
+            }
+        }
 
         StackCtx {
             i32_stack: i32_stack,
@@ -975,6 +994,7 @@ impl<'a> StackCtx {
             f32_idx: 0,
             f64_stack: f64_stack,
             f64_idx: 0,
+            stack_frame_offset: max_offset + max_offset_type_size,
             local_offsets: local_offsets.clone(),
             local_types: local_types_converted,
             param_offset: param_offset,
@@ -1127,6 +1147,30 @@ impl<'a> StackCtx {
         }
     }
 
+    /*
+     * Peak the last register on the vstack, useful for unops
+     */
+    pub fn vstack_peak(&mut self, t: StackType) -> String {
+        match t {
+            StackType::i32 => {
+                let alloc_val = self.i32_stack.get(self.i32_idx-1).unwrap();
+                format!("{}", alloc_val)
+            },
+            StackType::i64 => {
+                let alloc_val = self.i64_stack.get(self.i64_idx-1).unwrap();
+                format!("{}", alloc_val)
+            },
+            StackType::f32 => {
+                let alloc_val = self.f32_stack.get(self.f32_idx-1).unwrap();
+                format!("{}", alloc_val)
+            },
+            StackType::f64 => {
+                let alloc_val = self.f64_stack.get(self.f64_idx-1).unwrap();
+                format!("{}", alloc_val)
+            },
+        }
+    }
+
     pub fn stack_frame_size(&self) -> usize {
         self.i32_stack.len() + (self.i64_stack.len()*2) + self.f32_stack.len() + (self.f64_stack.len()*2)
     }
@@ -1136,14 +1180,177 @@ impl<'a> StackCtx {
      * We can statically determine the minimum
      */
     pub fn save_context(&self) -> String {
-        String::from("")
+        let mut ret_str = String::from("");
+
+        // First, save the locals to the stack frame
+        // TODO: track writes to locals at runtime to minimize gmem writes?
+        for (local, ty) in self.local_types.iter() {
+            let offset: i32 = *self.local_offsets.get(local).unwrap() as i32 + self.param_offset;
+            match ty {
+                StackType::i32 => {
+                    ret_str += &format!("\t{};\n", &emit_write_u32(&format!("(ulong)(stack_u32+{}+{})",
+                                                                    offset, 
+                                                                    &emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx")),
+                                                                    "(ulong)stack_u32",
+                                                                    &local,
+                                                                    "warp_idx"));
+                },
+                StackType::i64 => {
+                    ret_str += &format!("\t{};\n", &emit_write_u64(&format!("(ulong)(stack_u32+{}+{})",
+                                                                    offset, 
+                                                                    &emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx")),
+                                                                    "(ulong)stack_u32",
+                                                                    &local,
+                                                                    "warp_idx"));
+                },
+                StackType::f32 => {
+                    ret_str += &format!("\t{};\n", &emit_write_u32(&format!("(ulong)(stack_u32+{}+{})",
+                                                                    offset, 
+                                                                    &emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx")),
+                                                                    "(ulong)stack_u32",
+                                                                    &local,
+                                                                    "warp_idx"));
+                },
+                StackType::f64 => {
+                    ret_str += &format!("\t{};\n", &emit_write_u64(&format!("(ulong)(stack_u32+{}+{})",
+                                                                    offset, 
+                                                                    &emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx")),
+                                                                    "(ulong)stack_u32",
+                                                                    &local,
+                                                                    "warp_idx"));
+                }
+            }
+        }
+
+        // Now go through and save the intermediate values
+        let mut intermediate_offset = 0;
+        for idx in 0..self.i32_idx {
+            ret_str += &format!("\t{};\n", &emit_write_u32(&format!("(ulong)(stack_u32+{}+{}+{})",
+                                                            self.stack_frame_offset, intermediate_offset,
+                                                            &emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx")),
+                                                            "(ulong)stack_u32",
+                                                            &self.i32_stack.get(idx).unwrap(),
+                                                            "warp_idx"));
+            intermediate_offset += 1;
+        }
+
+        for idx in 0..self.i64_idx {
+            ret_str += &format!("\t{};\n", &emit_write_u64(&format!("(ulong)(stack_u32+{}+{}+{})",
+                                                            self.stack_frame_offset, intermediate_offset,
+                                                            &emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx")),
+                                                            "(ulong)stack_u32",
+                                                            &self.i64_stack.get(idx).unwrap(),
+                                                            "warp_idx"));
+            intermediate_offset += 2;
+        }
+
+        for idx in 0..self.f32_idx {
+            ret_str += &format!("\t{};\n", &emit_write_u32(&format!("(ulong)(stack_u32+{}+{}+{})",
+                                                            self.stack_frame_offset, intermediate_offset,
+                                                            &emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx")),
+                                                            "(ulong)stack_u32",
+                                                            &self.f32_stack.get(idx).unwrap(),
+                                                            "warp_idx"));
+            intermediate_offset += 1;
+        }
+
+        for idx in 0..self.f64_idx {
+            ret_str += &format!("\t{};\n", &emit_write_u64(&format!("(ulong)(stack_u32+{}+{}+{})",
+                                                            self.stack_frame_offset, intermediate_offset,
+                                                            &emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx")),
+                                                            "(ulong)stack_u32",
+                                                            &self.f64_stack.get(idx).unwrap(),
+                                                            "warp_idx"));
+            intermediate_offset += 2;
+        }
+
+        ret_str
     }
 
     /*
      * Generate the code to restore the context of the current function
      */
     pub fn restore_context(&self) -> String {
-        String::from("")
+        let mut ret_str = String::from("");
+
+        // First, load all locals from memory
+        for (local, ty) in self.local_types.iter() {
+            let offset: i32 = *self.local_offsets.get(local).unwrap() as i32 + self.param_offset;
+            match ty {
+                StackType::i32 => {
+                    ret_str += &format!("\t{} = {};\n", local, &emit_read_u32(&format!("(ulong)(stack_u32+{}+{})",
+                                                                    offset, 
+                                                                    &emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx")),
+                                                                    "(ulong)stack_u32",
+                                                                    "warp_idx"));
+                },
+                StackType::i64 => {
+                    ret_str += &format!("\t{} = {};\n", local, &emit_read_u64(&format!("(ulong)(stack_u32+{}+{})",
+                                                                    offset, 
+                                                                    &emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx")),
+                                                                    "(ulong)stack_u32",
+                                                                    "warp_idx"));
+                },
+                StackType::f32 => {
+                    ret_str += &format!("\t{} = {};\n", local, &emit_read_u32(&format!("(ulong)(stack_u32+{}+{})",
+                                                                    offset, 
+                                                                    &emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx")),
+                                                                    "(ulong)stack_u32",
+                                                                    "warp_idx"));
+                },
+                StackType::f64 => {
+                    ret_str += &format!("\t{} = {};\n", local, &emit_read_u64(&format!("(ulong)(stack_u32+{}+{})",
+                                                                    offset, 
+                                                                    &emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx")),
+                                                                    "(ulong)stack_u32",
+                                                                    "warp_idx"));
+                }
+            }
+        }
+
+        // Now restore the intermediate values
+        let mut intermediate_offset = 0;
+        for idx in 0..self.i32_idx {
+            ret_str += &format!("\t{} = {};\n", &self.i32_stack.get(idx).unwrap(),
+                                                &emit_read_u32(&format!("(ulong)(stack_u32+{}+{}+{})",
+                                                            self.stack_frame_offset, intermediate_offset,
+                                                            &emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx")),
+                                                            "(ulong)stack_u32",
+                                                            "warp_idx"));
+            intermediate_offset += 1;
+        }
+
+        for idx in 0..self.i64_idx {
+            ret_str += &format!("\t{} = {};\n", &self.i64_stack.get(idx).unwrap(), 
+                                                &emit_read_u64(&format!("(ulong)(stack_u32+{}+{}+{})",
+                                                            self.stack_frame_offset, intermediate_offset,
+                                                            &emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx")),
+                                                            "(ulong)stack_u32",
+                                                            "warp_idx"));
+            intermediate_offset += 2;
+        }
+
+        for idx in 0..self.f32_idx {
+            ret_str += &format!("\t{} = {};\n", &self.f32_stack.get(idx).unwrap(),
+                                                &emit_read_u32(&format!("(ulong)(stack_u32+{}+{}+{})",
+                                                            self.stack_frame_offset, intermediate_offset,
+                                                            &emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx")),
+                                                            "(ulong)stack_u32",
+                                                            "warp_idx"));
+            intermediate_offset += 1;
+        }
+
+        for idx in 0..self.f64_idx {
+            ret_str += &format!("\t{} = {};\n", &self.f64_stack.get(idx).unwrap(), 
+                                                &emit_read_u64(&format!("(ulong)(stack_u32+{}+{}+{})",
+                                                            self.stack_frame_offset, intermediate_offset,
+                                                            &emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx")),
+                                                            "(ulong)stack_u32",
+                                                            "warp_idx"));
+            intermediate_offset += 2;
+        }
+
+        ret_str
     }
 }
 
