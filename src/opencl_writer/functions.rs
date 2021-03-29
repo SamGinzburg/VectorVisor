@@ -78,7 +78,11 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stack
                     },
                 }
             }
-            return_type = Some(func_type_signature.clone().inline.unwrap().results[0]);
+            if func_type_signature.clone().inline.unwrap().results.len() > 0 {
+                return_type = Some(func_type_signature.clone().inline.unwrap().results[0]);
+            } else {
+                return_type = None;
+            }
         },
         // if we cannot find the type signature, we need to look it up to check for the param offset
         None => {
@@ -102,7 +106,11 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stack
                             },
                         }
                     }
-                    return_type = Some(ft.results[0]);
+                    if ft.results.len() > 0 {
+                        return_type = Some(ft.results[0]);
+                    } else {
+                        return_type = None;
+                    }
                 },
                 None => (),
                 _ => panic!("Non-function type referenced from function")
@@ -111,14 +119,19 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stack
     }
 
     // We need to manually write the parameters to the stack
-    for (param, size) in stack_params.iter().zip(stack_params_sizes.iter()) {
-        ret_str += &format!("\t{};\n\t*sp += {};\n",
-                            emit_write_u32("(ulong)(stack_u32+*sp)", "(ulong)(stack_u32)", param, "warp_idx"),
-                            size);
+    // For indirect function calls we need to do this before the switch case to over allocating registers
+    if !is_indirect {
+        for (param, size) in stack_params.iter().zip(stack_params_sizes.iter()) {
+            ret_str += &format!("\t{};\n\t*sp += {};\n",
+                                emit_write_u32("(ulong)(stack_u32+*sp)", "(ulong)(stack_u32)", param, "warp_idx"),
+                                size);
+        }
     }
 
     // Now, we need to save the intermediate context
-    ret_str += &stack_ctx.save_context();
+    if !is_indirect {
+        ret_str += &stack_ctx.save_context();
+    }
 
     // for each function call, map the call to an index
     // we use this index later on to return back to the instruction after the call
@@ -191,11 +204,14 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stack
     ret_str += &result;
 
     // restore the intermediate context
-    ret_str += &stack_ctx.restore_context();
+    if !is_indirect {
+        ret_str += &stack_ctx.restore_context();
+    }
 
     // after returning, the top of the stack is our return var (if we have one)
-    if return_size > 0 {
+    if return_size > 0 && !is_indirect {
         let result_register = stack_ctx.vstack_alloc(StackCtx::convert_wast_types(&return_type.unwrap()));
+
         match return_size {
             1 => {
                 ret_str += &format!("\t{} = {};\n\t{};\n", result_register, 
@@ -262,7 +278,12 @@ pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut St
         match value {
             wast::ValType::I32 => {
                 // compute the offset to read from the bottom of the stack
-                let reg = stack_ctx.vstack_pop(StackType::i32);
+                let reg = if !stack_ctx.vstack_is_empty(StackType::i32) {
+                    stack_ctx.vstack_pop(StackType::i32)
+                } else {
+                    String::from("(uint)(-1)")
+                };
+
                 if sp_counter > 0 {
                     offset = format!("write_u32((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), warp_idx)),
                                                 (ulong)stack_u32,
@@ -279,7 +300,11 @@ pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut St
             },
             wast::ValType::I64 => {
                 // compute the offset to read from the bottom of the stack
-                let reg = stack_ctx.vstack_pop(StackType::i64);
+                let reg = if !stack_ctx.vstack_is_empty(StackType::i64) {
+                    stack_ctx.vstack_pop(StackType::i64)
+                } else {
+                    String::from("(uint)(-1)")
+                };
 
                 if sp_counter > 0 {
                     offset = format!("write_u64((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx)),
@@ -297,7 +322,11 @@ pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut St
             },
             wast::ValType::F32 => {
                 // compute the offset to read from the bottom of the stack
-                let reg = stack_ctx.vstack_pop(StackType::f32);
+                let reg = if !stack_ctx.vstack_is_empty(StackType::f32) {
+                    stack_ctx.vstack_pop(StackType::f32)
+                } else {
+                    String::from("(uint)(-1)")
+                };
 
                 if sp_counter > 0 {
                     offset = format!("write_u32((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx)),
@@ -315,7 +344,12 @@ pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut St
             },
             wast::ValType::F64 => {
                 // compute the offset to read from the bottom of the stack
-                let reg = stack_ctx.vstack_pop(StackType::f64);
+                // compute the offset to read from the bottom of the stack
+                let reg = if !stack_ctx.vstack_is_empty(StackType::f64) {
+                    stack_ctx.vstack_pop(StackType::f64)
+                } else {
+                    String::from("(uint)(-1)")
+                };
 
                 if sp_counter > 0 {
                     offset = format!("write_u64((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx)),
@@ -377,8 +411,14 @@ pub fn emit_call_indirect(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut
         panic!("Function table index for indirect call must be of type i32");
     }
 
+    let index_register = stack_ctx.vstack_pop(StackType::i32);
+
+    let mut stack_params = vec![];
+    let mut stack_params_sizes = vec![];
+
     // Get the type information for the indirect call! We need this to handle parametric
     // statements after a call such as select
+    let mut result_types = vec![];
     match (call_indirect.ty.index.as_ref(), call_indirect.ty.inline.as_ref()) {
         (Some(index), _) => {
             // if we have an index, we need to look it up in the global structure
@@ -395,6 +435,8 @@ pub fn emit_call_indirect(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut
             // First, pop off the parameters
             for (_, _, param_type) in func_type.params.iter() {
                 let stack_param = stack_sizes.pop().unwrap();
+                stack_params_sizes.insert(0, stack_param);
+                stack_params.insert(0, stack_ctx.vstack_pop(StackCtx::convert_wast_types(&param_type)));
                 if stack_param != writer.get_size_valtype(param_type) {
                     panic!("Parameters on the stack don't match required function parameters!");
                 }
@@ -403,20 +445,35 @@ pub fn emit_call_indirect(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut
             // Next, push the result(s) back
             for return_type in func_type.results.iter() {
                 stack_sizes.push(writer.get_size_valtype(return_type));
+                result_types.push(return_type);
             }
         },
         (_, Some(inline)) => panic!("Inline types for call_indirect not implemented yet"),
         _ => (),
     };
 
+    // Push the parameters to the stack
+    for (param, size) in stack_params.iter().zip(stack_params_sizes.iter()) {
+        result += &format!("\t{};\n\t*sp += {};\n",
+                            emit_write_u32("(ulong)(stack_u32+*sp)", "(ulong)(stack_u32)", param, "warp_idx"),
+                            size);
+    }
+
+    // Allocate a register for return values
+    let result_register = if result_types.len() > 0 {
+        stack_ctx.vstack_alloc(StackCtx::convert_wast_types(&result_types[0]))
+    } else {
+        String::from("")
+    };
+
+    // Save the context before entering the switch case
+    result += &stack_ctx.save_context();
 
     result += &format!("\t{}\n",
-                       &format!("switch({}) {{", emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx")));
+                       &format!("switch({}) {{", index_register));
     // generate all of the cases in the table, all uninitialized values will trap to the default case
     for (key, value) in table {
         result += &format!("\t\t{}\n", format!("case {}:", key));
-        // now that we have found the appropriate call, we can pop the value off of the stack
-        result += &format!("\t\t\t{}\n", format!("*sp -= 1;"));
         // emit the function call here!
         result += &format!("{}", emit_fn_call(writer, stack_ctx, fn_name.clone(), **value, call_ret_map, call_ret_idx, &function_id_map, stack_sizes, true, debug));
         result += &format!("\t\t\t{}\n", format!("break;"));
@@ -426,6 +483,28 @@ pub fn emit_call_indirect(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut
     result += &format!("\t\t{}\n", "default:");
     result += &format!("\t\t\t{}\n", "return;");
     result += &format!("\t}}\n");
+
+    // Restore the context
+    result += &stack_ctx.restore_context();
+
+    // Read the result value into a register
+    if result_types.len() > 0 {
+        match writer.get_size_valtype(&result_types[0]) {
+            1 => {
+                result += &format!("\t{} = {};\n\t{};\n", result_register, 
+                                    emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx"),
+                                    "*sp -= 1");
+            },
+            2 => {
+                result += &format!("\t{} = {};\n\t{};\n", result_register, 
+                                    emit_read_u32("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx"),
+                                    "*sp -= 2;");
+            },
+            _ => {
+                panic!("Invalid return size type (functions.rs)");
+            }
+        }
+    }
 
     result
 }

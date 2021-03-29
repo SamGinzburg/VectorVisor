@@ -147,6 +147,8 @@ impl<'a> StackCtx {
                 wast::Instruction::I64Load16u(memarg) => {
                     stack_sizes.pop();
                     stack_sizes.push(2);
+                    current_i32_count -= 1;
+                    update_counter(&mut current_i64_count, &mut max_i64_count);
                 },
                 wast::Instruction::I32Load16u(memarg) => {
                     stack_sizes.pop();
@@ -163,14 +165,20 @@ impl<'a> StackCtx {
                 wast::Instruction::I64Load8u(memarg) => {
                     stack_sizes.pop();
                     stack_sizes.push(2);
+                    current_i32_count -= 1;
+                    update_counter(&mut current_i64_count, &mut max_i64_count);
                 },
                 wast::Instruction::I64Load32u(memarg) => {
                     stack_sizes.pop();
                     stack_sizes.push(2);
+                    current_i32_count -= 1;
+                    update_counter(&mut current_i64_count, &mut max_i64_count);
                 },
                 wast::Instruction::I64Load(memarg) => {
                     stack_sizes.pop();
                     stack_sizes.push(2);
+                    current_i32_count -= 1;
+                    update_counter(&mut current_i64_count, &mut max_i64_count);
                 },
                 wast::Instruction::F64Load(memarg) => {
                     stack_sizes.pop();
@@ -637,34 +645,79 @@ impl<'a> StackCtx {
                             Some(_) => {
                                 let func_type_signature = &writer_ctx.func_map.get(id).unwrap().ty;
 
-                                let params = &func_type_signature.inline.as_ref().unwrap().params;
-                                let results = &func_type_signature.inline.as_ref().unwrap().results;
+                                //let params = &func_type_signature.inline.as_ref().unwrap().params;
+                                //let results = &func_type_signature.inline.as_ref().unwrap().results;
 
-                                for (_, _, ty) in params.iter() {
-                                    match ty {
-                                        ValType::I32 => {
-                                            current_i32_count -= 1;
-                                        },
-                                        ValType::I64 => {
-                                            current_i64_count -= 1;
-                                        },
-                                        ValType::F32 => {
-                                            current_f32_count -= 1;
-                                        },
-                                        ValType::F64 => {
-                                            current_f64_count -= 1;
-                                        },
-                                        _ => panic!("vstack missing valtype check in func call")
-                                    }
-                                }
-
-                                // push the results back
-                                for ty in results.iter() {
-                                    update_by_valtype(ty,
-                                                        &mut current_i32_count, &mut max_i32_count,
-                                                        &mut current_i64_count, &mut max_i64_count,
-                                                        &mut current_f32_count, &mut max_f32_count,
-                                                        &mut current_f64_count, &mut max_f64_count);
+                                match &func_type_signature.inline {
+                                    // if we can find the type signature
+                                    Some(res) => {
+                                        for (_, _, ty) in res.params.iter() {
+                                            match ty {
+                                                ValType::I32 => {
+                                                    current_i32_count -= 1;
+                                                },
+                                                ValType::I64 => {
+                                                    current_i64_count -= 1;
+                                                },
+                                                ValType::F32 => {
+                                                    current_f32_count -= 1;
+                                                },
+                                                ValType::F64 => {
+                                                    current_f64_count -= 1;
+                                                },
+                                                _ => panic!("vstack missing valtype check in func call")
+                                            }
+                                        }
+                                        // push the results back
+                                        for ty in res.results.iter() {
+                                            update_by_valtype(ty,
+                                                                &mut current_i32_count, &mut max_i32_count,
+                                                                &mut current_i64_count, &mut max_i64_count,
+                                                                &mut current_f32_count, &mut max_f32_count,
+                                                                &mut current_f64_count, &mut max_f64_count);
+                                        }
+                                    },
+                                    // if we cannot find the type signature, we need to look it up to check for the param offset
+                                    None => {
+                                        let fn_type_id = match func_type_signature.index {
+                                            Some(wast::Index::Id(id)) => id.name().to_string(),
+                                            Some(wast::Index::Num(n, _)) => format!("t{}", n),
+                                            None => format!(""),
+                                        };
+                            
+                                        let function_type = writer_ctx.types.get(&fn_type_id);
+                                        match function_type {
+                                            Some(wast::TypeDef::Func(ft)) => {
+                                                for (_, _, ty) in ft.params.iter() {
+                                                    match ty {
+                                                        ValType::I32 => {
+                                                            current_i32_count -= 1;
+                                                        },
+                                                        ValType::I64 => {
+                                                            current_i64_count -= 1;
+                                                        },
+                                                        ValType::F32 => {
+                                                            current_f32_count -= 1;
+                                                        },
+                                                        ValType::F64 => {
+                                                            current_f64_count -= 1;
+                                                        },
+                                                        _ => panic!("vstack missing valtype check in func call")
+                                                    }
+                                                }
+                                                // push the results back
+                                                for ty in ft.results.iter() {
+                                                    update_by_valtype(ty,
+                                                                        &mut current_i32_count, &mut max_i32_count,
+                                                                        &mut current_i64_count, &mut max_i64_count,
+                                                                        &mut current_f32_count, &mut max_f32_count,
+                                                                        &mut current_f64_count, &mut max_f64_count);
+                                                }
+                                            },
+                                            None => (),
+                                            _ => panic!("Non-function type referenced from function (vstack)")
+                                        };
+                                    },
                                 }
                             },
                             // we have an import that isn't a system call...
@@ -1167,6 +1220,33 @@ impl<'a> StackCtx {
             StackType::f64 => {
                 let alloc_val = self.f64_stack.get(self.f64_idx-1).unwrap();
                 format!("{}", alloc_val)
+            },
+        }
+    }
+
+    /*
+     * Check if the vstack is empty, needed for function_unwind w/unreachable ending
+     * The type of unreachable is weird:
+     *   (func $__rust_start_panic (type $t5) (param $p0 i32) (result i32)
+     *       unreachable
+     *       unreachable) 
+     * 
+     * Is valid WASM code! So in function unwind we just check if the stack is empty
+     * and return -1 if it is.
+     */
+    pub fn vstack_is_empty(&mut self, t: StackType) -> bool {
+        match t {
+            StackType::i32 => {
+                self.i32_idx == 0
+            },
+            StackType::i64 => {
+                self.i64_idx == 0
+            },
+            StackType::f32 => {
+                self.f32_idx == 0
+            },
+            StackType::f64 => {
+                self.f64_idx == 0
             },
         }
     }
