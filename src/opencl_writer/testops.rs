@@ -16,6 +16,8 @@ pub fn emit_i32_eqz(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stack
 }
 
 pub fn emit_i64_eqz(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, debug: bool) -> String {
-    let reg = stack_ctx.vstack_peak(StackType::i64);
-    format!("\t{} = ((int)({}) == (int)0) ? 1 : 0;\n", reg, reg)
+    let reg = stack_ctx.vstack_pop(StackType::i64);
+    let result_register = stack_ctx.vstack_alloc(StackType::i32);
+
+    format!("\t{} = ((int)({}) == (int)0) ? 1 : 0;\n", result_register, reg)
 }

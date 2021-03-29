@@ -348,8 +348,7 @@ impl<'a> OpenCLCWriter<'_> {
             wast::Instruction::F64Load(memarg) => {
                 stack_sizes.pop();
                 stack_sizes.push(2);
-                // we can reuse the i64 load code
-                emit_memload_i64(self, stack_ctx, memarg, debug)
+                emit_memload_f64(self, stack_ctx, memarg, debug)
             },
             wast::Instruction::I64Store(memarg) => {
                 stack_sizes.pop();
@@ -359,8 +358,7 @@ impl<'a> OpenCLCWriter<'_> {
             wast::Instruction::F64Store(memarg) => {
                 stack_sizes.pop();
                 stack_sizes.pop();
-                // we can reuse the i64 code for f64
-                emit_memstore_i64(self, stack_ctx, memarg, debug)
+                emit_memstore_f64(self, stack_ctx, memarg, debug)
             },
             wast::Instruction::GlobalGet(idx) => {
                 match idx {
@@ -876,20 +874,16 @@ impl<'a> OpenCLCWriter<'_> {
                 emit_i64_sub(self, stack_ctx, debug)
             },
             wast::Instruction::I64ReinterpretF64 => {
-                // no-op
-                format!("")
+                emit_i64_reinterpret_f64(self, stack_ctx, debug)
             },
             wast::Instruction::F64ReinterpretI64 => {
-                // no-op
-                format!("")
+                emit_f64_reinterpret_i64(self, stack_ctx, debug)
             },
             wast::Instruction::F32ReinterpretI32 => {
-                // no-op
-                format!("")
+                emit_f32_reinterpret_i32(self, stack_ctx, debug)
             },
             wast::Instruction::I32ReinterpretF32 => {
-                // no-op
-                format!("")
+                emit_i32_reinterpret_f32(self, stack_ctx, debug)
             },
             wast::Instruction::F64ConvertI32S => {
                 stack_sizes.pop();
@@ -1097,12 +1091,12 @@ impl<'a> OpenCLCWriter<'_> {
                 final_string += &stack_ctx.emit_intermediates();
 
                 if debug_call_print {
-                    write!(final_string, "\t\tprintf(\"*sfp = %d\\n\", *sfp);\n");
-                    write!(final_string, "\t\tprintf(\"*sp = %d\\n\", *sp);\n");
-                    write!(final_string, "\t\tprintf(\"*hypercall_number = %d\\n\", *hypercall_number);\n");
-                    write!(final_string, "\t\tprintf(\"*hypercall_continuation = %d\\n\", *hypercall_continuation);\n");
-                    write!(final_string, "\t\tprintf(\"read_u32(stack_frames+*sfp) = %d\\n\", read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx));\n");
-                    write!(final_string, "\t\tprintf(\"read_u64(call_stack+*sfp) = %d\\n\", read_u64((ulong)(call_stack+*sfp), (ulong)(call_stack), warp_idx));\n");
+                    write!(final_string, "\t\tprintf(\"*sfp = %d\\n\", *sfp);\n").unwrap();
+                    write!(final_string, "\t\tprintf(\"*sp = %d\\n\", *sp);\n").unwrap();
+                    write!(final_string, "\t\tprintf(\"*hypercall_number = %d\\n\", *hypercall_number);\n").unwrap();
+                    write!(final_string, "\t\tprintf(\"*hypercall_continuation = %d\\n\", *hypercall_continuation);\n").unwrap();
+                    write!(final_string, "\t\tprintf(\"read_u32(stack_frames+*sfp) = %d\\n\", read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx));\n").unwrap();
+                    write!(final_string, "\t\tprintf(\"read_u64(call_stack+*sfp) = %d\\n\", read_u64((ulong)(call_stack+*sfp), (ulong)(call_stack), warp_idx));\n").unwrap();
                 }
 
                 /*
@@ -1156,46 +1150,46 @@ impl<'a> OpenCLCWriter<'_> {
                 // upon entry, first check to see if we are returning from a hypercall
                 // hypercall_number is set to -1 after completing the hypercall
 
-                write!(final_string, "\t{}\n", "if (*hypercall_number == -1) {");
-                write!(final_string, "\t\t{}\n", "*hypercall_number = -2;");
+                write!(final_string, "\t{}\n", "if (*hypercall_number == -1) {").unwrap();
+                write!(final_string, "\t\t{}\n", "*hypercall_number = -2;").unwrap();
                 if *num_hypercalls > 0 {
-                    write!(final_string, "\t\t{}\n", "switch (*hypercall_continuation) {");
+                    write!(final_string, "\t\t{}\n", "switch (*hypercall_continuation) {").unwrap();
                     for count in 0..*num_hypercalls {
-                        write!(final_string, "\t\t\tcase {}:\n", count);
+                        write!(final_string, "\t\t\tcase {}:\n", count).unwrap();
                         if debug_call_print {
-                            write!(final_string, "\t\t\t\tprintf(\"goto: {}_hypercall_return_stub_{}\\n\");\n", format!("{}{}", "__", id.name().replace(".", "")), count);
+                            write!(final_string, "\t\t\t\tprintf(\"goto: {}_hypercall_return_stub_{}\\n\");\n", format!("{}{}", "__", id.name().replace(".", "")), count).unwrap();
                         }
-                        write!(final_string, "\t\t\t\tgoto {}_hypercall_return_stub_{};\n", format!("{}{}", "__", id.name().replace(".", "")), count);
-                        write!(final_string, "\t\t\t\tbreak;\n");
+                        write!(final_string, "\t\t\t\tgoto {}_hypercall_return_stub_{};\n", format!("{}{}", "__", id.name().replace(".", "")), count).unwrap();
+                        write!(final_string, "\t\t\t\tbreak;\n").unwrap();
                     }
-                    write!(final_string, "\t\t}}\n");
+                    write!(final_string, "\t\t}}\n").unwrap();
                 }
 
-                write!(final_string, "\t}}\n");
+                write!(final_string, "\t}}\n").unwrap();
 
                 // after checking for hypercalls, check if we are unwinding the call stack
                 // (returning from another function)
 
-                write!(final_string, "\t{}\n", "if (!*is_calling) {");
+                write!(final_string, "\t{}\n", "if (!*is_calling) {").unwrap();
                 if *num_function_calls > 0 {
                     write!(final_string, "\t\t{}\n",
-                        format!("switch ({}) {{", emit_read_u64("(ulong)(call_stack+*sfp)", "(ulong)(call_stack)", "warp_idx")));
+                        format!("switch ({}) {{", emit_read_u64("(ulong)(call_stack+*sfp)", "(ulong)(call_stack)", "warp_idx"))).unwrap();
                     for count in 0..*num_function_calls {
-                        write!(final_string, "\t\t\tcase {}:\n", count);
-                        write!(final_string, "\t\t\t\t*sfp -= 1;\n");
+                        write!(final_string, "\t\t\tcase {}:\n", count).unwrap();
+                        write!(final_string, "\t\t\t\t*sfp -= 1;\n").unwrap();
                         if debug_call_print {
-                            write!(final_string, "\t\t\t\tprintf(\"goto: {}_call_return_stub_{}\\n\");\n", format!("{}{}", "__", id.name().replace(".", "")), count);
+                            write!(final_string, "\t\t\t\tprintf(\"goto: {}_call_return_stub_{}\\n\");\n", format!("{}{}", "__", id.name().replace(".", "")), count).unwrap();
                         }
-                        write!(final_string, "\t\t\t\tgoto {}_call_return_stub_{};\n", format!("{}{}", "__", id.name().replace(".", "")), count);
+                        write!(final_string, "\t\t\t\tgoto {}_call_return_stub_{};\n", format!("{}{}", "__", id.name().replace(".", "")), count).unwrap();
                         //write!(final_string, "\t\t\t\tbreak;\n");
                     }
-                    write!(final_string, "\t\t}}\n");
+                    write!(final_string, "\t\t}}\n").unwrap();
                 }
 
-                write!(final_string, "\t}} else {{\n");
+                write!(final_string, "\t}} else {{\n").unwrap();
                 // If we are running the func for the first time, init param intermediates
                 final_string += &stack_ctx.emit_load_params();
-                write!(final_string, "\t}}\n");
+                write!(final_string, "\t}}\n").unwrap();
 
                 /*
                  * Stack setup for each function:
@@ -1238,6 +1232,7 @@ impl<'a> OpenCLCWriter<'_> {
                 // (we can't just iterate because the control stack would have a different lifetime)
 
                 for instruction in expression.instrs.iter() {
+                    dbg!(&instruction);
                     final_string += &self.emit_instructions(instruction,
                                                             stack_sizes,
                                                             &mut stack_ctx,
@@ -1435,7 +1430,7 @@ impl<'a> OpenCLCWriter<'_> {
                     uchar  *is_calling,
                     ulong  warp_idx,
                     uint   *entry_point,
-                    uint   *hcall_ret_val)", fn_name));
+                    uint   *hcall_ret_val)", fn_name)).unwrap();
             } else {
                 write!(output, "{}", format!("void {}(uint   *stack_u32,
                     ulong  *stack_u64,
@@ -1457,7 +1452,7 @@ impl<'a> OpenCLCWriter<'_> {
                     uchar  *is_calling,
                     ulong  warp_idx,
                     uint   *entry_point,
-                    uint   hcall_ret_val)", fn_name));
+                    uint   hcall_ret_val)", fn_name)).unwrap();
             }
         } else if is_control_fn {
             let header = format!("__kernel void {}(__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}) {{\n",
@@ -1484,7 +1479,7 @@ impl<'a> OpenCLCWriter<'_> {
                                     "uint   *hcall_ret_val_global");
             // write thread-local private variables before header
 
-            write!(output, "{}", header);
+            write!(output, "{}", header).unwrap();
             // TODO: for the openCL launcher, pass the memory stride as a function parameter
             if interleave > 0 {
                 write!(output, "\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\n\t{}\n",
@@ -1512,7 +1507,7 @@ impl<'a> OpenCLCWriter<'_> {
                 "global uchar *is_calling = (global uchar *)is_calling_global+(get_global_id(0));",
                 "global uint  *entry_point   = (global uint*)entry_point_global+get_global_id(0);",
                 "ulong warp_idx = get_global_id(0);",
-                "global uint  *hcall_ret_val = (global uint*)hcall_ret_val_global+get_global_id(0);");
+                "global uint  *hcall_ret_val = (global uint*)hcall_ret_val_global+get_global_id(0);").unwrap();
             } else {
                 // The pointer math must be calculated in terms of bytes, which is why we cast to (char*) first
                 write!(output, "\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\n\t{}\n",
@@ -1541,12 +1536,12 @@ impl<'a> OpenCLCWriter<'_> {
                 "global uchar *is_calling = (global uchar *)is_calling_global+(get_global_id(0));",
                 "global uint  *entry_point   = (global uint *)entry_point_global+get_global_id(0);",
                 "ulong warp_idx = get_global_id(0);",
-                "global uint  *hcall_ret_val = (global uint*)hcall_ret_val_global+get_global_id(0);");
+                "global uint  *hcall_ret_val = (global uint*)hcall_ret_val_global+get_global_id(0);").unwrap();
             }
         // if we are an OpenCL kernel and we are not the control function, we only need the function header itself
         } else {
             write!(output, "{}", format!("
-inline void {}(global uint   *stack_u32,
+void {}(global uint   *stack_u32,
     global ulong  *stack_u64,
     global uint   *heap_u32,
     global ulong  *heap_u64,
@@ -1566,7 +1561,7 @@ inline void {}(global uint   *stack_u32,
     global uchar  *is_calling,
     ulong  warp_idx,
     global uint   *entry_point,
-    uint hcall_ret_val)", fn_name));
+    uint hcall_ret_val)", fn_name)).unwrap();
         }
         output
     }
@@ -1745,30 +1740,30 @@ inline void {}(global uint   *stack_u32,
                                                globals_buffer_size,
                                                stack_frame_ptr_size_bytes,
                                                true,
-                                               debug));
-        write!(ret_str, "\tstack_u32 += {};\n", 128);
+                                               debug)).unwrap();
+        write!(ret_str, "\tstack_u32 += {};\n", 128).unwrap();
         if debug_print_function_calls {
-            write!(ret_str, "\tprintf(\"stack_u32: %p\\n\", stack_u32);\n");
-            write!(ret_str, "\tprintf(\"heap_u32: %p\\n\", heap_u32);\n");
-            write!(ret_str, "\tprintf(\"is_calling: %p\\n\", is_calling);\n");
-            write!(ret_str, "\tprintf(\"hypercall_buffer: %p\\n\", hypercall_buffer);\n");
-            write!(ret_str, "\tprintf(\"call_stack: %p\\n\", call_stack);\n");
-            write!(ret_str, "\tprintf(\"stack_frames: %p\\n\", stack_frames);\n");
-            write!(ret_str, "\tprintf(\"call_return_stack: %p\\n\", call_return_stack);\n");
-            write!(ret_str, "\tprintf(\"branch_value_stack_state: %p\\n\", branch_value_stack_state);\n");
-            write!(ret_str, "\tprintf(\"loop_value_stack_state: %p\\n\", loop_value_stack_state);\n");
-            write!(ret_str, "\tprintf(\"hypercall_number: %p\\n\", hypercall_number);\n");
-            write!(ret_str, "\tprintf(\"hypercall_continuation: %p\\n\", hypercall_continuation);\n");
-            write!(ret_str, "\tprintf(\"current_mem_size: %p\\n\", current_mem_size);\n");
-            write!(ret_str, "\tprintf(\"max_mem_size: %p\\n\", max_mem_size);\n");
+            write!(ret_str, "\tprintf(\"stack_u32: %p\\n\", stack_u32);\n").unwrap();
+            write!(ret_str, "\tprintf(\"heap_u32: %p\\n\", heap_u32);\n").unwrap();
+            write!(ret_str, "\tprintf(\"is_calling: %p\\n\", is_calling);\n").unwrap();
+            write!(ret_str, "\tprintf(\"hypercall_buffer: %p\\n\", hypercall_buffer);\n").unwrap();
+            write!(ret_str, "\tprintf(\"call_stack: %p\\n\", call_stack);\n").unwrap();
+            write!(ret_str, "\tprintf(\"stack_frames: %p\\n\", stack_frames);\n").unwrap();
+            write!(ret_str, "\tprintf(\"call_return_stack: %p\\n\", call_return_stack);\n").unwrap();
+            write!(ret_str, "\tprintf(\"branch_value_stack_state: %p\\n\", branch_value_stack_state);\n").unwrap();
+            write!(ret_str, "\tprintf(\"loop_value_stack_state: %p\\n\", loop_value_stack_state);\n").unwrap();
+            write!(ret_str, "\tprintf(\"hypercall_number: %p\\n\", hypercall_number);\n").unwrap();
+            write!(ret_str, "\tprintf(\"hypercall_continuation: %p\\n\", hypercall_continuation);\n").unwrap();
+            write!(ret_str, "\tprintf(\"current_mem_size: %p\\n\", current_mem_size);\n").unwrap();
+            write!(ret_str, "\tprintf(\"max_mem_size: %p\\n\", max_mem_size);\n").unwrap();
         }
 
-        write!(ret_str, "\t{}\n", "do {");
-        write!(ret_str, "\t{}\n", "switch (*entry_point) {");
+        write!(ret_str, "\t{}\n", "do {").unwrap();
+        write!(ret_str, "\t{}\n", "switch (*entry_point) {").unwrap();
         for key in function_idx_label.keys() {
-            write!(ret_str, "\t\tcase {}:\n", function_idx_label.get(key).unwrap());
+            write!(ret_str, "\t\tcase {}:\n", function_idx_label.get(key).unwrap()).unwrap();
             if debug_print_function_calls {
-                write!(ret_str, "\t\tprintf(\"{}\\n\");\n", format!("{}{}", "__", key.replace(".", "")));
+                write!(ret_str, "\t\tprintf(\"{}\\n\");\n", format!("{}{}", "__", key.replace(".", ""))).unwrap();
             }
             // strip illegal chars from function names
             write!(ret_str, "\t\t\t{}({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {});\n",
@@ -1793,20 +1788,20 @@ inline void {}(global uint   *stack_u32,
                             "is_calling",
                             "warp_idx",
                             "entry_point",
-                            "*hcall_ret_val");
-            write!(ret_str, "\t\t\tbreak;\n");
+                            "*hcall_ret_val").unwrap();
+            write!(ret_str, "\t\t\tbreak;\n").unwrap();
         }
-        write!(ret_str, "\t\tdefault:\n");
+        write!(ret_str, "\t\tdefault:\n").unwrap();
         if debug_print_function_calls {
-            write!(ret_str, "\t\t\tprintf(\"{}\\n\");\n", "taking default case");
+            write!(ret_str, "\t\t\tprintf(\"{}\\n\");\n", "taking default case").unwrap();
         }
-        write!(ret_str, "\t\t\treturn;\n");
-        write!(ret_str, "\t}}\n");
+        write!(ret_str, "\t\t\treturn;\n").unwrap();
+        write!(ret_str, "\t}}\n").unwrap();
 
         // if we reset the hypercall_number, that means we need to exit back to the VMM
-        write!(ret_str, "\t{}\n", "} while (*sfp != 0 && *hypercall_number == -2);");
+        write!(ret_str, "\t{}\n", "} while (*sfp != 0 && *hypercall_number == -2);").unwrap();
 
-        write!(ret_str, "}}\n");
+        write!(ret_str, "}}\n").unwrap();
 
         ret_str
     }
@@ -1829,17 +1824,6 @@ inline void {}(global uint   *stack_u32,
         let mut kernel_hashmap: HashMap<u32, String> = HashMap::new();
         //let mut output = File::create(filename).unwrap();
 
-        // if we are running in debug C-mode, we must define the openCL types
-        if debug {
-            write!(output, "{}", format!("#include <stdlib.h>\n"));
-            write!(output, "{}", format!("#include \"../includes/wasm_hypercall.h\"\n"));
-
-            write!(output, "{}", format!("#define uchar unsigned char\n"));
-            write!(output, "{}", format!("#define ulong unsigned long\n"));
-            write!(output, "{}", format!("#define uint unsigned int\n"));
-            write!(output, "{}", format!("#define ushort unsigned short\n"));
-        }
-
         // enable the usage of FP64 operations (double precision floats)
         // if we are unable to enable, floating point calculations may be incorrect
         write!(output, "{}",
@@ -1849,17 +1833,17 @@ r#"
 #elif defined(cl_amd_fp64)
 #pragma OPENCL EXTENSION cl_amd_fp64 : enable
 #endif
-"#);
+"#).unwrap();
 
         // generate the read/write functions
         // we support only either a 1 byte interleave, or no interleave
         // 0 = no interleave
-        write!(output, "{}", generate_read_write_calls(&self, interleave, debug));
-        write!(header, "{}", generate_read_write_calls(&self, interleave, debug));
+        write!(output, "{}", generate_read_write_calls(&self, interleave, debug)).unwrap();
+        write!(header, "{}", generate_read_write_calls(&self, interleave, debug)).unwrap();
 
         // generate the hypercall helper section
-        write!(output, "{}", self.generate_hypercall_helpers(debug));
-        write!(header, "{}", self.generate_hypercall_helpers(debug));
+        write!(output, "{}", self.generate_hypercall_helpers(debug)).unwrap();
+        write!(header, "{}", self.generate_hypercall_helpers(debug)).unwrap();
 
         let prelude_header = output.clone();
 
@@ -1874,7 +1858,7 @@ r#"
 
         let data_program = format!("{}\n{}", prelude_header, data_section.clone());
         kernel_hashmap.insert(99999, data_program);
-        write!(output, "{}", data_section);
+        write!(output, "{}", data_section).unwrap();
 
         // for each function, assign an ID -> index mapping
         let mut function_idx_label: HashMap<&str, u32> = HashMap::new();
@@ -1916,11 +1900,7 @@ r#"
                                           is_gpu,
                                           debug);
 
-            if debug {
-                //write!(output, "{}", func);
-            }
-            
-            write!(output, "{}", func);
+            write!(output, "{}", func).unwrap();
 
             let fname = match (&function.kind, &function.id, &function.ty) {
                 (wast::FuncKind::Import(_), _, _) => {
@@ -1970,7 +1950,7 @@ r#"
                                                globals_buffer_size,
                                                stack_frame_ptr_size_bytes,
                                                true,
-                                               debug));
+                                               debug)).unwrap();
 
         /*
          * Set up the stack frame for the first function call (___start)
@@ -2012,7 +1992,7 @@ r#"
                             None => (),
                         }
                         */
-                        write!(output, "\tstack_u32 += {};\n", 128);
+                        write!(output, "\tstack_u32 += {};\n", 128).unwrap();
                         break;
                     }
                 },
@@ -2021,28 +2001,28 @@ r#"
         }
 
         if debug_print_function_calls {
-            write!(output, "\tprintf(\"stack_u32: %p\\n\", stack_u32);\n");
-            write!(output, "\tprintf(\"heap_u32: %p\\n\", heap_u32);\n");
-            write!(output, "\tprintf(\"is_calling: %p\\n\", is_calling);\n");
-            write!(output, "\tprintf(\"hypercall_buffer: %p\\n\", hypercall_buffer);\n");
-            write!(output, "\tprintf(\"call_stack: %p\\n\", call_stack);\n");
-            write!(output, "\tprintf(\"stack_frames: %p\\n\", stack_frames);\n");
-            write!(output, "\tprintf(\"call_return_stack: %p\\n\", call_return_stack);\n");
-            write!(output, "\tprintf(\"branch_value_stack_state: %p\\n\", branch_value_stack_state);\n");
-            write!(output, "\tprintf(\"loop_value_stack_state: %p\\n\", loop_value_stack_state);\n");
-            write!(output, "\tprintf(\"hypercall_number: %p\\n\", hypercall_number);\n");
-            write!(output, "\tprintf(\"hypercall_continuation: %p\\n\", hypercall_continuation);\n");
-            write!(output, "\tprintf(\"current_mem_size: %p\\n\", current_mem_size);\n");
-            write!(output, "\tprintf(\"max_mem_size: %p\\n\", max_mem_size);\n");
-            write!(output, "\tprintf(\"globals_buffer: %p\\n\", globals_buffer);\n");
+            write!(output, "\tprintf(\"stack_u32: %p\\n\", stack_u32);\n").unwrap();
+            write!(output, "\tprintf(\"heap_u32: %p\\n\", heap_u32);\n").unwrap();
+            write!(output, "\tprintf(\"is_calling: %p\\n\", is_calling);\n").unwrap();
+            write!(output, "\tprintf(\"hypercall_buffer: %p\\n\", hypercall_buffer);\n").unwrap();
+            write!(output, "\tprintf(\"call_stack: %p\\n\", call_stack);\n").unwrap();
+            write!(output, "\tprintf(\"stack_frames: %p\\n\", stack_frames);\n").unwrap();
+            write!(output, "\tprintf(\"call_return_stack: %p\\n\", call_return_stack);\n").unwrap();
+            write!(output, "\tprintf(\"branch_value_stack_state: %p\\n\", branch_value_stack_state);\n").unwrap();
+            write!(output, "\tprintf(\"loop_value_stack_state: %p\\n\", loop_value_stack_state);\n").unwrap();
+            write!(output, "\tprintf(\"hypercall_number: %p\\n\", hypercall_number);\n").unwrap();
+            write!(output, "\tprintf(\"hypercall_continuation: %p\\n\", hypercall_continuation);\n").unwrap();
+            write!(output, "\tprintf(\"current_mem_size: %p\\n\", current_mem_size);\n").unwrap();
+            write!(output, "\tprintf(\"max_mem_size: %p\\n\", max_mem_size);\n").unwrap();
+            write!(output, "\tprintf(\"globals_buffer: %p\\n\", globals_buffer);\n").unwrap();
         }
 
-        write!(output, "\t{}\n", "do {");
-        write!(output, "\t{}\n", "switch (*entry_point) {");
+        write!(output, "\t{}\n", "do {").unwrap();
+        write!(output, "\t{}\n", "switch (*entry_point) {").unwrap();
         for key in function_idx_label.keys() {
-            write!(output, "\t\tcase {}:\n", function_idx_label.get(key).unwrap());
+            write!(output, "\t\tcase {}:\n", function_idx_label.get(key).unwrap()).unwrap();
             if debug_print_function_calls {
-                write!(output, "\t\tprintf(\"{}\\n\");\n", format!("{}{}", "__", key.replace(".", "")));
+                write!(output, "\t\tprintf(\"{}\\n\");\n", format!("{}{}", "__", key.replace(".", ""))).unwrap();
             }
             // strip illegal chars from function names
             write!(output, "\t\t\t{}({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {});\n",
@@ -2067,92 +2047,17 @@ r#"
                             "is_calling",
                             "warp_idx",
                             "entry_point",
-                            "*hcall_ret_val");
-            write!(output, "\t\t\tbreak;\n");
+                            "*hcall_ret_val").unwrap();
+            write!(output, "\t\t\tbreak;\n").unwrap();
         }
-        write!(output, "\t\tdefault:\n");
-            write!(output, "\t\t\treturn;\n");
-        write!(output, "\t}}\n");
+        write!(output, "\t\tdefault:\n").unwrap();
+            write!(output, "\t\t\treturn;\n").unwrap();
+        write!(output, "\t}}\n").unwrap();
 
         // if we reset the hypercall_number, that means we need to exit back to the VMM
-        write!(output, "\t{}\n", "} while (*sfp != 0 && *hypercall_number == -2);");
+        write!(output, "\t{}\n", "} while (*sfp != 0 && *hypercall_number == -2);").unwrap();
 
-        write!(output, "}}\n");
-
-        if debug {
-            write!(output, "{}", format!("int main(int argc, char *argv[]) {{\n"));
-            
-            write!(output, "{}", format!("\t{}\n", "uvwasi_t uvwasi;"));
-            write!(output, "{}", format!("\t{}\n", "uvwasi_options_t init_options;"));
-            write!(output, "{}", format!("\t{}\n", "uvwasi_options_init(&init_options);"));
-            write!(output, "{}", format!("\t{}\n", "uvwasi_init(&uvwasi, &init_options);"));
-            write!(output, "{}", format!("\tuint *stack_u32 = calloc(1024*1024, sizeof(uint));\n"));
-            write!(output, "{}", format!("\tuint *globals = calloc(1024, sizeof(uint));\n"));
-            write!(output, "{}", format!("\tuint *hcall_buf = calloc(1024*16, sizeof(uint));\n"));
-            write!(output, "{}", format!("\tulong *stack_u64 = (ulong *)stack_u32;\n"));
-            write!(output, "{}", format!("\tuint *heap_u32 = (uint *)calloc(1024*1024*16, sizeof(uint));\n"));
-            write!(output, "{}", format!("\tulong *heap_u64 = (ulong *)calloc(1024, sizeof(uint));\n"));
-            write!(output, "{}", format!("\tuint *stack_frames = calloc(1024, sizeof(uint));\n"));
-            write!(output, "{}", format!("\tuint *call_stack = calloc(1024, sizeof(uint));\n"));
-            write!(output, "{}", format!("\tuint *call_return_stack = calloc(1024, sizeof(uint));\n"));
-
-            // the size of this structure is proportional to how many functions there are
-            // size = function count * 4096 bytes (64 x 64)
-            write!(output, "{}", format!("\tuchar *branch_value_stack_state = calloc({}, sizeof(uchar));\n", funcs.len() * 4096 * 2));
-            write!(output, "{}", format!("\tuchar *loop_value_stack_state = calloc({}, sizeof(uchar));\n", funcs.len() * 4096 * 2));
-
-            write!(output, "{}", format!("\tulong sp = 0;\n"));
-            write!(output, "{}", format!("\tulong sfp = 0;\n"));
-            write!(output, "{}", format!("\tuchar is_calling = 1;\n"));
-
-            write!(output, "{}", format!("\tulong entry_point = {};\n", function_idx_label.get("_start").unwrap()));
-
-            write!(output, "{}", format!("\tint hypercall_number = -2;\n"));
-            write!(output, "{}", format!("\tuint hypercall_continuation = 0;\n"));
-            write!(output, "{}", format!("\tuint curr_mem[1024];\n"));
-            write!(output, "{}", format!("\tuint max_mem[1024];\n"));
-            write!(output, "{}", format!("\tstack_frames[sfp] = sp;\n"));
-            write!(output, "{}", format!("\tstack_u64[0] = 0x1;\n"));
-            write!(output, "{}", format!("\tsp += 2;\n"));
-            write!(output, "{}", format!("\tdata_init(heap_u32, globals, curr_mem, max_mem, &is_calling);\n"));
-
-            // now we are entering the main execution loop, continue until *sp == 0
-            write!(output, "{}", format!("\twhile(1) {{\n"));
-
-            write!(output, "{}", format!("{}",
-                    format!("\t\twasm_entry(stack_u32, stack_u64, heap_u32, heap_u64, hcall_buf, globals, stack_frames, &sp, &sfp, call_stack, call_return_stack, branch_value_stack_state, loop_value_stack_state, &hypercall_number, &hypercall_continuation, curr_mem, max_mem, &is_calling, 0, &entry_point);\n")));
-
-                    // if *sp == 0, break
-                    write!(output, "{}", format!("\t\tif (sp == 0) {{\n"));
-                    write!(output, "{}", format!("\t\t\tbreak;\n"));
-
-                    // elif hypercall waiting -> dispatch hypercall
-                    write!(output, "{}", format!("\t\t}} else {{\n"));
-                    // process the hypercall
-                    write!(output, "{}", format!("\t\t\t{}\n", "printf(\"hypercall: %d\\n\", hypercall_number);"));
-                    // hypercall_number == 1, corresponds to proc_exit
-                    write!(output, "{}", format!("\t\t\t{}\n", "switch (hypercall_number) {"));
-                    write!(output, "{}", format!("\t\t\t\t{}\n", "case 0:"));
-                    write!(output, "{}", format!("\t\t\t\t\t{}\n", "vmm_fd_write(&uvwasi, stack_u32, &sp, heap_u32);"));
-                    write!(output, "{}", format!("\t\t\t\t\t{}\n", "break;"));
-                    write!(output, "{}", format!("\t\t\t\t{}\n", "case 1:"));
-                    write!(output, "{}", format!("\t\t\t\t\t{}\n", "goto exit;"));
-                    write!(output, "{}", format!("\t\t\t\t\t{}\n", "break;"));
-                    write!(output, "{}", format!("\t\t\t{}\n", "}"));
-                    // after processing, reset hypercall_number to -1 to reenter the continuation
-                    write!(output, "{}", format!("\t\t\t{}\n", "hypercall_number = -1;"));
-                    write!(output, "{}", format!("\t\t}}\n"));
-
-           
-            write!(output, "{}", format!("\t}}\n"));
-
-            write!(output, "{}", format!("exit:\n"));
-
-            // now check the result
-            write!(output, "{}", format!("\tprintf(\"%d\\n\", stack_u32[sp]);\n"));
-
-            write!(output, "}}\n\n");
-        }
+        write!(output, "}}\n").unwrap();
 
         (output, *function_idx_label.get("_start").unwrap(), globals_buffer_size, funcs.len().try_into().unwrap(), kernel_hashmap)
     }

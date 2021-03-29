@@ -17,14 +17,15 @@ pub fn emit_local_get(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Sta
         wast::ValType::I32 => {
 
             stack_sizes.push(1);
+
             let register = stack_ctx.vstack_alloc(StackType::i32);
             format!("\t{} = {};\n", register, id)
         },
         wast::ValType::I64 => {
 
             stack_sizes.push(2);
-            let register = stack_ctx.vstack_alloc(StackType::i64);
 
+            let register = stack_ctx.vstack_alloc(StackType::i64);
             format!("\t{} = {};\n", register, id)
         },
         wast::ValType::F32 => {
@@ -39,7 +40,6 @@ pub fn emit_local_get(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Sta
             stack_sizes.push(2);
 
             let register = stack_ctx.vstack_alloc(StackType::f64);
-
             format!("\t{} = {};\n", register, id)
         },
         _ => panic!("emit_local_get type not handled")
@@ -84,38 +84,27 @@ pub fn emit_local_tee(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Sta
     match t {
         wast::ValType::I32 => {
             stack_sizes.push(1);
-            let reg1 = stack_ctx.vstack_pop(StackType::i32);
+            let reg1 = stack_ctx.vstack_peak(StackType::i32);
             let reg2 = stack_ctx.vstack_alloc(StackType::i32);
-            let reg3 = stack_ctx.vstack_alloc(StackType::i32);
-            format!("\t{} = {};\n{}", reg3, reg2, emit_local_set(writer, stack_ctx, parameter_offset, id, offsets, type_info, stack_sizes, debug))
+            format!("\t{} = {};\n{}", reg2, reg1, emit_local_set(writer, stack_ctx, parameter_offset, id, offsets, type_info, stack_sizes, debug))
         },
         wast::ValType::I64 => {
-
             stack_sizes.push(2);
-
-            let reg1 = stack_ctx.vstack_pop(StackType::i64);
+            let reg1 = stack_ctx.vstack_peak(StackType::i64);
             let reg2 = stack_ctx.vstack_alloc(StackType::i64);
-            let reg3 = stack_ctx.vstack_alloc(StackType::i64);
-            format!("\t{} = {};\n{}", reg3, reg2, emit_local_set(writer, stack_ctx, parameter_offset, id, offsets, type_info, stack_sizes, debug))
+            format!("\t{} = {};\n{}", reg2, reg1, emit_local_set(writer, stack_ctx, parameter_offset, id, offsets, type_info, stack_sizes, debug))
         },
         wast::ValType::F32 => {
-
             stack_sizes.push(1);
-
-
-            let reg1 = stack_ctx.vstack_pop(StackType::f32);
+            let reg1 = stack_ctx.vstack_peak(StackType::f32);
             let reg2 = stack_ctx.vstack_alloc(StackType::f32);
-            let reg3 = stack_ctx.vstack_alloc(StackType::f32);
-            format!("\t{} = {};\n{}", reg3, reg2, emit_local_set(writer, stack_ctx, parameter_offset, id, offsets, type_info, stack_sizes, debug))
+            format!("\t{} = {};\n{}", reg2, reg1, emit_local_set(writer, stack_ctx, parameter_offset, id, offsets, type_info, stack_sizes, debug))
         },
         wast::ValType::F64 => {
-
             stack_sizes.push(2);
-
-            let reg1 = stack_ctx.vstack_pop(StackType::f64);
+            let reg1 = stack_ctx.vstack_peak(StackType::f64);
             let reg2 = stack_ctx.vstack_alloc(StackType::f64);
-            let reg3 = stack_ctx.vstack_alloc(StackType::f64);
-            format!("\t{} = {};\n{}", reg3, reg2, emit_local_set(writer, stack_ctx, parameter_offset, id, offsets, type_info, stack_sizes, debug))
+            format!("\t{} = {};\n{}", reg2, reg1, emit_local_set(writer, stack_ctx, parameter_offset, id, offsets, type_info, stack_sizes, debug))
         },
         _ => panic!("emit_local_tee type not handled")
     }

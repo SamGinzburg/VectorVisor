@@ -71,6 +71,7 @@ pub fn emit_br_if(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCt
     let mut ret_str = String::from("");
     
     stack_sizes.pop().unwrap();
+
     let reg = stack_ctx.vstack_pop(StackType::i32);
     ret_str += &format!("\tif ({} != 0) {{\n", reg);
     ret_str += &emit_br(writer, idx, fn_name, control_stack, function_id_map, debug);

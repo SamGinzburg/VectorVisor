@@ -400,7 +400,7 @@ pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut St
  *  each other, so we must process them sequentially.
  * 
  */
-pub fn emit_call_indirect(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, call_indirect: &wast::CallIndirect, fn_name: String, arameter_offset: i32, table: &HashMap<u32, &wast::Index>, call_ret_map: &mut HashMap<&str, u32>, call_ret_idx: &mut u32, function_id_map: HashMap<&str, u32>, stack_sizes: &mut Vec<u32>, debug: bool) -> String {
+pub fn emit_call_indirect(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, call_indirect: &wast::CallIndirect, fn_name: String, _parameter_offset: i32, table: &HashMap<u32, &wast::Index>, call_ret_map: &mut HashMap<&str, u32>, call_ret_idx: &mut u32, function_id_map: HashMap<&str, u32>, stack_sizes: &mut Vec<u32>, debug: bool) -> String {
     let mut result = String::from("");
     // set up a switch case statement, we read the last value on the stack and determine what function we are going to call
     // this adds code bloat, but it reduces the complexity of the compiler.

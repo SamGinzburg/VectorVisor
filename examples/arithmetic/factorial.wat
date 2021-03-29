@@ -142,7 +142,7 @@
 
   (func $_start (result i32)
     (local $l2 i64)
-    (i32.const 1)
+    (i32.const 0)
     (i32.const 12)
     (call $_factorial)
     (i32.add)

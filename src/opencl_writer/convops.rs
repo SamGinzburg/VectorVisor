@@ -52,3 +52,27 @@ pub fn emit_i32_trunc_f64_u(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &m
     let result_register = stack_ctx.vstack_alloc(StackType::i32);
     format!("\t{} = (uint)({});\n", result_register, reg)
 }
+
+pub fn emit_i64_reinterpret_f64(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, debug: bool) -> String {
+    let reg = stack_ctx.vstack_pop(StackType::f64);
+    let result_register = stack_ctx.vstack_alloc(StackType::i64);
+    format!("\t{} = ({});\n", result_register, reg)
+}
+
+pub fn emit_f64_reinterpret_i64(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, debug: bool) -> String {
+    let reg = stack_ctx.vstack_pop(StackType::i64);
+    let result_register = stack_ctx.vstack_alloc(StackType::f64);
+    format!("\t{} = ({});\n", result_register, reg)
+}
+
+pub fn emit_f32_reinterpret_i32(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, debug: bool) -> String {
+    let reg = stack_ctx.vstack_pop(StackType::i32);
+    let result_register = stack_ctx.vstack_alloc(StackType::f32);
+    format!("\t{} = ({});\n", result_register, reg)
+}
+
+pub fn emit_i32_reinterpret_f32(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, debug: bool) -> String {
+    let reg = stack_ctx.vstack_pop(StackType::f32);
+    let result_register = stack_ctx.vstack_alloc(StackType::i32);
+    format!("\t{} = ({});\n", result_register, reg)
+}

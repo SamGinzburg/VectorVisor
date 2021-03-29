@@ -85,6 +85,19 @@ pub fn emit_memload_i64(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut S
     ret_str
 }
 
+pub fn emit_memload_f64(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, args: &MemArg, debug: bool) -> String {
+    let mut ret_str = String::from("");
+
+    let i_load = stack_ctx.vstack_pop(StackType::i32);
+    let result_register = stack_ctx.vstack_alloc(StackType::f64);
+
+    let read = format!("({})", emit_read_u64(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load), "(ulong)(heap_u32)", "warp_idx"));
+
+    ret_str += &format!("\t{} = {};\n", result_register, read);
+
+    ret_str
+}
+
 pub fn emit_memload_i64_8u(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, args: &MemArg, debug: bool) -> String {
     let mut ret_str = String::from("");
 
@@ -201,6 +214,20 @@ pub fn emit_memstore_i64(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut 
 
     let i_load = stack_ctx.vstack_pop(StackType::i32);
     let stored_val = stack_ctx.vstack_pop(StackType::i64);
+
+    ret_str += &format!("\t{};\n", &emit_write_u64(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load),
+                        "(ulong)(heap_u32)",
+                        &stored_val,
+                        "warp_idx"));
+
+    ret_str
+}
+
+pub fn emit_memstore_f64(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, args: &MemArg, debug: bool) -> String {
+    let mut ret_str = String::from("");
+
+    let i_load = stack_ctx.vstack_pop(StackType::i32);
+    let stored_val = stack_ctx.vstack_pop(StackType::f64);
 
     ret_str += &format!("\t{};\n", &emit_write_u64(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load),
                         "(ulong)(heap_u32)",
