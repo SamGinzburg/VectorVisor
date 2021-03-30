@@ -126,6 +126,7 @@ pub fn emit_memload_i64_32u(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &m
 
 pub fn emit_memload_i64_16u(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, args: &MemArg, debug: bool) -> String {
     let mut ret_str = String::from("");
+
     let result_register = stack_ctx.vstack_alloc(StackType::i64);
     let i_load = stack_ctx.vstack_pop(StackType::i32);
 
@@ -169,9 +170,9 @@ pub fn emit_memstore8_i32(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut
 
 pub fn emit_memstore8_i64(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, args: &MemArg, debug: bool) -> String {
     let mut ret_str = String::from("");
-    
-    let i_load = stack_ctx.vstack_pop(StackType::i32);
+
     let stored_val = stack_ctx.vstack_pop(StackType::i64);
+    let i_load = stack_ctx.vstack_pop(StackType::i32);
 
     ret_str += &format!("\t{};\n", &emit_write_u8(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load),
                         "(ulong)(heap_u32)",
@@ -184,8 +185,8 @@ pub fn emit_memstore8_i64(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut
 pub fn emit_memstore16_i64(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, args: &MemArg, debug: bool) -> String {
     let mut ret_str = String::from("");
 
-    let i_load = stack_ctx.vstack_pop(StackType::i32);
     let stored_val = stack_ctx.vstack_pop(StackType::i64);
+    let i_load = stack_ctx.vstack_pop(StackType::i32);
 
     ret_str += &format!("\t{};\n", &emit_write_u16(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load),
                         "(ulong)(heap_u32)",
@@ -198,8 +199,8 @@ pub fn emit_memstore16_i64(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mu
 pub fn emit_memstore16_i32(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, args: &MemArg, debug: bool) -> String {
     let mut ret_str = String::from("");
 
-    let i_load = stack_ctx.vstack_pop(StackType::i32);
     let stored_val = stack_ctx.vstack_pop(StackType::i32);
+    let i_load = stack_ctx.vstack_pop(StackType::i32);
 
     ret_str += &format!("\t{};\n", &emit_write_u16(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load),
                         "(ulong)(heap_u32)",
@@ -212,8 +213,8 @@ pub fn emit_memstore16_i32(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mu
 pub fn emit_memstore_i64(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, args: &MemArg, debug: bool) -> String {
     let mut ret_str = String::from("");
 
-    let i_load = stack_ctx.vstack_pop(StackType::i32);
     let stored_val = stack_ctx.vstack_pop(StackType::i64);
+    let i_load = stack_ctx.vstack_pop(StackType::i32);
 
     ret_str += &format!("\t{};\n", &emit_write_u64(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load),
                         "(ulong)(heap_u32)",
@@ -226,8 +227,8 @@ pub fn emit_memstore_i64(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut 
 pub fn emit_memstore_f64(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, args: &MemArg, debug: bool) -> String {
     let mut ret_str = String::from("");
 
-    let i_load = stack_ctx.vstack_pop(StackType::i32);
     let stored_val = stack_ctx.vstack_pop(StackType::f64);
+    let i_load = stack_ctx.vstack_pop(StackType::i32);
 
     ret_str += &format!("\t{};\n", &emit_write_u64(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load),
                         "(ulong)(heap_u32)",
@@ -240,8 +241,8 @@ pub fn emit_memstore_f64(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut 
 pub fn emit_memstore32_i64(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, args: &MemArg, debug: bool) -> String {
     let mut ret_str = String::from("");
 
-    let i_load = stack_ctx.vstack_pop(StackType::i32);
     let stored_val = stack_ctx.vstack_pop(StackType::i64);
+    let i_load = stack_ctx.vstack_pop(StackType::i32);
 
     ret_str += &format!("\t{};\n", &emit_write_u32(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load),
                         "(ulong)(heap_u32)",
