@@ -1232,7 +1232,6 @@ impl<'a> OpenCLCWriter<'_> {
                 // (we can't just iterate because the control stack would have a different lifetime)
 
                 for instruction in expression.instrs.iter() {
-                    dbg!(&instruction);
                     final_string += &self.emit_instructions(instruction,
                                                             stack_sizes,
                                                             &mut stack_ctx,

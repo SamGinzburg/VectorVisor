@@ -166,49 +166,17 @@ pub fn emit_i64_ge_s(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stac
 }
 
 pub fn emit_f64_lt(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, debug: bool) -> String {
-    let mut ret_str = String::from("");
+    let reg1 = stack_ctx.vstack_pop(StackType::f64);
+    let reg2 = stack_ctx.vstack_pop(StackType::f64);
+    let result_register = stack_ctx.vstack_alloc(StackType::i32);
 
-    ret_str += &format!("\t{{\n");
-    ret_str += &format!("\t\t{}\n", "double x;");
-    ret_str += &format!("\t\t{}\n", "double y;");
-    ret_str += &format!("\t\tulong x_old = {};\n", &emit_read_u64("(ulong)(stack_u32+*sp-4)", "(ulong)(stack_u32)", "warp_idx"));
-    ret_str += &format!("\t\tulong y_old = {};\n", &emit_read_u64("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx"));
-    ret_str += &format!("\t\t{}\n", "___private_memcpy_nonmmu(&x, &x_old, sizeof(double));");
-    ret_str += &format!("\t\t{}\n", "___private_memcpy_nonmmu(&y, &y_old, sizeof(double));");
-    ret_str += &format!("\t{}\n", "x_old = x < y;");
-
-    ret_str += &format!("\t{};\n\t{}\n",
-            &emit_write_u32("(ulong)(stack_u32+*sp-4)",
-                            "(ulong)(stack_u32)",
-                            "x_old",
-                            "warp_idx"),
-            "*sp -= 3;");
-
-    ret_str += &format!("\t}}\n");
-
-    ret_str
+    format!("\t{} = ({}) < ({});\n", result_register, reg2, reg1)
 }
 
 pub fn emit_f64_le(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, debug: bool) -> String {
-    let mut ret_str = String::from("");
+    let reg1 = stack_ctx.vstack_pop(StackType::f64);
+    let reg2 = stack_ctx.vstack_pop(StackType::f64);
+    let result_register = stack_ctx.vstack_alloc(StackType::i32);
 
-    ret_str += &format!("\t{{\n");
-    ret_str += &format!("\t\t{}\n", "double x;");
-    ret_str += &format!("\t\t{}\n", "double y;");
-    ret_str += &format!("\t\tulong x_old = {};\n", &emit_read_u64("(ulong)(stack_u32+*sp-4)", "(ulong)(stack_u32)", "warp_idx"));
-    ret_str += &format!("\t\tulong y_old = {};\n", &emit_read_u64("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx"));
-    ret_str += &format!("\t\t{}\n", "___private_memcpy_nonmmu(&x, &x_old, sizeof(double));");
-    ret_str += &format!("\t\t{}\n", "___private_memcpy_nonmmu(&y, &y_old, sizeof(double));");
-    ret_str += &format!("\t{}\n", "x_old = x <= y;");
-
-    ret_str += &format!("\t{};\n\t{}\n",
-            &emit_write_u32("(ulong)(stack_u32+*sp-4)",
-                            "(ulong)(stack_u32)",
-                            "x_old",
-                            "warp_idx"),
-            "*sp -= 3;");
-
-    ret_str += &format!("\t}}\n");
-
-    ret_str
+    format!("\t{} = ({}) <= ({});\n", result_register, reg2, reg1)
 }

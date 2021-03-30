@@ -23,7 +23,7 @@ use wast::ValType;
 
 use std::collections::HashMap;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum StackType {
     i32,
     i64,
@@ -51,6 +51,7 @@ pub struct StackCtx {
     local_offsets: HashMap<String, u32>,
     local_types: HashMap<String, StackType>,
     param_offset: i32,
+    total_stack_types: Vec<StackType>
 }
 
 impl<'a> StackCtx {
@@ -165,7 +166,6 @@ impl<'a> StackCtx {
                 wast::Instruction::I32Load16u(memarg) => {
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i32);
-
                     // no-op
                 },
                 wast::Instruction::I32Load16s(memarg) => {
@@ -660,15 +660,9 @@ impl<'a> StackCtx {
                             _ => panic!("Unsupported hypercall found {:?} (vstack)", writer_ctx.imports_map.get(id))
                         }
                     } else {
-                        // else, this is a normal function call
-                        // if self.func_map.get(id) is none, we have an import
-                        // right now we only support WASI imports
                         match writer_ctx.func_map.get(id) {
                             Some(_) => {
                                 let func_type_signature = &writer_ctx.func_map.get(id).unwrap().ty;
-
-                                //let params = &func_type_signature.inline.as_ref().unwrap().params;
-                                //let results = &func_type_signature.inline.as_ref().unwrap().results;
 
                                 match &func_type_signature.inline {
                                     // if we can find the type signature
@@ -690,6 +684,7 @@ impl<'a> StackCtx {
                                                 _ => panic!("vstack missing valtype check in func call")
                                             }
                                         }
+
                                         // push the results back
                                         for ty in res.results.iter() {
                                             stack_sizes.push(StackCtx::convert_wast_types(&ty));
@@ -1142,6 +1137,7 @@ impl<'a> StackCtx {
             local_offsets: local_offsets.clone(),
             local_types: local_types_converted,
             param_offset: param_offset,
+            total_stack_types: vec![],
         }
     }
 
@@ -1240,6 +1236,7 @@ impl<'a> StackCtx {
      * Get the most recent intermediate value from the stack
      */
     pub fn vstack_pop(&mut self, t: StackType) -> String {
+        self.total_stack_types.pop().unwrap();
         match t {
             StackType::i32 => {
                 if self.i32_idx == 0 {
@@ -1277,6 +1274,7 @@ impl<'a> StackCtx {
      * Save the result of a computation to an intermediate value
      */
     pub fn vstack_alloc(&mut self, t: StackType) -> String {
+        self.total_stack_types.push(t.clone());
         match t {
             StackType::i32 => {
                 let alloc_val = self.i32_stack.get(self.i32_idx).unwrap();
@@ -1350,6 +1348,11 @@ impl<'a> StackCtx {
                 self.f64_idx == 0
             },
         }
+    }
+
+    // Get the Xth type from the top of the stack
+    pub fn vstack_peak_type(&mut self, idx: usize) -> StackType {
+        self.total_stack_types[self.total_stack_types.len()-1-idx].clone()
     }
 
     pub fn stack_frame_size(&self) -> usize {

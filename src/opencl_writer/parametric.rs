@@ -16,33 +16,26 @@ pub fn emit_select(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackC
     }
 
     // we have to make sure that the values are the same size
-    let size1 = stack_sizes.pop().unwrap();
-    let size2 = stack_sizes.pop().unwrap();
+    stack_sizes.pop().unwrap();
+    stack_sizes.pop().unwrap();
 
-    if size1 != size2 {
+    let type1 = stack_ctx.vstack_peak_type(0);
+    let type2 = stack_ctx.vstack_peak_type(1);
+
+    if type1 != type2 {
         panic!("Unequal sizes for select operation: {}", fn_name);
     }
 
-    let write_val2;
-    let write_val1;
-    if size1 == 1 {
-        let val2 = stack_ctx.vstack_pop(StackType::i32);
-        let val1 = stack_ctx.vstack_pop(StackType::i32);
-        let result_register = stack_ctx.vstack_alloc(StackType::i32);
+    let val2 = stack_ctx.vstack_pop(type1.clone());
+    let val1 = stack_ctx.vstack_pop(type1.clone());
+    let result_register = stack_ctx.vstack_alloc(type1.clone());
 
-        write_val1 = format!("{} = {}", result_register, val1);
-        write_val2 = format!("{} = {}", result_register, val2);
+    let write_val1 = format!("{} = {}", result_register, val1);
+    let write_val2 = format!("{} = {}", result_register, val2);
 
-        stack_sizes.push(1);
-    } else {
-        let val2 = stack_ctx.vstack_pop(StackType::i64);
-        let val1 = stack_ctx.vstack_pop(StackType::i64);
-        let result_register = stack_ctx.vstack_alloc(StackType::i64);
-
-        write_val1 = format!("{} = {}", result_register, val1);
-        write_val2 = format!("{} = {}", result_register, val2);
-
-        stack_sizes.push(2);
+    match type1.clone() {
+        StackType::i32 | StackType::f32 => stack_sizes.push(1),
+        StackType::i64 | StackType::f64 => stack_sizes.push(2),
     }
 
     ret_str += &format!("\t({} != 0) ? ({}) : ({});\n",
