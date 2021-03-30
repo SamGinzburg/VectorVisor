@@ -84,25 +84,25 @@ pub fn emit_local_tee(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Sta
     match t {
         wast::ValType::I32 => {
             stack_sizes.push(1);
-            let reg1 = stack_ctx.vstack_peak(StackType::i32);
+            let reg1 = stack_ctx.vstack_peak(StackType::i32, 0);
             let reg2 = stack_ctx.vstack_alloc(StackType::i32);
             format!("\t{} = {};\n{}", reg2, reg1, emit_local_set(writer, stack_ctx, parameter_offset, id, offsets, type_info, stack_sizes, debug))
         },
         wast::ValType::I64 => {
             stack_sizes.push(2);
-            let reg1 = stack_ctx.vstack_peak(StackType::i64);
+            let reg1 = stack_ctx.vstack_peak(StackType::i64, 0);
             let reg2 = stack_ctx.vstack_alloc(StackType::i64);
             format!("\t{} = {};\n{}", reg2, reg1, emit_local_set(writer, stack_ctx, parameter_offset, id, offsets, type_info, stack_sizes, debug))
         },
         wast::ValType::F32 => {
             stack_sizes.push(1);
-            let reg1 = stack_ctx.vstack_peak(StackType::f32);
+            let reg1 = stack_ctx.vstack_peak(StackType::f32, 0);
             let reg2 = stack_ctx.vstack_alloc(StackType::f32);
             format!("\t{} = {};\n{}", reg2, reg1, emit_local_set(writer, stack_ctx, parameter_offset, id, offsets, type_info, stack_sizes, debug))
         },
         wast::ValType::F64 => {
             stack_sizes.push(2);
-            let reg1 = stack_ctx.vstack_peak(StackType::f64);
+            let reg1 = stack_ctx.vstack_peak(StackType::f64, 0);
             let reg2 = stack_ctx.vstack_alloc(StackType::f64);
             format!("\t{} = {};\n{}", reg2, reg1, emit_local_set(writer, stack_ctx, parameter_offset, id, offsets, type_info, stack_sizes, debug))
         },

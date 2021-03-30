@@ -158,17 +158,15 @@ pub fn emit_block(writer: &opencl_writer::OpenCLCWriter, block: &wast::BlockType
 }
 
 
-pub fn emit_br_table(writer: &opencl_writer::OpenCLCWriter, table_indicies: &wast::BrTableIndices, fn_name: &str, stack_sizes: &mut Vec<u32>, control_stack: &mut Vec<(String, u32, i32)>, function_id_map: HashMap<&str, u32>, debug: bool) -> String {
+pub fn emit_br_table(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, table_indicies: &wast::BrTableIndices, fn_name: &str, stack_sizes: &mut Vec<u32>, control_stack: &mut Vec<(String, u32, i32)>, function_id_map: HashMap<&str, u32>, debug: bool) -> String {
     let mut ret_str = String::from("");
 
     let indicies = &table_indicies.labels;
 
     // read the label_idx from stack, always i32
-    let label_idx = emit_read_u32("(ulong)(stack_u32+*sp)", "(ulong)(stack_u32)", "warp_idx");
+    let label_idx = stack_ctx.vstack_pop(StackType::i32);
+    stack_sizes.pop().unwrap();
 
-    // pop the value we are branching on
-    ret_str += &format!("\t{}\n",
-                        format!("*sp -= {};", stack_sizes.pop().unwrap()));
     // generate a switch case for each label index
     ret_str += &format!("\tswitch({}) {{\n", label_idx);
 

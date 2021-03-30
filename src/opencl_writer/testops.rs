@@ -11,7 +11,7 @@ use crate::opencl_writer::StackType;
  */
 
 pub fn emit_i32_eqz(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, debug: bool) -> String {
-    let reg = stack_ctx.vstack_peak(StackType::i32);
+    let reg = stack_ctx.vstack_peak(StackType::i32, 0);
     format!("\t{} = ((int)({}) == (int)0) ? 1 : 0;\n", reg, reg)
 }
 

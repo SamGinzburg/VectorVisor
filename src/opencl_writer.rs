@@ -162,8 +162,12 @@ impl<'a> OpenCLCWriter<'_> {
         }
     }
 
-    fn emit_hypercall(&self, hypercall_id: WasmHypercallId, hypercall_id_count: &mut u32, fn_name: String, is_proc_exit_start: bool, debug: bool) -> String {
+    fn emit_hypercall(&self, hypercall_id: WasmHypercallId, stack_ctx: &mut StackCtx, hypercall_id_count: &mut u32, fn_name: String, is_proc_exit_start: bool, debug: bool) -> String {
         let mut ret_str = String::from("");
+
+        // We need to save the context early, because we are going to need the stack parameters after returning...
+        ret_str += &stack_ctx.save_context();
+
         // set the hypercall ret flag flag + r
         ret_str += &format!("\t{}\n", format!("*hypercall_number = {};", hypercall_id.clone() as u32));
 
@@ -171,12 +175,12 @@ impl<'a> OpenCLCWriter<'_> {
 
         // hypercalls that are omitted from this table are implied to not require any data transfer via the hcall buffer 
         match hypercall_id {
-            WasmHypercallId::fd_write => ret_str += &emit_fd_write_call_helper(self, debug),
-            WasmHypercallId::fd_prestat_get => ret_str += &emit_fd_prestat_get_helper(self, debug),
-            WasmHypercallId::fd_prestat_dir_name => ret_str += &emit_fd_prestat_dir_name_helper(self, debug),
+            WasmHypercallId::fd_write => ret_str += &emit_fd_write_call_helper(self, stack_ctx, debug),
+            WasmHypercallId::fd_prestat_get => ret_str += &emit_fd_prestat_get_helper(self, stack_ctx, debug),
+            WasmHypercallId::fd_prestat_dir_name => ret_str += &emit_fd_prestat_dir_name_helper(self, stack_ctx, debug),
             WasmHypercallId::serverless_invoke => ret_str += &emit_serverless_invoke_pre(self, debug),
-            WasmHypercallId::serverless_response => ret_str += &emit_serverless_response_pre(self, debug),
-            WasmHypercallId::random_get => ret_str += &emit_random_get_pre(self, debug),
+            WasmHypercallId::serverless_response => ret_str += &emit_serverless_response_pre(self, stack_ctx, debug),
+            WasmHypercallId::random_get => ret_str += &emit_random_get_pre(self, stack_ctx, debug),
             _ => (),
         }
         // insert return (we exit back to the VMM)
@@ -190,32 +194,35 @@ impl<'a> OpenCLCWriter<'_> {
             ret_str += &format!("{}_hypercall_return_stub_{}:\n", format!("{}{}", "__", fn_name.replace(".", "")), hypercall_id_count);
         }
 
+        // restore the contex
+        ret_str += &stack_ctx.restore_context();
+
         // after the hypercall, we need to reset values on re-entry, and possible copy data back from the hcall buf
         // skipped hypercall entries here are no-ops
         match hypercall_id {
             WasmHypercallId::fd_write => {
-                ret_str += &emit_fd_write_post(&self, debug);
+                ret_str += &emit_fd_write_post(&self, stack_ctx, debug);
             },
             WasmHypercallId::environ_sizes_get => {
-                ret_str += &emit_environ_sizes_get_post(&self, debug);
+                ret_str += &emit_environ_sizes_get_post(&self, stack_ctx, debug);
             },
             WasmHypercallId::environ_get => {
-                ret_str += &emit_environ_get_post(&self, debug);
+                ret_str += &emit_environ_get_post(&self, stack_ctx, debug);
             },
             WasmHypercallId::fd_prestat_get => {
-                ret_str += &emit_fd_prestat_get_post(&self, debug);
+                ret_str += &emit_fd_prestat_get_post(&self, stack_ctx, debug);
             },
             WasmHypercallId::fd_prestat_dir_name => {
-                ret_str += &emit_fd_prestat_dir_name_post(&self, debug);
+                ret_str += &emit_fd_prestat_dir_name_post(&self, stack_ctx, debug);
             },
             WasmHypercallId::serverless_invoke => {
-                ret_str += &emit_serverless_invoke_post(&self, debug);
+                ret_str += &emit_serverless_invoke_post(&self, stack_ctx, debug);
             },
             WasmHypercallId::serverless_response => {
-                ret_str += &emit_serverless_response_post(&self, debug);
+                ret_str += &emit_serverless_response_post(&self, stack_ctx, debug);
             },
             WasmHypercallId::random_get => {
-                ret_str += &emit_random_get_post(&self, debug);
+                ret_str += &emit_random_get_post(&self, stack_ctx, debug);
             },
             _ => (),
         }
@@ -266,9 +273,10 @@ impl<'a> OpenCLCWriter<'_> {
                 // based on the previous stack size, decrement sp
                 // we don't need to handle all cases, only the common case provided by LLVM output
                 // which is when drop follows a function call
-
-                format!("\t{}{};\n",
-                        "*sp -= ", stack_sizes.pop().unwrap())
+                stack_sizes.pop().unwrap();
+                let dropped_type = stack_ctx.vstack_peak_type(0);
+                stack_ctx.vstack_pop(dropped_type);
+                String::from("")
             }
             wast::Instruction::I32Store(memarg) => {
                 stack_sizes.pop();
@@ -712,15 +720,15 @@ impl<'a> OpenCLCWriter<'_> {
                                 // ignore WASI API scoping for now
                                 (_, Some(true)) => {
                                     match wasi_fn_name {
-                                        &"fd_write"               => self.emit_hypercall(WasmHypercallId::fd_write, hypercall_id_count, fn_name.to_string(), false, debug),
-                                        &"proc_exit"              => self.emit_hypercall(WasmHypercallId::proc_exit, hypercall_id_count, fn_name.to_string(), false, debug),
-                                        &"environ_sizes_get"      => self.emit_hypercall(WasmHypercallId::environ_sizes_get, hypercall_id_count, fn_name.to_string(), false, debug),
-                                        &"environ_get"            => self.emit_hypercall(WasmHypercallId::environ_get, hypercall_id_count, fn_name.to_string(), false, debug),
-                                        &"fd_prestat_get"         => self.emit_hypercall(WasmHypercallId::fd_prestat_get, hypercall_id_count, fn_name.to_string(), false, debug),
-                                        &"fd_prestat_dir_name"    => self.emit_hypercall(WasmHypercallId::fd_prestat_dir_name, hypercall_id_count, fn_name.to_string(), false, debug),
-                                        &"random_get"             => self.emit_hypercall(WasmHypercallId::random_get, hypercall_id_count, fn_name.to_string(), false, debug),
-                                        &"serverless_invoke"      => self.emit_hypercall(WasmHypercallId::serverless_invoke, hypercall_id_count, fn_name.to_string(), false, debug),
-                                        &"serverless_response"    => self.emit_hypercall(WasmHypercallId::serverless_response, hypercall_id_count, fn_name.to_string(), false, debug),
+                                        &"fd_write"               => self.emit_hypercall(WasmHypercallId::fd_write, stack_ctx, hypercall_id_count, fn_name.to_string(), false, debug),
+                                        &"proc_exit"              => self.emit_hypercall(WasmHypercallId::proc_exit, stack_ctx, hypercall_id_count, fn_name.to_string(), false, debug),
+                                        &"environ_sizes_get"      => self.emit_hypercall(WasmHypercallId::environ_sizes_get, stack_ctx, hypercall_id_count, fn_name.to_string(), false, debug),
+                                        &"environ_get"            => self.emit_hypercall(WasmHypercallId::environ_get, stack_ctx, hypercall_id_count, fn_name.to_string(), false, debug),
+                                        &"fd_prestat_get"         => self.emit_hypercall(WasmHypercallId::fd_prestat_get, stack_ctx, hypercall_id_count, fn_name.to_string(), false, debug),
+                                        &"fd_prestat_dir_name"    => self.emit_hypercall(WasmHypercallId::fd_prestat_dir_name, stack_ctx, hypercall_id_count, fn_name.to_string(), false, debug),
+                                        &"random_get"             => self.emit_hypercall(WasmHypercallId::random_get, stack_ctx, hypercall_id_count, fn_name.to_string(), false, debug),
+                                        &"serverless_invoke"      => self.emit_hypercall(WasmHypercallId::serverless_invoke, stack_ctx, hypercall_id_count, fn_name.to_string(), false, debug),
+                                        &"serverless_response"    => self.emit_hypercall(WasmHypercallId::serverless_response, stack_ctx, hypercall_id_count, fn_name.to_string(), false, debug),
                                         _ => panic!("Unidentified WASI fn name: {:?}", wasi_fn_name),
                                     }
                                 },
@@ -968,14 +976,14 @@ impl<'a> OpenCLCWriter<'_> {
             wast::Instruction::Return => emit_return(self, fn_name, debug),
             wast::Instruction::Br(idx) => emit_br(self, *idx, fn_name, control_stack, function_id_map, debug),
             wast::Instruction::BrIf(idx) => emit_br_if(self, stack_ctx, *idx, fn_name, stack_sizes, control_stack, function_id_map, debug),
-            wast::Instruction::BrTable(table_idxs) => emit_br_table(self, table_idxs, fn_name, stack_sizes, control_stack, function_id_map, debug),
+            wast::Instruction::BrTable(table_idxs) => emit_br_table(self, stack_ctx, table_idxs, fn_name, stack_sizes, control_stack, function_id_map, debug),
             wast::Instruction::Unreachable => {
                 let skip_label = if debug {
                     false
                 } else {
                     true
                 };
-                self.emit_hypercall(WasmHypercallId::proc_exit, hypercall_id_count, fn_name.to_string(), skip_label, debug)
+                self.emit_hypercall(WasmHypercallId::proc_exit, stack_ctx, hypercall_id_count, fn_name.to_string(), skip_label, debug)
             },
             _ => panic!("Instruction {:?} not yet implemented, in func: {:?}", instr, func.id)
         }
@@ -1260,7 +1268,7 @@ impl<'a> OpenCLCWriter<'_> {
                 if id.name().to_string() == "_start" {
                     // emit modified func unwind for _start
                     final_string += &function_unwind(&self, &mut stack_ctx, id.name(), &typeuse.inline, true, debug);
-                    final_string += &self.emit_hypercall(WasmHypercallId::proc_exit, hypercall_id_count, id.name().to_string(), true, debug);
+                    final_string += &self.emit_hypercall(WasmHypercallId::proc_exit, &mut stack_ctx, hypercall_id_count, id.name().to_string(), true, debug);
                 } else {
                     // to unwind from the function we unwind the call stack by moving the stack pointer
                     // and returning the last value on the stack 

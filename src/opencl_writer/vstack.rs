@@ -109,7 +109,6 @@ impl<'a> StackCtx {
 
         // for each instr, 
         for instruction in instructions.iter() {
-            println!("{:?}", instruction);
             match instruction {
                 wast::Instruction::Drop => {
                     stack_sizes.pop().unwrap();
@@ -1077,11 +1076,6 @@ impl<'a> StackCtx {
             }
         }
 
-        println!("max_i32_count: {}", max_i32_count);
-        println!("max_i64_count: {}", max_i64_count);
-        println!("max_f32_count: {}", max_f32_count);
-        println!("max_f64_count: {}", max_f64_count);
-
         let mut i32_stack = vec![];
         for idx in 0..max_i32_count {
             i32_stack.push(format!("i32_{}", idx));
@@ -1300,24 +1294,24 @@ impl<'a> StackCtx {
     }
 
     /*
-     * Peak the last register on the vstack, useful for unops
+     * Peak the registers on the vstack, useful for unops
      */
-    pub fn vstack_peak(&mut self, t: StackType) -> String {
+    pub fn vstack_peak(&mut self, t: StackType, idx: usize) -> String {
         match t {
             StackType::i32 => {
-                let alloc_val = self.i32_stack.get(self.i32_idx-1).unwrap();
+                let alloc_val = self.i32_stack.get(self.i32_idx-1-idx).unwrap();
                 format!("{}", alloc_val)
             },
             StackType::i64 => {
-                let alloc_val = self.i64_stack.get(self.i64_idx-1).unwrap();
+                let alloc_val = self.i64_stack.get(self.i64_idx-1-idx).unwrap();
                 format!("{}", alloc_val)
             },
             StackType::f32 => {
-                let alloc_val = self.f32_stack.get(self.f32_idx-1).unwrap();
+                let alloc_val = self.f32_stack.get(self.f32_idx-1-idx).unwrap();
                 format!("{}", alloc_val)
             },
             StackType::f64 => {
-                let alloc_val = self.f64_stack.get(self.f64_idx-1).unwrap();
+                let alloc_val = self.f64_stack.get(self.f64_idx-1-idx).unwrap();
                 format!("{}", alloc_val)
             },
         }
