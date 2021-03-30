@@ -166,7 +166,10 @@ impl<'a> OpenCLCWriter<'_> {
         let mut ret_str = String::from("");
 
         // We need to save the context early, because we are going to need the stack parameters after returning...
-        ret_str += &stack_ctx.save_context();
+        // But only if we are actually going to return to avoid overwriting ret vals
+        if !is_proc_exit_start {
+            ret_str += &stack_ctx.save_context();
+        }
 
         // set the hypercall ret flag flag + r
         ret_str += &format!("\t{}\n", format!("*hypercall_number = {};", hypercall_id.clone() as u32));
@@ -197,7 +200,9 @@ impl<'a> OpenCLCWriter<'_> {
         }
 
         // restore the contex
-        ret_str += &stack_ctx.restore_context();
+        if !is_proc_exit_start {
+            ret_str += &stack_ctx.restore_context();
+        }
 
         // after the hypercall, we need to reset values on re-entry, and possible copy data back from the hcall buf
         // skipped hypercall entries here are no-ops

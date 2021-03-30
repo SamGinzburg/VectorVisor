@@ -273,6 +273,8 @@ pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut St
         },
     }
     
+    dbg!(&parameter_offset);
+
     let mut offset;
     for value in results {
         match value {

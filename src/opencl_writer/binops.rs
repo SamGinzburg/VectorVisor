@@ -124,7 +124,7 @@ pub fn emit_i32_shl(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stack
     let reg2 = stack_ctx.vstack_pop(StackType::i32);
     let result_register = stack_ctx.vstack_alloc(StackType::i32);
 
-    format!("\t{} = (uint)({}) << ({});\n", result_register, reg2, reg1)
+    format!("\t{} = (uint)({}) << (uint)({});\n", result_register, reg2, reg1)
 }
 
 pub fn emit_i64_shl(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, debug: bool) -> String {

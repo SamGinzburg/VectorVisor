@@ -19,5 +19,5 @@ pub fn emit_i64_eqz(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stack
     let reg = stack_ctx.vstack_pop(StackType::i64);
     let result_register = stack_ctx.vstack_alloc(StackType::i32);
 
-    format!("\t{} = ((int)({}) == (int)0) ? 1 : 0;\n", result_register, reg)
+    format!("\t{} = ((long)({}) == (long)0) ? 1 : 0;\n", result_register, reg)
 }
