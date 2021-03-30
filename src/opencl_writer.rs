@@ -1142,7 +1142,7 @@ impl<'a> OpenCLCWriter<'_> {
                         },
                         wast::Instruction::Unreachable => {
                             // the POCL compiler seems to want this, NVIDIA compiler doesn't?
-                            if !is_gpu {
+                            if !is_gpu || debug {
                                 *num_hypercalls += 1;
                             }
                         },
