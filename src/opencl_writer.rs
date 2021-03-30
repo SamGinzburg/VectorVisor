@@ -192,6 +192,8 @@ impl<'a> OpenCLCWriter<'_> {
         if !is_proc_exit_start {
             // insert return label, the VMM will return to right after the return
             ret_str += &format!("{}_hypercall_return_stub_{}:\n", format!("{}{}", "__", fn_name.replace(".", "")), hypercall_id_count);
+            // increment hypercall_id_count, IFF we are counting it
+            *hypercall_id_count += 1;
         }
 
         // restore the contex
@@ -227,8 +229,6 @@ impl<'a> OpenCLCWriter<'_> {
             _ => (),
         }
 
-        // increment hypercall_id_count
-        *hypercall_id_count += 1;
         ret_str
     }
 
@@ -1142,7 +1142,7 @@ impl<'a> OpenCLCWriter<'_> {
                         },
                         wast::Instruction::Unreachable => {
                             // the POCL compiler seems to want this, NVIDIA compiler doesn't?
-                            if !is_gpu || debug {
+                            if !is_gpu {
                                 *num_hypercalls += 1;
                             }
                         },
