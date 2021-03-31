@@ -243,8 +243,6 @@ pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut St
     };
     
     final_str += &format!("\t{}\n", "/* function unwind */");
-    // strip illegal chars from func name
-    final_str += &format!("{}_return:\n", format!("{}{}", "__", fn_name.replace(".", "")));
     // for each value returned by the function, return it on the stack
     // keep track of the change to stack ptr from previous returns
     let mut sp_counter = 0;
@@ -332,14 +330,18 @@ pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut St
                     offset = format!("write_u32((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx)),
                                                 (ulong)stack_u32,
                                                 {},
-                                                warp_idx);", parameter_offset, reg);
+                                                warp_idx);", parameter_offset, "temp");
                 } else {
                     offset = format!("write_u32((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx)),
                                                 (ulong)stack_u32,
                                                 {},
-                                                warp_idx);", parameter_offset, reg);
+                                                warp_idx);", parameter_offset, "temp");
                 }
-                final_str += &format!("\t{}\n", offset);
+                final_str += &format!("\t{{\n");
+                final_str += &format!("\t\tuint temp = 0;\n");
+                final_str += &format!("\t\t___private_memcpy_nonmmu(&temp, &{}, sizeof(float));\n", reg);
+                final_str += &format!("\t\t{}\n", offset);
+                final_str += &format!("\t}}\n");
                 sp_counter += 1;
             },
             wast::ValType::F64 => {
@@ -355,14 +357,19 @@ pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut St
                     offset = format!("write_u64((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx)),
                                                 (ulong)stack_u32,
                                                 {},
-                                                warp_idx);", parameter_offset, reg);
+                                                warp_idx);", parameter_offset, "temp");
                 } else {
                     offset = format!("write_u64((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx)),
                                                 (ulong)stack_u32,
                                                 {},
-                                                warp_idx);", parameter_offset, reg);
+                                                warp_idx);", parameter_offset, "temp");
                 }
-                final_str += &format!("\t{}\n", offset);
+                final_str += &format!("\t{{\n");
+                final_str += &format!("\t\tulong temp = 0;\n");
+                final_str += &format!("\t\t___private_memcpy_nonmmu(&temp, &{}, sizeof(double));\n", reg);
+                final_str += &format!("\t\t{}\n", offset);
+                final_str += &format!("\t}}\n");
+
                 sp_counter += 2;
             },
             _ => panic!("Unimplemented function return type!!!"),

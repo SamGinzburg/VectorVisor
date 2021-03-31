@@ -14,8 +14,9 @@ pub fn emit_memload_i32_8u(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mu
     let mut ret_str = String::from("");
 
     let i_load = stack_ctx.vstack_pop(StackType::i32);
-    let read = format!("(uchar)({})", emit_read_u8(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load), "(ulong)(heap_u32)", "warp_idx"));
     let result_register = stack_ctx.vstack_alloc(StackType::i32);
+
+    let read = format!("(uchar)({})", emit_read_u8(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load), "(ulong)(heap_u32)", "warp_idx"));
 
     ret_str += &format!("\t{} = {};\n", result_register, read);
 
@@ -26,8 +27,9 @@ pub fn emit_memload_i32_16u(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &m
     let mut ret_str = String::from("");
 
     let i_load = stack_ctx.vstack_pop(StackType::i32);
-    let read = format!("(uint)({})", emit_read_u16(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load), "(ulong)(heap_u32)", "warp_idx"));
     let result_register = stack_ctx.vstack_alloc(StackType::i32);
+
+    let read = format!("(uint)({})", emit_read_u16(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load), "(ulong)(heap_u32)", "warp_idx"));
 
     ret_str += &format!("\t{} = convert_ushort({});\n", result_register, read);
 
@@ -38,8 +40,9 @@ pub fn emit_memload_i32_16s(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &m
     let mut ret_str = String::from("");
 
     let i_load = stack_ctx.vstack_pop(StackType::i32);
-    let read = format!("(short)({})", emit_read_u16(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load), "(ulong)(heap_u32)", "warp_idx"));
     let result_register = stack_ctx.vstack_alloc(StackType::i32);
+
+    let read = format!("(short)({})", emit_read_u16(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load), "(ulong)(heap_u32)", "warp_idx"));
 
     ret_str += &format!("\t{} = convert_short({});\n", result_register, read);
 
@@ -50,8 +53,9 @@ pub fn emit_memload_i32_8s(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mu
     let mut ret_str = String::from("");
 
     let i_load = stack_ctx.vstack_pop(StackType::i32);
-    let read = format!("(char)({})", emit_read_u8(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load), "(ulong)(heap_u32)", "warp_idx"));
     let result_register = stack_ctx.vstack_alloc(StackType::i32);
+
+    let read = format!("(char)({})", emit_read_u8(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load), "(ulong)(heap_u32)", "warp_idx"));
 
     ret_str += &format!("\t{} = convert_int({});\n", result_register, read);
 
@@ -127,8 +131,8 @@ pub fn emit_memload_i64_32u(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &m
 pub fn emit_memload_i64_16u(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, args: &MemArg, debug: bool) -> String {
     let mut ret_str = String::from("");
 
-    let result_register = stack_ctx.vstack_alloc(StackType::i64);
     let i_load = stack_ctx.vstack_pop(StackType::i32);
+    let result_register = stack_ctx.vstack_alloc(StackType::i64);
 
     let read = format!("(ulong)({})", &emit_read_u16(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load), "(ulong)(heap_u32)", "warp_idx"));
 

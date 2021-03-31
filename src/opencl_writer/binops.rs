@@ -279,7 +279,7 @@ pub fn emit_i32_rotl(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stac
         let reg1 = stack_ctx.vstack_pop(StackType::i32);
         let reg2 = stack_ctx.vstack_pop(StackType::i32);
         let result_register = stack_ctx.vstack_alloc(StackType::i32);
-    
+
         format!("\t{} = rotate({}, {});\n", result_register, reg2, reg1)
     } else {
         let reg1 = stack_ctx.vstack_pop(StackType::i32);

@@ -164,9 +164,23 @@ pub fn emit_i64_const(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Sta
 
 // the float bits are passed as unsigned integer values
 pub fn emit_f32_const(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, val: &u32, debug: bool) -> String {
-    format!("\t{} = {};\n", stack_ctx.vstack_alloc(StackType::f32), val)
+    let mut ret_val = String::from("");
+
+    ret_val += &format!("\t{{\n");
+    ret_val += &format!("\t\tulong temp = {};\n", *val);
+    ret_val += &format!("\t\t___private_memcpy_nonmmu(&{}, &temp, sizeof(float));\n", stack_ctx.vstack_alloc(StackType::f32));
+    ret_val += &format!("\t}}\n");
+
+    ret_val
 }
 
-pub fn emit_f64_const(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, val: &u64, debug: bool) -> String {
-    format!("\t{} = {};\n", stack_ctx.vstack_alloc(StackType::f64), val)
+pub fn emit_f64_const(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, val: &u64, debug: bool) -> String {    
+    let mut ret_val = String::from("");
+
+    ret_val += &format!("\t{{\n");
+    ret_val += &format!("\t\tulong temp = {};\n", *val);
+    ret_val += &format!("\t\t___private_memcpy_nonmmu(&{}, &temp, sizeof(double));\n", stack_ctx.vstack_alloc(StackType::f64));
+    ret_val += &format!("\t}}\n");
+
+    ret_val
 }

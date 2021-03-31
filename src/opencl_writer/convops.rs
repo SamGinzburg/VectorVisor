@@ -38,7 +38,7 @@ pub fn emit_f64_convert_i32(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &m
 pub fn emit_f64_convert_i32u(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, debug: bool) -> String {
     let reg = stack_ctx.vstack_pop(StackType::i32);
     let result_register = stack_ctx.vstack_alloc(StackType::f64);
-    format!("\t{} = (double)((uint){});\n", result_register, reg)
+    format!("\t{} = (double)({});\n", result_register, reg)
 }
 
 pub fn emit_f64_convert_i64u(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, debug: bool) -> String {

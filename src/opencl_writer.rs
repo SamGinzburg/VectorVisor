@@ -63,7 +63,7 @@ lazy_static! {
 }
 
 #[derive(Clone)]
-enum WasmHypercallId {
+pub enum WasmHypercallId {
     fd_write              = 0,
     proc_exit             = 1,
     environ_sizes_get     = 2,
@@ -978,7 +978,7 @@ impl<'a> OpenCLCWriter<'_> {
                 stack_sizes.push(1);
                 emit_mem_size(self, stack_ctx, arg, debug)
             },
-            wast::Instruction::Return => emit_return(self, fn_name, debug),
+            wast::Instruction::Return => emit_return(self, stack_ctx, fn_name, hypercall_id_count, debug),
             wast::Instruction::Br(idx) => emit_br(self, stack_ctx, *idx, fn_name, control_stack, function_id_map, debug),
             wast::Instruction::BrIf(idx) => emit_br_if(self, stack_ctx, *idx, fn_name, stack_sizes, control_stack, function_id_map, debug),
             wast::Instruction::BrTable(table_idxs) => emit_br_table(self, stack_ctx, table_idxs, fn_name, stack_sizes, control_stack, function_id_map, debug),

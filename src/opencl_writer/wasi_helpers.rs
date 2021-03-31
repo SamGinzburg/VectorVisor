@@ -382,7 +382,7 @@ pub fn emit_random_get_post(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &m
 
     let random_buf_len = stack_ctx.vstack_pop(StackType::i32);
     let random_buf_ptr = stack_ctx.vstack_pop(StackType::i32);
-    let result_regsiter = stack_ctx.vstack_alloc(StackType::i32);
+    let result_register = stack_ctx.vstack_alloc(StackType::i32);
 
     // Copy the random bytes back from the hcall_buf to the heap
     ret_str += &format!("\t___private_memcpy((ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), warp_idx);\n",
@@ -393,7 +393,7 @@ pub fn emit_random_get_post(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &m
                         &random_buf_len);
 
     // return the error code associated with random_get
-    ret_str += &format!("\t{} = {};\n", result_regsiter, "hcall_ret_val");
+    ret_str += &format!("\t{} = {};\n", result_register, "hcall_ret_val");
 
     ret_str
 }

@@ -4,13 +4,28 @@ use crate::opencl_writer::mem_interleave::emit_read_u32;
 use crate::opencl_writer::mem_interleave::emit_write_u64;
 use crate::opencl_writer::StackCtx;
 use crate::opencl_writer::StackType;
+use crate::opencl_writer::function_unwind;
+use crate::opencl_writer::WasmHypercallId;
 
 use std::collections::HashMap;
 
 // TODO: double check the semantics of this? 
-pub fn emit_return(writer: &opencl_writer::OpenCLCWriter, fn_name: &str, debug: bool) -> String {
-    // strip illegal chars from fn name
-    format!("\tgoto {}_return;\n", format!("{}{}", "__", fn_name.replace(".", "")))
+pub fn emit_return(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, fn_name: &str, hypercall_id_count: &mut u32, debug: bool) -> String {
+    let mut ret_str = String::from("");
+    
+    let fn_type = &writer.func_map.get(&fn_name).unwrap().ty.inline;
+
+    if fn_name.to_string() == "_start" {
+        // emit modified func unwind for _start
+        ret_str += &function_unwind(&writer, stack_ctx, fn_name, &fn_type, true, debug);
+        ret_str += &writer.emit_hypercall(WasmHypercallId::proc_exit, stack_ctx, hypercall_id_count, fn_name.to_string(), true, debug);
+    } else {
+        // to unwind from the function we unwind the call stack by moving the stack pointer
+        // and returning the last value on the stack 
+        ret_str += &function_unwind(writer, stack_ctx, fn_name, &fn_type, false, debug);
+    }
+
+    ret_str
 }
 
 // this function is semantically equivalent to function_unwind
@@ -76,6 +91,7 @@ pub fn emit_br_if(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCt
     stack_sizes.pop().unwrap();
 
     let reg = stack_ctx.vstack_pop(StackType::i32);
+
     ret_str += &format!("\tif ({} != 0) {{\n", reg);
     ret_str += &emit_br(writer, stack_ctx, idx, fn_name, control_stack, function_id_map, debug);
     ret_str += &format!("\t}}\n");
