@@ -29,7 +29,7 @@ pub fn emit_memload_i32_16u(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &m
     let read = format!("(uint)({})", emit_read_u16(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load), "(ulong)(heap_u32)", "warp_idx"));
     let result_register = stack_ctx.vstack_alloc(StackType::i32);
 
-    ret_str += &format!("\t{} = {};\n", result_register, read);
+    ret_str += &format!("\t{} = convert_ushort({});\n", result_register, read);
 
     ret_str
 }
@@ -41,7 +41,7 @@ pub fn emit_memload_i32_16s(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &m
     let read = format!("(short)({})", emit_read_u16(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load), "(ulong)(heap_u32)", "warp_idx"));
     let result_register = stack_ctx.vstack_alloc(StackType::i32);
 
-    ret_str += &format!("\t{} = {};\n", result_register, read);
+    ret_str += &format!("\t{} = convert_short({});\n", result_register, read);
 
     ret_str
 }
@@ -53,7 +53,7 @@ pub fn emit_memload_i32_8s(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mu
     let read = format!("(char)({})", emit_read_u8(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load), "(ulong)(heap_u32)", "warp_idx"));
     let result_register = stack_ctx.vstack_alloc(StackType::i32);
 
-    ret_str += &format!("\t{} = {};\n", result_register, read);
+    ret_str += &format!("\t{} = convert_int({});\n", result_register, read);
 
     ret_str
 }

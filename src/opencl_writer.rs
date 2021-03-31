@@ -1848,6 +1848,8 @@ r#"
 #elif defined(cl_amd_fp64)
 #pragma OPENCL EXTENSION cl_amd_fp64 : enable
 #endif
+// we always want this
+#pragma OPENCL EXTENSION cl_khr_byte_addressable_store : enable
 "#).unwrap();
 
         // generate the read/write functions

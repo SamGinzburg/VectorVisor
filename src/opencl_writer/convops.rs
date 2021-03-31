@@ -20,7 +20,7 @@ pub fn emit_i32_wrap_i64(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut 
 pub fn emit_i64_extend_i32_s(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, debug: bool) -> String {
     let reg = stack_ctx.vstack_pop(StackType::i32);
     let result_register = stack_ctx.vstack_alloc(StackType::i64);
-    format!("\t{} = (long)({});\n", result_register, reg)
+    format!("\t{} = (int)({});\n", result_register, reg)
 }
 
 pub fn emit_i64_extend_i32_u(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, debug: bool) -> String {
