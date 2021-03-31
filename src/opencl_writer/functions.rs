@@ -457,7 +457,7 @@ pub fn emit_call_indirect(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut
     let index_register = stack_ctx.vstack_pop(StackType::i32);
 
     let mut stack_params = vec![];
-    let mut stack_params_sizes = vec![];
+    let mut stack_params_types = vec![];
 
     // Get the type information for the indirect call! We need this to handle parametric
     // statements after a call such as select
@@ -477,12 +477,9 @@ pub fn emit_call_indirect(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut
 
             // First, pop off the parameters
             for (_, _, param_type) in func_type.params.iter() {
-                let stack_param = stack_sizes.pop().unwrap();
-                stack_params_sizes.insert(0, stack_param);
+                stack_sizes.pop().unwrap();
+                stack_params_types.insert(0, StackCtx::convert_wast_types(&param_type));
                 stack_params.insert(0, stack_ctx.vstack_pop(StackCtx::convert_wast_types(&param_type)));
-                if stack_param != writer.get_size_valtype(param_type) {
-                    panic!("Parameters on the stack don't match required function parameters!");
-                }
             }
 
             // Next, push the result(s) back
@@ -496,10 +493,33 @@ pub fn emit_call_indirect(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut
     };
 
     // Push the parameters to the stack
-    for (param, size) in stack_params.iter().zip(stack_params_sizes.iter()) {
-        result += &format!("\t{};\n\t*sp += {};\n",
-                            emit_write_u32("(ulong)(stack_u32+*sp)", "(ulong)(stack_u32)", param, "warp_idx"),
-                            size);
+    for (param, ty) in stack_params.iter().zip(stack_params_types.iter()) {
+        match ty {
+            StackType::i32 => {
+                result += &format!("\t\t{};\n\t\t*sp += 1;\n",
+                                        emit_write_u32("(ulong)(stack_u32+*sp)", "(ulong)(stack_u32)", &param, "warp_idx"));
+            },
+            StackType::i64 => {
+                result += &format!("\t\t{};\n\t\t*sp += 2;\n",
+                                        emit_write_u64("(ulong)(stack_u32+*sp)", "(ulong)(stack_u32)", &param, "warp_idx"));
+            },
+            StackType::f32 => {
+                result += &format!("\t{{\n");
+                result += &format!("\t\tuint temp = 0;\n");
+                result += &format!("\t\t___private_memcpy_nonmmu(&temp, &{}, sizeof(uint));\n", param);
+                result += &format!("\t\t{};\n\t\t*sp += 1;\n",
+                                    emit_write_u32("(ulong)(stack_u32+*sp)", "(ulong)(stack_u32)", "temp", "warp_idx"));
+                result += &format!("\t}}\n");
+            },
+            StackType::f64 => {
+                result += &format!("\t{{\n");
+                result += &format!("\t\tulong temp = 0;\n");
+                result += &format!("\t\t___private_memcpy_nonmmu(&temp, &{}, sizeof(double));\n", param);
+                result += &format!("\t\t{};\n\t\t*sp += 2;\n",
+                                    emit_write_u64("(ulong)(stack_u32+*sp)", "(ulong)(stack_u32)", "temp", "warp_idx"));
+                result += &format!("\t}}\n");
+            }
+        }
     }
 
     // Allocate a register for return values
@@ -532,19 +552,30 @@ pub fn emit_call_indirect(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut
 
     // Read the result value into a register
     if result_types.len() > 0 {
-        match writer.get_size_valtype(&result_types[0]) {
-            1 => {
+        match StackCtx::convert_wast_types(&result_types[0]) {
+            StackType::i32 => {
                 result += &format!("\t{} = {};\n\t{};\n", result_register, 
                                     emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx"),
                                     "*sp -= 1");
             },
-            2 => {
+            StackType::i64 => {
                 result += &format!("\t{} = {};\n\t{};\n", result_register, 
-                                    emit_read_u32("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx"),
+                                    emit_read_u64("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx"),
                                     "*sp -= 2;");
             },
-            _ => {
-                panic!("Invalid return size type (functions.rs)");
+            StackType::f32 => {
+                result += &format!("\t{{\n");
+                result += &format!("\t\tuint temp = {};\n", emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx"));
+                result += &format!("\t\t___private_memcpy_nonmmu(&{}, &temp, sizeof(uint));\n", result_register);
+                result += &format!("\t\t*sp -= 1;\n");
+                result += &format!("\t}}\n");
+            },
+            StackType::f64 => {
+                result += &format!("\t{{\n");
+                result += &format!("\t\tulong temp = {};\n", emit_read_u64("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx"));
+                result += &format!("\t\t___private_memcpy_nonmmu(&{}, &temp, sizeof(ulong));\n", result_register);
+                result += &format!("\t\t*sp -= 2;\n");
+                result += &format!("\t}}\n");
             }
         }
     }

@@ -23,7 +23,7 @@ pub fn emit_select(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackC
     let type2 = stack_ctx.vstack_peak_type(1);
 
     if type1 != type2 {
-        panic!("Unequal sizes for select operation: {}", fn_name);
+        panic!("Unequal sizes for select operation: {}, StackCtx: {:?}", fn_name, stack_ctx);
     }
 
     let val2 = stack_ctx.vstack_pop(type1.clone());
