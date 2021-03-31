@@ -1381,7 +1381,7 @@ impl<'a> StackCtx {
             let offset: i32 = *self.local_offsets.get(local).unwrap() as i32 + self.param_offset;
             match ty {
                 StackType::i32 => {
-                    ret_str += &format!("\tif (local_cache[{}]) {};\n", cache_idx, &emit_write_u32(&format!("(ulong)(stack_u32+{}+{})",
+                    ret_str += &format!("\t{};\n", &emit_write_u32(&format!("(ulong)(stack_u32+{}+{})",
                                                                     offset, 
                                                                     &emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx")),
                                                                     "(ulong)stack_u32",
@@ -1389,7 +1389,7 @@ impl<'a> StackCtx {
                                                                     "warp_idx"));
                 },
                 StackType::i64 => {
-                    ret_str += &format!("\tif (local_cache[{}]) {};\n", cache_idx, &emit_write_u64(&format!("(ulong)(stack_u32+{}+{})",
+                    ret_str += &format!("\t{};\n", &emit_write_u64(&format!("(ulong)(stack_u32+{}+{})",
                                                                     offset, 
                                                                     &emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx")),
                                                                     "(ulong)stack_u32",
@@ -1397,7 +1397,7 @@ impl<'a> StackCtx {
                                                                     "warp_idx"));
                 },
                 StackType::f32 => {
-                    ret_str += &format!("\tif (local_cache[{}]) {};\n", cache_idx, &emit_write_u32(&format!("(ulong)(stack_u32+{}+{})",
+                    ret_str += &format!("\t{};\n", &emit_write_u32(&format!("(ulong)(stack_u32+{}+{})",
                                                                     offset, 
                                                                     &emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx")),
                                                                     "(ulong)stack_u32",
@@ -1405,7 +1405,7 @@ impl<'a> StackCtx {
                                                                     "warp_idx"));
                 },
                 StackType::f64 => {
-                    ret_str += &format!("\tif (local_cache[{}]) {};\n", cache_idx, &emit_write_u64(&format!("(ulong)(stack_u32+{}+{})",
+                    ret_str += &format!("\t{};\n", &emit_write_u64(&format!("(ulong)(stack_u32+{}+{})",
                                                                     offset, 
                                                                     &emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx")),
                                                                     "(ulong)stack_u32",
