@@ -958,13 +958,13 @@ impl<'a> OpenCLCWriter<'_> {
                 *loop_name_count += 1;
                 // the third parameter in the control stack stores loop header entry points
                 control_stack.push((label.to_string(), 1, (*call_ret_idx).try_into().unwrap()));
-                emit_loop(&self, b, label, *loop_name_count-1, fn_name, function_id_map, call_ret_idx, debug)
+                emit_loop(&self, stack_ctx, b, label, *loop_name_count-1, fn_name, function_id_map, call_ret_idx, debug)
             }
             // if control_stack.pop() panics, that means we were parsing an incorrectly defined
             // wasm file, each block/loop must have a matching end!
             wast::Instruction::End(id) => {
                 let (label, t, _) = control_stack.pop().unwrap();
-                emit_end(&self, id, &label, t, fn_name, function_id_map, debug)
+                emit_end(&self, stack_ctx, id, &label, t, fn_name, function_id_map, debug)
             },
             wast::Instruction::Select(_) => {
                 emit_select(self, stack_ctx, stack_sizes, fn_name, debug)
@@ -979,7 +979,7 @@ impl<'a> OpenCLCWriter<'_> {
                 emit_mem_size(self, stack_ctx, arg, debug)
             },
             wast::Instruction::Return => emit_return(self, fn_name, debug),
-            wast::Instruction::Br(idx) => emit_br(self, *idx, fn_name, control_stack, function_id_map, debug),
+            wast::Instruction::Br(idx) => emit_br(self, stack_ctx, *idx, fn_name, control_stack, function_id_map, debug),
             wast::Instruction::BrIf(idx) => emit_br_if(self, stack_ctx, *idx, fn_name, stack_sizes, control_stack, function_id_map, debug),
             wast::Instruction::BrTable(table_idxs) => emit_br_table(self, stack_ctx, table_idxs, fn_name, stack_sizes, control_stack, function_id_map, debug),
             wast::Instruction::Unreachable => {
@@ -1099,6 +1099,9 @@ impl<'a> OpenCLCWriter<'_> {
                                                         0,
                                                         false,
                                                         debug));
+
+                // emit the local/parameter cacheing array, this is used to elide writes during ctx saves/restores
+                final_string += &stack_ctx.emit_cache_array();
 
                 // emit the necessary intermediate values
                 final_string += &stack_ctx.emit_intermediates();
