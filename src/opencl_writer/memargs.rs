@@ -95,9 +95,11 @@ pub fn emit_memload_f64(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut S
     let i_load = stack_ctx.vstack_pop(StackType::i32);
     let result_register = stack_ctx.vstack_alloc(StackType::f64);
 
+    ret_str += &format!("\t{{\n");
     let read = format!("({})", emit_read_u64(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load), "(ulong)(heap_u32)", "warp_idx"));
-
-    ret_str += &format!("\t{} = {};\n", result_register, read);
+    ret_str += &format!("\t\tulong temp = {};\n", read);
+    ret_str += &format!("\t\t___private_memcpy_nonmmu(&{}, &temp, sizeof(double));\n", result_register);
+    ret_str += &format!("\t}}\n");
 
     ret_str
 }
@@ -233,11 +235,15 @@ pub fn emit_memstore_f64(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut 
 
     let stored_val = stack_ctx.vstack_pop(StackType::f64);
     let i_load = stack_ctx.vstack_pop(StackType::i32);
-
-    ret_str += &format!("\t{};\n", &emit_write_u64(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load),
+    ret_str += &format!("\t{{\n");
+    ret_str += &format!("\t\tulong temp = 0;\n");
+    ret_str += &format!("\t\t___private_memcpy_nonmmu(&temp, &{}, sizeof(double));\n", stored_val);
+    ret_str += &format!("\t\t{};\n", &emit_write_u64(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load),
                         "(ulong)(heap_u32)",
-                        &stored_val,
+                        "temp",
                         "warp_idx"));
+    ret_str += &format!("\t}}\n");
+
 
     ret_str
 }

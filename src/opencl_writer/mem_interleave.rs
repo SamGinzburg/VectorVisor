@@ -232,17 +232,14 @@ pub fn generate_read_write_calls(writer: &opencl_writer::OpenCLCWriter, interlea
                        "}");
 
     result += &format!("\n{}\n",
-        "void * ___private_memcpy_nonmmu(void *dest, const void *src, size_t len) {");
-
+        "inline void * ___private_memcpy_nonmmu(void *dest, void *src, size_t len) {");
     result += &format!("\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n",
                         "char *d = dest;",
-                        "const char *s = src;",
+                        "char *s = src;",
                         "while (len--)",
                         "  *d++ = *s++;",
                         "return dest;");
-
-    result += &format!("\t{}\n",
-                        "}");
+    result += &format!("}}\n");
 
     result
 }

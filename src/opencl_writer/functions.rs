@@ -59,7 +59,7 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stack
      * we are about to call, not the current function
      */
     let mut stack_params = vec![];
-    let mut stack_params_sizes = vec![];
+    let mut stack_params_types = vec![];
 
     let mut return_type = None;
 
@@ -71,7 +71,8 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stack
                 match parameter {
                     (_, _, t) => {
                         if !is_indirect {
-                            stack_params_sizes.insert(0, stack_sizes.pop().unwrap());
+                            stack_sizes.pop().unwrap();
+                            stack_params_types.insert(0, StackCtx::convert_wast_types(&t));
                             stack_params.insert(0, stack_ctx.vstack_pop(StackCtx::convert_wast_types(&t)));
                         }
                         parameter_offset += writer.get_size_valtype(&t);
@@ -99,7 +100,8 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stack
                         match parameter {
                             (_, _, t) => {
                                 if !is_indirect {
-                                    stack_params_sizes.insert(0, stack_sizes.pop().unwrap());
+                                    stack_sizes.pop().unwrap();
+                                    stack_params_types.insert(0, StackCtx::convert_wast_types(&t));
                                     stack_params.insert(0, stack_ctx.vstack_pop(StackCtx::convert_wast_types(&t)));
                                 }
                                 parameter_offset += writer.get_size_valtype(&t);
@@ -121,10 +123,33 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stack
     // We need to manually write the parameters to the stack
     // For indirect function calls we need to do this before the switch case to over allocating registers
     if !is_indirect {
-        for (param, size) in stack_params.iter().zip(stack_params_sizes.iter()) {
-            ret_str += &format!("\t{};\n\t*sp += {};\n",
-                                emit_write_u32("(ulong)(stack_u32+*sp)", "(ulong)(stack_u32)", param, "warp_idx"),
-                                size);
+        for (param, ty) in stack_params.iter().zip(stack_params_types.iter()) {
+            match ty {
+                StackType::i32 => {
+                    ret_str += &format!("\t\t{};\n\t\t*sp += 1;\n",
+                                            emit_write_u32("(ulong)(stack_u32+*sp)", "(ulong)(stack_u32)", &param, "warp_idx"));
+                },
+                StackType::i64 => {
+                    ret_str += &format!("\t\t{};\n\t\t*sp += 2;\n",
+                                            emit_write_u64("(ulong)(stack_u32+*sp)", "(ulong)(stack_u32)", &param, "warp_idx"));
+                },
+                StackType::f32 => {
+                    ret_str += &format!("\t{{\n");
+                    ret_str += &format!("\t\tuint temp = 0;\n");
+                    ret_str += &format!("\t\t___private_memcpy_nonmmu(&temp, &{}, sizeof(uint));\n", param);
+                    ret_str += &format!("\t\t{};\n\t\t*sp += 1;\n",
+                                        emit_write_u32("(ulong)(stack_u32+*sp)", "(ulong)(stack_u32)", "temp", "warp_idx"));
+                    ret_str += &format!("\t}}\n");
+                },
+                StackType::f64 => {
+                    ret_str += &format!("\t{{\n");
+                    ret_str += &format!("\t\tulong temp = 0;\n");
+                    ret_str += &format!("\t\t___private_memcpy_nonmmu(&temp, &{}, sizeof(double));\n", param);
+                    ret_str += &format!("\t\t{};\n\t\t*sp += 2;\n",
+                                        emit_write_u64("(ulong)(stack_u32+*sp)", "(ulong)(stack_u32)", "temp", "warp_idx"));
+                    ret_str += &format!("\t}}\n");
+                },
+            }
         }
     }
 
@@ -212,19 +237,30 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stack
     if return_size > 0 && !is_indirect {
         let result_register = stack_ctx.vstack_alloc(StackCtx::convert_wast_types(&return_type.unwrap()));
 
-        match return_size {
-            1 => {
+        match StackCtx::convert_wast_types(&return_type.unwrap()) {
+            StackType::i32 => {
                 ret_str += &format!("\t{} = {};\n\t{};\n", result_register, 
                                     emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx"),
                                     "*sp -= 1");
             },
-            2 => {
+            StackType::i64 => {
                 ret_str += &format!("\t{} = {};\n\t{};\n", result_register, 
-                                    emit_read_u32("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx"),
+                                    emit_read_u64("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx"),
                                     "*sp -= 2;");
             },
-            _ => {
-                panic!("Invalid return size type (functions.rs)");
+            StackType::f32 => {
+                ret_str += &format!("\t{{\n");
+                ret_str += &format!("\t\tuint temp = {};\n", emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx"));
+                ret_str += &format!("\t\t___private_memcpy_nonmmu(&{}, &temp, sizeof(uint));\n", result_register);
+                ret_str += &format!("\t\t*sp -= 1;\n");
+                ret_str += &format!("\t}}\n");
+            },
+            StackType::f64 => {
+                ret_str += &format!("\t{{\n");
+                ret_str += &format!("\t\tulong temp = {};\n", emit_read_u64("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx"));
+                ret_str += &format!("\t\t___private_memcpy_nonmmu(&{}, &temp, sizeof(ulong));\n", result_register);
+                ret_str += &format!("\t\t*sp -= 2;\n");
+                ret_str += &format!("\t}}\n");
             }
         }
     }
@@ -366,7 +402,7 @@ pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut St
                 }
                 final_str += &format!("\t{{\n");
                 final_str += &format!("\t\tulong temp = 0;\n");
-                final_str += &format!("\t\t___private_memcpy_nonmmu(&temp, &{}, sizeof(double));\n", reg);
+                final_str += &format!("\t\t___private_memcpy_nonmmu(&temp, &{}, sizeof(double));\n", &reg);
                 final_str += &format!("\t\t{}\n", offset);
                 final_str += &format!("\t}}\n");
 
