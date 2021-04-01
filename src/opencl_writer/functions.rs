@@ -126,11 +126,11 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stack
         for (param, ty) in stack_params.iter().zip(stack_params_types.iter()) {
             match ty {
                 StackType::i32 => {
-                    ret_str += &format!("\t\t{};\n\t\t*sp += 1;\n",
+                    ret_str += &format!("\t{};\n\t\t*sp += 1;\n",
                                             emit_write_u32("(ulong)(stack_u32+*sp)", "(ulong)(stack_u32)", &param, "warp_idx"));
                 },
                 StackType::i64 => {
-                    ret_str += &format!("\t\t{};\n\t\t*sp += 2;\n",
+                    ret_str += &format!("\t{};\n\t\t*sp += 2;\n",
                                             emit_write_u64("(ulong)(stack_u32+*sp)", "(ulong)(stack_u32)", &param, "warp_idx"));
                 },
                 StackType::f32 => {

@@ -275,7 +275,7 @@ pub fn emit_mem_grow(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stac
     
     // if curr_size + num_pages_to_grow_by <= max size (in terms of pages)
     ret_str += &format!("\t{}\n",
-                        format!("if (*current_mem_size + {} <= *max_mem_size) {{", num_pages_to_grow_by));
+                        format!("if (*current_mem_size + (int)({}) <= *max_mem_size) {{", num_pages_to_grow_by));
     // the grow is successful and push curr_size, else push -1 
 
     ret_str += &format!("\t\tulong temp = {};\n", num_pages_to_grow_by);

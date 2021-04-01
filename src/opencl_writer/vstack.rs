@@ -1068,7 +1068,7 @@ impl<'a> StackCtx {
                     current_i32_count -= 1;
                 },
                 wast::Instruction::BrTable(table_idxs) => {
-
+                    current_i32_count -= 1;
                 },
                 wast::Instruction::Unreachable => {
                 },
@@ -1103,6 +1103,23 @@ impl<'a> StackCtx {
 
         let mut max_offset: u32 = 0;
         let mut max_offset_type_size = 0;
+
+        let mut cloned_local_offsets: Vec<(String, u32)> = vec![];
+
+        for (name, offset) in local_offsets.clone().iter() {
+            cloned_local_offsets.push((name.to_string(), *offset))
+        }
+
+        // pop the first entry, set it as the starting max
+        let (mut max_offset, mut max_offset_type_size): (u32, u32) = match cloned_local_offsets.pop() {
+            Some ((name, offset)) => {
+                (offset, writer_ctx.get_size_valtype(&local_param_types.get(&name).unwrap()))
+            },
+            None => {
+                (0, 0)
+            }
+        };
+
         for (name, offsets) in local_offsets {
             let param_found = match is_param.get(name) {
                 Some(false) => false,

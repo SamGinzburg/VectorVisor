@@ -3,6 +3,8 @@
     (local.get $p0)
     (local.get $p1)
     (i32.add)
+    (local.set $p1)
+    (local.get $p1)
   )
   (func $_start (result i32)
     (local $l2 i32)
@@ -13,6 +15,9 @@
     (local.get $l2)
     (i32.const 100)
     (call $_add2)
+    block
+    i32.const 1
+    end
   )
   (export "_start" (func $_start))
 )
