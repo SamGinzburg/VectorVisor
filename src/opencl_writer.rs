@@ -168,7 +168,7 @@ impl<'a> OpenCLCWriter<'_> {
         // We need to save the context early, because we are going to need the stack parameters after returning...
         // But only if we are actually going to return to avoid overwriting ret vals
         if !is_proc_exit_start {
-            ret_str += &stack_ctx.save_context();
+            ret_str += &stack_ctx.save_context(false);
         }
 
         // set the hypercall ret flag flag + r
@@ -201,7 +201,7 @@ impl<'a> OpenCLCWriter<'_> {
 
         // restore the contex
         if !is_proc_exit_start {
-            ret_str += &stack_ctx.restore_context();
+            ret_str += &stack_ctx.restore_context(false);
         }
 
         // after the hypercall, we need to reset values on re-entry, and possible copy data back from the hcall buf
@@ -1226,11 +1226,6 @@ impl<'a> OpenCLCWriter<'_> {
                 for local in locals {
                     final_string += &emit_local(&self, local.clone(), debug);
                 }
-
-                // now that space for the locals have been allocated, allocate space for the rest
-                // of our stack frame (we can statically determine this from the stack context!)
-                let stack_frame_size = &stack_ctx.stack_frame_size();
-                final_string += &format!("\t*sp += {};\n", stack_frame_size);
 
                 // keep a stack of control-flow labels
                 // for blocks we need to put the label at the "end" statement, while loops always jump back

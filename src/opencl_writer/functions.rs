@@ -120,6 +120,11 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stack
         },
     }
 
+    // Now, we need to save the intermediate context
+    if !is_indirect {
+        ret_str += &stack_ctx.save_context(false);
+    }
+
     // We need to manually write the parameters to the stack
     // For indirect function calls we need to do this before the switch case to over allocating registers
     if !is_indirect {
@@ -151,11 +156,6 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stack
                 },
             }
         }
-    }
-
-    // Now, we need to save the intermediate context
-    if !is_indirect {
-        ret_str += &stack_ctx.save_context();
     }
 
     // for each function call, map the call to an index
@@ -228,10 +228,14 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stack
 
     ret_str += &result;
 
-    // restore the intermediate context
-    if !is_indirect {
-        ret_str += &stack_ctx.restore_context();
-    }
+    // Restore the intermediate context, generate the string here
+    // We do this here because if we alloc for the return value, we don't want to delete more space
+
+    let restore_context = if !is_indirect {
+        stack_ctx.restore_context(false)
+    } else {
+        String::from("")
+    };
 
     // after returning, the top of the stack is our return var (if we have one)
     if return_size > 0 && !is_indirect {
@@ -263,6 +267,11 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stack
                 ret_str += &format!("\t}}\n");
             }
         }
+    }
+
+    // restore the intermediate context
+    if !is_indirect {
+        ret_str += &restore_context;
     }
 
     ret_str
@@ -492,6 +501,11 @@ pub fn emit_call_indirect(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut
         _ => (),
     };
 
+    // Save the context before entering the switch case
+    result += &stack_ctx.save_context(false);
+
+    let restore_ctx = stack_ctx.restore_context(false);
+
     // Push the parameters to the stack
     for (param, ty) in stack_params.iter().zip(stack_params_types.iter()) {
         match ty {
@@ -529,9 +543,6 @@ pub fn emit_call_indirect(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut
         String::from("")
     };
 
-    // Save the context before entering the switch case
-    result += &stack_ctx.save_context();
-
     result += &format!("\t{}\n",
                        &format!("switch({}) {{", index_register));
     // generate all of the cases in the table, all uninitialized values will trap to the default case
@@ -546,9 +557,6 @@ pub fn emit_call_indirect(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut
     result += &format!("\t\t{}\n", "default:");
     result += &format!("\t\t\t{}\n", "return;");
     result += &format!("\t}}\n");
-
-    // Restore the context
-    result += &stack_ctx.restore_context();
 
     // Read the result value into a register
     if result_types.len() > 0 {
@@ -579,6 +587,9 @@ pub fn emit_call_indirect(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut
             }
         }
     }
+
+    // Restore the context
+    result += &restore_ctx;
 
     result
 }

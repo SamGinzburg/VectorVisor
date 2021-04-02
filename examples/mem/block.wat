@@ -14,15 +14,15 @@
     local.set $l1
     i32.const 1 ;; i1
     i32.const 1 ;; i2
-    ;; save ctx
+    ;; save ctx (save everything)
     loop
-      ;; restore ctx
+      ;; restore ctx (restore only locals)
       local.get $l1 ;; i3
       i32.const 1 ;; i4
       i32.sub
       local.tee $l1
       i32.eqz
-      ;; save ctx
+      ;; save ctx (save only locals)
       br_if 0
     end
     i32.const 7 ;; i3?

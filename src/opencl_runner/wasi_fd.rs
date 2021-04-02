@@ -163,7 +163,7 @@ impl WasiFd {
                 Interleave::write_u8(hcall_buf, index + 8, hypercall.num_total_vms, value, hypercall.vm_id);
             } else {
                 let mut hcall_buf_temp = &mut hcall_buf[(index + 8) as usize..(index + 8 + 1) as usize];
-                hcall_buf_temp.write_u8(value);
+                hcall_buf_temp.write_u8(value).unwrap();
             }
             index += 1;
         }

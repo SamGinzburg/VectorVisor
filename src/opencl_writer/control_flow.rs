@@ -8,6 +8,7 @@ use crate::opencl_writer::function_unwind;
 use crate::opencl_writer::WasmHypercallId;
 
 use std::collections::HashMap;
+use std::convert::TryInto;
 
 // TODO: double check the semantics of this? 
 pub fn emit_return(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, fn_name: &str, hypercall_id_count: &mut u32, debug: bool) -> String {
@@ -55,11 +56,36 @@ pub fn emit_br(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, 
     // block = 0, loop = 1
     if *block_type == 0 {
         // If we are targeting a forward branch, just emit the goto
+
+        /*
+         * If our branch is used to break out of a loop by targeting a label after the loop end,
+         * then we have to cleanup the stack pointer ourselves.
+         * 
+         * We loop over the control stack to count how many loops we are currently inside
+         * In the stack context we track the space allocated for each loop (we also pop from this stack on 'end' statements)
+         * 
+         * We then subtract the stack pointer appropriately
+         */
+        let mut control_stack_copy = control_stack.clone();
+        control_stack_copy.reverse();
+        let mut loop_count: u32 = 0;
+        for (label, is_loop, _) in control_stack_copy.iter() {
+            if *is_loop == 1 {
+                loop_count += 1;
+            }
+            if label == block_name {
+                break;
+            }
+        }
+
+        // Get the value to decrement *sp by in the case of this jump
+        ret_str += &format!("\t*sp -= {};\n", stack_ctx.vstack_get_loop_stack_delta(loop_count));
+
         ret_str += &format!("\t{}\n", format!("goto {}_{};", format!("{}{}", "__", fn_name.replace(".", "")), block_name));
     } else {
         // If we are targeting a loop, we have to emit a return instead, to convert the iterative loop into a recursive function call
         // save the context, since we are about to call a function (ourself)
-        ret_str += &stack_ctx.save_context();
+        ret_str += &stack_ctx.save_context(true);
 
         ret_str += &format!("\t{}\n",
                             "*sfp += 1;");
@@ -117,16 +143,26 @@ pub fn emit_end<'a>(writer: &opencl_writer::OpenCLCWriter<'a>, stack_ctx: &mut S
     // 0 -> block (label goes here, at the end statement)
     // 1-> loop (label was already inserted at the top, this is a no-op here)
     if block_type == 0 {
+        /*
         format!("\n{}_{}:\n\t{}\n", format!("{}{}", "__", fn_name.replace(".", "")), label,
             format!("*sp = read_u32((ulong)(((global char*)branch_value_stack_state)+(*sfp*512)+({}*4)), (ulong)(branch_value_stack_state), warp_idx);",
                     branch_idx_u32))
+        */
+        format!("\n{}_{}:\n", format!("{}{}", "__", fn_name.replace(".", "")), label)
     } else {
         let mut result = String::from("");
         result += &format!("\t/* END (loop: {}_{}) */\n", format!("{}{}", "__", fn_name.replace(".", "")), label);
         
-        // pop the control flow stack entry (reset the stack to the state it was in before the loop)
+        // reset the stack pointer to the value before the loop
+        /*
         result += &format!("\t*sp = read_u32((ulong)(((global char*)loop_value_stack_state)+(*sfp*512)+({}*4)), (ulong)(loop_value_stack_state), warp_idx);\n",
                     branch_idx_u32);
+        */
+        // remove the stack space we allocated to save the loop context
+        let stack_frame_size = stack_ctx.stack_frame_size();
+        result += &format!("\t*sp -= {};\n", stack_frame_size);
+        // pop the loop stack tracking data
+        stack_ctx.vstack_pop_loop_stack_info();
 
         result
     }
@@ -141,25 +177,31 @@ pub fn emit_loop(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx
     // For each stack frame, we store a max of 32 loop stack values
     // As of now, this value is hardcoded (can be easily expanded later), but in practice it is rare to see more than 32 loops inside the same function
 
+    /*
     result += &format!("\t{}\n",
                         format!("write_u32((ulong)(((global char*)loop_value_stack_state)+(*sfp*512)+({}*4)), (ulong)(loop_value_stack_state), *sp, warp_idx);",
                         branch_idx_u32));
+    */
 
     // We have to save the context, since this is the entry point for a function call
     // TODO: optimize this by checking if we actually call a function inside the loop
     // we can replace with a GOTO in certain situations
     // This will have *huge* speedups for small loops
-    result += &stack_ctx.save_context();
+    stack_ctx.vstack_push_loop_stack_info(stack_ctx.stack_frame_size().try_into().unwrap());
+    result += &stack_ctx.save_context(false);
 
     // we convert our loop into a recursive call here - the loop header is treated as a function call re-entry point
     result += &format!("{}_call_return_stub_{}:\n", format!("{}{}", "__", fn_name.replace(".", "")), *call_ret_idx);
 
     // We have to issue a restore here because on subsequent invocations the state will have changed
-    result += &stack_ctx.restore_context();
+    // only restore locals here
+    result += &stack_ctx.restore_context(true);
 
     // pop the control flow stack entry (reset the stack to the state it was in before the loop)
+    /*
     result += &format!("\t*sp = read_u32((ulong)(((global char*)loop_value_stack_state)+(*sfp*512)+({}*4)), (ulong)(loop_value_stack_state), warp_idx);\n",
                 branch_idx_u32);
+    */
 
     *call_ret_idx += 1;
 

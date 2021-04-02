@@ -1311,7 +1311,7 @@ impl OpenCLRunner {
         let mut max_queue_time: u64 = 0;
         let mut min_queue_time: u64 = std::u64::MAX;
         let mut num_queue_submits: u64 = 0;
-       
+
         let mut backup_entry_point_temp = 0;
 
         let mut called_funcs = BTreeSet::new();
