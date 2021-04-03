@@ -12,6 +12,7 @@ mod convops;
 mod parametric;
 mod unops;
 mod vstack;
+mod fastcalls;
 
 use relops::*;
 use mem_interleave::*;
@@ -27,6 +28,7 @@ use convops::*;
 use parametric::*;
 use unops::*;
 use vstack::*;
+use fastcalls::*;
 
 use wast::Wat;
 use wast::parser::{self, ParseBuffer};
@@ -40,6 +42,8 @@ use std::fmt;
 use std::fmt::Write;
 use std::collections::HashMap;
 use std::convert::TryInto;
+use std::iter::FromIterator;
+use std::collections::BTreeSet;
 
 use lazy_static::lazy_static;
 
@@ -1898,6 +1902,19 @@ r#"
         // generate the indirect call mapping T0, refer to openclwriter/functions.rs:emit_call_indirect
         // for notes on why we are doing this statically at compile time
         let indirect_call_mapping: &HashMap<u32, &wast::Index> = &self.process_elements(debug);
+
+        // generate the set of indirect calls
+        let mut indirect_call_set = BTreeSet::new();
+        for (_, indirect_call_name) in indirect_call_mapping.iter() {
+            let name = match indirect_call_name {
+                wast::Index::Id(id)  => id.name().to_string(),
+                _ => panic!("Num function names not supported"),
+            };
+            indirect_call_set.insert(name);
+        }
+
+        let fast_function_set = compute_fastcall_set(self, Vec::from_iter(funcs.clone()), &mut indirect_call_set);
+        dbg!(fast_function_set);
 
         for function in funcs.clone() {
             let func = self.emit_function(function,
