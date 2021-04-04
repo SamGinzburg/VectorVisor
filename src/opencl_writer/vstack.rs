@@ -31,6 +31,25 @@ pub enum StackType {
     f64
 }
 
+#[derive(Debug, Clone)]
+pub struct StackSnapshot {
+    i32_idx: usize,
+    i64_idx: usize,
+    f32_idx: usize,
+    f64_idx: usize
+}
+
+impl StackSnapshot {
+    pub fn from_current_ctx(ctx: &StackCtx) -> StackSnapshot {
+        StackSnapshot {
+            i32_idx: ctx.i32_idx,
+            i64_idx: ctx.i64_idx,
+            f32_idx: ctx.f32_idx,
+            f64_idx: ctx.f64_idx,
+        }
+    }
+}
+
 /*
  * The stacks are generated during the first compilation pass
  * Indicies are tracked during execution
@@ -55,6 +74,7 @@ pub struct StackCtx {
     // Tracking loop sp state changes for unwinding the stack during br statements
     // We store the *sp modification in this stack, then pop this off when emitting end statements
     loop_control_stack: Vec<u32>,
+    control_stack_snapshots: Vec<StackSnapshot>,
 }
 
 impl<'a> StackCtx {
@@ -1153,6 +1173,7 @@ impl<'a> StackCtx {
             param_offset: param_offset,
             total_stack_types: vec![],
             loop_control_stack: vec![],
+            control_stack_snapshots: vec![],
         }
     }
 
@@ -1165,6 +1186,18 @@ impl<'a> StackCtx {
 
     pub fn vstack_pop_loop_stack_info(&mut self) -> () {
         self.loop_control_stack.pop();
+    }
+
+    pub fn vstack_push_stack_frame(&mut self) -> () {
+        self.control_stack_snapshots.push(StackSnapshot::from_current_ctx(self));
+    }
+
+    pub fn vstack_pop_stack_frame(&mut self) -> () {
+        let stack_frame_unwind = self.control_stack_snapshots.pop().unwrap();
+        self.i32_idx = stack_frame_unwind.i32_idx;
+        self.i64_idx = stack_frame_unwind.i64_idx;
+        self.f32_idx = stack_frame_unwind.f32_idx;
+        self.f64_idx = stack_frame_unwind.f64_idx;
     }
 
     /*
@@ -1547,7 +1580,7 @@ impl<'a> StackCtx {
 
         // clean up the stack space for the context
         // don't do this if we are only restoring locals (stack saving for loops)
-        if !restore_locals_only {
+        if !restore_locals_only && !restore_intermediates_only {
             let stack_frame_size = self.stack_frame_size();
             ret_str += &format!("\t*sp -= {};\n", stack_frame_size);
         }

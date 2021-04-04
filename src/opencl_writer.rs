@@ -952,7 +952,7 @@ impl<'a> OpenCLCWriter<'_> {
                 *block_name_count += 1;
                 // for the control stack, we don't use the third parameter for blocks
                 control_stack.push((label.to_string(), 0, -1));
-                emit_block(&self, b, label, *block_name_count-1, fn_name, function_id_map, debug)
+                emit_block(&self, stack_ctx, b, label, *block_name_count-1, fn_name, function_id_map, debug)
             },
             wast::Instruction::Loop(b) => {
                 let label: String = match b.label {

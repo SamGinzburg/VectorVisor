@@ -128,6 +128,10 @@ pub fn emit_br_if(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCt
 // semantically, the end statement pops from the control stack,
 // in our compiler, this is a no-op
 pub fn emit_end<'a>(writer: &opencl_writer::OpenCLCWriter<'a>, stack_ctx: &mut StackCtx, id: &Option<wast::Id<'a>>, label: &str, block_type: u32, fn_name: &str, function_id_map: HashMap<&str, u32>, debug: bool) -> String {
+
+    // unwind the stack frame
+    stack_ctx.vstack_pop_stack_frame();
+
     // after a block ends, we need to unwind the stack!
     let re = Regex::new(r"\d+").unwrap();
     // we can use the branch index to save to global state
@@ -185,6 +189,8 @@ pub fn emit_loop(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx
                         branch_idx_u32));
     */
 
+    stack_ctx.vstack_push_stack_frame();
+
     // We have to save the context, since this is the entry point for a function call
     // TODO: optimize this by checking if we actually call a function inside the loop
     // we can replace with a GOTO in certain situations
@@ -210,8 +216,10 @@ pub fn emit_loop(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx
     result
 }
 
-pub fn emit_block(writer: &opencl_writer::OpenCLCWriter, block: &wast::BlockType, label: String, branch_idx_u32: u32, fn_name: &str, function_id_map: HashMap<&str, u32>, debug: bool) -> String {
+pub fn emit_block(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, block: &wast::BlockType, label: String, branch_idx_u32: u32, fn_name: &str, function_id_map: HashMap<&str, u32>, debug: bool) -> String {
     let mut result: String = String::from("");
+
+    stack_ctx.vstack_push_stack_frame();
 
     // we have to emulate a 2-D array, since openCL does not support double ptrs in v1.2
     // the format is (64 x 64 * number of functions),
