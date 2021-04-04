@@ -232,7 +232,7 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stack
     // We do this here because if we alloc for the return value, we don't want to delete more space
 
     let restore_context = if !is_indirect {
-        stack_ctx.restore_context(false)
+        stack_ctx.restore_context(false, false)
     } else {
         String::from("")
     };
@@ -504,7 +504,7 @@ pub fn emit_call_indirect(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut
     // Save the context before entering the switch case
     result += &stack_ctx.save_context(false);
 
-    let restore_ctx = stack_ctx.restore_context(false);
+    let restore_ctx = stack_ctx.restore_context(false, false);
 
     // Push the parameters to the stack
     for (param, ty) in stack_params.iter().zip(stack_params_types.iter()) {

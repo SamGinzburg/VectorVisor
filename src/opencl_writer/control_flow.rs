@@ -163,6 +163,8 @@ pub fn emit_end<'a>(writer: &opencl_writer::OpenCLCWriter<'a>, stack_ctx: &mut S
         result += &format!("\t*sp -= {};\n", stack_frame_size);
         // pop the loop stack tracking data
         stack_ctx.vstack_pop_loop_stack_info();
+        // restore the intermediate values after ending the loop
+        result += &stack_ctx.restore_context(false, true);
 
         result
     }
@@ -195,7 +197,7 @@ pub fn emit_loop(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx
 
     // We have to issue a restore here because on subsequent invocations the state will have changed
     // only restore locals here
-    result += &stack_ctx.restore_context(true);
+    result += &stack_ctx.restore_context(true, false);
 
     // pop the control flow stack entry (reset the stack to the state it was in before the loop)
     /*
