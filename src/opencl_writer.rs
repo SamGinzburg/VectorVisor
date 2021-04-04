@@ -43,7 +43,7 @@ use std::fmt::Write;
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::iter::FromIterator;
-use std::collections::BTreeSet;
+use std::collections::HashSet;
 
 use lazy_static::lazy_static;
 
@@ -1904,7 +1904,7 @@ r#"
         let indirect_call_mapping: &HashMap<u32, &wast::Index> = &self.process_elements(debug);
 
         // generate the set of indirect calls
-        let mut indirect_call_set = BTreeSet::new();
+        let mut indirect_call_set = HashSet::new();
         for (_, indirect_call_name) in indirect_call_mapping.iter() {
             let name = match indirect_call_name {
                 wast::Index::Id(id)  => id.name().to_string(),
@@ -1913,8 +1913,9 @@ r#"
             indirect_call_set.insert(name);
         }
 
-        let fast_function_set = compute_fastcall_set(self, Vec::from_iter(funcs.clone()), &mut indirect_call_set);
-        dbg!(fast_function_set);
+        let _fast_function_set = compute_fastcall_set(self, Vec::from_iter(funcs.clone()), &mut indirect_call_set);
+        // TODO: emit fastcalls when available
+        //dbg!(fast_function_set);
 
         for function in funcs.clone() {
             let func = self.emit_function(function,

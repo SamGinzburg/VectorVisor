@@ -7,7 +7,8 @@ use crate::opencl_writer::StackCtx;
 use crate::opencl_writer::StackType;
 use crate::opencl_writer::WASI_SNAPSHOT_PREVIEW1;
 
-use std::collections::BTreeSet;
+use std::collections::HashSet;
+use std::iter::FromIterator;
 
 /*
  * Our CPS-style transform is too expensive for most function calls, so we perform some basic static analysis
@@ -35,7 +36,9 @@ use std::collections::BTreeSet;
  * 
  * At some point during our main pass, we will end up in a steady state where we have only ambiguous functions remaining (or none).
  * 
- * We then collect the set of all functions that are marked as ambiguous, and do one final pass where we attempt to  
+ * We then perform a second pass to identify if any ambiguous functions can be fastcall-optimized as well.
+ * 
+ * TODO: most of the functions we would like to optimize are actually stopped by panic! code - this can special cased 
  * 
  */
 
@@ -43,11 +46,11 @@ use std::collections::BTreeSet;
 pub enum FastcallPassStatus {
     fastcall_false(String), // The string is for debugging the compiler
     fastcall_true,
-    fastcall_ambiguous(BTreeSet<String>)
+    fastcall_ambiguous(HashSet<String>)
 }
 
 
- fn is_fastcall(writer: &opencl_writer::OpenCLCWriter, func: &wast::Func, fastcall_set: &mut BTreeSet<String>, indirect_calls: &mut BTreeSet<String>) -> FastcallPassStatus {
+ fn is_fastcall(writer: &opencl_writer::OpenCLCWriter, func: &wast::Func, fastcall_set: &mut HashSet<String>, indirect_calls: &mut HashSet<String>) -> FastcallPassStatus {
     match (&func.kind, &func.id, &func.ty) {
         (wast::FuncKind::Import(_), _, _) => {
             panic!("InlineImport functions not yet implemented (fastcall pass)");
@@ -65,7 +68,7 @@ pub enum FastcallPassStatus {
             }
 
             // Is this function in the indirect call table?
-            let mut ambiguous_dep_list = BTreeSet::new();
+            let mut ambiguous_dep_list = HashSet::new();
             for instruction in expression.instrs.iter() {
                 match instruction {
                     wast::Instruction::Call(idx) => {
@@ -122,14 +125,15 @@ pub enum FastcallPassStatus {
   * Check all the functions in the program to see which ones we can convert into fastcalls
   * Returns a set of function IDs that can be converted
   */
- pub fn compute_fastcall_set(writer: &opencl_writer::OpenCLCWriter, func_list: Vec<&wast::Func>, indirect_calls: &mut BTreeSet<String>) -> BTreeSet<String> {
-    let mut called_funcs = BTreeSet::new();
+ pub fn compute_fastcall_set(writer: &opencl_writer::OpenCLCWriter, func_list: Vec<&wast::Func>, indirect_calls: &mut HashSet<String>) -> HashSet<String> {
+    let mut called_funcs = HashSet::new();
+    let mut known_bad_calls = HashSet::new();
 
     let mut fastcall_count = 0;
-    let mut ambiguous_count = 0;
     let mut ambiguous_fastcalls = vec![];
+
     loop {
-        println!("Fastcall analysis pass, found: {:?} functions to optimize", fastcall_count);
+        //println!("Fastcall analysis pass, found: {:?} functions to optimize", fastcall_count);
         ambiguous_fastcalls = vec![];
         for func in &func_list {
             let is_fastcall = is_fastcall(writer, func, &mut called_funcs, indirect_calls);
@@ -140,21 +144,45 @@ pub enum FastcallPassStatus {
                 FastcallPassStatus::fastcall_ambiguous(fastcall_ambiguous) => {
                     ambiguous_fastcalls.push((func.id.unwrap().name().to_string(), fastcall_ambiguous));
                 },
-                _ => (),
+                FastcallPassStatus::fastcall_false(_) => {
+                    known_bad_calls.insert(func.id.unwrap().name().to_string());
+                }
             }
         }
 
         // If there has been no change in the amount of fastcall funcs, then we have reached a stable state and are done
-        if fastcall_count == called_funcs.clone().len() && ambiguous_count == ambiguous_fastcalls.clone().len() {
+        if fastcall_count == called_funcs.clone().len() {
             break;
         } else {
             fastcall_count = called_funcs.clone().len();
-            ambiguous_count = ambiguous_fastcalls.clone().len();
         }
     }
 
-    // Now check how many ambiguous calls we have to check
-    dbg!(ambiguous_fastcalls);
+    // Loop through the ambiguous calls, removing any that make bad calls, and adding those calls to the bad call set
+    let mut last_bad_call_count = 0;
+    loop {
+        // Keep going until we propogate all of the bad calls through
+        for (call, set) in ambiguous_fastcalls.clone().iter() {
+            let intersection = set.intersection(&known_bad_calls);
+            // If a function makes a bad call, then it is also bad
+            if intersection.into_iter().collect::<Vec<&String>>().len() != 0 {
+                known_bad_calls.insert(call.to_string());
+            }
+        }
+        if last_bad_call_count == known_bad_calls.len() {
+            break;
+        } else {
+            last_bad_call_count = known_bad_calls.len();
+        }
+    }
+
+    // Now check how many ambiguous calls we can add back
+    for (call, set) in ambiguous_fastcalls.clone().iter() {
+        let intersection = set.intersection(&known_bad_calls);
+        if intersection.into_iter().collect::<Vec<&String>>().len() == 0 {
+            called_funcs.insert(call.to_string());
+        }
+    }
 
     called_funcs
  }
