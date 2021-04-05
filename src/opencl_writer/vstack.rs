@@ -22,6 +22,7 @@ use wast::Instruction;
 use wast::ValType;
 
 use std::collections::HashMap;
+use core::ops::Range;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum StackType {
@@ -73,7 +74,7 @@ pub struct StackCtx {
     total_stack_types: Vec<StackType>,
     // Tracking loop sp state changes for unwinding the stack during br statements
     // We store the *sp modification in this stack, then pop this off when emitting end statements
-    loop_control_stack: Vec<u32>,
+    control_stack: Vec<u32>,
     control_stack_snapshots: Vec<StackSnapshot>,
 }
 
@@ -1172,7 +1173,7 @@ impl<'a> StackCtx {
             local_types: local_types_converted,
             param_offset: param_offset,
             total_stack_types: vec![],
-            loop_control_stack: vec![],
+            control_stack: vec![],
             control_stack_snapshots: vec![],
         }
     }
@@ -1180,12 +1181,12 @@ impl<'a> StackCtx {
     /*
      * When entering a loop block, track how much we increase *sp by
      */
-    pub fn vstack_push_loop_stack_info(&mut self, stack_inc: u32) -> () {
-        self.loop_control_stack.push(stack_inc);
+    pub fn vstack_push_stack_info(&mut self, stack_inc: u32) -> () {
+        self.control_stack.push(stack_inc);
     }
 
-    pub fn vstack_pop_loop_stack_info(&mut self) -> () {
-        self.loop_control_stack.pop();
+    pub fn vstack_pop_stack_info(&mut self) -> () {
+        self.control_stack.pop();
     }
 
     pub fn vstack_push_stack_frame(&mut self) -> () {
@@ -1203,12 +1204,12 @@ impl<'a> StackCtx {
     /*
      * When executing a br instruction that exits a loop
      */
-    pub fn vstack_get_loop_stack_delta(&mut self, nested_loop_count: u32) -> u32 {
+    pub fn vstack_get_stack_delta(&mut self, nested_stack_count: u32) -> u32 {
         let mut ret_val: u32 = 0;
-        let mut loop_control_stack_copy = self.loop_control_stack.clone();
-        loop_control_stack_copy.reverse();
-        for (val, idx) in loop_control_stack_copy.iter().zip(0..loop_control_stack_copy.len() as u32) {
-            if idx == nested_loop_count {
+        let mut control_stack_copy = self.control_stack.clone();
+        control_stack_copy.reverse();
+        for (val, idx) in control_stack_copy.iter().zip(0..control_stack_copy.len() as u32) {
+            if idx == nested_stack_count {
                 break;
             }
             ret_val += val;
@@ -1455,19 +1456,29 @@ impl<'a> StackCtx {
         self.i32_idx + (self.i64_idx*2) + self.f32_idx + (self.f64_idx*2)
     }
 
+    pub fn generate_intermediate_ranges(&self) -> (Range<usize>, Range<usize>, Range<usize>, Range<usize>) {
+        match self.control_stack_snapshots.last() {
+            Some(snap) => {
+
+                let i32_range = snap.i32_idx..self.i32_idx;
+                let i64_range = snap.i64_idx..self.i64_idx;
+                let f32_range = snap.f32_idx..self.f32_idx;
+                let f64_range = snap.f64_idx..self.f64_idx;
+
+                (i32_range, i64_range, f32_range, f64_range)
+            },
+            // If no stack frames pushed, then we have the easy case
+            None => (0..self.i32_idx, 0..self.i64_idx, 0..self.f32_idx, 0..self.f64_idx),
+        }
+    }
+
+
     /*
      * Generate the code to save the context of the current function
      * We can statically determine the minimum
      */
     pub fn save_context(&self, save_locals_only: bool) -> String {
         let mut ret_str = String::from("");
-
-        // allocate space for saving the context on *real* stack
-        // only do this if we have to save intermediate values at all
-        if !save_locals_only {
-            let stack_frame_size = self.stack_frame_size();
-            ret_str += &format!("\t*sp += {};\n", stack_frame_size);
-        }
 
         // First, save the locals to the stack frame
         for (local, ty) in self.local_types.iter() {
@@ -1517,36 +1528,41 @@ impl<'a> StackCtx {
             }
         }
 
+        let mut intermediate_offset = 0;
+
         // Now go through and save the intermediate values
         if !save_locals_only {
-            let mut intermediate_offset = 0;
-            for idx in 0..self.i32_idx {
-                ret_str += &format!("\t{};\n", &emit_write_u32(&format!("(ulong)(stack_u32+{}+{}+{})",
-                                                                self.stack_frame_offset, intermediate_offset,
-                                                                &emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx")),
+            // We only want to save the intermediates on our current stack frame
+            let (i32_range, i64_range, f32_range, f64_range) = self.generate_intermediate_ranges();
+
+            /*
+             * The ctx saving structure is:
+             *         (fn start, sfp pointer)
+             * |  <parameters>  | <locals> | intermediates ....
+             * 
+             */
+
+            for idx in i32_range {
+                ret_str += &format!("\t{};\n", &emit_write_u32(&format!("(ulong)(stack_u32+{}+*sp)", intermediate_offset),
                                                                 "(ulong)stack_u32",
                                                                 &self.i32_stack.get(idx).unwrap(),
                                                                 "warp_idx"));
                 intermediate_offset += 1;
             }
     
-            for idx in 0..self.i64_idx {
-                ret_str += &format!("\t{};\n", &emit_write_u64(&format!("(ulong)(stack_u32+{}+{}+{})",
-                                                                self.stack_frame_offset, intermediate_offset,
-                                                                &emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx")),
+            for idx in i64_range {
+                ret_str += &format!("\t{};\n", &emit_write_u64(&format!("(ulong)(stack_u32+{}+*sp)", intermediate_offset),
                                                                 "(ulong)stack_u32",
                                                                 &self.i64_stack.get(idx).unwrap(),
                                                                 "warp_idx"));
                 intermediate_offset += 2;
             }
     
-            for idx in 0..self.f32_idx {
+            for idx in f32_range {
                 ret_str += &format!("\t{{\n");
                 ret_str += &format!("\t\tuint temp = 0;\n");
                 ret_str += &format!("\t\t___private_memcpy_nonmmu(&temp, &{}, sizeof(float));\n", &self.f64_stack.get(idx).unwrap());
-                ret_str += &format!("\t\t{};\n", &emit_write_u32(&format!("(ulong)(stack_u32+{}+{}+{})",
-                                                                self.stack_frame_offset, intermediate_offset,
-                                                                &emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx")),
+                ret_str += &format!("\t\t{};\n", &emit_write_u32(&format!("(ulong)(stack_u32+{}+*sp)", intermediate_offset),
                                                                 "(ulong)stack_u32",
                                                                 "temp",
                                                                 "warp_idx"));
@@ -1554,19 +1570,25 @@ impl<'a> StackCtx {
                 intermediate_offset += 1;
             }
     
-            for idx in 0..self.f64_idx {
+            for idx in f64_range {
                 ret_str += &format!("\t{{\n");
                 ret_str += &format!("\t\tulong temp = 0;\n");
                 ret_str += &format!("\t\t___private_memcpy_nonmmu(&temp, &{}, sizeof(double));\n", &self.f64_stack.get(idx).unwrap());
-                ret_str += &format!("\t\t{};\n", &emit_write_u64(&format!("(ulong)(stack_u32+{}+{}+{})",
-                                                                self.stack_frame_offset, intermediate_offset,
-                                                                &emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx")),
+                ret_str += &format!("\t\t{};\n", &emit_write_u64(&format!("(ulong)(stack_u32+{}+*sp)", intermediate_offset),
                                                                 "(ulong)stack_u32",
                                                                 "temp",
                                                                 "warp_idx"));
                 ret_str += &format!("\t}}\n");
                 intermediate_offset += 2;
             }
+        }
+
+        // allocate space for saving the context on *real* stack
+        // only do this if we have to save intermediate values at all
+
+        if !save_locals_only {
+            let stack_frame_size = self.stack_frame_size();
+            ret_str += &format!("\t*sp += {};\n", stack_frame_size);
         }
 
         ret_str
@@ -1580,7 +1602,8 @@ impl<'a> StackCtx {
 
         // clean up the stack space for the context
         // don't do this if we are only restoring locals (stack saving for loops)
-        if !restore_locals_only && !restore_intermediates_only {
+
+        if !restore_locals_only {
             let stack_frame_size = self.stack_frame_size();
             ret_str += &format!("\t*sp -= {};\n", stack_frame_size);
         }
@@ -1631,41 +1654,37 @@ impl<'a> StackCtx {
         if !restore_locals_only {
             // Now restore the intermediate values
             let mut intermediate_offset = 0;
-            for idx in 0..self.i32_idx {
+
+            let (i32_range, i64_range, f32_range, f64_range) = self.generate_intermediate_ranges();
+
+            for idx in i32_range {
                 ret_str += &format!("\t{} = {};\n", &self.i32_stack.get(idx).unwrap(),
-                                                    &emit_read_u32(&format!("(ulong)(stack_u32+{}+{}+{})",
-                                                                self.stack_frame_offset, intermediate_offset,
-                                                                &emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx")),
+                                                    &emit_read_u32(&format!("(ulong)(stack_u32+{}+*sp)", intermediate_offset),
                                                                 "(ulong)stack_u32",
                                                                 "warp_idx"));
+
                 intermediate_offset += 1;
             }
 
-            for idx in 0..self.i64_idx {
+            for idx in i64_range {
                 ret_str += &format!("\t{} = {};\n", &self.i64_stack.get(idx).unwrap(), 
-                                                    &emit_read_u64(&format!("(ulong)(stack_u32+{}+{}+{})",
-                                                                self.stack_frame_offset, intermediate_offset,
-                                                                &emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx")),
+                                                    &emit_read_u64(&format!("(ulong)(stack_u32+{}+*sp)", intermediate_offset),
                                                                 "(ulong)stack_u32",
                                                                 "warp_idx"));
                 intermediate_offset += 2;
             }
 
-            for idx in 0..self.f32_idx {
+            for idx in f32_range {
                 ret_str += &format!("\t{} = {};\n", &self.f32_stack.get(idx).unwrap(),
-                                                    &emit_read_u32(&format!("(ulong)(stack_u32+{}+{}+{})",
-                                                                self.stack_frame_offset, intermediate_offset,
-                                                                &emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx")),
+                                                    &emit_read_u32(&format!("(ulong)(stack_u32+{}+*sp)", intermediate_offset),
                                                                 "(ulong)stack_u32",
                                                                 "warp_idx"));
                 intermediate_offset += 1;
             }
 
-            for idx in 0..self.f64_idx {
+            for idx in f64_range {
                 ret_str += &format!("\t{{\n");
-                ret_str += &format!("\t\tulong temp = {};\n", &emit_read_u64(&format!("(ulong)(stack_u32+{}+{}+{})",
-                                                                                self.stack_frame_offset, intermediate_offset, 
-                                                                                &emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx")),
+                ret_str += &format!("\t\tulong temp = {};\n", &emit_read_u64(&format!("(ulong)(stack_u32+{}+*sp)", intermediate_offset),
                                                                                 "(ulong)stack_u32",
                                                                                 "warp_idx"));
                 ret_str += &format!("\t\t___private_memcpy_nonmmu(&{}, &temp, sizeof(double));\n", &self.f64_stack.get(idx).unwrap());

@@ -68,19 +68,16 @@ pub fn emit_br(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, 
          */
         let mut control_stack_copy = control_stack.clone();
         control_stack_copy.reverse();
-        let mut loop_count: u32 = 0;
+        let mut block_count: u32 = 0;
         for (label, is_loop, _) in control_stack_copy.iter() {
-            if *is_loop == 1 {
-                loop_count += 1;
-            }
             if label == block_name {
                 break;
             }
+            block_count += 1;
         }
 
         // Get the value to decrement *sp by in the case of this jump
-        ret_str += &format!("\t*sp -= {};\n", stack_ctx.vstack_get_loop_stack_delta(loop_count));
-
+        ret_str += &format!("\t*sp -= {};\n", stack_ctx.vstack_get_stack_delta(block_count));
         ret_str += &format!("\t{}\n", format!("goto {}_{};", format!("{}{}", "__", fn_name.replace(".", "")), block_name));
     } else {
         // If we are targeting a loop, we have to emit a return instead, to convert the iterative loop into a recursive function call
@@ -131,6 +128,8 @@ pub fn emit_end<'a>(writer: &opencl_writer::OpenCLCWriter<'a>, stack_ctx: &mut S
 
     // unwind the stack frame
     stack_ctx.vstack_pop_stack_frame();
+    // pop the *sp tracking data
+    stack_ctx.vstack_pop_stack_info();
 
     // after a block ends, we need to unwind the stack!
     let re = Regex::new(r"\d+").unwrap();
@@ -147,26 +146,16 @@ pub fn emit_end<'a>(writer: &opencl_writer::OpenCLCWriter<'a>, stack_ctx: &mut S
     // 0 -> block (label goes here, at the end statement)
     // 1-> loop (label was already inserted at the top, this is a no-op here)
     if block_type == 0 {
-        /*
-        format!("\n{}_{}:\n\t{}\n", format!("{}{}", "__", fn_name.replace(".", "")), label,
-            format!("*sp = read_u32((ulong)(((global char*)branch_value_stack_state)+(*sfp*512)+({}*4)), (ulong)(branch_value_stack_state), warp_idx);",
-                    branch_idx_u32))
-        */
-        format!("\n{}_{}:\n", format!("{}{}", "__", fn_name.replace(".", "")), label)
+        let mut result = String::from("");
+
+        result += &format!("\n{}_{}:\n", format!("{}{}", "__", fn_name.replace(".", "")), label);
+        result += &stack_ctx.restore_context(false, true);
+
+        result
     } else {
         let mut result = String::from("");
         result += &format!("\t/* END (loop: {}_{}) */\n", format!("{}{}", "__", fn_name.replace(".", "")), label);
-        
-        // reset the stack pointer to the value before the loop
-        /*
-        result += &format!("\t*sp = read_u32((ulong)(((global char*)loop_value_stack_state)+(*sfp*512)+({}*4)), (ulong)(loop_value_stack_state), warp_idx);\n",
-                    branch_idx_u32);
-        */
-        // remove the stack space we allocated to save the loop context
-        let stack_frame_size = stack_ctx.stack_frame_size();
-        result += &format!("\t*sp -= {};\n", stack_frame_size);
-        // pop the loop stack tracking data
-        stack_ctx.vstack_pop_loop_stack_info();
+
         // restore the intermediate values after ending the loop
         result += &stack_ctx.restore_context(false, true);
 
@@ -189,14 +178,15 @@ pub fn emit_loop(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx
                         branch_idx_u32));
     */
 
+    // We need to save before we push the new stack frame
+    result += &stack_ctx.save_context(false);
     stack_ctx.vstack_push_stack_frame();
 
     // We have to save the context, since this is the entry point for a function call
     // TODO: optimize this by checking if we actually call a function inside the loop
     // we can replace with a GOTO in certain situations
     // This will have *huge* speedups for small loops
-    stack_ctx.vstack_push_loop_stack_info(stack_ctx.stack_frame_size().try_into().unwrap());
-    result += &stack_ctx.save_context(false);
+    stack_ctx.vstack_push_stack_info(stack_ctx.stack_frame_size().try_into().unwrap());
 
     // we convert our loop into a recursive call here - the loop header is treated as a function call re-entry point
     result += &format!("{}_call_return_stub_{}:\n", format!("{}{}", "__", fn_name.replace(".", "")), *call_ret_idx);
@@ -204,12 +194,6 @@ pub fn emit_loop(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx
     // We have to issue a restore here because on subsequent invocations the state will have changed
     // only restore locals here
     result += &stack_ctx.restore_context(true, false);
-
-    // pop the control flow stack entry (reset the stack to the state it was in before the loop)
-    /*
-    result += &format!("\t*sp = read_u32((ulong)(((global char*)loop_value_stack_state)+(*sfp*512)+({}*4)), (ulong)(loop_value_stack_state), warp_idx);\n",
-                branch_idx_u32);
-    */
 
     *call_ret_idx += 1;
 
@@ -219,17 +203,10 @@ pub fn emit_loop(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx
 pub fn emit_block(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, block: &wast::BlockType, label: String, branch_idx_u32: u32, fn_name: &str, function_id_map: HashMap<&str, u32>, debug: bool) -> String {
     let mut result: String = String::from("");
 
+
+    result += &stack_ctx.save_context(false);
     stack_ctx.vstack_push_stack_frame();
-
-    // we have to emulate a 2-D array, since openCL does not support double ptrs in v1.2
-    // the format is (64 x 64 * number of functions),
-    // so [..........] 4096 entries per function consecutively
-    // lookups are done as: branch_value_stack_state[(*sfp * 64) + idx + (func_id * 4096)]
-    // sfp = stack frame ptr, idx = branch ID, func_id = the numerical id of the function
-
-    result += &format!("\t{}\n",
-                format!("write_u32((ulong)(((global char*)branch_value_stack_state)+(*sfp*512)+({}*4)), (ulong)(branch_value_stack_state), *sp, warp_idx);",
-                        branch_idx_u32));
+    stack_ctx.vstack_push_stack_info(stack_ctx.stack_frame_size().try_into().unwrap());
 
     // we don't emit a label for block statements here, any br's goto the END of the block
     // we don't need to modify the sp here, we will do all stack unwinding in the br instr

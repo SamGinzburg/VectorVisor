@@ -72,6 +72,9 @@ impl WasmtimeRunner {
             // copy the output json 
             match mem {
                 Ok(memory) => {
+                    // Debug memory usage of functions
+                    //dbg!(memory.size());
+
                     let chan = vm_sender.clone();
                     unsafe {
                         let arr = memory.data_unchecked_mut();

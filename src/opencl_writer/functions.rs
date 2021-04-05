@@ -131,18 +131,18 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stack
         for (param, ty) in stack_params.iter().zip(stack_params_types.iter()) {
             match ty {
                 StackType::i32 => {
-                    ret_str += &format!("\t{};\n\t\t*sp += 1;\n",
+                    ret_str += &format!("\t{};\n\t*sp += 1;\n",
                                             emit_write_u32("(ulong)(stack_u32+*sp)", "(ulong)(stack_u32)", &param, "warp_idx"));
                 },
                 StackType::i64 => {
-                    ret_str += &format!("\t{};\n\t\t*sp += 2;\n",
+                    ret_str += &format!("\t{};\n\t*sp += 2;\n",
                                             emit_write_u64("(ulong)(stack_u32+*sp)", "(ulong)(stack_u32)", &param, "warp_idx"));
                 },
                 StackType::f32 => {
                     ret_str += &format!("\t{{\n");
                     ret_str += &format!("\t\tuint temp = 0;\n");
                     ret_str += &format!("\t\t___private_memcpy_nonmmu(&temp, &{}, sizeof(uint));\n", param);
-                    ret_str += &format!("\t\t{};\n\t\t*sp += 1;\n",
+                    ret_str += &format!("\t\t{};\n\t*sp += 1;\n",
                                         emit_write_u32("(ulong)(stack_u32+*sp)", "(ulong)(stack_u32)", "temp", "warp_idx"));
                     ret_str += &format!("\t}}\n");
                 },
@@ -150,7 +150,7 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stack
                     ret_str += &format!("\t{{\n");
                     ret_str += &format!("\t\tulong temp = 0;\n");
                     ret_str += &format!("\t\t___private_memcpy_nonmmu(&temp, &{}, sizeof(double));\n", param);
-                    ret_str += &format!("\t\t{};\n\t\t*sp += 2;\n",
+                    ret_str += &format!("\t\t{};\n\t*sp += 2;\n",
                                         emit_write_u64("(ulong)(stack_u32+*sp)", "(ulong)(stack_u32)", "temp", "warp_idx"));
                     ret_str += &format!("\t}}\n");
                 },
@@ -240,7 +240,6 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stack
     // after returning, the top of the stack is our return var (if we have one)
     if return_size > 0 && !is_indirect {
         let result_register = stack_ctx.vstack_alloc(StackCtx::convert_wast_types(&return_type.unwrap()));
-
         match StackCtx::convert_wast_types(&return_type.unwrap()) {
             StackType::i32 => {
                 ret_str += &format!("\t{} = {};\n\t{};\n", result_register, 
