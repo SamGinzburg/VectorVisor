@@ -64,7 +64,7 @@ pub enum FastcallPassStatus {
 
             // Is this function the target of an indirect call?
             if indirect_calls.contains(id.name()) {
-                return FastcallPassStatus::fastcall_false(String::from("indirect call target"))
+                // return FastcallPassStatus::fastcall_false(String::from("indirect call target"))
             }
 
             // Is this function in the indirect call table?

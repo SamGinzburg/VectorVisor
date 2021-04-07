@@ -13,6 +13,7 @@ mod parametric;
 mod unops;
 mod vstack;
 mod fastcalls;
+mod compile_stats;
 
 use relops::*;
 use mem_interleave::*;
@@ -29,6 +30,7 @@ use parametric::*;
 use unops::*;
 use vstack::*;
 use fastcalls::*;
+use compile_stats::*;
 
 use wast::Wat;
 use wast::parser::{self, ParseBuffer};
@@ -1831,11 +1833,13 @@ void {}(global uint   *stack_u32,
                              debug_print_function_calls: bool,
                              force_inline: bool,
                              is_gpu: bool,
-                             debug: bool) -> (String, u32, u32, u32, HashMap<u32, String>) {
+                             debug: bool) -> (String, u32, u32, u32, HashMap<u32, String>, HashMap<u32, (u32, u32, u32, u32, u32, u32)>) {
         let mut output = String::new();
         let mut header = String::new();
         let mut func_vec = Vec::new();
         let mut kernel_hashmap: HashMap<u32, String> = HashMap::new();
+        let mut kernel_compile_stats: HashMap<u32, (u32, u32, u32, u32, u32, u32)> = HashMap::new();
+
         //let mut output = File::create(filename).unwrap();
 
         // enable the usage of FP64 operations (double precision floats)
@@ -1915,9 +1919,28 @@ r#"
 
         let _fast_function_set = compute_fastcall_set(self, Vec::from_iter(funcs.clone()), &mut indirect_call_set);
         // TODO: emit fastcalls when available
-        //dbg!(fast_function_set);
+        dbg!(&_fast_function_set);
 
         for function in funcs.clone() {
+
+            let fname = match (&function.kind, &function.id, &function.ty) {
+                (wast::FuncKind::Import(_), _, _) => {
+                    panic!("InlineImport functions not yet implemented");
+                },
+                (wast::FuncKind::Inline{locals, expression}, Some(id), typeuse) => {
+                    id.name()
+                },
+                (_, _, _) => panic!("Inline function must always have a valid identifier in wasm")
+            };
+
+            let mut function_idx_label_temp: HashMap<&str, u32> = HashMap::new();
+            let fname_idx = function_idx_label.get(fname).unwrap();
+
+            // Get compilation stats for function
+            //let (total_instr_count, total_func_count, total_fastcall_count, total_indirect_count, total_block_count, total_loop_count) = 
+            //dbg!(&total_instr_count, &total_func_count, &total_fastcall_count, &total_indirect_count, &total_block_count, &total_loop_count);
+
+            kernel_compile_stats.insert(*fname_idx, function_stats(function, _fast_function_set.clone()));
             let func = self.emit_function(function,
                                           call_ret_map,
                                           &mut call_ret_idx,
@@ -1932,18 +1955,6 @@ r#"
 
             write!(output, "{}", func).unwrap();
 
-            let fname = match (&function.kind, &function.id, &function.ty) {
-                (wast::FuncKind::Import(_), _, _) => {
-                    panic!("InlineImport functions not yet implemented");
-                },
-                (wast::FuncKind::Inline{locals, expression}, Some(id), typeuse) => {
-                    id.name()
-                },
-                (_, _, _) => panic!("Inline function must always have a valid identifier in wasm")
-            };
-
-            let mut function_idx_label_temp: HashMap<&str, u32> = HashMap::new();
-            let fname_idx = function_idx_label.get(fname).unwrap();
             function_idx_label_temp.insert(fname, *fname_idx);
             let control_function = self.emit_wasm_control_fn(interleave,
                                                             stack_size_bytes,
@@ -2089,7 +2100,7 @@ r#"
 
         write!(output, "}}\n").unwrap();
 
-        (output, *function_idx_label.get("_start").unwrap(), globals_buffer_size, funcs.len().try_into().unwrap(), kernel_hashmap)
+        (output, *function_idx_label.get("_start").unwrap(), globals_buffer_size, funcs.len().try_into().unwrap(), kernel_hashmap, kernel_compile_stats)
     }
 }
 

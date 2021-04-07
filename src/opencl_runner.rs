@@ -36,6 +36,8 @@ use std::io::Write;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::collections::BTreeSet;
+use std::fs::OpenOptions;
+use std::io::prelude::*;
 
 use std::convert::TryInto;
 use std::thread::JoinHandle;
@@ -134,7 +136,7 @@ pub struct PartitionedSeralizedProgram {
 pub enum InputProgram {
     binary(Vec<u8>),
     text(String),
-    partitioned(HashMap<u32, String>),
+    partitioned(HashMap<u32, String>, HashMap<u32, (u32, u32, u32, u32, u32, u32)>),
     PartitionedBinary(HashMap<u32, Vec<u8>>),
 }
 
@@ -557,7 +559,7 @@ impl OpenCLRunner {
                 println!("Time to load program from binary: {:?}", binary_prep_end-binary_start);
                 ProgramType::Standard(program_to_run)
             },
-            InputProgram::partitioned(map) => {
+            InputProgram::partitioned(map, compile_stats_map) => {
                 let mut final_hashmap: HashMap<u32, ocl::core::Program> = HashMap::new();
                 let mut final_binarized_hashmap: HashMap<u32, Vec<u8>> = HashMap::new();
 
@@ -569,7 +571,7 @@ impl OpenCLRunner {
                 let num_vms = self.num_vms.clone();
                 let device_id = device_ids[0];
                 
-                let (finished_sender, finished_receiver): (Sender<(u32, ocl::core::Program)>, Receiver<(u32, ocl::core::Program)>) = unbounded();
+                let (finished_sender, finished_receiver): (Sender<(u32, ocl::core::Program, u64)>, Receiver<(u32, ocl::core::Program, u64)>) = unbounded();
 
                 let mut submit_compile_job = vec![];
 
@@ -592,8 +594,11 @@ impl OpenCLRunner {
                                     break;
                                 },
                             };
+                            let start = Utc::now().timestamp_nanos();
                             ocl::core::build_program(&program_to_build, Some(&[device_id]), &CString::new(format!("{} -DNUM_THREADS={} -DVMM_STACK_SIZE_BYTES={} -DVMM_HEAP_SIZE_BYTES={}", cflags, num_vms_clone, stack_size.clone(), heap_size.clone())).unwrap(), None, None).unwrap();
-                            sender.send((key, program_to_build)).unwrap();
+                            let end = Utc::now().timestamp_nanos();
+
+                            sender.send((key, program_to_build, (end-start).try_into().unwrap())).unwrap();
                         }
                     });
                 }
@@ -613,7 +618,7 @@ impl OpenCLRunner {
                     .progress_chars("#>-"));
 
                 for idx in 0..map.len() {
-                    let (key, compiled_program) = finished_receiver.recv().unwrap();
+                    let (key, compiled_program, time_to_compile) = finished_receiver.recv().unwrap();
 
                     // extract the binary and save that as well
                     let binary_to_save = ocl::core::get_program_info(&compiled_program, ocl::core::ProgramInfo::Binaries);
@@ -621,6 +626,27 @@ impl OpenCLRunner {
                         ocl::core::types::enums::ProgramInfoResult::Binaries(binary_vec) => binary_vec.get(0).unwrap().clone(),
                         _ => panic!("Incorrect result from get_program_info"),
                     };
+
+                    // Don't record build times for data_init
+                    if key != 99999 {
+                        //dbg!(time_to_compile, compile_stats_map.get(&key).unwrap());
+                        let (total_instr_count, total_func_count, total_fastcall_count, total_indirect_count, total_block_count, total_loop_count) = compile_stats_map.get(&key).unwrap();
+                        let mut file = OpenOptions::new()
+                                                    .write(true)
+                                                    .append(true)
+                                                    .create(true)
+                                                    .open("compile-times-log.csv")
+                                                    .unwrap();
+                        if let Err(e) = writeln!(file, "{}", format!("{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t", key, total_instr_count,
+                                                                                total_func_count,
+                                                                                total_fastcall_count,
+                                                                                total_indirect_count,
+                                                                                total_block_count,
+                                                                                total_loop_count,
+                                                                                time_to_compile)) {
+                            eprintln!("Couldn't write to file: {}", e);
+                        }
+                    }
 
                     pb.set_position(idx.try_into().unwrap());
                     final_binarized_hashmap.insert(key, binary);
