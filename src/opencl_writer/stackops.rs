@@ -46,35 +46,40 @@ pub fn emit_local_get(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Sta
     }
 }
 
-pub fn emit_local_set(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, parameter_offset: i32, id: &str, offsets: &HashMap<String, u32>, type_info: &HashMap<String, ValType>, stack_sizes: &mut Vec<u32>, debug: bool) -> String {
+pub fn emit_local_set(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, parameter_offset: i32, id: &str, offsets: &HashMap<String, u32>, type_info: &HashMap<String, ValType>, stack_sizes: &mut Vec<u32>, is_fastcall: bool, debug: bool) -> String {
     let offset: i32 = *offsets.get(id).unwrap() as i32 + parameter_offset;
     let cache_offset: u32 = *offsets.get(id).unwrap();
     let t = type_info.get(id).unwrap();
+    let cache = if !is_fastcall {
+        format!("\tlocal_cache[{}] = 1;\n", cache_offset)
+    }else {
+        String::from("")
+    };
 
     stack_sizes.pop();
 
     match t {
         wast::ValType::I32 => {
             let register = stack_ctx.vstack_pop(StackType::i32);
-            format!("\t{} = {};\n\tlocal_cache[{}] = 1;\n", id, register, cache_offset)
+            format!("\t{} = {};\n{}", id, register, cache)
         },
         wast::ValType::I64 => {
             let register = stack_ctx.vstack_pop(StackType::i64);
-            format!("\t{} = {};\n\tlocal_cache[{}] = 1;\n", id, register, cache_offset)
+            format!("\t{} = {};\n{}", id, register, cache)
         },
         wast::ValType::F32 => {
             let register = stack_ctx.vstack_pop(StackType::f32);
-            format!("\t{} = {};\n\tlocal_cache[{}] = 1;\n", id, register, cache_offset)
+            format!("\t{} = {};\n{}", id, register, cache)
         },
         wast::ValType::F64 => {
             let register = stack_ctx.vstack_pop(StackType::f64);
-            format!("\t{} = {};\n\tlocal_cache[{}] = 1;\n", id, register, cache_offset)
+            format!("\t{} = {};\n{}", id, register, cache)
         },
         _ => panic!("emit_local_set type not handled")
     }
 }
 
-pub fn emit_local_tee(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, parameter_offset: i32, id: &str, offsets: &HashMap<String, u32>, type_info: &HashMap<String, ValType>, stack_sizes: &mut Vec<u32>, debug: bool) -> String {
+pub fn emit_local_tee(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, parameter_offset: i32, id: &str, offsets: &HashMap<String, u32>, type_info: &HashMap<String, ValType>, stack_sizes: &mut Vec<u32>, is_fastcall: bool, debug: bool) -> String {
     /*
      * peak the top of the stack, push the most recent value again
      * call local.set [x]
@@ -87,25 +92,25 @@ pub fn emit_local_tee(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Sta
             stack_sizes.push(1);
             let reg1 = stack_ctx.vstack_peak(StackType::i32, 0);
             let reg2 = stack_ctx.vstack_alloc(StackType::i32);
-            format!("\t{} = {};\n{}", reg2, reg1, emit_local_set(writer, stack_ctx, parameter_offset, id, offsets, type_info, stack_sizes, debug))
+            format!("\t{} = {};\n{}", reg2, reg1, emit_local_set(writer, stack_ctx, parameter_offset, id, offsets, type_info, stack_sizes, is_fastcall, debug))
         },
         wast::ValType::I64 => {
             stack_sizes.push(2);
             let reg1 = stack_ctx.vstack_peak(StackType::i64, 0);
             let reg2 = stack_ctx.vstack_alloc(StackType::i64);
-            format!("\t{} = {};\n{}", reg2, reg1, emit_local_set(writer, stack_ctx, parameter_offset, id, offsets, type_info, stack_sizes, debug))
+            format!("\t{} = {};\n{}", reg2, reg1, emit_local_set(writer, stack_ctx, parameter_offset, id, offsets, type_info, stack_sizes, is_fastcall, debug))
         },
         wast::ValType::F32 => {
             stack_sizes.push(1);
             let reg1 = stack_ctx.vstack_peak(StackType::f32, 0);
             let reg2 = stack_ctx.vstack_alloc(StackType::f32);
-            format!("\t{} = {};\n{}", reg2, reg1, emit_local_set(writer, stack_ctx, parameter_offset, id, offsets, type_info, stack_sizes, debug))
+            format!("\t{} = {};\n{}", reg2, reg1, emit_local_set(writer, stack_ctx, parameter_offset, id, offsets, type_info, stack_sizes, is_fastcall, debug))
         },
         wast::ValType::F64 => {
             stack_sizes.push(2);
             let reg1 = stack_ctx.vstack_peak(StackType::f64, 0);
             let reg2 = stack_ctx.vstack_alloc(StackType::f64);
-            format!("\t{} = {};\n{}", reg2, reg1, emit_local_set(writer, stack_ctx, parameter_offset, id, offsets, type_info, stack_sizes, debug))
+            format!("\t{} = {};\n{}", reg2, reg1, emit_local_set(writer, stack_ctx, parameter_offset, id, offsets, type_info, stack_sizes, is_fastcall, debug))
         },
         _ => panic!("emit_local_tee type not handled")
     }

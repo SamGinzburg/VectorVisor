@@ -15,13 +15,13 @@ use crate::opencl_writer::emit_read_u64;
 use crate::opencl_writer::emit_write_u32;
 use crate::opencl_writer::emit_write_u64;
 
-
 use wast::Index::Id;
 use wast::Index::Num;
 use wast::Instruction;
 use wast::ValType;
 
 use std::collections::HashMap;
+use std::cmp::Ord;
 use core::ops::Range;
 
 #[derive(Debug, PartialEq, Clone)]
@@ -76,6 +76,8 @@ pub struct StackCtx {
     // We store the *sp modification in this stack, then pop this off when emitting end statements
     control_stack: Vec<u32>,
     control_stack_snapshots: Vec<StackSnapshot>,
+    // store which locals are parameters (for emitting fastcalls)
+    is_param: HashMap<String, bool>
 }
 
 impl<'a> StackCtx {
@@ -1175,6 +1177,7 @@ impl<'a> StackCtx {
             total_stack_types: vec![],
             control_stack: vec![],
             control_stack_snapshots: vec![],
+            is_param: is_param.clone()
         }
     }
 
@@ -1228,37 +1231,81 @@ impl<'a> StackCtx {
         }
     }
 
-    pub fn emit_cache_array(&self) -> String {
+    pub fn emit_cache_array(&self, is_fastcall: bool) -> String {
         let mut max_offset: u32 = 0;
         for (local, offset) in self.local_offsets.iter() {
             if *offset > max_offset {
                 max_offset = *offset;
             }
         }
-        if self.local_offsets.len() > 0 {
+        if self.local_offsets.len() > 0  && !is_fastcall {
             format!("\tuchar local_cache[{}] = {{ 0 }};\n", max_offset+1)
         } else {
             String::from("")
         }
     }
 
-    pub fn emit_intermediates(&self) -> String {
+    pub fn emit_fastcall_header(&self) -> String {
+        let mut ret_str = String::from("(");
+
+
+        let mut params = self.local_types.iter().collect::<Vec<(&String, &StackType)>>();
+        params.sort_by(|(a, _), (b, _)| a.cmp(b));
+
+        for (local_name, local_type) in params.clone() {
+            let param_found = match self.is_param.get(local_name) {
+                Some(false) => false,
+                Some(true) => true,
+                _ => panic!("Local offset name not found (vstack)"),
+            };
+            if param_found {
+                match local_type {
+                    StackType::i32 => {
+                        ret_str += &format!("uint {}, ", local_name);
+                    },
+                    StackType::i64 => {
+                        ret_str += &format!("ulong {}, ", local_name);
+                    },
+                    StackType::f32 => {
+                        ret_str += &format!("float {}, ", local_name);
+                    },
+                    StackType::f64 => {
+                        ret_str += &format!("double {}, ", local_name);
+                    }
+                }
+            }
+        }
+
+        // now add the other info we need for fastcalls
+        ret_str += &format!("global uint *heap_u32, global uint *current_mem_size, global uint *max_mem_size) {{\n");
+
+        ret_str
+    }
+
+    pub fn emit_intermediates(&self, is_fastcall: bool) -> String {
         let mut ret_str = String::from("");
 
         // emit the locals and parameters
         for (local_name, local_type) in self.local_types.iter() {
-            match local_type {
-                StackType::i32 => {
-                    ret_str += &format!("\tuint {} = 0;\n", local_name);
-                },
-                StackType::i64 => {
-                    ret_str += &format!("\tulong {} = 0;\n", local_name);
-                },
-                StackType::f32 => {
-                    ret_str += &format!("\tfloat {} = 0.0;\n", local_name);
-                },
-                StackType::f64 => {
-                    ret_str += &format!("\tdouble {} = 0.0;\n", local_name);
+            let param_found = match self.is_param.get(local_name) {
+                Some(false) => false,
+                Some(true) => true,
+                _ => panic!("Local offset name not found (vstack)"),
+            };
+            if !is_fastcall || !param_found {
+                match local_type {
+                    StackType::i32 => {
+                        ret_str += &format!("\tuint {} = 0;\n", local_name);
+                    },
+                    StackType::i64 => {
+                        ret_str += &format!("\tulong {} = 0;\n", local_name);
+                    },
+                    StackType::f32 => {
+                        ret_str += &format!("\tfloat {} = 0.0;\n", local_name);
+                    },
+                    StackType::f64 => {
+                        ret_str += &format!("\tdouble {} = 0.0;\n", local_name);
+                    }
                 }
             }
         }

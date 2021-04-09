@@ -85,7 +85,7 @@ pub struct OpenCLCWriter<'a> {
     types: HashMap<String, wast::TypeDef<'a>>,
     imports_map: HashMap<&'a str, (&'a str, Option<&'a str>, wast::ItemSig<'a>)>,
     // map of item.id -> (module, field)
-    func_map: HashMap<&'a str, wast::Func<'a>>,
+    func_map: HashMap<String, wast::Func<'a>>,
     tables: Vec<wast::Table<'a>>,
     memory: Vec<wast::Memory<'a>>,
     globals: Vec<wast::Global<'a>>,
@@ -136,7 +136,7 @@ impl<'a> OpenCLCWriter<'_> {
                         },
                         wast::ModuleField::Func(f) => {
                             match f.id {
-                                Some(f_id) => self.func_map.insert(f_id.name(), f),
+                                Some(f_id) => self.func_map.insert(f_id.name().to_string(), f),
                                 None => {
                                     continue
                                 },
@@ -277,6 +277,8 @@ impl<'a> OpenCLCWriter<'_> {
                          // When doing so we simply name the block "$block{block_name_count}"
                          block_name_count: &mut u32,
                          loop_name_count: &mut u32,
+                         // emit an optimized function that does not require a CPS-style transformation
+                         is_fastcall: bool,
                          // emit OpenCL C (False) or standard C for debugging on the CPU (True)
                          debug: bool) -> String {
         match instr {
@@ -435,7 +437,7 @@ impl<'a> OpenCLCWriter<'_> {
             wast::Instruction::LocalSet(idx) => {
                 match idx {
                     wast::Index::Id(id) => {
-                        emit_local_set(self, stack_ctx, parameter_offset, id.name(), offsets, type_info, stack_sizes, debug)
+                        emit_local_set(self, stack_ctx, parameter_offset, id.name(), offsets, type_info, stack_sizes, is_fastcall, debug)
                     },
                     wast::Index::Num(value, _) => {
                         let id = match is_param.get(&format!("l{}", value)) {
@@ -445,14 +447,14 @@ impl<'a> OpenCLCWriter<'_> {
                             Some(true) => format!("p{}", value),
                             _ => format!("p{}", value),
                         };
-                        emit_local_set(self, stack_ctx, parameter_offset, &id, offsets, type_info, stack_sizes, debug)
+                        emit_local_set(self, stack_ctx, parameter_offset, &id, offsets, type_info, stack_sizes, is_fastcall, debug)
                     },
                 }
             },
             wast::Instruction::LocalTee(idx) => {
                 match idx {
                     wast::Index::Id(id) => {
-                        emit_local_tee(self, stack_ctx, parameter_offset, id.name(), offsets, type_info, stack_sizes, debug)
+                        emit_local_tee(self, stack_ctx, parameter_offset, id.name(), offsets, type_info, stack_sizes, is_fastcall, debug)
                     },
                     wast::Index::Num(value, _) => {
                         let id = match is_param.get(&format!("l{}", value)) {
@@ -462,7 +464,7 @@ impl<'a> OpenCLCWriter<'_> {
                             Some(true) => format!("p{}", value),
                             _ => format!("p{}", value),
                         };
-                        emit_local_tee(self, stack_ctx, parameter_offset, &id, offsets, type_info, stack_sizes, debug)
+                        emit_local_tee(self, stack_ctx, parameter_offset, &id, offsets, type_info, stack_sizes, is_fastcall, debug)
                     },
                 }
             },
@@ -954,7 +956,7 @@ impl<'a> OpenCLCWriter<'_> {
                 *block_name_count += 1;
                 // for the control stack, we don't use the third parameter for blocks
                 control_stack.push((label.to_string(), 0, -1));
-                emit_block(&self, stack_ctx, b, label, *block_name_count-1, fn_name, function_id_map, debug)
+                emit_block(&self, stack_ctx, b, label, *block_name_count-1, fn_name, function_id_map, is_fastcall, debug)
             },
             wast::Instruction::Loop(b) => {
                 let label: String = match b.label {
@@ -964,13 +966,13 @@ impl<'a> OpenCLCWriter<'_> {
                 *loop_name_count += 1;
                 // the third parameter in the control stack stores loop header entry points
                 control_stack.push((label.to_string(), 1, (*call_ret_idx).try_into().unwrap()));
-                emit_loop(&self, stack_ctx, b, label, *loop_name_count-1, fn_name, function_id_map, call_ret_idx, debug)
+                emit_loop(&self, stack_ctx, b, label, *loop_name_count-1, fn_name, function_id_map, call_ret_idx, is_fastcall, debug)
             }
             // if control_stack.pop() panics, that means we were parsing an incorrectly defined
             // wasm file, each block/loop must have a matching end!
             wast::Instruction::End(id) => {
                 let (label, t, _) = control_stack.pop().unwrap();
-                emit_end(&self, stack_ctx, id, &label, t, fn_name, function_id_map, debug)
+                emit_end(&self, stack_ctx, id, &label, t, fn_name, function_id_map, is_fastcall, debug)
             },
             wast::Instruction::Select(_) => {
                 emit_select(self, stack_ctx, stack_sizes, fn_name, debug)
@@ -985,9 +987,9 @@ impl<'a> OpenCLCWriter<'_> {
                 emit_mem_size(self, stack_ctx, arg, debug)
             },
             wast::Instruction::Return => emit_return(self, stack_ctx, fn_name, hypercall_id_count, debug),
-            wast::Instruction::Br(idx) => emit_br(self, stack_ctx, *idx, fn_name, control_stack, function_id_map, debug),
-            wast::Instruction::BrIf(idx) => emit_br_if(self, stack_ctx, *idx, fn_name, stack_sizes, control_stack, function_id_map, debug),
-            wast::Instruction::BrTable(table_idxs) => emit_br_table(self, stack_ctx, table_idxs, fn_name, stack_sizes, control_stack, function_id_map, debug),
+            wast::Instruction::Br(idx) => emit_br(self, stack_ctx, *idx, fn_name, control_stack, function_id_map, is_fastcall, debug),
+            wast::Instruction::BrIf(idx) => emit_br_if(self, stack_ctx, *idx, fn_name, stack_sizes, control_stack, function_id_map, is_fastcall, debug),
+            wast::Instruction::BrTable(table_idxs) => emit_br_table(self, stack_ctx, table_idxs, fn_name, stack_sizes, control_stack, function_id_map, is_fastcall, debug),
             wast::Instruction::Unreachable => {
                 let skip_label = if debug {
                     false
@@ -1011,6 +1013,7 @@ impl<'a> OpenCLCWriter<'_> {
                      force_inline: bool,
                      debug_call_print: bool,
                      is_gpu: bool,
+                     is_fastcall: bool,
                      debug: bool) -> String {
         let mut final_string = String::from(""); 
         *call_ret_idx = 0;
@@ -1093,24 +1096,49 @@ impl<'a> OpenCLCWriter<'_> {
                     format!("")
                 };
 
-                final_string += &format!("{}{} {{\n", inline,
-                        self.generate_function_prelude(&format!("{}{}", "__", id.name().replace(".", "")),
-                                                        0,
-                                                        0,
-                                                        0,
-                                                        0,
-                                                        0,
-                                                        0,
-                                                        0,
-                                                        0,
-                                                        false,
-                                                        debug));
+                if !is_fastcall {
+                    final_string += &format!("{}{} {{\n", inline,
+                    self.generate_function_prelude(&format!("{}{}", "__", id.name().replace(".", "")),
+                                                    0,
+                                                    0,
+                                                    0,
+                                                    0,
+                                                    0,
+                                                    0,
+                                                    0,
+                                                    0,
+                                                    false,
+                                                    debug));
+                } else {
+                    // Generate the fastcall header
+                    let ret_type = match typeuse.clone().inline {
+                        Some(ret) => {
+                            if ret.results.len() > 0 {
+                                Some(ret.results[0])
+                            } else {
+                                None
+                            }
+                        },
+                        _ => None,
+                    };
+
+                    let ret_signature = match ret_type {
+                        Some(wast::ValType::I32) => String::from("uint"),
+                        Some(wast::ValType::I64) => String::from("ulong"),
+                        Some(wast::ValType::F32) => String::from("float"),
+                        Some(wast::ValType::F64) => String::from("double"),
+                        _ => String::from("void"),
+                    };
+
+                    final_string += &format!("{} {}{}", ret_signature, id.name().replace(".", ""), stack_ctx.emit_fastcall_header());
+                }
+
 
                 // emit the local/parameter cacheing array, this is used to elide writes during ctx saves/restores
-                final_string += &stack_ctx.emit_cache_array();
+                final_string += &stack_ctx.emit_cache_array(is_fastcall);
 
                 // emit the necessary intermediate values
-                final_string += &stack_ctx.emit_intermediates();
+                final_string += &stack_ctx.emit_intermediates(is_fastcall);
 
                 if debug_call_print {
                     write!(final_string, "\t\tprintf(\"*sfp = %d\\n\", *sfp);\n").unwrap();
@@ -1171,47 +1199,48 @@ impl<'a> OpenCLCWriter<'_> {
 
                 // upon entry, first check to see if we are returning from a hypercall
                 // hypercall_number is set to -1 after completing the hypercall
-
-                write!(final_string, "\t{}\n", "if (*hypercall_number == -1) {").unwrap();
-                write!(final_string, "\t\t{}\n", "*hypercall_number = -2;").unwrap();
-                if *num_hypercalls > 0 {
-                    write!(final_string, "\t\t{}\n", "switch (*hypercall_continuation) {").unwrap();
-                    for count in 0..*num_hypercalls {
-                        write!(final_string, "\t\t\tcase {}:\n", count).unwrap();
-                        if debug_call_print {
-                            write!(final_string, "\t\t\t\tprintf(\"goto: {}_hypercall_return_stub_{}\\n\");\n", format!("{}{}", "__", id.name().replace(".", "")), count).unwrap();
+                if !is_fastcall {
+                    write!(final_string, "\t{}\n", "if (*hypercall_number == -1) {").unwrap();
+                    write!(final_string, "\t\t{}\n", "*hypercall_number = -2;").unwrap();
+                    if *num_hypercalls > 0 {
+                        write!(final_string, "\t\t{}\n", "switch (*hypercall_continuation) {").unwrap();
+                        for count in 0..*num_hypercalls {
+                            write!(final_string, "\t\t\tcase {}:\n", count).unwrap();
+                            if debug_call_print {
+                                write!(final_string, "\t\t\t\tprintf(\"goto: {}_hypercall_return_stub_{}\\n\");\n", format!("{}{}", "__", id.name().replace(".", "")), count).unwrap();
+                            }
+                            write!(final_string, "\t\t\t\tgoto {}_hypercall_return_stub_{};\n", format!("{}{}", "__", id.name().replace(".", "")), count).unwrap();
+                            write!(final_string, "\t\t\t\tbreak;\n").unwrap();
                         }
-                        write!(final_string, "\t\t\t\tgoto {}_hypercall_return_stub_{};\n", format!("{}{}", "__", id.name().replace(".", "")), count).unwrap();
-                        write!(final_string, "\t\t\t\tbreak;\n").unwrap();
+                        write!(final_string, "\t\t}}\n").unwrap();
                     }
-                    write!(final_string, "\t\t}}\n").unwrap();
-                }
-
-                write!(final_string, "\t}}\n").unwrap();
-
-                // after checking for hypercalls, check if we are unwinding the call stack
-                // (returning from another function)
-
-                write!(final_string, "\t{}\n", "if (!*is_calling) {").unwrap();
-                if *num_function_calls > 0 {
-                    write!(final_string, "\t\t{}\n",
-                        format!("switch ({}) {{", emit_read_u64("(ulong)(call_stack+*sfp)", "(ulong)(call_stack)", "warp_idx"))).unwrap();
-                    for count in 0..*num_function_calls {
-                        write!(final_string, "\t\t\tcase {}:\n", count).unwrap();
-                        write!(final_string, "\t\t\t\t*sfp -= 1;\n").unwrap();
-                        if debug_call_print {
-                            write!(final_string, "\t\t\t\tprintf(\"goto: {}_call_return_stub_{}\\n\");\n", format!("{}{}", "__", id.name().replace(".", "")), count).unwrap();
+    
+                    write!(final_string, "\t}}\n").unwrap();
+    
+                    // after checking for hypercalls, check if we are unwinding the call stack
+                    // (returning from another function)
+    
+                    write!(final_string, "\t{}\n", "if (!*is_calling) {").unwrap();
+                    if *num_function_calls > 0 {
+                        write!(final_string, "\t\t{}\n",
+                            format!("switch ({}) {{", emit_read_u64("(ulong)(call_stack+*sfp)", "(ulong)(call_stack)", "warp_idx"))).unwrap();
+                        for count in 0..*num_function_calls {
+                            write!(final_string, "\t\t\tcase {}:\n", count).unwrap();
+                            write!(final_string, "\t\t\t\t*sfp -= 1;\n").unwrap();
+                            if debug_call_print {
+                                write!(final_string, "\t\t\t\tprintf(\"goto: {}_call_return_stub_{}\\n\");\n", format!("{}{}", "__", id.name().replace(".", "")), count).unwrap();
+                            }
+                            write!(final_string, "\t\t\t\tgoto {}_call_return_stub_{};\n", format!("{}{}", "__", id.name().replace(".", "")), count).unwrap();
+                            //write!(final_string, "\t\t\t\tbreak;\n");
                         }
-                        write!(final_string, "\t\t\t\tgoto {}_call_return_stub_{};\n", format!("{}{}", "__", id.name().replace(".", "")), count).unwrap();
-                        //write!(final_string, "\t\t\t\tbreak;\n");
+                        write!(final_string, "\t\t}}\n").unwrap();
                     }
-                    write!(final_string, "\t\t}}\n").unwrap();
+    
+                    write!(final_string, "\t}} else {{\n").unwrap();
+                    // If we are running the func for the first time, init param intermediates
+                    final_string += &stack_ctx.emit_load_params();
+                    write!(final_string, "\t}}\n").unwrap();    
                 }
-
-                write!(final_string, "\t}} else {{\n").unwrap();
-                // If we are running the func for the first time, init param intermediates
-                final_string += &stack_ctx.emit_load_params();
-                write!(final_string, "\t}}\n").unwrap();
 
                 /*
                  * Stack setup for each function:
@@ -1229,14 +1258,16 @@ impl<'a> OpenCLCWriter<'_> {
 
                 // for each local, push them onto the stack
 
-                for local in locals {
-                    final_string += &emit_local(&self, local.clone(), debug);
+                if !is_fastcall {
+                    for local in locals {
+                        final_string += &emit_local(&self, local.clone(), debug);
+                    }
                 }
 
                 // keep a stack of control-flow labels
                 // for blocks we need to put the label at the "end" statement, while loops always jump back
                 let mut control_stack: Vec<(String, u32, i32)> = vec![];
-                
+
                 // keep a stack of the size of previous stack operations
                 // this is needed to implement drop/select
                 let stack_sizes: &mut Vec<u32> = &mut vec![];
@@ -1267,6 +1298,7 @@ impl<'a> OpenCLCWriter<'_> {
                                                             func,
                                                             block_name_count,
                                                             loop_name_count,
+                                                            is_fastcall,
                                                             // if we are compiling a CPU kernel
                                                             // we have to force this to true, even if we aren't
                                                             // actually emitting "debug" code
@@ -1921,6 +1953,23 @@ r#"
         // TODO: emit fastcalls when available
         dbg!(&_fast_function_set);
 
+        // Generate the fastcall header
+        for fastfunc in _fast_function_set.iter() {
+            let func = self.emit_function(self.func_map.get(&fastfunc.to_string()).unwrap(),
+                                            call_ret_map,
+                                            &mut call_ret_idx,
+                                            function_idx_label.clone(),
+                                            hypercall_id_count,
+                                            indirect_call_mapping,
+                                            &global_mappings,
+                                            force_inline,
+                                            debug_print_function_calls,
+                                            is_gpu,
+                                            true,
+                                            debug);
+            print!("{}", func);
+        }
+
         for function in funcs.clone() {
 
             let fname = match (&function.kind, &function.id, &function.ty) {
@@ -1951,6 +2000,7 @@ r#"
                                           force_inline,
                                           debug_print_function_calls,
                                           is_gpu,
+                                          false,
                                           debug);
 
             write!(output, "{}", func).unwrap();
