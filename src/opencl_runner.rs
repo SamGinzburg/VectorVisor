@@ -135,8 +135,8 @@ pub struct PartitionedSeralizedProgram {
 #[derive(Clone)]
 pub enum InputProgram {
     binary(Vec<u8>),
-    text(String),
-    partitioned(HashMap<u32, String>, HashMap<u32, (u32, u32, u32, u32, u32, u32)>),
+    text(String, String),
+    partitioned(HashMap<u32, String>, String, HashMap<u32, (u32, u32, u32, u32, u32, u32)>),
     PartitionedBinary(HashMap<u32, Vec<u8>>),
 }
 
@@ -469,8 +469,9 @@ impl OpenCLRunner {
 
         // compile the GPU kernel(s)
         let program_to_run = match &self.input_program {
-            InputProgram::text(program) => {
+            InputProgram::text(program, fastcall_header) => {
                 let src_cstring = CString::new(program.clone()).unwrap();
+                let header_cstring = CString::new(fastcall_header.clone()).unwrap();
 
                 println!("Sucessfully compiled kernel to OpenCL C: saving to: {}", format!("{}.cl", input_filename));
                 let mut file = File::create(format!("{}.cl", input_filename)).unwrap();
@@ -479,7 +480,9 @@ impl OpenCLRunner {
                 let compile_start = std::time::Instant::now();
 
                 let compiled_program = ocl::core::create_program_with_source(&context, &[src_cstring.clone()]).unwrap();
-                let build_result = ocl::core::compile_program(&compiled_program, Some(&[device_ids[0]]), &CString::new(format!("{} -DNUM_THREADS={} -DVMM_STACK_SIZE_BYTES={} -DVMM_HEAP_SIZE_BYTES={}", compile_flags, self.num_vms, stack_size, heap_size)).unwrap(), &[], &[], None, None, None);
+                let header = ocl::core::create_program_with_source(&context, &[header_cstring.clone()]).unwrap();
+                let options = &CString::new(format!("{} -DNUM_THREADS={} -DVMM_STACK_SIZE_BYTES={} -DVMM_HEAP_SIZE_BYTES={}", compile_flags, self.num_vms, stack_size, heap_size)).unwrap();
+                let build_result = ocl::core::compile_program(&compiled_program, Some(&[device_ids[0]]), options, &[&header], &[CString::new("fastcalls.cl").unwrap()], None, None, None);
                 match build_result {
                     Err(e) => {
                         println!("Build error:\n{}", e);
@@ -559,7 +562,7 @@ impl OpenCLRunner {
                 println!("Time to load program from binary: {:?}", binary_prep_end-binary_start);
                 ProgramType::Standard(program_to_run)
             },
-            InputProgram::partitioned(map, compile_stats_map) => {
+            InputProgram::partitioned(map, fastcall_header, compile_stats_map) => {
                 let mut final_hashmap: HashMap<u32, ocl::core::Program> = HashMap::new();
                 let mut final_binarized_hashmap: HashMap<u32, Vec<u8>> = HashMap::new();
 
@@ -576,17 +579,22 @@ impl OpenCLRunner {
                 let mut submit_compile_job = vec![];
 
                 for _idx in 0..num_threads {
-                    let (compile_sender, compile_receiver): (Sender<(u32, ocl::core::Program)>, Receiver<(u32, ocl::core::Program)>) = unbounded();
+                    let (compile_sender, compile_receiver): (Sender<(u32, ocl::core::Program, ocl::core::Program)>, Receiver<(u32, ocl::core::Program, ocl::core::Program)>) = unbounded();
                     let cflags = compile_flags.clone();
                     let sender = finished_sender.clone();
                     let num_vms_clone = self.num_vms.clone();
+                    let link_flags_clone = link_flags.clone();
+                    let device_ids_clone = device_ids.clone();
+                    let compile_flags_clone = compile_flags.clone();
+                    let context_clone = context.clone();
+
                     submit_compile_job.push(compile_sender);
 
                     thread::spawn(move || {
                         let receiver = compile_receiver.clone();
                         loop {
                             // receive the function to compile
-                            let (key, program_to_build) = match receiver.recv() {
+                            let (key, program_to_build, fastcall_header) = match receiver.recv() {
                                 Ok(m) => m,
                                 _ => {
                                     // if the main sending thread is closed, we will get an error
@@ -595,10 +603,12 @@ impl OpenCLRunner {
                                 },
                             };
                             let start = Utc::now().timestamp_nanos();
-                            ocl::core::build_program(&program_to_build, Some(&[device_id]), &CString::new(format!("{} -DNUM_THREADS={} -DVMM_STACK_SIZE_BYTES={} -DVMM_HEAP_SIZE_BYTES={}", cflags, num_vms_clone, stack_size.clone(), heap_size.clone())).unwrap(), None, None).unwrap();
+                            let options = &CString::new(format!("{} -DNUM_THREADS={} -DVMM_STACK_SIZE_BYTES={} -DVMM_HEAP_SIZE_BYTES={}", compile_flags_clone, num_vms_clone, stack_size, heap_size)).unwrap();
+                            let build_result = ocl::core::compile_program(&program_to_build, Some(&[device_ids_clone[0]]), options, &[&fastcall_header], &[CString::new("fastcalls.cl").unwrap()], None, None, None);
+                            let final_program = ocl::core::link_program(&context_clone, Some(&[device_ids_clone[0]]), &CString::new(format!("{}", link_flags_clone)).unwrap(), &[&program_to_build], None, None, None).unwrap();
                             let end = Utc::now().timestamp_nanos();
 
-                            sender.send((key, program_to_build, (end-start).try_into().unwrap())).unwrap();
+                            sender.send((key, final_program, (end-start).try_into().unwrap())).unwrap();
                         }
                     });
                 }
@@ -606,10 +616,12 @@ impl OpenCLRunner {
                 // for each function, submit it to be compiled
                 let mut counter = 0;
                 for (key, value) in map.iter() {
-                    let src_cstring = CString::new(value.clone()).unwrap();    
+                    let src_cstring = CString::new(value.clone()).unwrap();
+                    let header_cstring = CString::new(fastcall_header.clone()).unwrap();    
                     let compiled_program = ocl::core::create_program_with_source(&context, &[src_cstring.clone()]).unwrap();
+                    let fastcall_header = ocl::core::create_program_with_source(&context, &[header_cstring.clone()]).unwrap();
 
-                    submit_compile_job[counter % submit_compile_job.len() as usize].send((*key, compiled_program)).unwrap();
+                    submit_compile_job[counter % submit_compile_job.len() as usize].send((*key, compiled_program, fastcall_header)).unwrap();
                     counter += 1;
                 }
                 let pb = ProgressBar::new(map.len().try_into().unwrap());

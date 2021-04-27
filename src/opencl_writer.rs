@@ -277,6 +277,7 @@ impl<'a> OpenCLCWriter<'_> {
                          // When doing so we simply name the block "$block{block_name_count}"
                          block_name_count: &mut u32,
                          loop_name_count: &mut u32,
+                         fastcall_set: &HashSet<String>,
                          // emit an optimized function that does not require a CPS-style transformation
                          is_fastcall: bool,
                          // emit OpenCL C (False) or standard C for debugging on the CPU (True)
@@ -757,7 +758,10 @@ impl<'a> OpenCLCWriter<'_> {
                     match self.func_map.get(id) {
                         Some(_) => {
                             let func_type_signature = &self.func_map.get(id).unwrap().ty;
-                            emit_fn_call(&self, stack_ctx, fn_name.to_string(), *idx, call_ret_map, call_ret_idx, &function_id_map, stack_sizes, false, debug)
+
+                            // We emit fastcalls either if the function itself is a fastcall, or if we are a CPS-style function making a fastcall
+                            let make_fastcall = is_fastcall || fastcall_set.contains(id);
+                            emit_fn_call(&self, stack_ctx, fn_name.to_string(), *idx, call_ret_map, call_ret_idx, &function_id_map, stack_sizes, false, make_fastcall, debug)
                         },
                         // we have an import that isn't a system call...
                         None => String::from("")
@@ -986,17 +990,22 @@ impl<'a> OpenCLCWriter<'_> {
                 stack_sizes.push(1);
                 emit_mem_size(self, stack_ctx, arg, debug)
             },
-            wast::Instruction::Return => emit_return(self, stack_ctx, fn_name, hypercall_id_count, debug),
+            wast::Instruction::Return => emit_return(self, stack_ctx, fn_name, hypercall_id_count, is_fastcall, debug),
             wast::Instruction::Br(idx) => emit_br(self, stack_ctx, *idx, fn_name, control_stack, function_id_map, is_fastcall, debug),
             wast::Instruction::BrIf(idx) => emit_br_if(self, stack_ctx, *idx, fn_name, stack_sizes, control_stack, function_id_map, is_fastcall, debug),
             wast::Instruction::BrTable(table_idxs) => emit_br_table(self, stack_ctx, table_idxs, fn_name, stack_sizes, control_stack, function_id_map, is_fastcall, debug),
             wast::Instruction::Unreachable => {
-                let skip_label = if debug {
-                    false
+                if is_fastcall {
+                    // if we are in a fastcall, just dereference some invalid memory address
+                    String::from("\t*((unsigned long *)0x133713371337) = 0x42;\n")
                 } else {
-                    true
-                };
-                self.emit_hypercall(WasmHypercallId::proc_exit, stack_ctx, hypercall_id_count, fn_name.to_string(), skip_label, debug)
+                    let skip_label = if debug {
+                        false
+                    } else {
+                        true
+                    };
+                    self.emit_hypercall(WasmHypercallId::proc_exit, stack_ctx, hypercall_id_count, fn_name.to_string(), skip_label, debug)    
+                }
             },
             _ => panic!("Instruction {:?} not yet implemented, in func: {:?}", instr, func.id)
         }
@@ -1010,6 +1019,7 @@ impl<'a> OpenCLCWriter<'_> {
                      hypercall_id_count: &mut u32,
                      indirect_call_mapping: &HashMap<u32, &wast::Index>, 
                      global_mappings: &HashMap<String, (u32, u32)>,
+                     fastcall_set: HashSet<String>,
                      force_inline: bool,
                      debug_call_print: bool,
                      is_gpu: bool,
@@ -1130,9 +1140,9 @@ impl<'a> OpenCLCWriter<'_> {
                         _ => String::from("void"),
                     };
 
-                    final_string += &format!("{} {}{}", ret_signature, id.name().replace(".", ""), stack_ctx.emit_fastcall_header());
+                    let func_name_demangle = format!("{}{}", "__", id.name().to_string().replace(".", ""));
+                    final_string += &format!("{} {}_fastcall{}", ret_signature, func_name_demangle, stack_ctx.emit_fastcall_header());
                 }
-
 
                 // emit the local/parameter cacheing array, this is used to elide writes during ctx saves/restores
                 final_string += &stack_ctx.emit_cache_array(is_fastcall);
@@ -1140,7 +1150,7 @@ impl<'a> OpenCLCWriter<'_> {
                 // emit the necessary intermediate values
                 final_string += &stack_ctx.emit_intermediates(is_fastcall);
 
-                if debug_call_print {
+                if debug_call_print && !is_fastcall {
                     write!(final_string, "\t\tprintf(\"*sfp = %d\\n\", *sfp);\n").unwrap();
                     write!(final_string, "\t\tprintf(\"*sp = %d\\n\", *sp);\n").unwrap();
                     write!(final_string, "\t\tprintf(\"*hypercall_number = %d\\n\", *hypercall_number);\n").unwrap();
@@ -1172,7 +1182,10 @@ impl<'a> OpenCLCWriter<'_> {
                             if self.imports_map.contains_key(id) {
                                 *num_hypercalls += 1;
                             } else {
-                                *num_function_calls += 1;
+                                // if this is a fastcall, don't increment
+                                if !fastcall_set.contains(id) {
+                                    *num_function_calls += 1;
+                                }
                             }
                         },
                         wast::Instruction::CallIndirect(_) => {
@@ -1298,6 +1311,7 @@ impl<'a> OpenCLCWriter<'_> {
                                                             func,
                                                             block_name_count,
                                                             loop_name_count,
+                                                            &fastcall_set,
                                                             is_fastcall,
                                                             // if we are compiling a CPU kernel
                                                             // we have to force this to true, even if we aren't
@@ -1308,12 +1322,12 @@ impl<'a> OpenCLCWriter<'_> {
                 // If we are emitting the start function, just emit a proc_exit here
                 if id.name().to_string() == "_start" {
                     // emit modified func unwind for _start
-                    final_string += &function_unwind(&self, &mut stack_ctx, id.name(), &typeuse.inline, true, debug);
+                    final_string += &function_unwind(&self, &mut stack_ctx, id.name(), &typeuse.inline, true, is_fastcall, debug);
                     final_string += &self.emit_hypercall(WasmHypercallId::proc_exit, &mut stack_ctx, hypercall_id_count, id.name().to_string(), true, debug);
                 } else {
                     // to unwind from the function we unwind the call stack by moving the stack pointer
                     // and returning the last value on the stack 
-                    final_string += &function_unwind(&self, &mut stack_ctx, id.name(), &typeuse.inline, false, debug);
+                    final_string += &function_unwind(&self, &mut stack_ctx, id.name(), &typeuse.inline, false, is_fastcall, debug);
                 }
             },
             (_, _, _) => panic!("Inline function must always have a valid identifier in wasm")
@@ -1865,7 +1879,7 @@ void {}(global uint   *stack_u32,
                              debug_print_function_calls: bool,
                              force_inline: bool,
                              is_gpu: bool,
-                             debug: bool) -> (String, u32, u32, u32, HashMap<u32, String>, HashMap<u32, (u32, u32, u32, u32, u32, u32)>) {
+                             debug: bool) -> (String, String, u32, u32, u32, HashMap<u32, String>, HashMap<u32, (u32, u32, u32, u32, u32, u32)>) {
         let mut output = String::new();
         let mut header = String::new();
         let mut func_vec = Vec::new();
@@ -1897,7 +1911,11 @@ r#"
         write!(output, "{}", self.generate_hypercall_helpers(debug)).unwrap();
         write!(header, "{}", self.generate_hypercall_helpers(debug)).unwrap();
 
+        write!(output, "#include \"fastcalls.cl\"").unwrap();
+
         let prelude_header = output.clone();
+
+        let mut fastcall_header = String::from("");
 
         // generate the data loading function
         // also return the global mappings: global id -> (global buffer offset, global size)
@@ -1954,6 +1972,43 @@ r#"
         dbg!(&_fast_function_set);
 
         // Generate the fastcall header
+
+        // first generate the function declarations
+        for fastfunc in _fast_function_set.iter() {
+            let func = self.func_map.get(&fastfunc.to_string()).unwrap();
+            // Get parameters & return type of the function
+            let params = get_func_params(self, &func.ty);
+            let mut parameter_list = String::from("");
+            for parameter in params {
+                let fn_ty_name = match parameter {
+                    StackType::i32 => format!("uint"),
+                    StackType::i64 => format!("ulong"),
+                    StackType::f32 => format!("float"),
+                    StackType::f64 => format!("double")
+                };
+                parameter_list += &format!("{}, ", fn_ty_name);
+            }
+
+            let ret_val = get_func_result(self, &func.ty);
+            let func_ret_val = match ret_val {
+                Some(ty) => {
+                    match ty {
+                        StackType::i32 => format!("uint"),
+                        StackType::i64 => format!("ulong"),
+                        StackType::f32 => format!("float"),
+                        StackType::f64 => format!("double")
+                    }
+                },
+                None => {
+                    format!("void")
+                }
+            };
+            let calling_func_name = format!("{}{}", "__", fastfunc.to_string().replace(".", ""));
+            let func_declaration = format!("static {} {}_fastcall({}global uint *, global uint *, global uint *);\n", func_ret_val, calling_func_name, parameter_list);
+            write!(fastcall_header, "{}", func_declaration).unwrap();
+        }
+
+        // emit functions
         for fastfunc in _fast_function_set.iter() {
             let func = self.emit_function(self.func_map.get(&fastfunc.to_string()).unwrap(),
                                             call_ret_map,
@@ -1962,12 +2017,13 @@ r#"
                                             hypercall_id_count,
                                             indirect_call_mapping,
                                             &global_mappings,
+                                            _fast_function_set.clone(),
                                             force_inline,
                                             debug_print_function_calls,
                                             is_gpu,
                                             true,
                                             debug);
-            print!("{}", func);
+            write!(fastcall_header, "{}", func).unwrap();
         }
 
         for function in funcs.clone() {
@@ -1997,6 +2053,7 @@ r#"
                                           hypercall_id_count,
                                           indirect_call_mapping,
                                           &global_mappings,
+                                          _fast_function_set.clone(),
                                           force_inline,
                                           debug_print_function_calls,
                                           is_gpu,
@@ -2150,7 +2207,7 @@ r#"
 
         write!(output, "}}\n").unwrap();
 
-        (output, *function_idx_label.get("_start").unwrap(), globals_buffer_size, funcs.len().try_into().unwrap(), kernel_hashmap, kernel_compile_stats)
+        (output, fastcall_header, *function_idx_label.get("_start").unwrap(), globals_buffer_size, funcs.len().try_into().unwrap(), kernel_hashmap, kernel_compile_stats)
     }
 }
 
