@@ -2004,7 +2004,7 @@ r#"
                 }
             };
             let calling_func_name = format!("{}{}", "__", fastfunc.to_string().replace(".", ""));
-            let func_declaration = format!("static {} {}_fastcall({}global uint *, global uint *, global uint *);\n", func_ret_val, calling_func_name, parameter_list);
+            let func_declaration = format!("static {} {}_fastcall({}global uint *, global uint *, global uint *, global uint *, ulong);\n", func_ret_val, calling_func_name, parameter_list);
             write!(fastcall_header, "{}", func_declaration).unwrap();
         }
 

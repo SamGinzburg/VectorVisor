@@ -44,15 +44,30 @@ pub fn get_return_size(writer: &opencl_writer::OpenCLCWriter, ty: &wast::TypeUse
 
 pub fn get_func_params(writer: &opencl_writer::OpenCLCWriter, ty: &wast::TypeUse<wast::FunctionType>) -> Vec<StackType> {
     let mut return_params = vec![];
-    match ty.clone().inline {
-        Some(func_type) => {
+
+    match (ty.index.as_ref(), ty.inline.as_ref()) {
+        (Some(index), _) => {
+            // if we have an index, we need to look it up in the global structure
+            let type_index = match index {
+                Num(n, _) => format!("t{}", n),
+                Id(i) => i.name().to_string(),
+            };
+
+            let func_type = match writer.types.get(&type_index).unwrap() {
+                Func(ft) => ft,
+                _ => panic!("Indirect call cannot have a type of something other than a func"),
+            };
+
             for (_, _, param_type) in func_type.params.iter() {
                 return_params.push(StackCtx::convert_wast_types(&param_type));
             }
         },
-        _ => {
-            panic!("get_func_params index TypeUse not supported yet");
+        (_, Some(inline)) => {
+            for (_, _, param_type) in inline.params.iter() {
+                return_params.push(StackCtx::convert_wast_types(&param_type));
+            }
         },
+        _ => panic!("Neither inline or index type found for func in get_func_params!"),
     }
 
     return_params
@@ -60,15 +75,29 @@ pub fn get_func_params(writer: &opencl_writer::OpenCLCWriter, ty: &wast::TypeUse
 
 pub fn get_func_result(writer: &opencl_writer::OpenCLCWriter, ty: &wast::TypeUse<wast::FunctionType>) -> Option<StackType> {
     let mut ret_val = None;
-    match ty.clone().inline {
-        Some(func_type) => {
+
+    match (ty.index.as_ref(), ty.inline.as_ref()) {
+        (Some(index), _) => {
+            // if we have an index, we need to look it up in the global structure
+            let type_index = match index {
+                Num(n, _) => format!("t{}", n),
+                Id(i) => i.name().to_string(),
+            };
+
+            let func_type = match writer.types.get(&type_index).unwrap() {
+                Func(ft) => ft,
+                _ => panic!("get_func_result cannot have a type of something other than a func"),
+            };
             if func_type.results.len() > 0 {
                 ret_val = Some(StackCtx::convert_wast_types(&func_type.results[0]));
             }
         },
-        _ => {
-            panic!("get_func_params index TypeUse not supported yet");
+        (_, Some(inline)) => {
+            if inline.results.len() > 0 {
+                ret_val = Some(StackCtx::convert_wast_types(&inline.results[0]));
+            }
         },
+        _ => panic!("Neither inline or index type found for func in get_func_result!"),
     }
 
     ret_val
@@ -318,7 +347,7 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stack
             parameter_list += &format!("{}, ", param);
         }
 
-        ret_str += &format!("\t{} = {}_fastcall({}heap_u32, current_mem_size, max_mem_size); //calling\n", result_register, calling_func_name, parameter_list);
+        ret_str += &format!("\t{} = {}_fastcall({}heap_u32, current_mem_size, max_mem_size, globals_buffer, warp_idx); //calling\n", result_register, calling_func_name, parameter_list);
     }
 
     ret_str

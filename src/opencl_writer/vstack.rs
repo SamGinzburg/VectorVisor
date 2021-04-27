@@ -1277,7 +1277,7 @@ impl<'a> StackCtx {
         }
 
         // now add the other info we need for fastcalls
-        ret_str += &format!("global uint *heap_u32, global uint *current_mem_size, global uint *max_mem_size) {{\n");
+        ret_str += &format!("global uint *heap_u32, global uint *current_mem_size, global uint *max_mem_size, global uint *globals_buffer, ulong warp_idx) {{\n");
 
         ret_str
     }
