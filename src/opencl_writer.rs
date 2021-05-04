@@ -1204,7 +1204,10 @@ impl<'a> OpenCLCWriter<'_> {
                         wast::Instruction::Loop(_) => {
                             // if we find a loop, we will treat the back-branch of each loop
                             // as a function call, see opencl_writer/control_flow.rs for more details on why we do this
-                            *num_function_calls += 1;
+                            // fastcalls in CPS-style also don't need normal loops
+                            if !fastcall_set.contains(&id.name().to_string()) {
+                                *num_function_calls += 1;
+                            }
                         },
                         _ => (),
                     }
@@ -1968,6 +1971,7 @@ r#"
         }
 
         let _fast_function_set = compute_fastcall_set(self, Vec::from_iter(funcs.clone()), &mut indirect_call_set);
+        //let _fast_function_set: HashSet<String> = HashSet::new();
         // TODO: emit fastcalls when available
         dbg!(&_fast_function_set);
 

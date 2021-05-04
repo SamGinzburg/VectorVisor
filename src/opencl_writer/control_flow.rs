@@ -13,7 +13,7 @@ use std::convert::TryInto;
 // TODO: double check the semantics of this? 
 pub fn emit_return(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, fn_name: &str, hypercall_id_count: &mut u32, is_fastcall: bool, debug: bool) -> String {
     let mut ret_str = String::from("");
-    
+
     let fn_type = &writer.func_map.get(&fn_name.to_string()).unwrap().ty.inline;
 
     if fn_name.to_string() == "_start" {
@@ -79,9 +79,11 @@ pub fn emit_br(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, 
 
             // Get the value to decrement *sp by in the case of this jump
             ret_str += &format!("\t*sp -= {};\n", stack_ctx.vstack_get_stack_delta(block_count));
+            ret_str += &format!("\t{}\n", format!("goto {}_{};", format!("{}{}", "__", fn_name.replace(".", "")), block_name));
+        } else {
+            ret_str += &format!("\t{}\n", format!("goto {}_{}_fastcall;", format!("{}{}", "__", fn_name.replace(".", "")), block_name));
         }
 
-        ret_str += &format!("\t{}\n", format!("goto {}_{};", format!("{}{}", "__", fn_name.replace(".", "")), block_name));
     } else {
         if !is_fastcall {
             // If we are targeting a loop, we have to emit a return instead, to convert the iterative loop into a recursive function call
@@ -106,7 +108,7 @@ pub fn emit_br(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, 
             ret_str += &format!("\t{}\n",
                                 "return;");
         } else {
-            ret_str += &format!("\t{}\n", format!("goto {}_{};", format!("{}{}", "__", fn_name.replace(".", "")), block_name));
+            ret_str += &format!("\t{}\n", format!("goto {}_{}_fastcall;", format!("{}{}", "__", fn_name.replace(".", "")), block_name));
         }
     }
     
@@ -156,10 +158,11 @@ pub fn emit_end<'a>(writer: &opencl_writer::OpenCLCWriter<'a>, stack_ctx: &mut S
     if block_type == 0 {
         let mut result = String::from("");
 
-        result += &format!("\n{}_{}:\n", format!("{}{}", "__", fn_name.replace(".", "")), label);
-
         if !is_fastcall {
+            result += &format!("\n{}_{}:\n", format!("{}{}", "__", fn_name.replace(".", "")), label);
             result += &stack_ctx.restore_context(false, true);
+        } else {
+            result += &format!("\n{}_{}_fastcall:\n", format!("{}{}", "__", fn_name.replace(".", "")), label);
         }
 
         result
@@ -199,14 +202,13 @@ pub fn emit_loop(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx
         // only restore locals here
 
         result += &stack_ctx.restore_context(true, false);
+
+        *call_ret_idx += 1;
     } else {
         // emit just the loop header for GOTOs during fastcalls
-            // emit a GOTO to the loop header
-            result += &format!("{}\n", format!("{}_{}:", format!("{}{}", "__", fn_name.replace(".", "")), label));
+        // emit a GOTO to the loop header
+        result += &format!("{}\n", format!("{}_{}_fastcall:", format!("{}{}", "__", fn_name.replace(".", "")), label));
     }
-
-
-    *call_ret_idx += 1;
 
     result
 }

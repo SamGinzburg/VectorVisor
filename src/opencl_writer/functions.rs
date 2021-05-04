@@ -289,7 +289,10 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stack
         format!("")
     };
 
-    *call_ret_idx += 1;
+    // only increment the call ret idx if we are not a fastcall
+    if !is_fastcall {
+        *call_ret_idx += 1;
+    }
 
     ret_str += &result;
 
@@ -333,21 +336,24 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stack
         }
     }
 
-    // restore the intermediate context
+    // restore the intermediate context, increment the call ret idx
     if !is_indirect && !is_fastcall {
         ret_str += &restore_context;
     }
 
     // Insert the code for fastcalls here
-    if return_size > 0 && is_fastcall {
-        let result_register = stack_ctx.vstack_alloc(StackCtx::convert_wast_types(&return_type.unwrap()));
+    if  is_fastcall {
         let calling_func_name = format!("{}{}", "__", id.replace(".", ""));
         let mut parameter_list = String::from("");
         for (param, ty) in stack_params.iter().zip(stack_params_types.iter()) {
             parameter_list += &format!("{}, ", param);
         }
-
-        ret_str += &format!("\t{} = {}_fastcall({}heap_u32, current_mem_size, max_mem_size, globals_buffer, warp_idx); //calling\n", result_register, calling_func_name, parameter_list);
+        if return_size > 0 {
+            let result_register = stack_ctx.vstack_alloc(StackCtx::convert_wast_types(&return_type.unwrap()));
+            ret_str += &format!("\t{} = {}_fastcall({}heap_u32, current_mem_size, max_mem_size, globals_buffer, warp_idx); //calling\n", result_register, calling_func_name, parameter_list);
+        } else {
+            ret_str += &format!("\t{}_fastcall({}heap_u32, current_mem_size, max_mem_size, globals_buffer, warp_idx); //calling\n", calling_func_name, parameter_list);
+        }
     }
 
     ret_str
