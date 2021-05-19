@@ -10,8 +10,10 @@
 
 use std::convert::TryInto;
 use std::collections::HashSet;
+use std::collections::HashMap;
 
-pub fn function_stats(func: &wast::Func, fastcalls: HashSet<String>) -> (u32, u32, u32, u32, u32, u32) {
+
+pub fn function_stats(func: &wast::Func, fastcalls: &HashSet<String>, func_map: &HashMap<String, &wast::Func>) -> (u32, u32, u32, u32, u32, u32) {
 
     let mut total_instr_count: u32 = 0;
     let mut total_func_count: u32 = 0;
@@ -37,9 +39,18 @@ pub fn function_stats(func: &wast::Func, fastcalls: HashSet<String>) -> (u32, u3
                         };
 
                         if fastcalls.contains(id) {
-                            total_fastcall_count += 1
+                            total_fastcall_count += 1;
+                            // get the func
+                            let func = func_map.get(id).unwrap();
+                            // Look up the compile stats for the fastcall and add it to our own
+                            let (nested_total_instr_count, nested_total_func_count, nested_total_fastcall_count, nested_total_indirect_count, nested_total_block_count, nested_total_loop_count) = function_stats(func, fastcalls, func_map);
+                            total_instr_count += nested_total_instr_count;
+                            total_func_count += nested_total_func_count;
+                            total_indirect_count += nested_total_indirect_count;
+                            total_loop_count += nested_total_loop_count;
+                            total_block_count += nested_total_block_count;
                         } else {
-                            total_func_count += 1
+                            total_func_count += 1;
                         }
                     },
                     wast::Instruction::CallIndirect(_) => total_indirect_count += 1,

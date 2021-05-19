@@ -14,6 +14,7 @@ mod unops;
 mod vstack;
 mod fastcalls;
 mod compile_stats;
+mod cfg_optimizer;
 
 use relops::*;
 use mem_interleave::*;
@@ -31,6 +32,7 @@ use unops::*;
 use vstack::*;
 use fastcalls::*;
 use compile_stats::*;
+use cfg_optimizer::*;
 
 use wast::Wat;
 use wast::parser::{self, ParseBuffer};
@@ -2030,8 +2032,24 @@ r#"
             write!(fastcall_header, "{}", func).unwrap();
         }
 
-        for function in funcs.clone() {
+        let mut func_mapping: HashMap<String, &wast::Func> = HashMap::new();
 
+        for (name, func) in &self.func_map {
+            func_mapping.insert(name.to_string(), func);
+        }
+
+
+        // Compute how many instructions each fastcall contains (necessary for packing functions)
+        // This is needed for the function packing
+
+
+        // Compute the function groups, we will then enumerate the groups to emit the functions
+        let partitions = form_partitions(1, self.func_map.keys().collect(), &_fast_function_set, &func_mapping, &self.imports_map);
+
+        for function in funcs.clone() {
+            let mut function_idx_label_temp: HashMap<&str, u32> = HashMap::new();
+
+            // for each function in a partition, perform codegen
             let fname = match (&function.kind, &function.id, &function.ty) {
                 (wast::FuncKind::Import(_), _, _) => {
                     panic!("InlineImport functions not yet implemented");
@@ -2042,14 +2060,9 @@ r#"
                 (_, _, _) => panic!("Inline function must always have a valid identifier in wasm")
             };
 
-            let mut function_idx_label_temp: HashMap<&str, u32> = HashMap::new();
             let fname_idx = function_idx_label.get(fname).unwrap();
 
-            // Get compilation stats for function
-            //let (total_instr_count, total_func_count, total_fastcall_count, total_indirect_count, total_block_count, total_loop_count) = 
-            //dbg!(&total_instr_count, &total_func_count, &total_fastcall_count, &total_indirect_count, &total_block_count, &total_loop_count);
-
-            kernel_compile_stats.insert(*fname_idx, function_stats(function, _fast_function_set.clone()));
+            kernel_compile_stats.insert(*fname_idx, function_stats(function, &_fast_function_set, &func_mapping));
             let func = self.emit_function(function,
                                           call_ret_map,
                                           &mut call_ret_idx,
@@ -2063,10 +2076,9 @@ r#"
                                           is_gpu,
                                           false,
                                           debug);
-
             write!(output, "{}", func).unwrap();
-
             function_idx_label_temp.insert(fname, *fname_idx);
+
             let control_function = self.emit_wasm_control_fn(interleave,
                                                             stack_size_bytes,
                                                             heap_size_bytes,
@@ -2078,6 +2090,7 @@ r#"
                                                             globals_buffer_size,
                                                             function_idx_label_temp,
                                                             debug);
+
             let func_full = format!("{}\n{}\n{}\n", prelude_header.clone(), func.clone(), control_function); 
 
             kernel_hashmap.insert(*fname_idx, func_full);
