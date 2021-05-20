@@ -10,7 +10,7 @@ use std::iter::FromIterator;
  * Get the names of:
  * - Called functions inside loops, Called functions
  */
-fn get_called_funcs(func: &wast::Func, fastcalls: &HashSet<String>, imports_map: &HashMap<&str, (&str, Option<&str>, wast::ItemSig)>) -> (Vec<String>, Vec<String>) {
+fn get_called_funcs(func: &wast::Func, fastcalls: &HashSet<String>, func_map: &HashMap<String, &wast::Func>, imports_map: &HashMap<&str, (&str, Option<&str>, wast::ItemSig)>, visited_funcs: &mut HashSet<String>) -> (Vec<String>, Vec<String>) {
     let mut fn_call_in_loop: Vec<String> = vec![];
     let mut fn_call: Vec<String> = vec![];
 
@@ -36,8 +36,21 @@ fn get_called_funcs(func: &wast::Func, fastcalls: &HashSet<String>, imports_map:
                         if !fastcalls.contains(id) && !imports_map.contains_key(id) {
                             if nested_loop_count > 0 {
                                 fn_call_in_loop.push(id.to_string());
+                                // Also track nested function calls
+                                if !visited_funcs.contains(id) {
+                                    visited_funcs.insert(id.to_string());
+                                    let (nested_fn_call_in_loop, nested_fn_calls) = get_called_funcs(func_map.get(id).unwrap(), fastcalls, func_map, imports_map, visited_funcs);
+                                    fn_call_in_loop.extend(nested_fn_call_in_loop);
+                                    fn_call.extend(nested_fn_calls);    
+                                }
                             } else {
                                 fn_call.push(id.to_string());
+                                if !visited_funcs.contains(id) {
+                                    visited_funcs.insert(id.to_string());
+                                    let (nested_fn_call_in_loop, nested_fn_calls) = get_called_funcs(func_map.get(id).unwrap(), fastcalls, func_map, imports_map, visited_funcs);
+                                    fn_call_in_loop.extend(nested_fn_call_in_loop);
+                                    fn_call.extend(nested_fn_calls);    
+                                }
                             }
                         }
                     },
@@ -71,7 +84,7 @@ fn get_called_funcs(func: &wast::Func, fastcalls: &HashSet<String>, imports_map:
  * each GPU kernel contains a single function, and function-level divergence is handled by the VMM.
  *
  * This is done to avoid exceedingly large compile-times and memory usage by the GPU JIT compiler.
- * 
+ *
  * However, partitioning to N=1 functions per kernel results in high device queueing times & VMM overhead.
  * It is usually better to let the GPU handle divergence (if possible).
  *
@@ -105,7 +118,7 @@ pub fn form_partitions(num_funcs_in_partition: u32, func_names: Vec<&String>, fa
 
         current_partition.insert(String::from(f_name));
 
-        let (loop_called_fns, called_fns) = get_called_funcs(func_map.get(&f_name.clone()).unwrap(), fastcalls, imports_map);
+        let (loop_called_fns, called_fns) = get_called_funcs(func_map.get(&f_name.clone()).unwrap(), fastcalls, func_map, imports_map, &mut HashSet::new());
         
         let mut current_partition_count = 0;
         let mut current_instruction_count = 0;
@@ -113,17 +126,10 @@ pub fn form_partitions(num_funcs_in_partition: u32, func_names: Vec<&String>, fa
         let (instr_count, _, _, _, _, _) = function_stats(func_map.get(&f_name.clone()).unwrap(), fastcalls, func_map);
         current_instruction_count += instr_count;
 
-        dbg!(&f_name);
-        dbg!(&current_instruction_count);
-
-        //dbg!(&loop_called_fns);
-        //dbg!(&called_fns);
-
         // Now we can form the partition itself
 
          for func in loop_called_fns {
              let (instr_count, _, _, _, _, _) = function_stats(func_map.get(&func.clone()).unwrap(), fastcalls, func_map);
-             dbg!(&instr_count);
              /*
               * If the func is the following:
               * - Still in the Set G
@@ -133,16 +139,15 @@ pub fn form_partitions(num_funcs_in_partition: u32, func_names: Vec<&String>, fa
               if current_partition_count < num_funcs_in_partition &&
                  func_set.contains(&func) {
                     // add the func to the set
-                    current_partition.insert(String::from(f_name));
+                    current_partition.insert(String::from(&func));
+                    func_set.remove(&func);
                     current_partition_count += 1;
                     current_instruction_count += instr_count;
                 }
          }
 
          for func in called_fns {
-            dbg!(&func.clone());
             let (instr_count, _, _, _, _, _) = function_stats(func_map.get(&func.clone()).unwrap(), fastcalls, func_map);
-            dbg!(&instr_count);
             /*
              * If the func is the following:
              * - Still in the Set G
@@ -152,17 +157,35 @@ pub fn form_partitions(num_funcs_in_partition: u32, func_names: Vec<&String>, fa
              if current_partition_count < num_funcs_in_partition &&
                 func_set.contains(&func) {
                    // add the func to the set
-                   current_partition.insert(String::from(f_name));
+                   current_partition.insert(String::from(&func));
+                   func_set.remove(&func);
                    current_partition_count += 1;
                    current_instruction_count += instr_count;
                 }
         }
 
+
+        // If we couldn't form a group with anyone, set this function aside for now
+        // We will get back to it later if we can't find a partition for it
+        if current_partition.len() == 1 {
+            continue;
+        }
+
+        // only remove this if we managed to form a partition with at least 1 other function
+        func_set.remove(f_name);
+
         dbg!(&current_partition);
+        dbg!(&current_instruction_count);
+
+        partitions.push(current_partition.clone());
+    }
+
+    // The remaining functions are either fastcalls, or functions
+    for func in func_set {
+        dbg!(&func);
         partitions.push(current_partition.clone());
     }
 
     dbg!(&partitions.len());
     (partitions, HashMap::new())
-
 }
