@@ -786,7 +786,12 @@ impl OpenCLRunner {
          * Then, inside of each thread, the vm_id % (N/4) gets the WASI context
          * 
          */
-        let num_threads = num_cpus::get() as u32;
+        let num_threads = if num_cpus::get() as u32 > self.num_vms {
+            self.num_vms as u32
+        } else {
+            num_cpus::get() as u32
+        };
+
         let thread_pool = rayon::ThreadPoolBuilder::new().num_threads(num_threads.try_into().unwrap()).build().unwrap();
 
         let number_vms = self.num_vms.clone();
@@ -1188,7 +1193,12 @@ impl OpenCLRunner {
          * Then, inside of each thread, the vm_id % (N/4) gets the WASI context
          * 
          */
-        let num_threads = num_cpus::get() as u32;
+        let num_threads = if num_cpus::get() as u32 > self.num_vms {
+            self.num_vms as u32
+        } else {
+            num_cpus::get() as u32
+        };
+        
         let thread_pool = rayon::ThreadPoolBuilder::new().num_threads(num_threads.try_into().unwrap()).build().unwrap();
 
         let number_vms = self.num_vms.clone();
