@@ -286,7 +286,7 @@ fn main() {
         let mut ast_debug = opencl_writer::OpenCLCWriter::new(&pb_debug);
         let result = ast.parse_file().unwrap();
         let result_debug = ast_debug.parse_file().unwrap();
-        let (compiled_kernel, fastcall_header, entry_point, globals_buffer_size, num_compiled_funcs, _, _) = ast.write_opencl_file(interleaved as u32,
+        let (compiled_kernel, fastcall_header, entry_point, globals_buffer_size, num_compiled_funcs, _, _, _) = ast.write_opencl_file(interleaved as u32,
                                                                                                             stack_size,
                                                                                                             heap_size, 
                                                                                                             call_stack_size, 
@@ -348,7 +348,7 @@ fn main() {
                 let result_debug = ast_debug.parse_file().unwrap();
             
                 // apply our compilation pass to the source WASM 
-                let (compiled_kernel, fastcall_header, entry_point, globals_buffer_size, num_compiled_funcs, kernel_hashmap, kernel_compile_stats) = ast.write_opencl_file(interleaved as u32,
+                let (compiled_kernel, fastcall_header, entry_point, globals_buffer_size, num_compiled_funcs, kernel_hashmap, kernel_compile_stats, kernel_partition_mappings) = ast.write_opencl_file(interleaved as u32,
                                                                                                                     stack_size,
                                                                                                                     heap_size, 
                                                                                                                     call_stack_size, 
@@ -376,7 +376,7 @@ fn main() {
                 let result_debug = ast_debug.parse_file().unwrap();
             
                 // apply our compilation pass to the source WASM 
-                let (compiled_kernel, fastcall_header, entry_point, globals_buffer_size, num_compiled_funcs, kernel_hashmap, kernel_compile_stats) = ast.write_opencl_file(interleaved as u32,
+                let (compiled_kernel, fastcall_header, entry_point, globals_buffer_size, num_compiled_funcs, kernel_hashmap, kernel_compile_stats, kernel_partition_mappings) = ast.write_opencl_file(interleaved as u32,
                                                                                                                     stack_size,
                                                                                                                     heap_size, 
                                                                                                                     call_stack_size, 
@@ -407,7 +407,7 @@ fn main() {
                 let result_debug = ast_debug.parse_file().unwrap();
             
                 // apply our compilation pass to the source WASM 
-                let (compiled_kernel, fastcall_header, entry_point, globals_buffer_size, num_compiled_funcs, kernel_hashmap, kernel_compile_stats) = ast.write_opencl_file(interleaved as u32,
+                let (compiled_kernel, fastcall_header, entry_point, globals_buffer_size, num_compiled_funcs, kernel_hashmap, kernel_compile_stats, kernel_partition_mappings) = ast.write_opencl_file(interleaved as u32,
                                                                                                                     stack_size,
                                                                                                                     heap_size, 
                                                                                                                     call_stack_size, 
@@ -423,7 +423,7 @@ fn main() {
                 println!("Globals buffer: {}", globals_buffer_size);
                 println!("interleaved: {}", interleaved);
     
-                (InputProgram::partitioned(kernel_hashmap.clone(), fastcall_header.clone(), kernel_compile_stats.clone()), entry_point, num_compiled_funcs, globals_buffer_size, interleaved)
+                (InputProgram::partitioned(kernel_hashmap.clone(), fastcall_header.clone(), kernel_compile_stats.clone(), kernel_partition_mappings.clone()), entry_point, num_compiled_funcs, globals_buffer_size, interleaved)
             },
             ("wasm", true) => {
                 let filedata_text = wasmprinter::print_file(file_path.clone()).unwrap();
@@ -435,7 +435,7 @@ fn main() {
                 let result_debug = ast_debug.parse_file().unwrap();
 
                 // apply our compilation pass to the source WASM 
-                let (compiled_kernel, fastcall_header, entry_point, globals_buffer_size, num_compiled_funcs, kernel_hashmap, kernel_compile_stats) = ast.write_opencl_file(interleaved as u32,
+                let (compiled_kernel, fastcall_header, entry_point, globals_buffer_size, num_compiled_funcs, kernel_hashmap, kernel_compile_stats, kernel_partition_mappings) = ast.write_opencl_file(interleaved as u32,
                                                                                                                     stack_size,
                                                                                                                     heap_size, 
                                                                                                                     call_stack_size, 
@@ -451,7 +451,7 @@ fn main() {
                 println!("Globals buffer: {}", globals_buffer_size);
                 println!("interleaved: {}", interleaved);
     
-                (InputProgram::partitioned(kernel_hashmap.clone(), fastcall_header.clone(), kernel_compile_stats.clone()), entry_point, num_compiled_funcs, globals_buffer_size, interleaved)
+                (InputProgram::partitioned(kernel_hashmap.clone(), fastcall_header.clone(), kernel_compile_stats.clone(), kernel_partition_mappings.clone()), entry_point, num_compiled_funcs, globals_buffer_size, interleaved)
             },
             ("bin", _) => {
                 // read the binary file as a Vec<u8>
@@ -474,7 +474,7 @@ fn main() {
                 let program: PartitionedSeralizedProgram = bincode::deserialize(&filedata).unwrap();
                 println!("Loaded partitioned program with entry point: {}, num_compiled_funcs: {}, globals_buffer_size: {}, is_interleaved: {}", program.entry_point, program.num_compiled_funcs, program.globals_buffer_size, program.interleaved);
 
-                (InputProgram::PartitionedBinary(program.program_data), program.entry_point, program.num_compiled_funcs, program.globals_buffer_size, program.interleaved)
+                (InputProgram::PartitionedBinary(program.program_data, program.partition_mapping), program.entry_point, program.num_compiled_funcs, program.globals_buffer_size, program.interleaved)
             },
             // nvidia specific assembly code, prebuilt
             // this is a legacy stub from earlier testing, it still works though

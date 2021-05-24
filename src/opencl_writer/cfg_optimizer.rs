@@ -93,7 +93,7 @@ fn get_called_funcs(func: &wast::Func, fastcalls: &HashSet<String>, func_map: &H
  * each other into the same OpenCL kernel.
  */
 
-pub fn form_partitions(num_funcs_in_partition: u32, func_names: Vec<&String>, fastcalls: &HashSet<String>, func_map: &HashMap<String, &wast::Func>, imports_map: &HashMap<&str, (&str, Option<&str>, wast::ItemSig)>) -> (Vec<HashSet<String>>, HashMap<String, String>) {
+pub fn form_partitions(num_funcs_in_partition: u32, func_names: Vec<&String>, fastcalls: &HashSet<String>, func_map: &HashMap<String, &wast::Func>, imports_map: &HashMap<&str, (&str, Option<&str>, wast::ItemSig)>, kernel_compile_stats: &mut HashMap<u32, (u32, u32, u32, u32, u32, u32)>) -> Vec<(u32, HashSet<String>)> {
 
     let mut func_set = HashSet::<&String>::from_iter(func_names);
     let mut partitions = vec![];
@@ -175,7 +175,10 @@ pub fn form_partitions(num_funcs_in_partition: u32, func_names: Vec<&String>, fa
         // only remove this if we managed to form a partition with at least 1 other function
         func_set.remove(f_name);
 
-        partitions.push(current_partition.clone());
+        partitions.push((partition_idx, current_partition.clone()));
+
+        // update the kernel compile stats tracking object
+        kernel_compile_stats.insert(partition_idx, (current_instruction_count, 0, 0, 0, 0, 0));
 
         partition_idx += 1;
     }
@@ -184,10 +187,14 @@ pub fn form_partitions(num_funcs_in_partition: u32, func_names: Vec<&String>, fa
     for func in func_set {
         let mut set = HashSet::new();
         set.insert(func.clone());
-        partitions.push(set);
+        partitions.push((partition_idx, set));
+
+        let (instr_count, _, _, _, _, _) = function_stats(func_map.get(&func.clone()).unwrap(), fastcalls, func_map);
+
+        kernel_compile_stats.insert(partition_idx, (instr_count, 0, 0, 0, 0, 0));
         partition_idx += 1;
     }
 
     dbg!(&partitions.len());
-    (partitions, HashMap::new())
+    partitions
 }

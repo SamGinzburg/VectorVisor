@@ -1884,14 +1884,12 @@ void {}(global uint   *stack_u32,
                              debug_print_function_calls: bool,
                              force_inline: bool,
                              is_gpu: bool,
-                             debug: bool) -> (String, String, u32, u32, u32, HashMap<u32, String>, HashMap<u32, (u32, u32, u32, u32, u32, u32)>) {
+                             debug: bool) -> (String, String, u32, u32, u32, HashMap<u32, String>, HashMap<u32, (u32, u32, u32, u32, u32, u32)>, HashMap<u32, u32>) {
         let mut output = String::new();
         let mut header = String::new();
-        let mut func_vec = Vec::new();
         let mut kernel_hashmap: HashMap<u32, String> = HashMap::new();
         let mut kernel_compile_stats: HashMap<u32, (u32, u32, u32, u32, u32, u32)> = HashMap::new();
-
-        //let mut output = File::create(filename).unwrap();
+        let mut kernel_partition_mappings: HashMap<u32, u32> = HashMap::new();
 
         // enable the usage of FP64 operations (double precision floats)
         // if we are unable to enable, floating point calculations may be incorrect
@@ -1933,6 +1931,8 @@ r#"
 
         let data_program = format!("{}\n{}", prelude_header, data_section.clone());
         kernel_hashmap.insert(99999, data_program);
+        kernel_partition_mappings.insert(99999, 99999);
+
         write!(output, "{}", data_section).unwrap();
 
         // for each function, assign an ID -> index mapping
@@ -2045,42 +2045,46 @@ r#"
 
         // Compute the function groups, we will then enumerate the groups to emit the functions
         // kernel_partition_mapping get the partition ID from a function idx
-        let (partitions, kernel_partition_mapping) = form_partitions(100, self.func_map.keys().collect(), &_fast_function_set, &func_mapping, &self.imports_map);
+        let partitions = form_partitions(100, self.func_map.keys().collect(), &_fast_function_set, &func_mapping, &self.imports_map, &mut kernel_compile_stats);
 
         dbg!(&partitions);
 
-        for function in funcs.clone() {
+        for (partition_idx, partition) in partitions.clone() {
             let mut function_idx_label_temp: HashMap<&str, u32> = HashMap::new();
+            let mut partition_func_str = String::from("");
 
             // for each function in a partition, perform codegen
-            let fname = match (&function.kind, &function.id, &function.ty) {
-                (wast::FuncKind::Import(_), _, _) => {
-                    panic!("InlineImport functions not yet implemented");
-                },
-                (wast::FuncKind::Inline{locals, expression}, Some(id), typeuse) => {
-                    id.name()
-                },
-                (_, _, _) => panic!("Inline function must always have a valid identifier in wasm")
-            };
-
-            let fname_idx = function_idx_label.get(fname).unwrap();
-
-            kernel_compile_stats.insert(*fname_idx, function_stats(function, &_fast_function_set, &func_mapping));
-            let func = self.emit_function(function,
-                                          call_ret_map,
-                                          &mut call_ret_idx,
-                                          function_idx_label.clone(),
-                                          hypercall_id_count,
-                                          indirect_call_mapping,
-                                          &global_mappings,
-                                          _fast_function_set.clone(),
-                                          force_inline,
-                                          debug_print_function_calls,
-                                          is_gpu,
-                                          false,
-                                          debug);
-            write!(output, "{}", func).unwrap();
-            function_idx_label_temp.insert(fname, *fname_idx);
+            for function in partition {
+                let func_to_emit = self.func_map.get(&function).unwrap();
+                let fname = match (&func_to_emit.kind, &func_to_emit.id, &func_to_emit.ty) {
+                    (wast::FuncKind::Import(_), _, _) => {
+                        panic!("InlineImport functions not yet implemented");
+                    },
+                    (wast::FuncKind::Inline{locals, expression}, Some(id), typeuse) => {
+                        id.name()
+                    },
+                    (_, _, _) => panic!("Inline function must always have a valid identifier in wasm")
+                };
+    
+                let func = self.emit_function(func_to_emit,
+                                              call_ret_map,
+                                              &mut call_ret_idx,
+                                              function_idx_label.clone(),
+                                              hypercall_id_count,
+                                              indirect_call_mapping,
+                                              &global_mappings,
+                                              _fast_function_set.clone(),
+                                              force_inline,
+                                              debug_print_function_calls,
+                                              is_gpu,
+                                              false,
+                                              debug);
+                write!(output, "{}", func).unwrap();
+                write!(partition_func_str, "{}\n", func).unwrap();
+                let fname_idx = function_idx_label.get(fname).unwrap();
+                function_idx_label_temp.insert(fname, *fname_idx);
+                kernel_partition_mappings.insert(*fname_idx, partition_idx);
+            }
 
             let control_function = self.emit_wasm_control_fn(interleave,
                                                             stack_size_bytes,
@@ -2094,15 +2098,9 @@ r#"
                                                             function_idx_label_temp,
                                                             debug);
 
-            let func_full = format!("{}\n{}\n{}\n", prelude_header.clone(), func.clone(), control_function); 
+            let func_full = format!("{}\n{}\n{}\n", prelude_header.clone(), partition_func_str.clone(), control_function); 
 
-            kernel_hashmap.insert(*fname_idx, func_full);
-
-            // if we are going to try linking a lib
-            //write!(output, "{};", self.generate_function_prelude(&format!("{}{}", "__", fname.replace(".", "")), interleave, 0, 0, 0, 0, 0, 0, 0, false, false));
-            
-            let header_include = format!("#include \"helper.cl\"\n{}", func);
-            func_vec.push(header_include);
+            kernel_hashmap.insert(partition_idx, func_full);
         }
         
 
@@ -2227,7 +2225,7 @@ r#"
 
         write!(output, "}}\n").unwrap();
 
-        (output, fastcall_header, *function_idx_label.get("_start").unwrap(), globals_buffer_size, funcs.len().try_into().unwrap(), kernel_hashmap, kernel_compile_stats)
+        (output, fastcall_header, *function_idx_label.get("_start").unwrap(), globals_buffer_size, funcs.len().try_into().unwrap(), kernel_hashmap, kernel_compile_stats, kernel_partition_mappings)
     }
 }
 

@@ -22,8 +22,7 @@ use crossbeam::channel::Receiver;
 
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::collections::BTreeSet;
-
+use std::collections::HashSet;
 
 use std::convert::TryInto;
 use std::fs::File;
@@ -56,7 +55,7 @@ pub struct HyperCall<'a> {
     pub timestamp_counter: u64,
     pub queue_submit_delta: u64,
     pub num_queue_submits: u64,
-    pub called_fns: BTreeSet<u32>,
+    pub called_fns: HashSet<u32>,
     pub syscall: WasiSyscalls,
     pub is_interleaved_mem: bool,
     pub ocl_buffers: &'a OpenCLBuffers,
@@ -71,7 +70,7 @@ impl<'a> HyperCall<'a> {
                timestamp_counter: u64,
                queue_submit_delta: u64,
                num_queue_submits: u64,
-               called_funcs: BTreeSet<u32>,
+               called_funcs: HashSet<u32>,
                syscall: WasiSyscalls,
                is_interleaved_mem: bool,
                ocl_buffers: &'a OpenCLBuffers,
@@ -142,7 +141,7 @@ pub struct VectorizedVM {
     pub timestamp_counter: Arc<u64>,
     pub queue_submit_counter: Arc<u64>,
     pub queue_submit_qty: Arc<u64>,
-    pub called_fns_set: Arc<BTreeSet<u32>>,
+    pub called_fns_set: Arc<HashSet<u32>>,
     pub vm_sender: Arc<Mutex<Sender<(Vec<u8>, usize, u64, u64, u64, u64)>>>,
     pub vm_recv:   Arc<Mutex<Receiver<(Vec<u8>, usize)>>>,
 }
@@ -184,7 +183,7 @@ impl VectorizedVM {
             timestamp_counter: Arc::new(0),
             queue_submit_counter: Arc::new(0),
             queue_submit_qty: Arc::new(0),
-            called_fns_set: Arc::new(BTreeSet::new()),
+            called_fns_set: Arc::new(HashSet::new()),
             vm_sender: vm_sender,
             vm_recv: vm_recv,
         }

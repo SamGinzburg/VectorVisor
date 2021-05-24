@@ -35,7 +35,7 @@ use std::fs::File;
 use std::io::Write;
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::collections::BTreeSet;
+use std::collections::HashSet;
 use std::fs::OpenOptions;
 use std::io::prelude::*;
 
@@ -126,6 +126,7 @@ pub struct SeralizedProgram {
 #[derive(Serialize, Deserialize)]
 pub struct PartitionedSeralizedProgram {
     pub program_data: HashMap<u32, Vec<u8>>,
+    pub partition_mapping: HashMap<u32, u32>,
     pub entry_point: u32,
     pub num_compiled_funcs: u32,
     pub globals_buffer_size: u32,
@@ -136,14 +137,14 @@ pub struct PartitionedSeralizedProgram {
 pub enum InputProgram {
     binary(Vec<u8>),
     text(String, String),
-    partitioned(HashMap<u32, String>, String, HashMap<u32, (u32, u32, u32, u32, u32, u32)>),
-    PartitionedBinary(HashMap<u32, Vec<u8>>),
+    partitioned(HashMap<u32, String>, String, HashMap<u32, (u32, u32, u32, u32, u32, u32)>, HashMap<u32, u32>),
+    PartitionedBinary(HashMap<u32, Vec<u8>>, HashMap<u32, u32>),
 }
 
 #[derive(Clone)]
 pub enum ProgramType {
     Standard(ocl::core::Program),
-    Partitioned(HashMap<u32, ocl::core::Program>),
+    Partitioned(HashMap<u32, ocl::core::Program>, HashMap<u32, u32>),
 }
 
 pub struct OpenCLRunner {
@@ -215,8 +216,8 @@ impl OpenCLRunner {
                 ProgramType::Standard(program) => {
                     final_runner.run_vector_vms(stack_frames_size, program, &leaked_command_queue, hypercall_buffer_read_buffer, 1024*16, context, print_return, vm_sender, vm_recv)
                 },
-                ProgramType::Partitioned(program_map) => {
-                    final_runner.run_partitioned_vector_vms(stack_frames_size, program_map, &leaked_command_queue, hypercall_buffer_read_buffer, 1024*16, context, print_return, vm_sender, vm_recv)
+                ProgramType::Partitioned(program_map, kernel_partition_mapping) => {
+                    final_runner.run_partitioned_vector_vms(stack_frames_size, program_map, kernel_partition_mapping, &leaked_command_queue, hypercall_buffer_read_buffer, 1024*16, context, print_return, vm_sender, vm_recv)
                 }
             };
 
@@ -562,7 +563,7 @@ impl OpenCLRunner {
                 println!("Time to load program from binary: {:?}", binary_prep_end-binary_start);
                 ProgramType::Standard(program_to_run)
             },
-            InputProgram::partitioned(map, fastcall_header, compile_stats_map) => {
+            InputProgram::partitioned(map, fastcall_header, compile_stats_map, kernel_partition_mappings) => {
                 let mut final_hashmap: HashMap<u32, ocl::core::Program> = HashMap::new();
                 let mut final_binarized_hashmap: HashMap<u32, Vec<u8>> = HashMap::new();
 
@@ -671,6 +672,7 @@ impl OpenCLRunner {
 
                 let program_to_serialize = PartitionedSeralizedProgram {
                     program_data: final_binarized_hashmap,
+                    partition_mapping: kernel_partition_mappings.clone(),
                     globals_buffer_size: globals_buffer_size,
                     entry_point: self.entry_point,
                     num_compiled_funcs: num_compiled_funcs,
@@ -681,9 +683,9 @@ impl OpenCLRunner {
                 let mut file = File::create(format!("{}.partbin", input_filename)).unwrap();
                 file.write_all(&serialized_program).unwrap();
 
-                ProgramType::Partitioned(final_hashmap)
+                ProgramType::Partitioned(final_hashmap, kernel_partition_mappings.clone())
             },
-            InputProgram::PartitionedBinary(map) => {
+            InputProgram::PartitionedBinary(map, kernel_partition_mappings) => {
                 let mut final_hashmap: HashMap<u32, ocl::core::Program> = HashMap::new();
 
                 // map contains a mapping of u32 (function ID) -> program
@@ -711,7 +713,7 @@ impl OpenCLRunner {
                 let binary_prep_end = std::time::Instant::now();
                 pb.finish_with_message(&format!("Time to load program from binary: {:?}", binary_prep_end-binary_start));
 
-                ProgramType::Partitioned(final_hashmap)
+                ProgramType::Partitioned(final_hashmap, kernel_partition_mappings.clone())
             }
         };
 
@@ -936,7 +938,7 @@ impl OpenCLRunner {
 
         // this isn't used here at all, just needed for constructing hypercalls
         // for tracking profiling information
-        let mut called_funcs = BTreeSet::new();
+        let mut called_funcs = HashSet::new();
 
         // now the data in the program has been initialized, we can run the main loop
         println!("start: {}", Utc::now().timestamp());
@@ -1125,6 +1127,7 @@ impl OpenCLRunner {
     pub fn run_partitioned_vector_vms(self: &'static OpenCLRunner,
                                     per_vm_stack_frames_size: u32,
                                     program_map: HashMap<u32, ocl::core::Program>,
+                                    kernel_partition_mappings: HashMap<u32, u32>,
                                     queue: &'static CommandQueue,
                                     hypercall_buffer_read_buffer: &'static mut [u8],
                                     hypercall_buffer_size: u32,
@@ -1354,7 +1357,7 @@ impl OpenCLRunner {
         }
 
         dbg!(self.entry_point);
-        let mut start_kernel = kernels.get(&self.entry_point).unwrap();
+        let mut start_kernel = kernels.get(&kernel_partition_mappings.get(&self.entry_point).unwrap()).unwrap();
 
         let mut max_queue_time: u64 = 0;
         let mut min_queue_time: u64 = std::u64::MAX;
@@ -1362,7 +1365,7 @@ impl OpenCLRunner {
 
         let mut backup_entry_point_temp = 0;
 
-        let mut called_funcs = BTreeSet::new();
+        let mut called_funcs = HashSet::new();
 
         let mut is_first: HashMap<u32, bool> = HashMap::new();
         let mut first_invokes: Vec<u64> = vec![];
@@ -1463,7 +1466,7 @@ impl OpenCLRunner {
                 // if we find a VM that isn't blocked on a hypercall
                 if !found && hypercall_num_temp[idx] == -2 {
                     // set the next function to run to be this targeted function
-                    start_kernel = kernels.get(&entry_point_temp[idx]).unwrap();
+                    start_kernel = kernels.get(&kernel_partition_mappings.get(&entry_point_temp[idx]).unwrap()).unwrap();
                     curr_func_id = entry_point_temp[idx];
                     found = true;
                 } if hypercall_num_temp[idx] != -2 && entry_point_temp[idx] != ((-1) as i32) as u32 {
@@ -1492,7 +1495,7 @@ impl OpenCLRunner {
             } else {
                 // if we don't have any VMs to run, reset the next function to run to be that of the hcall
                 // we are returning to and dispatch the calls
-                start_kernel = kernels.get(&backup_entry_point_temp).unwrap();
+                start_kernel = kernels.get(&kernel_partition_mappings.get(&backup_entry_point_temp).unwrap()).unwrap();
                 curr_func_id = backup_entry_point_temp;
                 called_funcs.insert(curr_func_id);
 
