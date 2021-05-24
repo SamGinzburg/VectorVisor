@@ -2044,7 +2044,10 @@ r#"
 
 
         // Compute the function groups, we will then enumerate the groups to emit the functions
-        let partitions = form_partitions(100, self.func_map.keys().collect(), &_fast_function_set, &func_mapping, &self.imports_map);
+        // kernel_partition_mapping get the partition ID from a function idx
+        let (partitions, kernel_partition_mapping) = form_partitions(100, self.func_map.keys().collect(), &_fast_function_set, &func_mapping, &self.imports_map);
+
+        dbg!(&partitions);
 
         for function in funcs.clone() {
             let mut function_idx_label_temp: HashMap<&str, u32> = HashMap::new();

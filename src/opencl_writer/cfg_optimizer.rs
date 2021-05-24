@@ -97,6 +97,7 @@ pub fn form_partitions(num_funcs_in_partition: u32, func_names: Vec<&String>, fa
 
     let mut func_set = HashSet::<&String>::from_iter(func_names);
     let mut partitions = vec![];
+    let mut partition_idx = 0;
     /*
      * 1) Create a set of all functions in the program (global BTreeSet G)
      * 2) Pop a function (F) out of the global set of functions
@@ -174,16 +175,17 @@ pub fn form_partitions(num_funcs_in_partition: u32, func_names: Vec<&String>, fa
         // only remove this if we managed to form a partition with at least 1 other function
         func_set.remove(f_name);
 
-        dbg!(&current_partition);
-        dbg!(&current_instruction_count);
-
         partitions.push(current_partition.clone());
+
+        partition_idx += 1;
     }
 
     // The remaining functions are either fastcalls, or functions
     for func in func_set {
-        dbg!(&func);
-        partitions.push(current_partition.clone());
+        let mut set = HashSet::new();
+        set.insert(func.clone());
+        partitions.push(set);
+        partition_idx += 1;
     }
 
     dbg!(&partitions.len());
