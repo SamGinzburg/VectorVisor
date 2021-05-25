@@ -99,7 +99,8 @@ if __name__ == '__main__':
 
     print ("Batch size for each req: ", BATCH_SIZE)
     print ("Total number of batches: ", NUM_BATCHES_TO_RUN)
-
+    total_rps = 0
+    max_time = 0
     for vmm, idx in zip(times, range(len(times))):
         e2e_times = vmm[0]
         on_device_time = vmm[1]
@@ -107,7 +108,8 @@ if __name__ == '__main__':
         average_queue_submit_count = vmm[3]
         num_unique_fns_called = vmm[4]
         total_on_dev_times = vmm[5]
-
+        total_rps +=  (BATCH_SIZE * NUM_BATCHES_TO_RUN) / sum(e2e_times)
+        max_time = max(max_time, sum(e2e_times))
         print ("VMM: ", idx)
         print ("Total E2E (s): ", sum(e2e_times))
         print ("Requests Per Second: ", (BATCH_SIZE * NUM_BATCHES_TO_RUN) / sum(e2e_times))
@@ -117,3 +119,4 @@ if __name__ == '__main__':
         print ("Average queue submit overhead (ns): ", sum(queue) / len(queue))
         print ("Average # queue submits: ", sum(average_queue_submit_count) / len(average_queue_submit_count))
         print ("Average # num_unique_fns_called: ", sum(num_unique_fns_called) / len(num_unique_fns_called))
+    print ("Total sum RPS: ", (BATCH_SIZE * NUM_BATCHES_TO_RUN * NUM_VMM) / max_time)
