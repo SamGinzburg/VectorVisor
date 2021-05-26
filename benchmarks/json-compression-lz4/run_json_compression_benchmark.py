@@ -21,7 +21,7 @@ def send_request_batch(req_list_ip_tuple):
     average_num_unique_fns_called = []
     for x in range(num_batches_to_run):
         t0 = time()
-        r = requests.get('http://localhost:{}/batch_submit/'.format(port), json={"requests": req_list})
+        r = requests.get('http://52.205.73.166:{}/batch_submit/'.format(port), json={"requests": req_list})
         t1 = time()
         on_device_times = []
         device_queue_times = []
@@ -33,7 +33,6 @@ def send_request_batch(req_list_ip_tuple):
             device_queue_times.append(r.json()['requests'][resp]['device_queue_overhead_time_ns'])
             queue_submit_count.append(r.json()['requests'][resp]['queue_submit_count'])
             num_unique_fns_called.append(r.json()['requests'][resp]['num_unique_fns_called'])
-
 
         e2e_times.append(t1-t0)
         average_on_device_times.append(sum(on_device_times) / len(on_device_times))
@@ -93,7 +92,7 @@ if __name__ == '__main__':
 
 
     # we can use this to ping multiple VMMs in parallel
-    p = Pool(processes=32)
+    p = Pool(processes=16)
 
     t0 = time()
     times = p.map(send_request_batch, req_submit_list)
