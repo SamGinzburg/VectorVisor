@@ -57,7 +57,6 @@ impl BatchSubmitServer {
                             // copy the string to the buffer
                             let inc_req_as_bytes = req.req.as_bytes();
                             test[0..inc_req_as_bytes.len()].clone_from_slice(inc_req_as_bytes);
-
                             sender.send((test.to_vec(), inc_req_as_bytes.len())).unwrap();
                         }
 

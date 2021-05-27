@@ -21,14 +21,14 @@ def send_request_batch(req_list_ip_tuple):
     average_num_unique_fns_called = []
     for x in range(num_batches_to_run):
         t0 = time()
-        r = requests.get('http://52.205.73.166:{}/batch_submit/'.format(port), json={"requests": req_list})
+        r = requests.get('http://localhost:{}/batch_submit/'.format(port), json={"requests": req_list})
         t1 = time()
         on_device_times = []
         device_queue_times = []
         queue_submit_count = []
         num_unique_fns_called = []
         for resp in r.json()['requests']:
-            #print (r.json()['requests'][resp])
+            print (r.json()['requests'][resp])
             on_device_times.append(r.json()['requests'][resp]['on_device_execution_time_ns'])
             device_queue_times.append(r.json()['requests'][resp]['device_queue_overhead_time_ns'])
             queue_submit_count.append(r.json()['requests'][resp]['queue_submit_count'])
@@ -75,8 +75,8 @@ if __name__ == '__main__':
         req_list = []
         for x in range(BATCH_SIZE):
             # generate random string
-            random_str = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(random.randint(4096*2,4096*2)))
-
+            #random_str = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(random.randint(4096*2,4096*2)))
+            random_str = "text"
             # what we are sending the serverless function
             payload = {
                 "text": random_str,
@@ -88,11 +88,12 @@ if __name__ == '__main__':
                 "req": json.dumps(payload),
             }
             req_list.append(sample_req)
+        print (req_list)
         req_submit_list.append((req_list, PORT + vmm_idx, NUM_BATCHES_TO_RUN))
 
 
     # we can use this to ping multiple VMMs in parallel
-    p = Pool(processes=16)
+    p = Pool(processes=1)
 
     t0 = time()
     times = p.map(send_request_batch, req_submit_list)
