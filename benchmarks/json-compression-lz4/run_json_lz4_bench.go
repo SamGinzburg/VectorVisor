@@ -49,20 +49,25 @@ func IssueRequests(ip string, port int, req_list []byte, num_batches_to_run int,
 	var DefaultClient = &http.Client{}
 	addr := fmt.Sprintf("http://%s:%d/batch_submit/", ip, port)
 
-	//start := time.Now()
+	start := time.Now()
 	http_request, _ := http.NewRequest("GET", addr, final_request)
 	http_request.Header.Add("Content-Type", "application/json; charset=utf-8")
 	//m := map[string]interface{}{}
+	read_cnt := int64(0)
 	for b := 0; b < num_batches_to_run; b++ {
 		//DefaultClient.Do(http_request)
 		resp, _ := DefaultClient.Do(http_request)
+		start_read := time.Now()
 		body, _ := ioutil.ReadAll(resp.Body)
+		read_secs := time.Since(start_read)
+		read_cnt += read_secs.Nanoseconds()
 		data_ch <- body
 		//jsddon.Unmarshal(body, m)
 		//fmt.Printf("map: %s\n", string(body))
 	}
-	//secs := time.Since(start)
-	//ch <- fmt.Sprintf("%.2f elapsed with response: %s\n", secs, addr)
+	secs := time.Since(start)
+	fmt.Printf("%.2f elapsed with response: %s\n", secs, addr)
+	fmt.Printf("%.2f elapsed for reads\n", read_cnt)
   }
 
 func main() {
