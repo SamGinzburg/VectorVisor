@@ -16,7 +16,6 @@ use interleave_offsets::Interleave;
 use std::ffi::CString;
 
 use ocl::core::Event;
-use ocl::core::ContextProperties;
 use ocl::core::ArgVal;
 
 use std::thread;
@@ -169,6 +168,8 @@ impl OpenCLRunner {
     }
 
     pub fn run(self,
+               context: ocl::core::Context,
+               device_id: ocl::core::DeviceId,
                input_filename: &str,
                stack_size: u32,
                heap_size: u32,
@@ -184,7 +185,7 @@ impl OpenCLRunner {
                link_flags: String,
                print_return: bool) -> JoinHandle<()> {
         let num_vms = self.num_vms.clone();
-        let (program, context, device_id) = self.setup_kernel(input_filename, stack_size, heap_size, num_compiled_funcs, globals_buffer_size, compile_flags, link_flags);
+        let (program, context, device_id) = self.setup_kernel(context, device_id, input_filename, stack_size, heap_size, num_compiled_funcs, globals_buffer_size, compile_flags, link_flags);
 
         // create the buffers
         let (new_runner, context) = self.create_buffers(stack_size,
@@ -427,23 +428,7 @@ impl OpenCLRunner {
      * It returns a sending channel for the HTTP Endpoint to send requests to be processed with.
      * 
      */
-    pub fn setup_kernel(&self, input_filename: &str, stack_size: u32, heap_size: u32, num_compiled_funcs: u32, globals_buffer_size: u32, compile_flags: String, link_flags: String) -> (ProgramType, ocl::core::Context, ocl::core::DeviceId) {
-        let platform_id = ocl::core::default_platform().unwrap();
-        let device_type = if self.is_gpu_backend {
-            Some(ocl::core::DEVICE_TYPE_GPU)
-        } else {
-            Some(ocl::core::DEVICE_TYPE_CPU)
-        };
-
-        let device_ids = ocl::core::get_device_ids(&platform_id, device_type, None).unwrap();
-        let device_id = device_ids[0];
-        println!("{:?}", platform_id);
-        println!("{:?}", device_ids);
-        println!("{:?}", device_id);
-        // set up the device context
-        let context_properties = ContextProperties::new().platform(platform_id);
-        let context = ocl::core::create_context(Some(&context_properties), &[device_id], None, None).unwrap();        
-
+    pub fn setup_kernel(&self, context: ocl::core::Context, device_id: ocl::core::DeviceId, input_filename: &str, stack_size: u32, heap_size: u32, num_compiled_funcs: u32, globals_buffer_size: u32, compile_flags: String, link_flags: String) -> (ProgramType, ocl::core::Context, ocl::core::DeviceId) {
         let dev_type = ocl::core::get_device_info(&device_id, ocl::core::DeviceInfo::Type);
         let dev_name = ocl::core::get_device_info(&device_id, ocl::core::DeviceInfo::Name);
         let vendor = ocl::core::get_device_info(&device_id, ocl::core::DeviceInfo::Vendor);
@@ -483,7 +468,7 @@ impl OpenCLRunner {
                 let compiled_program = ocl::core::create_program_with_source(&context, &[src_cstring.clone()]).unwrap();
                 let header = ocl::core::create_program_with_source(&context, &[header_cstring.clone()]).unwrap();
                 let options = &CString::new(format!("{} -DNUM_THREADS={} -DVMM_STACK_SIZE_BYTES={} -DVMM_HEAP_SIZE_BYTES={}", compile_flags, self.num_vms, stack_size, heap_size)).unwrap();
-                let build_result = ocl::core::compile_program(&compiled_program, Some(&[device_ids[0]]), options, &[&header], &[CString::new("fastcalls.cl").unwrap()], None, None, None);
+                let build_result = ocl::core::compile_program(&compiled_program, Some(&[device_id]), options, &[&header], &[CString::new("fastcalls.cl").unwrap()], None, None, None);
                 match build_result {
                     Err(e) => {
                         println!("Build error:\n{}", e);
@@ -494,7 +479,7 @@ impl OpenCLRunner {
                     Ok(_) => {
                     },
                 };
-                let buildinfo = ocl::core::get_program_build_info(&compiled_program, &device_ids[0], ocl::core::ProgramBuildInfo::BuildLog).unwrap();
+                let buildinfo = ocl::core::get_program_build_info(&compiled_program, &device_id, ocl::core::ProgramBuildInfo::BuildLog).unwrap();
                 dbg!(buildinfo);
                 let compile_end = std::time::Instant::now();
                 println!("Compile time for kernel: {:?}", compile_end-compile_start);
@@ -502,7 +487,7 @@ impl OpenCLRunner {
                 println!("Now linking program...");
 
                 let link_start = std::time::Instant::now();
-                let final_program = ocl::core::link_program(&context, Some(&[device_ids[0]]), &CString::new(format!("{}", link_flags)).unwrap(), &[&compiled_program], None, None, None);
+                let final_program = ocl::core::link_program(&context, Some(&[device_id]), &CString::new(format!("{}", link_flags)).unwrap(), &[&compiled_program], None, None, None);
                 let link_end = std::time::Instant::now();
                 println!("Link time for kernel: {:?}", link_end-link_start);
 
@@ -552,11 +537,11 @@ impl OpenCLRunner {
             InputProgram::binary(b) => {
                 let binary_start = std::time::Instant::now();
 
-                let program_to_run = match ocl::core::create_program_with_binary(&context, &[device_ids[0]], &[&b]) {
+                let program_to_run = match ocl::core::create_program_with_binary(&context, &[device_id], &[&b]) {
                     Ok(binary) => binary,
                     Err(e) => panic!("Unable to create program from given binary: {:?}", e),
                 };
-                ocl::core::build_program(&program_to_run, Some(&[device_ids[0]]), &CString::new(format!("{} -DNUM_THREADS={} -DVMM_STACK_SIZE_BYTES={} -DVMM_HEAP_SIZE_BYTES={}", compile_flags, self.num_vms, stack_size, heap_size)).unwrap(), None, None).unwrap();
+                ocl::core::build_program(&program_to_run, Some(&[device_id]), &CString::new(format!("{} -DNUM_THREADS={} -DVMM_STACK_SIZE_BYTES={} -DVMM_HEAP_SIZE_BYTES={}", compile_flags, self.num_vms, stack_size, heap_size)).unwrap(), None, None).unwrap();
                 let knames = ocl::core::get_program_info(&program_to_run, ocl::core::ProgramInfo::KernelNames);
                 println!("Loaded kernels: {}", knames.unwrap());
                 let binary_prep_end = std::time::Instant::now();
@@ -573,8 +558,7 @@ impl OpenCLRunner {
                 // Evenly divide workload between threads
                 let num_threads = num_cpus::get();
                 let num_vms = self.num_vms.clone();
-                let device_id = device_ids[0];
-                
+
                 let (finished_sender, finished_receiver): (Sender<(u32, ocl::core::Program, u64)>, Receiver<(u32, ocl::core::Program, u64)>) = unbounded();
 
                 let mut submit_compile_job = vec![];
@@ -585,7 +569,6 @@ impl OpenCLRunner {
                     let sender = finished_sender.clone();
                     let num_vms_clone = self.num_vms.clone();
                     let link_flags_clone = link_flags.clone();
-                    let device_ids_clone = device_ids.clone();
                     let compile_flags_clone = compile_flags.clone();
                     let context_clone = context.clone();
 
@@ -605,8 +588,8 @@ impl OpenCLRunner {
                             };
                             let start = Utc::now().timestamp_nanos();
                             let options = &CString::new(format!("{} -DNUM_THREADS={} -DVMM_STACK_SIZE_BYTES={} -DVMM_HEAP_SIZE_BYTES={}", compile_flags_clone, num_vms_clone, stack_size, heap_size)).unwrap();
-                            let build_result = ocl::core::compile_program(&program_to_build, Some(&[device_ids_clone[0]]), options, &[&fastcall_header], &[CString::new("fastcalls.cl").unwrap()], None, None, None);
-                            let final_program = ocl::core::link_program(&context_clone, Some(&[device_ids_clone[0]]), &CString::new(format!("{}", link_flags_clone)).unwrap(), &[&program_to_build], None, None, None).unwrap();
+                            let build_result = ocl::core::compile_program(&program_to_build, Some(&[device_id]), options, &[&fastcall_header], &[CString::new("fastcalls.cl").unwrap()], None, None, None);
+                            let final_program = ocl::core::link_program(&context_clone, Some(&[device_id]), &CString::new(format!("{}", link_flags_clone)).unwrap(), &[&program_to_build], None, None, None).unwrap();
                             let end = Utc::now().timestamp_nanos();
 
                             sender.send((key, final_program, (end-start).try_into().unwrap())).unwrap();
@@ -698,11 +681,11 @@ impl OpenCLRunner {
 
                 let mut count: u64 = 0;
                 for (id, program_binary) in map.iter() {
-                    let program_to_run = match ocl::core::create_program_with_binary(&context, &[device_ids[0]], &[&program_binary]) {
+                    let program_to_run = match ocl::core::create_program_with_binary(&context, &[device_id], &[&program_binary]) {
                         Ok(binary) => binary,
                         Err(e) => panic!("Unable to create program from given binary: {:?}", e),
                     };
-                    ocl::core::build_program(&program_to_run, Some(&[device_ids[0]]), &CString::new(format!("{} -DNUM_THREADS={} -DVMM_STACK_SIZE_BYTES={} -DVMM_HEAP_SIZE_BYTES={}", compile_flags, self.num_vms, stack_size, heap_size)).unwrap(), None, None).unwrap();
+                    ocl::core::build_program(&program_to_run, Some(&[device_id]), &CString::new(format!("{} -DNUM_THREADS={} -DVMM_STACK_SIZE_BYTES={} -DVMM_HEAP_SIZE_BYTES={}", compile_flags, self.num_vms, stack_size, heap_size)).unwrap(), None, None).unwrap();
                     let knames = ocl::core::get_program_info(&program_to_run, ocl::core::ProgramInfo::KernelNames);
                     println!("Loaded kernels: {}", knames.unwrap());
                     pb.set_position(count);

@@ -30,6 +30,7 @@ use clap::{Arg, App, value_t};
 use opencl_runner::InputProgram;
 use opencl_runner::SeralizedProgram;
 use opencl_runner::PartitionedSeralizedProgram;
+use ocl::core::ContextProperties;
 
 use batch_submit::BatchSubmitServer;
 use wasmtime_runner::WasmtimeRunner;
@@ -495,9 +496,27 @@ fn main() {
         };
         let fname = &file_path.as_str();
         //let mut spawned_threads = Vec::new();
+
+        // Create a single context for all vmgroups
+        let platform_id = ocl::core::default_platform().unwrap();
+        let device_type = if is_gpu {
+            Some(ocl::core::DEVICE_TYPE_GPU)
+        } else {
+            Some(ocl::core::DEVICE_TYPE_CPU)
+        };
+
+        let device_ids = ocl::core::get_device_ids(&platform_id, device_type, None).unwrap();
+        let device_id = device_ids[0];
+        println!("{:?}", platform_id);
+        println!("{:?}", device_ids);
+        println!("{:?}", device_id);
+        // set up the device context
+        let context_properties = ContextProperties::new().platform(platform_id);
+        let context = ocl::core::create_context(Some(&context_properties), &[device_id], None, None).unwrap();        
+
         (0..num_vm_groups).collect::<Vec<u32>>().par_iter().map(|_idx| {
             let runner = opencl_runner::OpenCLRunner::new(num_vms, interleaved, is_gpu, entry_point, file.clone());
-            runner.run(fname,
+            runner.run(context.clone(), device_id, fname,
                        stack_size,
                        heap_size, 
                        call_stack_size, 
