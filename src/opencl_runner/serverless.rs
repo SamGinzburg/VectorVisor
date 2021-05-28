@@ -86,7 +86,7 @@ impl Serverless {
             count += 1;
         }
 
-        (*vm_ctx.vm_sender).lock().unwrap().send((resp_buf.to_vec(), resp_buf_len, on_device_time, queue_submit_time, queue_submit_count, count)).unwrap();
+        (*vm_ctx.vm_sender).lock().unwrap().send((resp_buf, resp_buf_len, on_device_time, queue_submit_time, queue_submit_count, count)).unwrap();
 
         sender.send({
             HyperCallResult::new(0, hypercall.vm_id, WasiSyscalls::ServerlessResponse)
