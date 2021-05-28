@@ -263,7 +263,7 @@ fn main() {
     let serverless = value_t!(matches.value_of("serverless"), bool).unwrap_or_else(|e| e.exit());
     let hcall_size = value_t!(matches.value_of("hcallsize"), usize).unwrap_or_else(|e| e.exit());
     let batch_submit_ip = value_t!(matches.value_of("ip"), String).unwrap_or_else(|e| e.exit());
-    let batch_submit_port = value_t!(matches.value_of("port"), String).unwrap_or_else(|e| e.exit());
+    let batch_submit_port = value_t!(matches.value_of("port"), u32).unwrap_or_else(|e| e.exit());
 
     dbg!(compile_args.clone());
 
@@ -321,17 +321,7 @@ fn main() {
 
     // start an HTTP endpoint for submitting batch jobs/
     // pass in the channels we use to send requests back and forth
-    let (server_sender, vm_recv): (Sender<(Vec<u8>, usize)>, Receiver<(Vec<u8>, usize)>) = bounded(num_vms.try_into().unwrap());
-    let (vm_sender, server_recv): (Sender<(Vec<u8>, usize, u64, u64, u64, u64)>, Receiver<(Vec<u8>, usize, u64, u64, u64, u64)>) = bounded(num_vms.try_into().unwrap());
 
-    let vm_sender_mutex = Arc::new(Mutex::new(vm_sender));
-    let vm_recv_mutex = Arc::new(Mutex::new(vm_recv));
-
-    let join_handle = if serverless {
-        Some(BatchSubmitServer::start_server(hcall_size, server_sender, server_recv, num_vms, batch_submit_ip, batch_submit_port))
-    } else {
-        None
-    };
 
     if !wasmtime {
         let extension = match Path::new(&file_path).extension() {
@@ -550,8 +540,22 @@ fn main() {
         let context_properties = ContextProperties::new().platform(platform_id);
         let context = ocl::core::create_context(Some(&context_properties), &[device_id], None, None).unwrap();        
 
-        (0..num_vm_groups).collect::<Vec<u32>>().par_iter().map(|_idx| {
+        (0..num_vm_groups).collect::<Vec<u32>>().par_iter().map(|idx| {
             let runner = opencl_runner::OpenCLRunner::new(num_vms, interleaved, is_gpu, entry_point, file.clone());
+
+            // Create a unique pair of sender/receivers per VM-group
+            let (server_sender, vm_recv): (Sender<(Vec<u8>, usize)>, Receiver<(Vec<u8>, usize)>) = bounded(num_vms.try_into().unwrap());
+            let (vm_sender, server_recv): (Sender<(Vec<u8>, usize, u64, u64, u64, u64)>, Receiver<(Vec<u8>, usize, u64, u64, u64, u64)>) = bounded(num_vms.try_into().unwrap());
+
+            let vm_sender_mutex = Arc::new(Mutex::new(vm_sender));
+            let vm_recv_mutex = Arc::new(Mutex::new(vm_recv));
+
+            // we don't need to join the server handle, this will be active as long as the runtime is
+            if serverless {
+                println!("Starting server on: {}:{}/batch_submit", batch_submit_ip.clone(), (batch_submit_port+idx).to_string());
+                BatchSubmitServer::start_server(hcall_size, server_sender, server_recv, num_vms, batch_submit_ip.clone(), (batch_submit_port+idx).to_string());
+            }
+
             runner.run(context.clone(), device_id, fname,
                        hcall_size,
                        stack_size,
@@ -573,6 +577,19 @@ fn main() {
         // If we are running the wasmtime runtime
         let num_threads = num_cpus::get();
         let thread_pool = rayon::ThreadPoolBuilder::new().num_threads(num_threads.try_into().unwrap()).build().unwrap();
+
+        let (server_sender, vm_recv): (Sender<(Vec<u8>, usize)>, Receiver<(Vec<u8>, usize)>) = bounded(num_vms.try_into().unwrap());
+        let (vm_sender, server_recv): (Sender<(Vec<u8>, usize, u64, u64, u64, u64)>, Receiver<(Vec<u8>, usize, u64, u64, u64, u64)>) = bounded(num_vms.try_into().unwrap());
+    
+        let vm_sender_mutex = Arc::new(Mutex::new(vm_sender));
+        let vm_recv_mutex = Arc::new(Mutex::new(vm_recv));
+    
+        let server_handle = if serverless {
+            println!("Starting server on: {}:{}/batch_submit", batch_submit_ip.clone(), batch_submit_port.to_string());
+            Some(BatchSubmitServer::start_server(hcall_size, server_sender, server_recv, num_vms, batch_submit_ip, batch_submit_port.to_string()))
+        } else {
+            None
+        };
 
         for idx in 0..num_threads {
             println!("Starting Wasmtime VM: {:?}", idx);
@@ -608,10 +625,7 @@ fn main() {
                 }
             });
         }
-
-        if serverless {
-            join_handle.unwrap().join().unwrap();
-        }
+        server_handle.unwrap().join().unwrap();
     }
 }
  
