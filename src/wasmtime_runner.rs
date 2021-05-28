@@ -1,15 +1,12 @@
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::sync::Condvar;
 use std::error::Error;
 use std::convert::TryInto;
 
 use crossbeam::channel::Sender;
 use crossbeam::channel::Receiver;
-use crossbeam::channel::bounded;
 
 use wasmtime::*;
-use wasi_common::WasiCtx;
 use wasi_cap_std_sync::WasiCtxBuilder;
 use wasmtime_wasi::Wasi;
 
@@ -20,9 +17,9 @@ pub struct WasmtimeRunner {}
 impl WasmtimeRunner {
     // this is run once for each thread/VM
     pub fn run(program: String,
+               hcall_buf_size: usize,
                vm_sender: Arc<Mutex<Sender<(Vec<u8>, usize, u64, u64, u64, u64)>>>,
-               vm_recv: Arc<Mutex<Receiver<(Vec<u8>, usize)>>>,
-               vm_recv_condvar: Arc<Condvar>) -> Result<(), Box<dyn Error>> {
+               vm_recv: Arc<Mutex<Receiver<(Vec<u8>, usize)>>>) -> Result<(), Box<dyn Error>> {
 
         let curr_time = Arc::new(Mutex::<i64>::new(0));
 
@@ -32,7 +29,7 @@ impl WasmtimeRunner {
         let curr_time_response = curr_time.clone();
 
         // serverless_invoke
-        let serverless_invoke = Func::wrap(&store, move |caller: Caller<'_>, buf_ptr: u32, buf_len: u32| -> u32 {
+        let serverless_invoke = Func::wrap(&store, move |caller: Caller<'_>, buf_ptr: u32, _buf_len: u32| -> u32 {
             let mem = match caller.get_export("memory") {
                 Some(Extern::Memory(mem)) => Ok(mem),
                 _ => Err(Trap::new("failed to find host memory")),
@@ -47,12 +44,12 @@ impl WasmtimeRunner {
                     unsafe {
                         let arr = memory.data_unchecked_mut();
                         let start = buf_ptr as usize;
-                        let end = ((buf_ptr as usize)+msg_len);
+                        let end = (buf_ptr as usize)+msg_len;
                         arr[start..end].copy_from_slice(&msg[0..msg_len]);
                     }
                 },
                 Err(e) => {
-                    panic!("Unable to find memory for WASM VM");
+                    panic!("Unable to find memory for WASM VM: {}", e);
                 }
             }
 
@@ -78,7 +75,7 @@ impl WasmtimeRunner {
                     let chan = vm_sender.clone();
                     unsafe {
                         let arr = memory.data_unchecked_mut();
-                        let mut resp_buf = vec![0u8; 16384];
+                        let mut resp_buf = vec![0u8; hcall_buf_size];
                         let resp_buf_len: usize = buf_len.try_into().unwrap();
                         let main_mem_start = buf_ptr.try_into().unwrap();
 
@@ -92,7 +89,7 @@ impl WasmtimeRunner {
                     }
                 },
                 Err(e) => {
-                    panic!("Unable to find memory for WASM VM");
+                    panic!("Unable to find memory for WASM VM: {}", e);
                 }
             }
         });

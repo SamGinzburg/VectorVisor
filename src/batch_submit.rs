@@ -1,19 +1,16 @@
 use std::thread;
 use std::thread::JoinHandle;
-use std::sync::Condvar;
-use std::sync::Arc;
 use std::str::from_utf8;
 use std::collections::HashMap;
 use std::convert::TryInto;
 
 use crossbeam::channel::Sender;
 use crossbeam::channel::Receiver;
-use crossbeam::channel::bounded;
-
-use rouille::input::json;
 
 use serde::Deserialize;
 use serde::Serialize;
+use rayon::prelude::*;
+
 
 pub struct BatchSubmitServer {}
 
@@ -43,25 +40,24 @@ struct BatchResponse {
 }
 
 impl BatchSubmitServer {
-    pub fn start_server(sender: Sender<(Vec<u8>, usize)>, receiver: Receiver<(Vec<u8>, usize, u64, u64, u64, u64)>, num_vms: u32, server_ip: String, server_port: String) -> JoinHandle<()> {
+    pub fn start_server(hcall_buf_size: usize, sender: Sender<(Vec<u8>, usize)>, receiver: Receiver<(Vec<u8>, usize, u64, u64, u64, u64)>, num_vms: u32, server_ip: String, server_port: String) -> JoinHandle<()> {
         let thandle = thread::spawn(move || {
             rouille::start_server(format!("{}:{}", server_ip, server_port), move |request| {
                 router!(request,
                     (GET) (/batch_submit/) => {
                         let json: BatchInput = try_or_400!(rouille::input::json_input(request));
 
-                        for req in &json.requests {
+                        (&json.requests).into_par_iter().for_each(|req| {
                             // each request has an ID and a string (containing the json body)
-                            let mut test = [0u8; 16384];
+                            let mut test = vec![0u8; hcall_buf_size];
 
                             // copy the string to the buffer
                             let inc_req_as_bytes = req.req.as_bytes();
                             test[0..inc_req_as_bytes.len()].clone_from_slice(inc_req_as_bytes);
                             sender.send((test.to_vec(), inc_req_as_bytes.len())).unwrap();
-                        }
+                        });
 
                         let mut responses: HashMap<u32, BatchReply> = HashMap::new();
-
                         // wait for the requests to complete
                         for _idx in 0..json.requests.len() {
                             // each request has an ID and a string (containing the json body)

@@ -171,6 +171,7 @@ impl OpenCLRunner {
                context: ocl::core::Context,
                device_id: ocl::core::DeviceId,
                input_filename: &str,
+               hcall_size: usize,
                stack_size: u32,
                heap_size: u32,
                call_stack_size: u32,
@@ -210,15 +211,15 @@ impl OpenCLRunner {
             // These values really do last for the entire program, so it is fine to make them static
             let final_runner = Box::leak(Box::new(new_runner));
             let leaked_command_queue: &'static CommandQueue = Box::leak(Box::new(command_queue));
-            let hypercall_buffer_read_buffer: &'static mut [u8] = Box::leak(vec![0u8; 16 * 1024 * num_vms as usize].into_boxed_slice());
+            let hypercall_buffer_read_buffer: &'static mut [u8] = Box::leak(vec![0u8; hcall_size * num_vms as usize].into_boxed_slice());
 
             // decide which vector runner to use based off the compiled program enum...
             let status = match program {
                 ProgramType::Standard(program) => {
-                    final_runner.run_vector_vms(stack_frames_size, program, &leaked_command_queue, hypercall_buffer_read_buffer, 1024*16, context, print_return, vm_sender, vm_recv)
+                    final_runner.run_vector_vms(stack_frames_size, program, &leaked_command_queue, hypercall_buffer_read_buffer, hcall_size.try_into().unwrap(), context, print_return, vm_sender, vm_recv)
                 },
                 ProgramType::Partitioned(program_map, kernel_partition_mapping) => {
-                    final_runner.run_partitioned_vector_vms(stack_frames_size, program_map, kernel_partition_mapping, &leaked_command_queue, hypercall_buffer_read_buffer, 1024*16, context, print_return, vm_sender, vm_recv)
+                    final_runner.run_partitioned_vector_vms(stack_frames_size, program_map, kernel_partition_mapping, &leaked_command_queue, hypercall_buffer_read_buffer, hcall_size.try_into().unwrap(), context, print_return, vm_sender, vm_recv)
                 }
             };
 
@@ -787,7 +788,6 @@ impl OpenCLRunner {
             hypercall_sender.push(sender.clone());
             let vm_sender_clone1 = vm_sender.clone();
             let vm_recv_clone1 = vm_recv.clone();
-
             thread_pool.spawn(move || {
                 let receiver = recv.clone();
                 // create the WASI contexts for this thread
@@ -796,7 +796,7 @@ impl OpenCLRunner {
                 for vm in 0..(number_vms/num_threads) {
                     let vm_sender_copy = vm_sender_clone1.clone();
                     let vm_recv_copy = vm_recv_clone1.clone();
-                    wasi_ctxs.push(VectorizedVM::new(vm, number_vms, vm_sender_copy, vm_recv_copy));
+                    wasi_ctxs.push(VectorizedVM::new(vm, hypercall_buffer_size, number_vms, vm_sender_copy, vm_recv_copy));
                 }
 
                 loop {
@@ -1189,6 +1189,7 @@ impl OpenCLRunner {
 
         let number_vms = self.num_vms.clone();
         let (result_sender, result_receiver): (Sender<HyperCallResult>, Receiver<HyperCallResult>) = bounded(0);
+
         for _idx in 0..num_threads {
             let (sender, recv): (Sender<HyperCall>, Receiver<HyperCall>) = unbounded();
             let sender_copy = result_sender.clone();
@@ -1205,7 +1206,7 @@ impl OpenCLRunner {
                 for vm in 0..(number_vms/num_threads) {
                     let vm_sender_copy = vm_sender_clone1.clone();
                     let vm_recv_copy = vm_recv_clone1.clone();
-                    wasi_ctxs.push(VectorizedVM::new(vm, number_vms, vm_sender_copy, vm_recv_copy));
+                    wasi_ctxs.push(VectorizedVM::new(vm, hypercall_buffer_size, number_vms, vm_sender_copy, vm_recv_copy));
                 }
 
                 loop {

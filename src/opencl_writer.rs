@@ -1119,6 +1119,7 @@ impl<'a> OpenCLCWriter<'_> {
                                                     0,
                                                     0,
                                                     0,
+                                                    0,
                                                     false,
                                                     debug));
                 } else {
@@ -1459,6 +1460,7 @@ impl<'a> OpenCLCWriter<'_> {
 
     fn generate_function_prelude(&self,
                                  fn_name: &str,
+                                 hcall_size: u32,
                                  interleave: u32,
                                  stack_size_bytes: u32,
                                  heap_size_bytes: u32,
@@ -1583,7 +1585,7 @@ impl<'a> OpenCLCWriter<'_> {
                 format!("global uint  *heap_u32     = (global uint *)((global char*)heap_u32_global+(get_global_id(0) * {}));", heap_size_bytes),
                 "global ulong *heap_u64     = (global ulong *)heap_u32;",
                 // the hypercall_buffer is hardcoded to always be 16KiB - we can change this later if needed possibly
-                "global uint  *hypercall_buffer = (global uint *)((global char*)hypercall_buffer_global+(get_global_id(0) * 1024*16));",
+                format!("global uint  *hypercall_buffer = (global uint *)((global char*)hypercall_buffer_global+(get_global_id(0) * {}));", hcall_size),
                 format!("global uint  *globals_buffer = (global uint*)((global char*)globals_buffer_global+(get_global_id(0) * {}));", globals_buffer_size * 4),
                 format!("global uint  *stack_frames = (global uint*)((global char*)stack_frames_global+(get_global_id(0) * {}));", stack_frames_size_bytes),
                 // only an array of N elements, where N=warp size
@@ -1784,6 +1786,7 @@ void {}(global uint   *stack_u32,
     }
 
     fn emit_wasm_control_fn(&self,
+                            hcall_buf_size: u32,
                             interleave: u32,
                             stack_size_bytes: u32,
                             heap_size_bytes: u32,
@@ -1798,6 +1801,7 @@ void {}(global uint   *stack_u32,
         let mut ret_str = String::from("");
         write!(ret_str, "{}",
                 self.generate_function_prelude("wasm_entry",
+                                               hcall_buf_size,
                                                interleave,
                                                stack_size_bytes,
                                                heap_size_bytes,
@@ -1874,6 +1878,7 @@ void {}(global uint   *stack_u32,
     }
 
     pub fn write_opencl_file(&self,
+                             hcall_buf_size: u32,
                              interleave: u32,
                              stack_size_bytes: u32,
                              heap_size_bytes: u32,
@@ -2086,7 +2091,8 @@ r#"
                 kernel_partition_mappings.insert(*fname_idx, partition_idx);
             }
 
-            let control_function = self.emit_wasm_control_fn(interleave,
+            let control_function = self.emit_wasm_control_fn(hcall_buf_size,
+                                                            interleave,
                                                             stack_size_bytes,
                                                             heap_size_bytes,
                                                             call_stack_size_bytes,
@@ -2107,6 +2113,7 @@ r#"
         // generate control function prelude
         write!(output, "{}",
                 self.generate_function_prelude("wasm_entry",
+                                               hcall_buf_size,
                                                interleave,
                                                stack_size_bytes,
                                                heap_size_bytes,

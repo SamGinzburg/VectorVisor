@@ -1,7 +1,7 @@
 /*
  * This file contains the WASI-helper functions, used to marshall and unmarshall data for performing hypercalls
  * 
- * We pre-allocate a 16KiB buffer per-VM, which we use for sending data back and forth to avoid
+ * We pre-allocate a hcall buffer per-VM, which we use for sending data back and forth to avoid
  * excess reads in the VMM.
  * 
  * The buffer lets us coalesce reads/writes together,

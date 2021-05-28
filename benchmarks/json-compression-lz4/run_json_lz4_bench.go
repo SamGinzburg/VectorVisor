@@ -97,7 +97,7 @@ func main() {
 
 	reqs := make([]Message, batch_size)
 	for i := 0; i < batch_size; i++ {
-		p := payload{Text: RandString(8192)}
+		p := payload{Text: RandString(1024 * 32)}
 		msg, _ := json.Marshal(p)
 		m := Message{Req_id: 0, Req: string(msg)}
 		reqs[i] = m

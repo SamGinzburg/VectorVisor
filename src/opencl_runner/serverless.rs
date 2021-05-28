@@ -53,10 +53,10 @@ impl Serverless {
     }
 
 
-    pub fn hypercall_serverless_response(ctx: &WasiCtx, vm_ctx: &VectorizedVM, hypercall: &mut HyperCall, sender: &Sender<HyperCallResult>) -> () {
+    pub fn hypercall_serverless_response(_ctx: &WasiCtx, vm_ctx: &VectorizedVM, hypercall: &mut HyperCall, sender: &Sender<HyperCallResult>) -> () {
         let hcall_buf: &mut [u8] = &mut hypercall.hypercall_buffer.lock().unwrap();
 
-        let mut resp_buf = [0u8; 16384];
+        let mut resp_buf = vec![0u8; vm_ctx.hcall_buf_size.try_into().unwrap()];
         // the first 4 bytes are the length as a u32, the remainder is the buffer containing the json
         let msg_len = if hypercall.is_interleaved_mem {
             Interleave::read_u32(hcall_buf, 0, hypercall.num_total_vms, hypercall.vm_id)

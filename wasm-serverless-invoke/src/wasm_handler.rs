@@ -28,10 +28,10 @@ impl WasmHandler {
         }
     }
 
-    pub fn run(self) -> () {
+    pub fn run(self, hcall_buf_size: usize) -> () {
         // main run loop of the runtime
         // First, allocate a buffer to store json input
-        let mut buffer = [0u8; 1024 * 16];
+        let mut buffer = vec![0u8; hcall_buf_size];
         let mut func_ret_val: Value;
         // if this is the first invocation, then we skip sending the buffer back
         loop {

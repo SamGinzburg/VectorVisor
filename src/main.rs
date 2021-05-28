@@ -261,7 +261,7 @@ fn main() {
     let partition = value_t!(matches.value_of("partition"), bool).unwrap_or_else(|e| e.exit());
     let wasmtime = value_t!(matches.value_of("wasmtime"), bool).unwrap_or_else(|e| e.exit());
     let serverless = value_t!(matches.value_of("serverless"), bool).unwrap_or_else(|e| e.exit());
-    let hcall_size = value_t!(matches.value_of("hcallsize"), u32).unwrap_or_else(|e| e.exit());
+    let hcall_size = value_t!(matches.value_of("hcallsize"), usize).unwrap_or_else(|e| e.exit());
     let batch_submit_ip = value_t!(matches.value_of("ip"), String).unwrap_or_else(|e| e.exit());
     let batch_submit_port = value_t!(matches.value_of("port"), String).unwrap_or_else(|e| e.exit());
 
@@ -287,17 +287,22 @@ fn main() {
         let mut ast_debug = opencl_writer::OpenCLCWriter::new(&pb_debug);
         let result = ast.parse_file().unwrap();
         let result_debug = ast_debug.parse_file().unwrap();
-        let (compiled_kernel, fastcall_header, entry_point, globals_buffer_size, num_compiled_funcs, _, _, _) = ast.write_opencl_file(interleaved as u32,
-                                                                                                            stack_size,
-                                                                                                            heap_size, 
-                                                                                                            call_stack_size, 
-                                                                                                            stack_frames_size, 
-                                                                                                            sfp_size, 
-                                                                                                            predictor_size,
-                                                                                                            debug_call_print,
-                                                                                                            force_inline,
-                                                                                                            is_gpu,
-                                                                                                            false);
+        let (compiled_kernel,
+            fastcall_header,
+            entry_point,
+            globals_buffer_size,
+            num_compiled_funcs, _, _, _) = ast.write_opencl_file(hcall_size.try_into().unwrap(),
+                                                                    interleaved as u32,
+                                                                    stack_size,
+                                                                    heap_size, 
+                                                                    call_stack_size, 
+                                                                    stack_frames_size, 
+                                                                    sfp_size, 
+                                                                    predictor_size,
+                                                                    debug_call_print,
+                                                                    force_inline,
+                                                                    is_gpu,
+                                                                    false);
 
         println!("The following info is needed to later run compiled pre-compiled/externally compiled binaries");
         println!("Compiled: {} functions", num_compiled_funcs);
@@ -319,12 +324,11 @@ fn main() {
     let (server_sender, vm_recv): (Sender<(Vec<u8>, usize)>, Receiver<(Vec<u8>, usize)>) = bounded(num_vms.try_into().unwrap());
     let (vm_sender, server_recv): (Sender<(Vec<u8>, usize, u64, u64, u64, u64)>, Receiver<(Vec<u8>, usize, u64, u64, u64, u64)>) = bounded(num_vms.try_into().unwrap());
 
-    let vm_recv_condvar = Arc::new(Condvar::new());
     let vm_sender_mutex = Arc::new(Mutex::new(vm_sender));
     let vm_recv_mutex = Arc::new(Mutex::new(vm_recv));
 
     let join_handle = if serverless {
-        Some(BatchSubmitServer::start_server(server_sender, server_recv, num_vms, batch_submit_ip, batch_submit_port))
+        Some(BatchSubmitServer::start_server(hcall_size, server_sender, server_recv, num_vms, batch_submit_ip, batch_submit_port))
     } else {
         None
     };
@@ -349,17 +353,25 @@ fn main() {
                 let result_debug = ast_debug.parse_file().unwrap();
             
                 // apply our compilation pass to the source WASM 
-                let (compiled_kernel, fastcall_header, entry_point, globals_buffer_size, num_compiled_funcs, kernel_hashmap, kernel_compile_stats, kernel_partition_mappings) = ast.write_opencl_file(interleaved as u32,
-                                                                                                                    stack_size,
-                                                                                                                    heap_size, 
-                                                                                                                    call_stack_size, 
-                                                                                                                    stack_frames_size, 
-                                                                                                                    sfp_size, 
-                                                                                                                    predictor_size,
-                                                                                                                    debug_call_print,
-                                                                                                                    force_inline,
-                                                                                                                    is_gpu,
-                                                                                                                    false);
+                let (compiled_kernel,
+                    fastcall_header,
+                    entry_point,
+                    globals_buffer_size,
+                    num_compiled_funcs,
+                    kernel_hashmap,
+                    kernel_compile_stats,
+                    kernel_partition_mappings) = ast.write_opencl_file(hcall_size.try_into().unwrap(),
+                                                                        interleaved as u32,
+                                                                        stack_size,
+                                                                        heap_size, 
+                                                                        call_stack_size, 
+                                                                        stack_frames_size, 
+                                                                        sfp_size, 
+                                                                        predictor_size,
+                                                                        debug_call_print,
+                                                                        force_inline,
+                                                                        is_gpu,
+                                                                        false);
                 println!("Compiled: {} functions", num_compiled_funcs);
                 println!("Entry point: {}", entry_point);
                 println!("Globals buffer: {}", globals_buffer_size);
@@ -377,17 +389,25 @@ fn main() {
                 let result_debug = ast_debug.parse_file().unwrap();
             
                 // apply our compilation pass to the source WASM 
-                let (compiled_kernel, fastcall_header, entry_point, globals_buffer_size, num_compiled_funcs, kernel_hashmap, kernel_compile_stats, kernel_partition_mappings) = ast.write_opencl_file(interleaved as u32,
-                                                                                                                    stack_size,
-                                                                                                                    heap_size, 
-                                                                                                                    call_stack_size, 
-                                                                                                                    stack_frames_size, 
-                                                                                                                    sfp_size, 
-                                                                                                                    predictor_size,
-                                                                                                                    debug_call_print,
-                                                                                                                    force_inline,
-                                                                                                                    is_gpu,
-                                                                                                                    false);
+                let (compiled_kernel,
+                    fastcall_header,
+                    entry_point,
+                    globals_buffer_size,
+                    num_compiled_funcs,
+                    kernel_hashmap,
+                    kernel_compile_stats,
+                    kernel_partition_mappings) = ast.write_opencl_file(hcall_size.try_into().unwrap(),
+                                                                        interleaved as u32,
+                                                                        stack_size,
+                                                                        heap_size, 
+                                                                        call_stack_size, 
+                                                                        stack_frames_size, 
+                                                                        sfp_size, 
+                                                                        predictor_size,
+                                                                        debug_call_print,
+                                                                        force_inline,
+                                                                        is_gpu,
+                                                                        false);
                 println!("Compiled: {} functions", num_compiled_funcs);
                 println!("Entry point: {}", entry_point);
                 println!("Globals buffer: {}", globals_buffer_size);
@@ -408,17 +428,25 @@ fn main() {
                 let result_debug = ast_debug.parse_file().unwrap();
             
                 // apply our compilation pass to the source WASM 
-                let (compiled_kernel, fastcall_header, entry_point, globals_buffer_size, num_compiled_funcs, kernel_hashmap, kernel_compile_stats, kernel_partition_mappings) = ast.write_opencl_file(interleaved as u32,
-                                                                                                                    stack_size,
-                                                                                                                    heap_size, 
-                                                                                                                    call_stack_size, 
-                                                                                                                    stack_frames_size, 
-                                                                                                                    sfp_size, 
-                                                                                                                    predictor_size,
-                                                                                                                    debug_call_print,
-                                                                                                                    force_inline,
-                                                                                                                    is_gpu,
-                                                                                                                    false);
+                let (compiled_kernel,
+                    fastcall_header,
+                    entry_point,
+                    globals_buffer_size,
+                    num_compiled_funcs,
+                    kernel_hashmap,
+                    kernel_compile_stats,
+                    kernel_partition_mappings) = ast.write_opencl_file(hcall_size.try_into().unwrap(),
+                                                                        interleaved as u32,
+                                                                        stack_size,
+                                                                        heap_size, 
+                                                                        call_stack_size, 
+                                                                        stack_frames_size, 
+                                                                        sfp_size, 
+                                                                        predictor_size,
+                                                                        debug_call_print,
+                                                                        force_inline,
+                                                                        is_gpu,
+                                                                        false);
                 println!("Compiled: {} functions", num_compiled_funcs);
                 println!("Entry point: {}", entry_point);
                 println!("Globals buffer: {}", globals_buffer_size);
@@ -436,17 +464,25 @@ fn main() {
                 let result_debug = ast_debug.parse_file().unwrap();
 
                 // apply our compilation pass to the source WASM 
-                let (compiled_kernel, fastcall_header, entry_point, globals_buffer_size, num_compiled_funcs, kernel_hashmap, kernel_compile_stats, kernel_partition_mappings) = ast.write_opencl_file(interleaved as u32,
-                                                                                                                    stack_size,
-                                                                                                                    heap_size, 
-                                                                                                                    call_stack_size, 
-                                                                                                                    stack_frames_size, 
-                                                                                                                    sfp_size, 
-                                                                                                                    predictor_size,
-                                                                                                                    debug_call_print,
-                                                                                                                    force_inline,
-                                                                                                                    is_gpu,
-                                                                                                                    false);
+                let (compiled_kernel,
+                    fastcall_header,
+                    entry_point,
+                    globals_buffer_size,
+                    num_compiled_funcs,
+                    kernel_hashmap,
+                    kernel_compile_stats,
+                    kernel_partition_mappings) = ast.write_opencl_file(hcall_size.try_into().unwrap(),
+                                                                        interleaved as u32,
+                                                                        stack_size,
+                                                                        heap_size, 
+                                                                        call_stack_size, 
+                                                                        stack_frames_size, 
+                                                                        sfp_size, 
+                                                                        predictor_size,
+                                                                        debug_call_print,
+                                                                        force_inline,
+                                                                        is_gpu,
+                                                                        false);
                 println!("Compiled: {} functions", num_compiled_funcs);
                 println!("Entry point: {}", entry_point);
                 println!("Globals buffer: {}", globals_buffer_size);
@@ -517,6 +553,7 @@ fn main() {
         (0..num_vm_groups).collect::<Vec<u32>>().par_iter().map(|_idx| {
             let runner = opencl_runner::OpenCLRunner::new(num_vms, interleaved, is_gpu, entry_point, file.clone());
             runner.run(context.clone(), device_id, fname,
+                       hcall_size,
                        stack_size,
                        heap_size, 
                        call_stack_size, 
@@ -559,10 +596,9 @@ fn main() {
 
             let vm_sender_mutex_clone = vm_sender_mutex.clone();
             let vm_recv_mutex_clone = vm_recv_mutex.clone();
-            let vm_recv_condvar_clone = vm_recv_condvar.clone();
             thread_pool.spawn(move || {
                 // run the WASM VM...
-                match WasmtimeRunner::run(filedata.clone(), vm_sender_mutex_clone, vm_recv_mutex_clone, vm_recv_condvar_clone) {
+                match WasmtimeRunner::run(filedata.clone(), hcall_size, vm_sender_mutex_clone, vm_recv_mutex_clone) {
                     Ok(()) => {
                         println!("Wasmtime VM: {:?} finished running!", idx);
                     },

@@ -24,7 +24,6 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::collections::HashSet;
 
-use std::convert::TryInto;
 use std::fs::File;
 use std::path::Path;
 
@@ -138,6 +137,7 @@ pub struct VectorizedVM {
     pub enviroment_size: Option<u32>,
     pub environment_str_size: Option<u32>,
     vm_id: u32,
+    pub hcall_buf_size: u32,
     pub timestamp_counter: Arc<u64>,
     pub queue_submit_counter: Arc<u64>,
     pub queue_submit_qty: Arc<u64>,
@@ -147,7 +147,7 @@ pub struct VectorizedVM {
 }
 
 impl VectorizedVM {
-    pub fn new(vm_id: u32, num_total_vms: u32, vm_sender: Arc<Mutex<Sender<(Vec<u8>, usize, u64, u64, u64, u64)>>>, vm_recv: Arc<Mutex<Receiver<(Vec<u8>, usize)>>>) -> VectorizedVM {
+    pub fn new(vm_id: u32, hcall_buf_size: u32, _num_total_vms: u32, vm_sender: Arc<Mutex<Sender<(Vec<u8>, usize, u64, u64, u64, u64)>>>, vm_recv: Arc<Mutex<Receiver<(Vec<u8>, usize)>>>) -> VectorizedVM {
         // default context with no args yet - we can inherit arguments from the CLI if we want
         // or we can pass them in some other config file
 
@@ -180,6 +180,7 @@ impl VectorizedVM {
             enviroment_size: None,
             environment_str_size: None,
             vm_id: vm_id,
+            hcall_buf_size: hcall_buf_size,
             timestamp_counter: Arc::new(0),
             queue_submit_counter: Arc::new(0),
             queue_submit_qty: Arc::new(0),
