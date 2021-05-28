@@ -48,7 +48,7 @@ impl BatchSubmitServer {
                         let json: BatchInput = try_or_400!(rouille::input::json_input(request));
 
                         (&json.requests).into_par_iter().for_each(|req| {
-                            sender.send((req.req.clone().into_bytes(), inc_req_as_bytes.len())).unwrap();
+                            sender.send((req.req.clone().into_bytes(), req.req.len())).unwrap();
                         });
 
                         let mut responses: HashMap<u32, BatchReply> = HashMap::new();
