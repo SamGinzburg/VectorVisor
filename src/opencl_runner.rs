@@ -146,6 +146,7 @@ pub enum ProgramType {
     Partitioned(HashMap<u32, ocl::core::Program>, HashMap<u32, u32>),
 }
 
+#[derive(Clone)]
 pub struct OpenCLRunner {
     num_vms: u32,
     input_program: InputProgram,
@@ -169,6 +170,7 @@ impl OpenCLRunner {
 
     pub fn run(self,
                context: ocl::core::Context,
+               program: ProgramType,
                device_id: ocl::core::DeviceId,
                input_filename: &str,
                hcall_size: usize,
@@ -186,7 +188,7 @@ impl OpenCLRunner {
                link_flags: String,
                print_return: bool) -> JoinHandle<()> {
         let num_vms = self.num_vms.clone();
-        let (program, context, device_id) = self.setup_kernel(context, device_id, input_filename, stack_size, heap_size, num_compiled_funcs, globals_buffer_size, compile_flags, link_flags);
+        //let (program, context, device_id) = self.setup_kernel(context, device_id, input_filename, stack_size, heap_size, num_compiled_funcs, globals_buffer_size, compile_flags, link_flags);
 
         // create the buffers
         let (new_runner, context) = self.create_buffers(stack_size,
