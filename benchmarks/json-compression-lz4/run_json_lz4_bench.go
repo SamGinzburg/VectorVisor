@@ -107,7 +107,7 @@ func main() {
 	request_body, _ := json.Marshal(MessageBatch{Requests: reqs})
 
 	ch := make(chan []byte, num_vms*100000) // we prob won't exceed ~6.4M RPS ever
-	benchmark_duration := 5 * time.Second
+	benchmark_duration := 60 * time.Second
 	bench_timer := time.NewTimer(benchmark_duration)
 	for i := 0; i < num_vms; i++ {
 		go IssueRequests(os.Args[1], port+i, request_body, batch_size, num_batches_to_run, ch)
@@ -126,7 +126,7 @@ func main() {
 	duration := float64(benchmark_duration.Seconds())
 	fmt.Printf("duration: %f\n", duration)
 	// calculate the total RPS	
-	total_rps := (float64(batch_size) * float64(num_vms) * float64(batches_completed)) / duration
+	total_rps := (float64(batch_size) * float64(batches_completed)) / duration
 
 	on_device_compute_time := 0.0
 	device_queue_overhead := 0.0
