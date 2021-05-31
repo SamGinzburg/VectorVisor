@@ -10,11 +10,10 @@ import (
 	"bytes"
 	"strconv"
 	"math/rand"
-	"strings"
 )
 
 type payload struct {
-	Text string `json:"numbers"`
+	Text []int `json:"numbers"`
 }
 
 type Message struct {
@@ -34,12 +33,12 @@ type VmmResponse struct {
 	num_unique_fns_called float64
 }
 
-func RandIntSlice(n int) string {
+func RandIntSlice(n int) []int {
     b := make([]int, n)
     for i := range b {
         b[i] = rand.Intn(10000)
     }
-    return strings.Trim(strings.Join(strings.Fields(fmt.Sprint(b)), ","), "[]")
+    return b
 }
 
 func IssueRequests(ip string, port int, req_list []byte, batch_size int, num_batches_to_run int, data_ch chan<-[]byte) {
@@ -97,7 +96,7 @@ func main() {
 
 	reqs := make([]Message, batch_size)
 	for i := 0; i < batch_size; i++ {
-		p := payload{Text: RandIntSlice(1)}
+		p := payload{Text: RandIntSlice(1024 * 128)}
 		msg, _ := json.Marshal(p)
 		m := Message{Req_id: 0, Req: string(msg)}
 		reqs[i] = m
@@ -116,7 +115,6 @@ func main() {
 	fmt.Printf("Benchmark complete: %d batches completed\n", batches_completed)
 	responses := make([][]byte, batches_completed)
 
-	fmt.Printf("now waiting...\n")
 	for i := 0; i < batches_completed; i++ {
 		responses[i] = <-ch
 	}
