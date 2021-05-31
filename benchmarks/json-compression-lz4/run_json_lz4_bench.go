@@ -44,7 +44,7 @@ func RandString(n int) string {
     return string(b)
 }
 
-func IssueRequests(ip string, port int, req_list []byte, num_batches_to_run int, data_ch chan<-[]byte) {
+func IssueRequests(ip string, port int, req_list []byte, batch_size int, num_batches_to_run int, data_ch chan<-[]byte) {
 	final_request := bytes.NewReader(req_list)
 	var DefaultClient = &http.Client{}
 	addr := fmt.Sprintf("http://%s:%d/batch_submit/", ip, port)
@@ -66,7 +66,7 @@ func IssueRequests(ip string, port int, req_list []byte, num_batches_to_run int,
 		//fmt.Printf("map: %s\n", string(body))
 	}
 	secs := time.Since(start)
-	fmt.Printf("%.2f elapsed with response: %s\n", secs, addr)
+	fmt.Printf("%.2f elapsed with response: %s, with RPS: %.2f\n", secs, addr, float64(batch_size) * float64(num_batches_to_run) / float64(secs.Seconds()))
 	fmt.Printf("%.2f elapsed for reads\n", read_cnt)
   }
 
@@ -108,7 +108,7 @@ func main() {
 	ch := make(chan []byte)
 	start := time.Now()
 	for i := 0; i < num_vms; i++ {
-		go IssueRequests(os.Args[1], port+i, request_body, num_batches_to_run, ch)
+		go IssueRequests(os.Args[1], port+i, request_body, batch_size, num_batches_to_run, ch)
 	}
 
 	fmt.Printf("now waiting...\n")
