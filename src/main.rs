@@ -539,12 +539,18 @@ fn main() {
         // set up the device context
         let context_properties = ContextProperties::new().platform(platform_id);
         let context = ocl::core::create_context(Some(&context_properties), &[device_id], None, None).unwrap();        
-
-        // Compile the input program
         let runner = opencl_runner::OpenCLRunner::new(num_vms, interleaved, is_gpu, entry_point, file.clone());
-        let (program, context, device_id) = runner.setup_kernel(context, device_id, fname, stack_size, heap_size, num_compiled_funcs, globals_buffer_size, compile_args.clone(), link_args.clone());
+        let (program, _, device_id) = runner.setup_kernel(context.clone(), device_id, fname, stack_size, heap_size, num_compiled_funcs, globals_buffer_size, compile_args.clone(), link_args.clone());
 
         (0..num_vm_groups).collect::<Vec<u32>>().par_iter().map(|idx| {
+            // set up the device context
+            //let context_properties = ContextProperties::new().platform(platform_id);
+            //let context = ocl::core::create_context(Some(&context_properties), &[device_id], None, None).unwrap();        
+
+            // Compile the input program
+            //let runner = opencl_runner::OpenCLRunner::new(num_vms, interleaved, is_gpu, entry_point, file.clone());
+            //let (program, _, device_id) = runner.setup_kernel(context.clone(), device_id, fname, stack_size, heap_size, num_compiled_funcs, globals_buffer_size, compile_args.clone(), link_args.clone());
+
 
             // Create a unique pair of sender/receivers per VM-group
             let (server_sender, vm_recv): (Sender<(Vec<u8>, usize)>, Receiver<(Vec<u8>, usize)>) = bounded(num_vms.try_into().unwrap());

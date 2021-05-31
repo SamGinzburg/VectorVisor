@@ -97,7 +97,7 @@ func main() {
 
 	reqs := make([]Message, batch_size)
 	for i := 0; i < batch_size; i++ {
-		p := payload{Text: RandString(1024 * 32)}
+		p := payload{Text: RandString(1024 * 128)}
 		msg, _ := json.Marshal(p)
 		m := Message{Req_id: 0, Req: string(msg)}
 		reqs[i] = m
@@ -117,6 +117,7 @@ func main() {
 	}
 
 	fmt.Printf("%.2f ns elapsed\n", time.Since(start))
+	duration := float64(time.Since(start).Seconds())
 	// calculate the total RPS	
 	total_rps := float64(batch_size) * float64(num_vms) * float64(num_batches_to_run) / float64(time.Since(start).Seconds())
 
@@ -156,4 +157,7 @@ func main() {
 	fmt.Printf("Average device queue overhead (ns): %f\n", device_queue_overhead)
 	fmt.Printf("Average queue submit count: %f\n", queue_submit_count)
 	fmt.Printf("Average num of unique fns called: %f\n", num_unique_fns_called)
+
+
+	fmt.Printf("Parallel fraction of function (only applicable to GPU funcs): %f\n", (((on_device_compute_time+device_queue_overhead)/1000000000)*float64(num_batches_to_run)) / duration)
 }
