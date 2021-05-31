@@ -12,6 +12,7 @@ wasm-parser.d
 wasm-serverless-invoke/target/*
 benchmarks/json-compression/target/*
 benchmarks/pbkdf2/target/*
+benchmarks/*/target/*
 
 *.rlib
 *.rmeta
