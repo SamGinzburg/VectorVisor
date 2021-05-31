@@ -40,7 +40,6 @@ func RandIntSlice(n int) string {
         b[i] = rand.Intn(10000)
     }
     return strings.Trim(strings.Join(strings.Fields(fmt.Sprint(b)), ","), "[]")
-
 }
 
 func IssueRequests(ip string, port int, req_list []byte, batch_size int, num_batches_to_run int, data_ch chan<-[]byte) {
@@ -53,15 +52,18 @@ func IssueRequests(ip string, port int, req_list []byte, batch_size int, num_bat
 	http_request.Header.Add("Content-Type", "application/json; charset=utf-8")
 	//m := map[string]interface{}{}
 	read_cnt := int64(0)
-	for b := 0; b < num_batches_to_run; b++ {
+	for {
 		//DefaultClient.Do(http_request)
 		resp, _ := DefaultClient.Do(http_request)
 		start_read := time.Now()
 		body, _ := ioutil.ReadAll(resp.Body)
 		read_secs := time.Since(start_read)
 		read_cnt += read_secs.Nanoseconds()
-		data_ch <- body
-		//jsddon.Unmarshal(body, m)
+		select {
+			case data_ch <- body:
+			default:
+				break
+		}
 	}
 	secs := time.Since(start)
 	fmt.Printf("%.2f elapsed with response: %s, with RPS: %.2f\n", secs, addr, float64(batch_size) * float64(num_batches_to_run) / float64(secs.Seconds()))
@@ -95,29 +97,34 @@ func main() {
 
 	reqs := make([]Message, batch_size)
 	for i := 0; i < batch_size; i++ {
-		p := payload{Text: RandIntSlice(1024 * 128)}
+		p := payload{Text: RandIntSlice(1)}
 		msg, _ := json.Marshal(p)
 		m := Message{Req_id: 0, Req: string(msg)}
 		reqs[i] = m
 	}
 	request_body, _ := json.Marshal(MessageBatch{Requests: reqs})
 
-	responses := make([][]byte, num_vms*num_batches_to_run)
-	ch := make(chan []byte)
-	start := time.Now()
+	ch := make(chan []byte, num_vms*100000) // we prob won't exceed ~6.4M RPS ever
+	benchmark_duration := 5 * time.Second
+	bench_timer := time.NewTimer(benchmark_duration)
 	for i := 0; i < num_vms; i++ {
 		go IssueRequests(os.Args[1], port+i, request_body, batch_size, num_batches_to_run, ch)
 	}
 
+	<-bench_timer.C
+	batches_completed := len(ch)
+	fmt.Printf("Benchmark complete: %d batches completed\n", batches_completed)
+	responses := make([][]byte, batches_completed)
+
 	fmt.Printf("now waiting...\n")
-	for i := 0; i < num_vms*num_batches_to_run; i++ {
+	for i := 0; i < batches_completed; i++ {
 		responses[i] = <-ch
 	}
 
-	fmt.Printf("%.2f ns elapsed\n", time.Since(start))
-	duration := float64(time.Since(start).Seconds())
+	duration := float64(benchmark_duration.Seconds())
+	fmt.Printf("duration: %f\n", duration)
 	// calculate the total RPS	
-	total_rps := float64(batch_size) * float64(num_vms) * float64(num_batches_to_run) / float64(time.Since(start).Seconds())
+	total_rps := (float64(batch_size) * float64(num_vms) * float64(batches_completed)) / duration
 
 	on_device_compute_time := 0.0
 	device_queue_overhead := 0.0
@@ -125,7 +132,7 @@ func main() {
 	num_unique_fns_called := 0.0
 	req_count := 0.0
 	m := map[string]map[int]interface{}{}
-	for i := 0; i < num_vms*num_batches_to_run; i++ {
+	for i := 0; i < batches_completed; i++ {
 		err := json.Unmarshal(responses[i], &m)
 		if err != nil {
 			fmt.Printf("Failed to unmarshal json error: %s, %s", err, string(responses[i]))
