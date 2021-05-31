@@ -47,6 +47,12 @@ pub fn emit_f64_convert_i64u(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &
     format!("\t{} = (double)((ulong){});\n", result_register, reg)
 }
 
+pub fn emit_f64_convert_i64s(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, debug: bool) -> String {
+    let reg = stack_ctx.vstack_pop(StackType::i64);
+    let result_register = stack_ctx.vstack_alloc(StackType::f64);
+    format!("\t{} = (double)((long){});\n", result_register, reg)
+}
+
 pub fn emit_i32_trunc_f64_u(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, debug: bool) -> String {
     let reg = stack_ctx.vstack_pop(StackType::f64);
     let result_register = stack_ctx.vstack_alloc(StackType::i32);
