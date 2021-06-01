@@ -224,7 +224,7 @@ impl<'a> StackCtx {
                 },
                 wast::Instruction::F64Load(memarg) => {
                     stack_sizes.pop();
-                    stack_sizes.push(StackType::i64);
+                    stack_sizes.push(StackType::f64);
                     current_i32_count -= 1;
                     update_counter(&mut current_f64_count, &mut max_f64_count);
                 },
