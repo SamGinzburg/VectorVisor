@@ -496,7 +496,7 @@ impl OpenCLRunner {
 
                 match final_program {
                     Err(e) => {
-                        println!("Link error:\n{}", e);
+                        println!("Link error:\n{}\n", e);
                         println!("\n\nWriting source to output file test.cl\n");
                         std::fs::write("test.cl", program).expect("Unable to write file");
                         panic!("Unable to compile OpenCL kernel - see errors above");

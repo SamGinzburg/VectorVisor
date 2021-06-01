@@ -1101,6 +1101,7 @@ impl<'a> StackCtx {
                     current_i32_count -= 1;
                 },
                 wast::Instruction::BrTable(table_idxs) => {
+                    stack_sizes.pop().unwrap();
                     current_i32_count -= 1;
                 },
                 wast::Instruction::Unreachable => {

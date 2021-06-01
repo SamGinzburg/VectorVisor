@@ -178,6 +178,7 @@ pub fn form_partitions(num_funcs_in_partition: u32, func_names: Vec<&String>, fa
         partitions.push((partition_idx, current_partition.clone()));
 
         // update the kernel compile stats tracking object
+        dbg!(&current_instruction_count);
         kernel_compile_stats.insert(partition_idx, (current_instruction_count, 0, 0, 0, 0, 0));
 
         partition_idx += 1;
