@@ -693,6 +693,7 @@ impl<'a> StackCtx {
                                     // if we can find the type signature
                                     Some(res) => {
                                         for (_, _, ty) in res.params.iter() {
+                                            stack_sizes.pop();
                                             match ty {
                                                 ValType::I32 => {
                                                     current_i32_count -= 1;
@@ -1054,7 +1055,7 @@ impl<'a> StackCtx {
                     // no-op
                 },
                 wast::Instruction::Select(_) => {
-                    stack_sizes.pop().unwrap(); // c
+                    let _c = stack_sizes.pop().unwrap(); // c
                     let arg1 = stack_sizes.pop().unwrap();
                     let arg2 = stack_sizes.pop().unwrap();
                     if arg1 != arg2 {

@@ -5,15 +5,20 @@ use serde_json::json;
 
 // Take in a list of numbers and compute the average
 fn average_json(event: Value) -> Value {
+    println!("unparsed event: {}", &event);
     let response = match event.get("numbers") {
         Some(Value::Array(number_vec)) => {
+            println!("number vec: {:?}", &number_vec);
             let vec: Vec<f64> = serde_json::from_value(Value::Array(number_vec.clone())).unwrap();
             // make sure its a vec of numbers
+            println!("parsed vec: {:?}", &vec);
             let mut acc: f64 = 0.0;
-            for item in vec {
+            for item in &vec {
+                println!("vec item: {}", &item);
                 acc += item;
             }
-            json!(acc / number_vec.len() as f64)
+            println!("acc: {}, vec.len(): {}", acc, &vec.len());
+            json!(acc / vec.len() as f64)
         },
         _ => {
             // input is not a string we can compress!, no-op
