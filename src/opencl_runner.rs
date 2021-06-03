@@ -34,6 +34,7 @@ use std::fs::File;
 use std::io::Write;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::sync::RwLock;
 use std::collections::HashSet;
 use std::fs::OpenOptions;
 use std::io::prelude::*;
@@ -734,7 +735,7 @@ impl OpenCLRunner {
         let mut entry_point_exit_flag;
         let vm_slice: Vec<u32> = std::ops::Range { start: 0, end: (self.num_vms) }.collect();
         let mut hypercall_sender = vec![];
-        let hcall_read_buffer: Arc<Mutex<&mut [u8]>> = Arc::new(Mutex::new(hypercall_buffer_read_buffer));
+        let hcall_read_buffer: Arc<RwLock<&mut [u8]>> = Arc::new(RwLock::new(hypercall_buffer_read_buffer));
         let mut total_gpu_execution_time: u64 = 0;
         let mut queue_submit_delta: u64 = 0;
 
@@ -980,7 +981,7 @@ impl OpenCLRunner {
             let start_hcall_dispatch = std::time::Instant::now();
 
             unsafe {
-                let buf: &mut [u8] = &mut hcall_read_buffer.lock().unwrap();
+                let buf: &mut [u8] = &mut hcall_read_buffer.write().unwrap();
                 ocl::core::enqueue_read_buffer(&queue, &hypercall_buffer, true, 0, buf, None::<Event>, None::<&mut Event>).unwrap();
             }
 
@@ -1057,7 +1058,7 @@ impl OpenCLRunner {
             // update the hypercall numbers to -1 to indicate that we are now returning from the hypercall
             // also don't forget to write the hcall buf back
             unsafe {
-                let mut hcall_buf = hcall_read_buffer.lock().unwrap();
+                let mut hcall_buf = hcall_read_buffer.read().unwrap();
                 ocl::core::enqueue_write_buffer(&queue, &hypercall_buffer, true, 0, &mut hcall_buf, None::<Event>, None::<&mut Event>).unwrap();
                 ocl::core::enqueue_write_buffer(&queue, &buffers.entry, true, 0, &mut entry_point_temp, None::<Event>, None::<&mut Event>).unwrap();
                 ocl::core::enqueue_write_buffer(&queue, &buffers.sp, true, 0, &mut stack_pointer_temp, None::<Event>, None::<&mut Event>).unwrap();
@@ -1141,7 +1142,7 @@ impl OpenCLRunner {
         let mut entry_point_exit_flag;
         let vm_slice: Vec<u32> = std::ops::Range { start: 0, end: (self.num_vms) }.collect();
         let mut hypercall_sender = vec![];
-        let hcall_read_buffer: Arc<Mutex<&mut [u8]>> = Arc::new(Mutex::new(hypercall_buffer_read_buffer));
+        let hcall_read_buffer: Arc<RwLock<&mut [u8]>> = Arc::new(RwLock::new(hypercall_buffer_read_buffer));
         let mut total_gpu_execution_time: u64 = 0;
         let mut queue_submit_delta: u64 = 0;
 
@@ -1501,7 +1502,7 @@ impl OpenCLRunner {
             // read the hypercall_buffer
             let start_hcall_dispatch = std::time::Instant::now();
             unsafe {
-                let buf: &mut [u8] = &mut hcall_read_buffer.lock().unwrap();
+                let buf: &mut [u8] = &mut hcall_read_buffer.write().unwrap();
                 ocl::core::enqueue_read_buffer(&queue, &hypercall_buffer, true, 0, buf, None::<Event>, None::<&mut Event>).unwrap();
             }
 
@@ -1580,7 +1581,7 @@ impl OpenCLRunner {
             // update the hypercall numbers to -1 to indicate that we are now returning from the hypercall
             // also don't forget to write the hcall buf back
             unsafe {
-                let mut hcall_buf = hcall_read_buffer.lock().unwrap();
+                let mut hcall_buf = hcall_read_buffer.read().unwrap();
                 ocl::core::enqueue_write_buffer(&queue, &hypercall_buffer, true, 0, &mut hcall_buf, None::<Event>, None::<&mut Event>).unwrap();
                 ocl::core::enqueue_write_buffer(&queue, &buffers.entry, true, 0, &mut entry_point_temp, None::<Event>, None::<&mut Event>).unwrap();
                 ocl::core::enqueue_write_buffer(&queue, &buffers.sp, true, 0, &mut stack_pointer_temp, None::<Event>, None::<&mut Event>).unwrap();

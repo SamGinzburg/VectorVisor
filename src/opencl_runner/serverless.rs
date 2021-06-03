@@ -18,7 +18,8 @@ pub struct Serverless {}
 
 impl Serverless {
     pub fn hypercall_serverless_invoke(vm_ctx: &mut VectorizedVM, hypercall: &mut HyperCall, sender: &Sender<HyperCallResult>) -> () {
-        let hcall_buf: &mut [u8] = &mut hypercall.hypercall_buffer.lock().unwrap();
+        // TODO: breakup hypercall buffer for serverless_invoke so we don't serialize here
+        let hcall_buf: &mut [u8] = &mut hypercall.hypercall_buffer.write().unwrap();
 
         // block until we get an incoming request
         let recv_chan = (vm_ctx.vm_recv).clone();
@@ -54,7 +55,7 @@ impl Serverless {
 
 
     pub fn hypercall_serverless_response(_ctx: &WasiCtx, vm_ctx: &VectorizedVM, hypercall: &mut HyperCall, sender: &Sender<HyperCallResult>) -> () {
-        let hcall_buf: &mut [u8] = &mut hypercall.hypercall_buffer.lock().unwrap();
+        let hcall_buf: &[u8] = &hypercall.hypercall_buffer.read().unwrap();
 
         let mut resp_buf = vec![0u8; vm_ctx.hcall_buf_size.try_into().unwrap()];
         // the first 4 bytes are the length as a u32, the remainder is the buffer containing the json

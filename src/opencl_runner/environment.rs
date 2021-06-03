@@ -21,7 +21,7 @@ pub struct Environment {}
 
 impl Environment {
     pub fn hypercall_environ_sizes_get(ctx: &WasiCtx, hypercall: &mut HyperCall, sender: &Sender<HyperCallResult>) -> () {
-        let mut hcall_buf: &mut [u8] = &mut hypercall.hypercall_buffer.lock().unwrap();
+        let mut hcall_buf: &mut [u8] = &mut hypercall.hypercall_buffer.write().unwrap();
         let hcall_buf_size: u32 = hcall_buf.len().try_into().unwrap();
         let result = match ctx.environ_sizes_get() {
             Ok(tuple) => {
@@ -48,7 +48,7 @@ impl Environment {
     }
 
     pub fn hypercall_environ_get(ctx: &WasiCtx, vm_ctx: &VectorizedVM, hypercall: &mut HyperCall, sender: &Sender<HyperCallResult>) -> () {
-        let mut hcall_buf: &mut [u8] = &mut hypercall.hypercall_buffer.lock().unwrap();
+        let mut hcall_buf: &mut [u8] = &mut hypercall.hypercall_buffer.write().unwrap();
         let hcall_buf_size: u32 = hcall_buf.len().try_into().unwrap();
 
         let memory = &vm_ctx.memory;

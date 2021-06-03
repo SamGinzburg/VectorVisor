@@ -28,7 +28,7 @@ pub struct WasiFd {}
 
 impl WasiFd {
     pub fn hypercall_fd_write(ctx: &WasiCtx, vm_ctx: &VectorizedVM, hypercall: &mut HyperCall, sender: &Sender<HyperCallResult>) -> () {
-        let mut hcall_buf: &mut [u8] = &mut hypercall.hypercall_buffer.lock().unwrap();
+        let mut hcall_buf: &[u8] = &hypercall.hypercall_buffer.read().unwrap();
         let hcall_buf_size: u32 = hcall_buf.len().try_into().unwrap();
 
         let memory = &vm_ctx.memory;
@@ -60,7 +60,7 @@ impl WasiFd {
         } else {
             // set the buffer to the scratch space for the appropriate VM
             // we don't have to do this for the interleave
-            hcall_buf = &mut hcall_buf[(hypercall.vm_id * hcall_buf_size) as usize..((hypercall.vm_id+1) * hcall_buf_size) as usize];
+            hcall_buf = &hcall_buf[(hypercall.vm_id * hcall_buf_size) as usize..((hypercall.vm_id+1) * hcall_buf_size) as usize];
             fd = LittleEndian::read_u32(&hcall_buf[0..4]);
             num_iovecs = LittleEndian::read_u32(&hcall_buf[8..12]);
 
@@ -91,7 +91,7 @@ impl WasiFd {
     }
 
     pub fn hypercall_fd_prestat_get(ctx: &WasiCtx, _vm_ctx: &VectorizedVM, hypercall: &mut HyperCall, sender: &Sender<HyperCallResult>) -> () {
-        let mut hcall_buf: &mut [u8] = &mut hypercall.hypercall_buffer.lock().unwrap();
+        let mut hcall_buf: &mut [u8] = &mut hypercall.hypercall_buffer.write().unwrap();
         let hcall_buf_size: u32 = hcall_buf.len().try_into().unwrap();
 
         //let memory = &vm_ctx.memory;
@@ -127,7 +127,7 @@ impl WasiFd {
         }).unwrap();
     }
     pub fn hypercall_fd_prestat_dir_name(ctx: &WasiCtx, vm_ctx: &VectorizedVM, hypercall: &mut HyperCall, sender: &Sender<HyperCallResult>) -> () {
-        let mut hcall_buf: &mut [u8] = &mut hypercall.hypercall_buffer.lock().unwrap();
+        let mut hcall_buf: &mut [u8] = &mut hypercall.hypercall_buffer.write().unwrap();
         let hcall_buf_size: u32 = hcall_buf.len().try_into().unwrap();
 
         //let memory = &vm_ctx.memory;

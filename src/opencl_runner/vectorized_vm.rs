@@ -21,6 +21,7 @@ use crossbeam::channel::Sender;
 use crossbeam::channel::Receiver;
 
 use std::sync::Arc;
+use std::sync::RwLock;
 use std::sync::Mutex;
 use std::collections::HashSet;
 
@@ -58,7 +59,7 @@ pub struct HyperCall<'a> {
     pub syscall: WasiSyscalls,
     pub is_interleaved_mem: bool,
     pub ocl_buffers: &'a OpenCLBuffers,
-    pub hypercall_buffer: Arc<Mutex<&'a mut [u8]>>,
+    pub hypercall_buffer: Arc<RwLock<&'a mut [u8]>>,
     pub queue: &'a CommandQueue,
 }
 
@@ -73,7 +74,7 @@ impl<'a> HyperCall<'a> {
                syscall: WasiSyscalls,
                is_interleaved_mem: bool,
                ocl_buffers: &'a OpenCLBuffers,
-               hypercall_buffer: Arc<Mutex<&'a mut [u8]>>,
+               hypercall_buffer: Arc<RwLock<&'a mut [u8]>>,
                queue: &'a CommandQueue) -> HyperCall<'a> {
         HyperCall {
             vm_id: vm_id,
