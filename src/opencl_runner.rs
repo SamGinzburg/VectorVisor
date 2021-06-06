@@ -307,7 +307,7 @@ impl OpenCLRunner {
         // TODO: sp is currently 8 bytes? very unecessary - 4 bytes is probably enough
         let sp = unsafe {
             ocl::core::create_buffer::<_, u8>(&context,
-                                              ocl::core::MEM_READ_WRITE,
+                                              ocl::core::MEM_READ_WRITE | ocl::core::MEM_ALLOC_HOST_PTR,
                                               (8 * self.num_vms) as usize,
                                               None).unwrap()
         };
@@ -316,7 +316,7 @@ impl OpenCLRunner {
         // way, way too big
         let sfp = unsafe {
             ocl::core::create_buffer::<_, u8>(&context,
-                                              ocl::core::MEM_READ_WRITE,
+                                              ocl::core::MEM_READ_WRITE | ocl::core::MEM_ALLOC_HOST_PTR,
                                               (stack_frame_ptr_size * 8 * self.num_vms) as usize,
                                               None).unwrap()
         };
@@ -325,7 +325,7 @@ impl OpenCLRunner {
         // 1KB call stack should be way more than enough
         let call_stack = unsafe {
             ocl::core::create_buffer::<_, u8>(&context,
-                                              ocl::core::MEM_READ_WRITE,
+                                              ocl::core::MEM_READ_WRITE | ocl::core::MEM_ALLOC_HOST_PTR,
                                               (call_stack_size * 8 * self.num_vms) as usize,
                                               None).unwrap()
         };
@@ -360,7 +360,7 @@ impl OpenCLRunner {
 
         let hypercall_num = unsafe {
             ocl::core::create_buffer::<_, u8>(&context,
-                                              ocl::core::MEM_READ_WRITE,
+                                              ocl::core::MEM_READ_WRITE | ocl::core::MEM_ALLOC_HOST_PTR,
                                               (4 * self.num_vms) as usize,
                                               None).unwrap()
         };
@@ -368,7 +368,7 @@ impl OpenCLRunner {
 
         let hypercall_continuation = unsafe {
             ocl::core::create_buffer::<_, u8>(&context,
-                                              ocl::core::MEM_READ_WRITE,
+                                              ocl::core::MEM_READ_WRITE | ocl::core::MEM_ALLOC_HOST_PTR,
                                               (4 * self.num_vms) as usize,
                                               None).unwrap()
         };
@@ -393,7 +393,7 @@ impl OpenCLRunner {
 
         let entry = unsafe {
             ocl::core::create_buffer::<_, u8>(&context,
-                                              ocl::core::MEM_READ_WRITE,
+                                              ocl::core::MEM_READ_WRITE | ocl::core::MEM_ALLOC_HOST_PTR,
                                               (4 * self.num_vms) as usize,
                                               None).unwrap()
         };
@@ -787,7 +787,7 @@ impl OpenCLRunner {
 
         let number_vms = self.num_vms.clone();
         let (result_sender, result_receiver): (SyncSender<HyperCallResult>, SyncReceiver<HyperCallResult>) = bounded(0);
-        for _idx in 0..num_threads {
+        for idx in 0..num_threads {
             let (sender, recv): (SyncSender<HyperCall>, SyncReceiver<HyperCall>) = unbounded();
             let sender_copy = result_sender.clone();
             hypercall_sender.push(sender.clone());
@@ -799,7 +799,8 @@ impl OpenCLRunner {
                 let mut wasi_ctxs = vec![];
                 // we divide up the number of VMs per thread evenly
                 for vm in 0..(number_vms/num_threads) {
-                    wasi_ctxs.push(VectorizedVM::new(vm, hypercall_buffer_size, number_vms, Arc::new(vm_sender_copy.get(0).unwrap()), Arc::new(vm_recv_copy.get(0).unwrap())));
+                    let vm_index = (vm + idx * (number_vms/num_threads)) as usize;
+                    wasi_ctxs.push(VectorizedVM::new(vm, hypercall_buffer_size, number_vms, Arc::new(vm_sender_copy.get(vm_index).unwrap()), Arc::new(vm_recv_copy.get(vm_index).unwrap())));
                 }
 
                 loop {
@@ -1154,7 +1155,7 @@ impl OpenCLRunner {
          */
         let hypercall_buffer = unsafe {
             ocl::core::create_buffer::<_, u8>(&ctx,
-                                              ocl::core::MEM_READ_WRITE,
+                                              ocl::core::MEM_READ_WRITE | ocl::core::MEM_ALLOC_HOST_PTR,
                                               (hypercall_buffer_size * self.num_vms) as usize,
                                               None).unwrap()
         };
@@ -1164,7 +1165,7 @@ impl OpenCLRunner {
          */
         let hcall_retval_buffer = unsafe {
             ocl::core::create_buffer::<_, u8>(&ctx,
-                                              ocl::core::MEM_READ_WRITE,
+                                              ocl::core::MEM_READ_WRITE | ocl::core::MEM_ALLOC_HOST_PTR,
                                               (4 * self.num_vms) as usize,
                                               None).unwrap()
         };
@@ -1182,32 +1183,42 @@ impl OpenCLRunner {
          * Then, inside of each thread, the vm_id % (N/4) gets the WASI context
          * 
          */
+        /*
         let num_threads = if num_cpus::get() as u32 > self.num_vms {
             self.num_vms as u32
         } else {
             num_cpus::get() as u32
         };
-        
-        let thread_pool = rayon::ThreadPoolBuilder::new().num_threads(num_threads.try_into().unwrap()).build().unwrap();
+        */
+
+        let num_threads = self.num_vms;
+        let thread_pool = rayon::ThreadPoolBuilder::new().num_threads(num_threads.try_into().unwrap()).stack_size(1024*512).build().unwrap();
 
         let number_vms = self.num_vms.clone();
-        let (result_sender, result_receiver): (SyncSender<HyperCallResult>, SyncReceiver<HyperCallResult>) = bounded(0);
-
-        for _idx in 0..num_threads {
+        let (result_sender, result_receiver): (SyncSender<HyperCallResult>, SyncReceiver<HyperCallResult>) = unbounded();
+        for idx in 0..num_threads {
             let (sender, recv): (SyncSender<HyperCall>, SyncReceiver<HyperCall>) = unbounded();
             let sender_copy = result_sender.clone();
             hypercall_sender.push(sender.clone());
 
             let mut vm_sender_copy = vm_sender.clone();
             let mut vm_recv_copy = vm_recv.clone();
-
             thread_pool.spawn(move || {
                 let receiver = recv.clone();
                 // create the WASI contexts for this thread
                 let mut wasi_ctxs = vec![];
                 // we divide up the number of VMs per thread evenly
+                /*
+                 * Example:
+                 *   If we have 32 threads and 64 VMs:
+                 *   Thread 0 gets VMs 0 and 312
+                 *   Thread 1 gets VMs 1 and 33
+                 *   ...
+                 *   Thread 31 gets VMs 31 and 63
+                 */
                 for vm in 0..(number_vms/num_threads) {
-                    wasi_ctxs.push(VectorizedVM::new(vm, hypercall_buffer_size, number_vms, Arc::new(vm_sender_copy.get(0).unwrap()), Arc::new(vm_recv_copy.get(0).unwrap())));
+                    let vm_index = (idx + (vm*num_threads)) as usize;
+                    wasi_ctxs.push(VectorizedVM::new(vm, hypercall_buffer_size, number_vms, Arc::new(vm_sender_copy.get(vm_index).unwrap()), Arc::new(vm_recv_copy.get(vm_index).unwrap())));
                 }
 
                 loop {
@@ -1504,7 +1515,7 @@ impl OpenCLRunner {
             }
 
             // now it is time to dispatch hypercalls
-            vm_slice.as_slice().par_iter().for_each(|vm_id| {
+            vm_slice.as_slice().iter().for_each(|vm_id| {
                 let hypercall_id = match hypercall_num_temp[*vm_id as usize] as i64 {
                     0 => WasiSyscalls::FdWrite,
                     1 => WasiSyscalls::ProcExit,

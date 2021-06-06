@@ -35,6 +35,8 @@ type VmmResponse struct {
 
 var NUM_PARAMS = 256;
 
+var client = &http.Client{}
+
 func RandIntSlice(n int) []int {
     b := make([]int, n)
     for i := range b {
@@ -55,7 +57,6 @@ func RandString(n int) string {
 }
 
 func IssueRequests(ip string, port int, req [][]byte, data_ch chan<-[]byte, end_chan chan bool) {
-	client := http.DefaultClient
 	addr := fmt.Sprintf("http://%s:%d/batch_submit/", ip, port)
 	http_request, _ := http.NewRequest("GET", addr, nil)
 	http_request.Header.Add("Content-Type", "application/json; charset=utf-8")
@@ -66,10 +67,11 @@ func IssueRequests(ip string, port int, req [][]byte, data_ch chan<-[]byte, end_
 		resp, err := client.Do(http_request)
 		if err != nil {
 			fmt.Printf("client err: %s\n", err)
+			continue
 		}
 		start_read := time.Now()
 		body, err := ioutil.ReadAll(resp.Body)
-		defer resp.Body.Close()
+		resp.Body.Close()
 		if err != nil {
 			fmt.Printf("err: %s\n", err)
 		}
@@ -86,7 +88,7 @@ func IssueRequests(ip string, port int, req [][]byte, data_ch chan<-[]byte, end_
 			return;
 		}
 	}
-  }
+}
 
 func main() {
 	port, err := strconv.Atoi(os.Args[2])
@@ -101,7 +103,13 @@ func main() {
 		os.Exit(2)
 	}
 
-	timeout_secs, err := strconv.Atoi(os.Args[4])
+	num_vmgroups, err := strconv.Atoi(os.Args[4])
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(2)
+	}
+
+	timeout_secs, err := strconv.Atoi(os.Args[5])
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(2)
@@ -110,18 +118,26 @@ func main() {
 
 	reqs := make([][]byte, NUM_PARAMS)
 	for i := 0; i < NUM_PARAMS; i++ {
-		p := payload{Text: RandString(1024 * 128)}
+		p := payload{Text: RandString(1024 * 64)}
 		request_body, _ := json.Marshal(p)
 		reqs[i] = request_body
 	}
+
+	tr := &http.Transport{
+		MaxIdleConnsPerHost: num_vms * 2 * num_vmgroups,
+	}
+	client = &http.Client{Transport: tr}
+
 
 	ch := make(chan []byte, num_vms*100000) // we prob won't exceed ~6.4M RPS ever
 	termination_chan := make(chan bool, num_vms)
 
 	benchmark_duration := time.Duration(timeout_secs) * time.Second
 	bench_timer := time.NewTimer(benchmark_duration)
-	for i := 0; i < num_vms; i++ {
-		go IssueRequests(os.Args[1], port, reqs, ch, termination_chan)
+	for vmgroup := 0 ; vmgroup < num_vmgroups; vmgroup++ {
+		for i := 0; i < num_vms; i++ {
+			go IssueRequests(os.Args[1], port+vmgroup, reqs, ch, termination_chan)
+		}
 	}
 
 	<-bench_timer.C

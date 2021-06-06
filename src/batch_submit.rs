@@ -4,6 +4,7 @@ use std::str::from_utf8;
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::sync::Arc;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
 use tokio::sync::mpsc::{Sender, Receiver};
 use tokio::sync::Mutex;
@@ -51,7 +52,6 @@ impl BatchSubmitServer {
         let vm_idx = vm_queue.pop().await;
         let tx: &Mutex<Sender<(Vec<u8>, usize)>> = (*sender).get(vm_idx).unwrap();
         let rx: &Mutex<Receiver<(Vec<u8>, usize, u64, u64, u64, u64)>> = (*receiver).get(vm_idx).unwrap();
-
         /*
         let (tx, rx, vm_idx) = match vm_queue.try_pop() {
             Some(idx) => {
@@ -105,8 +105,8 @@ impl BatchSubmitServer {
 
                     let hello = warp::path!("batch_submit")
                     .and(warp::body::bytes()).and(warp_queue).and(warp_senders).and(warp_receivers).and_then(BatchSubmitServer::response);
-
-                    warp::serve(hello).run(([127, 0, 0, 1], 8000)).await;
+                    let socket: SocketAddr = format!("{}:{}", server_ip, server_port).parse().unwrap();
+                    warp::serve(hello).run(socket).await;
             }});
     }
 }

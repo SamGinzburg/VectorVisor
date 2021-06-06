@@ -224,7 +224,7 @@ fn main() {
         .arg(Arg::with_name("ip")
             .long("ip")
             .value_name("Listen on this IP for incoming requests")
-            .default_value("localhost")
+            .default_value("127.0.0.1")
             .help("Listen on different IPs locally")
             .multiple(false)
             .number_of_values(1)
@@ -558,14 +558,6 @@ fn main() {
             //let runner = opencl_runner::OpenCLRunner::new(num_vms, interleaved, is_gpu, entry_point, file.clone());
             //let (program, _, device_id) = runner.setup_kernel(context.clone(), device_id, fname, stack_size, heap_size, num_compiled_funcs, globals_buffer_size, compile_args.clone(), link_args.clone());
 
-
-            // Create a unique pair of sender/receivers per VM-group
-            let (server_sender, vm_recv): (Sender<(Vec<u8>, usize)>, Receiver<(Vec<u8>, usize)>) = bounded(16384);
-            let (vm_sender, server_recv): (Sender<(Vec<u8>, usize, u64, u64, u64, u64)>, Receiver<(Vec<u8>, usize, u64, u64, u64, u64)>) = bounded(16384);
-
-            let vm_sender_mutex = Arc::new(Mutex::new(vm_sender));
-            let vm_recv_mutex = Arc::new(Mutex::new(vm_recv));
-
             let mut server_sender_vec = vec![];
             let mut vm_recv_vec = vec![];
             for x in 0..num_vms.clone() {
@@ -591,7 +583,12 @@ fn main() {
             // we don't need to join the server handle, this will be active as long as the runtime is
             if serverless {
                 println!("Starting server on: {}:{}/batch_submit", batch_submit_ip.clone(), (batch_submit_port+idx).to_string());
-                BatchSubmitServer::start_server(hcall_size, server_sender_vec_arc, server_recv_vec_arc, num_vms, batch_submit_ip.clone(), (batch_submit_port+idx).to_string());
+               
+                let batch_submit_ip_clone = batch_submit_ip.clone();
+                let port = (batch_submit_port + idx).to_string();
+                thread::spawn(move || {
+                    BatchSubmitServer::start_server(hcall_size, server_sender_vec_arc, server_recv_vec_arc, num_vms, batch_submit_ip_clone.clone(), port.clone());
+                });
             }
 
             runner.clone().run(context.clone(), program.clone(), device_id, fname,
