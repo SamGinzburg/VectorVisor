@@ -3,8 +3,7 @@ use std::sync::Mutex;
 use std::error::Error;
 use std::convert::TryInto;
 
-use crossbeam::channel::Sender;
-use crossbeam::channel::Receiver;
+use tokio::sync::mpsc::{Sender, Receiver};
 
 use wasmtime::*;
 use wasi_cap_std_sync::WasiCtxBuilder;
@@ -12,14 +11,23 @@ use wasmtime_wasi::Wasi;
 
 use chrono::prelude::*;
 
-pub struct WasmtimeRunner {}
+pub struct WasmtimeRunner {
+    vm_idx: usize,
+    vm_sender: Arc<Vec<Mutex<Sender<(Vec<u8>, usize, u64, u64, u64, u64)>>>>,
+    vm_recv: Arc<Vec<Mutex<Receiver<(Vec<u8>, usize)>>>>
+}
 
 impl WasmtimeRunner {
+    pub fn new(vm_idx: usize, vm_sender: Arc<Vec<Mutex<Sender<(Vec<u8>, usize, u64, u64, u64, u64)>>>>,
+               vm_recv: Arc<Vec<Mutex<Receiver<(Vec<u8>, usize)>>>>) -> WasmtimeRunner {
+            WasmtimeRunner {
+                vm_idx: vm_idx,
+                vm_sender: vm_sender,
+                vm_recv: vm_recv
+            }
+    }
     // this is run once for each thread/VM
-    pub fn run(program: String,
-               hcall_buf_size: usize,
-               vm_sender: Arc<Mutex<Sender<(Vec<u8>, usize, u64, u64, u64, u64)>>>,
-               vm_recv: Arc<Mutex<Receiver<(Vec<u8>, usize)>>>) -> Result<(), Box<dyn Error>> {
+    pub fn run(&'static self, program: String, hcall_buf_size: usize) -> Result<(), Box<dyn Error>> {
 
         let curr_time = Arc::new(Mutex::<i64>::new(0));
 
@@ -35,8 +43,8 @@ impl WasmtimeRunner {
                 _ => Err(Trap::new("failed to find host memory")),
             };
 
-            let chan = vm_recv.clone();
-            let (msg, msg_len) = chan.lock().unwrap().recv().unwrap();
+            let chan = self.vm_recv.get(self.vm_idx).unwrap();
+            let (msg, msg_len) = chan.lock().unwrap().blocking_recv().unwrap();
 
             // copy the input to the VM
             match mem {
@@ -72,7 +80,7 @@ impl WasmtimeRunner {
                     // Debug memory usage of functions
                     // dbg!(memory.size());
 
-                    let chan = vm_sender.clone();
+                    let chan = self.vm_sender.get(self.vm_idx).unwrap();
                     unsafe {
                         let arr = memory.data_unchecked_mut();
                         let mut resp_buf = vec![0u8; hcall_buf_size];
@@ -85,7 +93,7 @@ impl WasmtimeRunner {
                         let tsc = curr_time_response.clone();
                         let device_execution_time = Utc::now().timestamp_nanos() - *tsc.lock().unwrap();
 
-                        chan.lock().unwrap().send((resp_buf, resp_buf_len, device_execution_time.try_into().unwrap(), 0, 0, 0)).unwrap();
+                        chan.lock().unwrap().blocking_send((resp_buf, resp_buf_len, device_execution_time.try_into().unwrap(), 0, 0, 0)).unwrap();
                     }
                 },
                 Err(e) => {

@@ -4,12 +4,13 @@
   (type $t0 (func (param i32 i32 i32 i32) (result i32)))
   (type $t1 (func (param i32)))
   (type $t2 (func (result i32)))
-  (type $t3 (func (param i32 i32)))
+  (type $t3 (func (param i32 i32) (result i32)))
+  (type $t4 (func (param i32 i32)))
 
   (import "wasi_unstable" "fd_write" (func $wasi_unstable.fd_write (type $t0)))
   (import "wasi_unstable" "proc_exit" (func $wasi_unstable.proc_exit (type $t1)))
   (import "env" "serverless_invoke" (func $serverless_invoke (type $t3)))
-  (import "env" "serverless_response" (func $serverless_response (type $t3)))
+  (import "env" "serverless_response" (func $serverless_response (type $t4)))
 
   (func $_start
     loop $loop1

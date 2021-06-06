@@ -9,6 +9,7 @@ use crate::opencl_runner::vectorized_vm::VectorizedVM;
 
 use byteorder::LittleEndian;
 use byteorder::ByteOrder;
+
 use crossbeam::channel::Sender;
 
 use std::convert::TryInto;
@@ -24,7 +25,7 @@ impl Serverless {
         // block until we get an incoming request
         let recv_chan = (vm_ctx.vm_recv).clone();
 
-        let (msg, msg_len) = recv_chan.lock().unwrap().recv().unwrap();
+        let (msg, msg_len) = recv_chan.lock().unwrap().blocking_recv().unwrap();
 
         // copy the incoming request into the hcall_buffer
         if hypercall.is_interleaved_mem {
@@ -87,7 +88,7 @@ impl Serverless {
             count += 1;
         }
 
-        (*vm_ctx.vm_sender).lock().unwrap().send((resp_buf, resp_buf_len, on_device_time, queue_submit_time, queue_submit_count, count)).unwrap();
+        (*vm_ctx.vm_sender).lock().unwrap().blocking_send((resp_buf, resp_buf_len, on_device_time, queue_submit_time, queue_submit_count, count)).unwrap();
 
         sender.send({
             HyperCallResult::new(0, hypercall.vm_id, WasiSyscalls::ServerlessResponse)

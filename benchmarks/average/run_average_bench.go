@@ -33,6 +33,8 @@ type VmmResponse struct {
 	num_unique_fns_called float64
 }
 
+var NUM_PARAMS = 256;
+
 func RandIntSlice(n int) []int {
     b := make([]int, n)
     for i := range b {
@@ -41,32 +43,38 @@ func RandIntSlice(n int) []int {
     return b
 }
 
-func IssueRequests(ip string, port int, req_list []byte, batch_size int, num_batches_to_run int, data_ch chan<-[]byte) {
-	final_request := bytes.NewReader(req_list)
-	var DefaultClient = &http.Client{}
+func IssueRequests(ip string, port int, req [][]byte, data_ch chan<-[]byte, end_chan chan bool) {
+	client := http.DefaultClient
 	addr := fmt.Sprintf("http://%s:%d/batch_submit/", ip, port)
-
-	start := time.Now()
-	http_request, _ := http.NewRequest("GET", addr, final_request)
+	http_request, _ := http.NewRequest("GET", addr, nil)
 	http_request.Header.Add("Content-Type", "application/json; charset=utf-8")
-	//m := map[string]interface{}{}
+
 	read_cnt := int64(0)
 	for {
-		//DefaultClient.Do(http_request)
-		resp, _ := DefaultClient.Do(http_request)
+		http_request.Body = ioutil.NopCloser(bytes.NewReader(req[rand.Intn(NUM_PARAMS)]))
+		resp, err := client.Do(http_request)
+		if err != nil {
+			fmt.Printf("client err: %s\n", err)
+		}
 		start_read := time.Now()
-		body, _ := ioutil.ReadAll(resp.Body)
+		body, err := ioutil.ReadAll(resp.Body)
+		defer resp.Body.Close()
+		if err != nil {
+			fmt.Printf("err: %s\n", err)
+		}
 		read_secs := time.Since(start_read)
 		read_cnt += read_secs.Nanoseconds()
 		select {
 			case data_ch <- body:
 			default:
-				break
+				return;
+		}
+
+		// check to see if we are done
+		if len(end_chan) > 0 {
+			return;
 		}
 	}
-	secs := time.Since(start)
-	fmt.Printf("%.2f elapsed with response: %s, with RPS: %.2f\n", secs, addr, float64(batch_size) * float64(num_batches_to_run) / float64(secs.Seconds()))
-	fmt.Printf("%.2f elapsed for reads\n", read_cnt)
   }
 
 func main() {
@@ -76,78 +84,70 @@ func main() {
 		os.Exit(2)
 	}
 
-	batch_size, err := strconv.Atoi(os.Args[3])
+	num_vms, err := strconv.Atoi(os.Args[3])
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(2)
 	}
 
-	num_vms, err := strconv.Atoi(os.Args[4])
+	timeout_secs, err := strconv.Atoi(os.Args[4])
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(2)
 	}
 
-	num_batches_to_run, err := strconv.Atoi(os.Args[5])
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(2)
-	}
 
-	reqs := make([]Message, batch_size)
-	for i := 0; i < batch_size; i++ {
-		p := payload{Text: RandIntSlice(1)}
-		msg, _ := json.Marshal(p)
-		m := Message{Req_id: 0, Req: string(msg)}
-		reqs[i] = m
+	reqs := make([][]byte, NUM_PARAMS)
+	for i := 0; i < NUM_PARAMS; i++ {
+		p := payload{Text: RandIntSlice(1024 * 16)}
+		request_body, _ := json.Marshal(p)
+		reqs[i] = request_body
 	}
-	request_body, _ := json.Marshal(MessageBatch{Requests: reqs})
 
 	ch := make(chan []byte, num_vms*100000) // we prob won't exceed ~6.4M RPS ever
-	benchmark_duration := 5 * time.Second
+	termination_chan := make(chan bool, num_vms)
+
+	benchmark_duration := time.Duration(timeout_secs) * time.Second
 	bench_timer := time.NewTimer(benchmark_duration)
 	for i := 0; i < num_vms; i++ {
-		go IssueRequests(os.Args[1], port+i, request_body, batch_size, num_batches_to_run, ch)
+		go IssueRequests(os.Args[1], port, reqs, ch, termination_chan)
 	}
 
 	<-bench_timer.C
 	batches_completed := len(ch)
 	fmt.Printf("Benchmark complete: %d batches completed\n", batches_completed)
 	responses := make([][]byte, batches_completed)
-
 	for i := 0; i < batches_completed; i++ {
 		responses[i] = <-ch
 	}
 
 	duration := float64(benchmark_duration.Seconds())
 	fmt.Printf("duration: %f\n", duration)
+
+	for i := 0; i < num_vms; i++ {
+		termination_chan <- true
+	}
+
 	// calculate the total RPS	
-	total_rps := (float64(batch_size) * float64(num_vms) * float64(batches_completed)) / duration
+	total_rps := (float64(batches_completed)) / duration
 
 	on_device_compute_time := 0.0
 	device_queue_overhead := 0.0
 	queue_submit_count := 0.0
 	num_unique_fns_called := 0.0
 	req_count := 0.0
-	m := map[string]map[int]interface{}{}
+	m := map[string]interface{}{}
 	for i := 0; i < batches_completed; i++ {
 		err := json.Unmarshal(responses[i], &m)
 		if err != nil {
 			fmt.Printf("Failed to unmarshal json error: %s, %s", err, string(responses[i]))
 			os.Exit(2)
 		}
-		for key := range m["requests"] {
-			m, err := m["requests"][key].(map[string]interface{})
-			if !err {
-				fmt.Printf("error: ", err)
-				os.Exit(2)
-			}
-			on_device_compute_time += m["on_device_execution_time_ns"].(float64)
-			device_queue_overhead += m["device_queue_overhead_time_ns"].(float64)
-			queue_submit_count += m["queue_submit_count"].(float64)
-			num_unique_fns_called += m["num_unique_fns_called"].(float64)
-			req_count += 1
-		}
+		on_device_compute_time += m["on_device_execution_time_ns"].(float64)
+		device_queue_overhead += m["device_queue_overhead_time_ns"].(float64)
+		queue_submit_count += m["queue_submit_count"].(float64)
+		num_unique_fns_called += m["num_unique_fns_called"].(float64)
+		req_count += 1
 	}
 
 	on_device_compute_time = on_device_compute_time / req_count
@@ -162,5 +162,5 @@ func main() {
 	fmt.Printf("Average num of unique fns called: %f\n", num_unique_fns_called)
 
 
-	fmt.Printf("Parallel fraction of function (only applicable to GPU funcs): %f\n", (((on_device_compute_time+device_queue_overhead)/1000000000)*float64(num_batches_to_run)) / duration)
+	fmt.Printf("Parallel fraction of function (only applicable to GPU funcs): %f\n", (((on_device_compute_time+device_queue_overhead)/1000000000)) / duration)
 }

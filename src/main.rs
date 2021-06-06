@@ -12,7 +12,11 @@ use std::path::Path;
 use std::fs::File;
 use std::io::Write;
 use std::collections::HashMap;
+use std::thread;
+
 use std::sync::Mutex;
+use tokio::sync::Mutex as AsyncMutex;
+
 use std::sync::Condvar;
 use std::sync::Arc;
 use std::convert::TryInto;
@@ -20,6 +24,9 @@ use std::convert::TryInto;
 use crossbeam::channel::Sender;
 use crossbeam::channel::Receiver;
 use crossbeam::channel::bounded;
+use crossbeam::sync::WaitGroup;
+
+use tokio::sync::mpsc;
 
 use wast::parser::{ParseBuffer};
 
@@ -559,10 +566,32 @@ fn main() {
             let vm_sender_mutex = Arc::new(Mutex::new(vm_sender));
             let vm_recv_mutex = Arc::new(Mutex::new(vm_recv));
 
+            let mut server_sender_vec = vec![];
+            let mut vm_recv_vec = vec![];
+            for x in 0..num_vms.clone() {
+                let (sender, recv): (tokio::sync::mpsc::Sender<(Vec<u8>, usize)>, tokio::sync::mpsc::Receiver<(Vec<u8>, usize)>) = mpsc::channel(100);
+                server_sender_vec.push(AsyncMutex::new(sender));
+                vm_recv_vec.push(Mutex::new(recv));
+            }
+    
+            let server_sender_vec_arc = Arc::new(server_sender_vec);
+            let vm_recv_vec_arc = Arc::new(vm_recv_vec);
+    
+            let mut vm_sender_vec = vec![];
+            let mut server_recv_vec = vec![];
+            for x in 0..num_vms.clone() {
+                let (sender, recv): (tokio::sync::mpsc::Sender<(Vec<u8>, usize, u64, u64, u64, u64)>, tokio::sync::mpsc::Receiver<(Vec<u8>, usize, u64, u64, u64, u64)>) = mpsc::channel(100);
+                vm_sender_vec.push(Mutex::new(sender));
+                server_recv_vec.push(AsyncMutex::new(recv));
+            }
+    
+            let vm_sender_vec_arc = Arc::new(vm_sender_vec);
+            let server_recv_vec_arc = Arc::new(server_recv_vec);
+
             // we don't need to join the server handle, this will be active as long as the runtime is
             if serverless {
                 println!("Starting server on: {}:{}/batch_submit", batch_submit_ip.clone(), (batch_submit_port+idx).to_string());
-                BatchSubmitServer::start_server(hcall_size, server_sender, server_recv, num_vms, batch_submit_ip.clone(), (batch_submit_port+idx).to_string());
+                BatchSubmitServer::start_server(hcall_size, server_sender_vec_arc, server_recv_vec_arc, num_vms, batch_submit_ip.clone(), (batch_submit_port+idx).to_string());
             }
 
             runner.clone().run(context.clone(), program.clone(), device_id, fname,
@@ -574,8 +603,8 @@ fn main() {
                        sfp_size, 
                        num_compiled_funcs,
                        globals_buffer_size,
-                       vm_sender_mutex.clone(),
-                       vm_recv_mutex.clone(),
+                       vm_sender_vec_arc.clone(),
+                       vm_recv_vec_arc.clone(),
                        compile_args.clone(),
                        link_args.clone(),
                        print_return)
@@ -585,20 +614,45 @@ fn main() {
     } else {
         // If we are running the wasmtime runtime
         let num_threads = num_cpus::get();
+        let wg = WaitGroup::new();
         let thread_pool = rayon::ThreadPoolBuilder::new().num_threads(num_threads.try_into().unwrap()).build().unwrap();
 
         let (server_sender, vm_recv): (Sender<(Vec<u8>, usize)>, Receiver<(Vec<u8>, usize)>) = bounded(16384);
         let (vm_sender, server_recv): (Sender<(Vec<u8>, usize, u64, u64, u64, u64)>, Receiver<(Vec<u8>, usize, u64, u64, u64, u64)>) = bounded(16384);
     
+        let mut server_sender_vec = vec![];
+        let mut vm_recv_vec = vec![];
+        for x in 0..num_threads {
+            let (sender, recv): (tokio::sync::mpsc::Sender<(Vec<u8>, usize)>, tokio::sync::mpsc::Receiver<(Vec<u8>, usize)>) = mpsc::channel(100);
+            server_sender_vec.push(AsyncMutex::new(sender));
+            vm_recv_vec.push(Mutex::new(recv));
+        }
+
+        let server_sender_vec_arc = Arc::new(server_sender_vec);
+        let vm_recv_vec_arc = Arc::new(vm_recv_vec);
+
+        let mut vm_sender_vec = vec![];
+        let mut server_recv_vec = vec![];
+        for x in 0..num_threads {
+            let (sender, recv): (tokio::sync::mpsc::Sender<(Vec<u8>, usize, u64, u64, u64, u64)>, tokio::sync::mpsc::Receiver<(Vec<u8>, usize, u64, u64, u64, u64)>) = mpsc::channel(100);
+            vm_sender_vec.push(Mutex::new(sender));
+            server_recv_vec.push(AsyncMutex::new(recv));
+        }
+
+        let vm_sender_vec_arc = Arc::new(vm_sender_vec);
+        let server_recv_vec_arc = Arc::new(server_recv_vec);
+
         let vm_sender_mutex = Arc::new(Mutex::new(vm_sender));
         let vm_recv_mutex = Arc::new(Mutex::new(vm_recv));
+
+        // For each VM create a tracking context (contains sender/receiver pair for each VM)
     
-        let server_handle = if serverless {
+        if serverless {
             println!("Starting server on: {}:{}/batch_submit", batch_submit_ip.clone(), batch_submit_port.to_string());
-            Some(BatchSubmitServer::start_server(hcall_size, server_sender, server_recv, num_vms, batch_submit_ip, batch_submit_port.to_string()))
-        } else {
-            None
-        };
+            thread_pool.spawn(move || {
+                BatchSubmitServer::start_server(hcall_size, server_sender_vec_arc, server_recv_vec_arc, num_threads.try_into().unwrap(), batch_submit_ip, batch_submit_port.to_string());
+            });
+        }
 
         for idx in 0..num_threads {
             println!("Starting Wasmtime VM: {:?}", idx);
@@ -620,11 +674,16 @@ fn main() {
                 }
             };
 
-            let vm_sender_mutex_clone = vm_sender_mutex.clone();
-            let vm_recv_mutex_clone = vm_recv_mutex.clone();
-            thread_pool.spawn(move || {
+            let mut vm_sender_mutex_clone = vm_sender_vec_arc.clone();
+            let mut vm_recv_mutex_clone = vm_recv_vec_arc.clone();
+            let wg = wg.clone();
+
+            thread::spawn(move || {
+                let wasmtime_runner = WasmtimeRunner::new(idx, vm_sender_mutex_clone.clone(), vm_recv_mutex_clone.clone());
+                let leaked_runner: &'static WasmtimeRunner = Box::leak(Box::new(wasmtime_runner));
+
                 // run the WASM VM...
-                match WasmtimeRunner::run(filedata.clone(), hcall_size, vm_sender_mutex_clone, vm_recv_mutex_clone) {
+                match leaked_runner.run(filedata.clone(), hcall_size) {
                     Ok(()) => {
                         println!("Wasmtime VM: {:?} finished running!", idx);
                     },
@@ -632,9 +691,10 @@ fn main() {
                         println!("An error occured while running VM: {:?}, error: {:?}", idx, e);
                     }
                 }
+                drop(wg);
             });
         }
-        server_handle.unwrap().join().unwrap();
+        wg.wait();
     }
 }
  

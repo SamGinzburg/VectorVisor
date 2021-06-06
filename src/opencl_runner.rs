@@ -27,8 +27,9 @@ use rayon::prelude::*;
 use ocl::core::CommandQueue;
 use ocl::core::CommandQueueProperties;
 
-use crossbeam::channel::Sender;
-use crossbeam::channel::Receiver;
+use crossbeam::channel::Sender as SyncSender;
+use crossbeam::channel::Receiver as SyncReceiver;
+use tokio::sync::mpsc::{Sender, Receiver};
 
 use std::fs::File;
 use std::io::Write;
@@ -184,8 +185,8 @@ impl OpenCLRunner {
                // needed for the size of the loop/branch data structures
                num_compiled_funcs: u32,
                globals_buffer_size: u32,
-               vm_sender: Arc<Mutex<Sender<(Vec<u8>, usize, u64, u64, u64, u64)>>>,
-               vm_recv: Arc<Mutex<Receiver<(Vec<u8>, usize)>>>,
+               vm_sender: Arc<Vec<Mutex<Sender<(Vec<u8>, usize, u64, u64, u64, u64)>>>>,
+               vm_recv: Arc<Vec<Mutex<Receiver<(Vec<u8>, usize)>>>>,
                compile_flags: String,
                link_flags: String,
                print_return: bool) -> JoinHandle<()> {
@@ -564,12 +565,12 @@ impl OpenCLRunner {
                 let num_threads = num_cpus::get();
                 let num_vms = self.num_vms.clone();
 
-                let (finished_sender, finished_receiver): (Sender<(u32, ocl::core::Program, u64)>, Receiver<(u32, ocl::core::Program, u64)>) = unbounded();
+                let (finished_sender, finished_receiver): (SyncSender<(u32, ocl::core::Program, u64)>, SyncReceiver<(u32, ocl::core::Program, u64)>) = unbounded();
 
                 let mut submit_compile_job = vec![];
 
                 for _idx in 0..num_threads {
-                    let (compile_sender, compile_receiver): (Sender<(u32, ocl::core::Program, ocl::core::Program)>, Receiver<(u32, ocl::core::Program, ocl::core::Program)>) = unbounded();
+                    let (compile_sender, compile_receiver): (SyncSender<(u32, ocl::core::Program, ocl::core::Program)>, SyncReceiver<(u32, ocl::core::Program, ocl::core::Program)>) = unbounded();
                     let cflags = compile_flags.clone();
                     let sender = finished_sender.clone();
                     let num_vms_clone = self.num_vms.clone();
@@ -721,8 +722,8 @@ impl OpenCLRunner {
                          hypercall_buffer_size: u32,
                          ctx: ocl::core::Context,
                          print_return: bool,
-                         vm_sender: Arc<Mutex<Sender<(Vec<u8>, usize, u64, u64, u64, u64)>>>,
-                         vm_recv: Arc<Mutex<Receiver<(Vec<u8>, usize)>>>) -> VMMRuntimeStatus {
+                         vm_sender: Arc<Vec<Mutex<Sender<(Vec<u8>, usize, u64, u64, u64, u64)>>>>,
+                         vm_recv: Arc<Vec<Mutex<Receiver<(Vec<u8>, usize)>>>>) -> VMMRuntimeStatus {
         // we have the compiled program & context, we now can set up the kernels...
         let data_kernel = ocl::core::create_kernel(&program, "data_init").unwrap();
         let start_kernel = ocl::core::create_kernel(&program, "wasm_entry").unwrap();
@@ -785,22 +786,20 @@ impl OpenCLRunner {
         let thread_pool = rayon::ThreadPoolBuilder::new().num_threads(num_threads.try_into().unwrap()).build().unwrap();
 
         let number_vms = self.num_vms.clone();
-        let (result_sender, result_receiver): (Sender<HyperCallResult>, Receiver<HyperCallResult>) = bounded(0);
+        let (result_sender, result_receiver): (SyncSender<HyperCallResult>, SyncReceiver<HyperCallResult>) = bounded(0);
         for _idx in 0..num_threads {
-            let (sender, recv): (Sender<HyperCall>, Receiver<HyperCall>) = unbounded();
+            let (sender, recv): (SyncSender<HyperCall>, SyncReceiver<HyperCall>) = unbounded();
             let sender_copy = result_sender.clone();
             hypercall_sender.push(sender.clone());
-            let vm_sender_clone1 = vm_sender.clone();
-            let vm_recv_clone1 = vm_recv.clone();
+            let mut vm_sender_copy = vm_sender.clone();
+            let mut vm_recv_copy = vm_recv.clone();
             thread_pool.spawn(move || {
                 let receiver = recv.clone();
                 // create the WASI contexts for this thread
                 let mut wasi_ctxs = vec![];
                 // we divide up the number of VMs per thread evenly
                 for vm in 0..(number_vms/num_threads) {
-                    let vm_sender_copy = vm_sender_clone1.clone();
-                    let vm_recv_copy = vm_recv_clone1.clone();
-                    wasi_ctxs.push(VectorizedVM::new(vm, hypercall_buffer_size, number_vms, vm_sender_copy, vm_recv_copy));
+                    wasi_ctxs.push(VectorizedVM::new(vm, hypercall_buffer_size, number_vms, Arc::new(vm_sender_copy.get(0).unwrap()), Arc::new(vm_recv_copy.get(0).unwrap())));
                 }
 
                 loop {
@@ -1120,8 +1119,8 @@ impl OpenCLRunner {
                                     hypercall_buffer_size: u32,
                                     ctx: ocl::core::Context,
                                     print_return: bool,
-                                    vm_sender: Arc<Mutex<Sender<(Vec<u8>, usize, u64, u64, u64, u64)>>>,
-                                    vm_recv: Arc<Mutex<Receiver<(Vec<u8>, usize)>>>) -> VMMRuntimeStatus {
+                                    vm_sender: Arc<Vec<Mutex<Sender<(Vec<u8>, usize, u64, u64, u64, u64)>>>>,
+                                    vm_recv: Arc<Vec<Mutex<Receiver<(Vec<u8>, usize)>>>>) -> VMMRuntimeStatus {
         let mut kernels: HashMap<u32, ocl::core::Kernel> = HashMap::new();
 
         // setup the data kernel
@@ -1192,15 +1191,15 @@ impl OpenCLRunner {
         let thread_pool = rayon::ThreadPoolBuilder::new().num_threads(num_threads.try_into().unwrap()).build().unwrap();
 
         let number_vms = self.num_vms.clone();
-        let (result_sender, result_receiver): (Sender<HyperCallResult>, Receiver<HyperCallResult>) = bounded(0);
+        let (result_sender, result_receiver): (SyncSender<HyperCallResult>, SyncReceiver<HyperCallResult>) = bounded(0);
 
         for _idx in 0..num_threads {
-            let (sender, recv): (Sender<HyperCall>, Receiver<HyperCall>) = unbounded();
+            let (sender, recv): (SyncSender<HyperCall>, SyncReceiver<HyperCall>) = unbounded();
             let sender_copy = result_sender.clone();
             hypercall_sender.push(sender.clone());
 
-            let vm_sender_clone1 = vm_sender.clone();
-            let vm_recv_clone1 = vm_recv.clone();
+            let mut vm_sender_copy = vm_sender.clone();
+            let mut vm_recv_copy = vm_recv.clone();
 
             thread_pool.spawn(move || {
                 let receiver = recv.clone();
@@ -1208,9 +1207,7 @@ impl OpenCLRunner {
                 let mut wasi_ctxs = vec![];
                 // we divide up the number of VMs per thread evenly
                 for vm in 0..(number_vms/num_threads) {
-                    let vm_sender_copy = vm_sender_clone1.clone();
-                    let vm_recv_copy = vm_recv_clone1.clone();
-                    wasi_ctxs.push(VectorizedVM::new(vm, hypercall_buffer_size, number_vms, vm_sender_copy, vm_recv_copy));
+                    wasi_ctxs.push(VectorizedVM::new(vm, hypercall_buffer_size, number_vms, Arc::new(vm_sender_copy.get(0).unwrap()), Arc::new(vm_recv_copy.get(0).unwrap())));
                 }
 
                 loop {

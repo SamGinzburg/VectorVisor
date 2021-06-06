@@ -17,8 +17,8 @@ use crate::opencl_runner::random::Random;
 
 use ocl::core::CommandQueue;
 
-use crossbeam::channel::Sender;
-use crossbeam::channel::Receiver;
+use tokio::sync::mpsc::{Sender, Receiver};
+use crossbeam::channel::Sender as SyncSender;
 
 use std::sync::Arc;
 use std::sync::RwLock;
@@ -128,7 +128,7 @@ impl HyperCallResult {
     }
 }
 
-pub struct VectorizedVM {
+pub struct VectorizedVM<'a> {
     // each VM has its own WASI state tracking object
     ctx: WasiCtx,
     engine: Engine,
@@ -143,12 +143,12 @@ pub struct VectorizedVM {
     pub queue_submit_counter: Arc<u64>,
     pub queue_submit_qty: Arc<u64>,
     pub called_fns_set: Arc<HashSet<u32>>,
-    pub vm_sender: Arc<Mutex<Sender<(Vec<u8>, usize, u64, u64, u64, u64)>>>,
-    pub vm_recv:   Arc<Mutex<Receiver<(Vec<u8>, usize)>>>,
+    pub vm_sender: Arc<&'a Mutex<Sender<(Vec<u8>, usize, u64, u64, u64, u64)>>>,
+    pub vm_recv:   Arc<&'a Mutex<Receiver<(Vec<u8>, usize)>>>,
 }
 
-impl VectorizedVM {
-    pub fn new(vm_id: u32, hcall_buf_size: u32, _num_total_vms: u32, vm_sender: Arc<Mutex<Sender<(Vec<u8>, usize, u64, u64, u64, u64)>>>, vm_recv: Arc<Mutex<Receiver<(Vec<u8>, usize)>>>) -> VectorizedVM {
+impl<'a> VectorizedVM<'_> {
+    pub fn new(vm_id: u32, hcall_buf_size: u32, _num_total_vms: u32, vm_sender: Arc<&'a Mutex<Sender<(Vec<u8>, usize, u64, u64, u64, u64)>>>, vm_recv: Arc<&'a Mutex<Receiver<(Vec<u8>, usize)>>>) -> VectorizedVM<'a> {
         // default context with no args yet - we can inherit arguments from the CLI if we want
         // or we can pass them in some other config file
 
@@ -199,7 +199,7 @@ impl VectorizedVM {
      */
     pub fn dispatch_hypercall(&mut self,
                               hypercall: &mut HyperCall,
-                              sender: &Sender<HyperCallResult>) -> () {
+                              sender: &SyncSender<HyperCallResult>) -> () {
         match hypercall.syscall {
             WasiSyscalls::FdWrite => {
                 WasiFd::hypercall_fd_write(&self.ctx, self, hypercall, sender);
@@ -237,7 +237,7 @@ impl VectorizedVM {
     }
 }
 
-impl fmt::Debug for VectorizedVM {
+impl fmt::Debug for VectorizedVM<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("VectorizedVM")
         .field("vm_id", &self.vm_id)

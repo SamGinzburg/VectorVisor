@@ -3,14 +3,17 @@ use std::thread::JoinHandle;
 use std::str::from_utf8;
 use std::collections::HashMap;
 use std::convert::TryInto;
+use std::sync::Arc;
 
-use crossbeam::channel::Sender;
-use crossbeam::channel::Receiver;
+use tokio::sync::mpsc::{Sender, Receiver};
+use tokio::sync::Mutex;
 
 use serde::Deserialize;
 use serde::Serialize;
 use rayon::prelude::*;
 
+use warp::{Buf, Filter, Reply};
+use bytes::Bytes;
 
 pub struct BatchSubmitServer {}
 
@@ -39,42 +42,71 @@ struct BatchResponse {
     requests: HashMap<u32, BatchReply>
 }
 
+type VmQueue = deadqueue::limited::Queue<usize>;
+
 impl BatchSubmitServer {
-    pub fn start_server(hcall_buf_size: usize, sender: Sender<(Vec<u8>, usize)>, receiver: Receiver<(Vec<u8>, usize, u64, u64, u64, u64)>, num_vms: u32, server_ip: String, server_port: String) -> JoinHandle<()> {
-        let thandle = thread::spawn(move || {
-            rouille::start_server(format!("{}:{}", server_ip, server_port), move |request| {
-                router!(request,
-                    (GET) (/batch_submit/) => {
-                        let json: BatchInput = try_or_400!(rouille::input::json_input(request));
 
-                        (&json.requests).into_par_iter().for_each(|req| {
-                            sender.send((req.req.clone().into_bytes(), req.req.len())).unwrap();
-                        });
+    async fn response(body: bytes::Bytes, vm_queue: Arc<VmQueue>, sender: Arc<Vec<Mutex<Sender<(Vec<u8>, usize)>>>>, receiver: Arc<Vec<Mutex<Receiver<(Vec<u8>, usize, u64, u64, u64, u64)>>>>) -> Result<impl warp::Reply, warp::Rejection> {
+        // Get an available VM first
+        let vm_idx = vm_queue.pop().await;
+        let tx: &Mutex<Sender<(Vec<u8>, usize)>> = (*sender).get(vm_idx).unwrap();
+        let rx: &Mutex<Receiver<(Vec<u8>, usize, u64, u64, u64, u64)>> = (*receiver).get(vm_idx).unwrap();
 
-                        let mut responses: HashMap<u32, BatchReply> = HashMap::new();
-                        // wait for the requests to complete
-                        for _idx in 0..json.requests.len() {
-                            // each request has an ID and a string (containing the json body)
-                            let (resp, len, on_dev_time, queue_submit_time, num_queue_submits, num_unique_fns) = receiver.recv().unwrap();
-                            // TODO: replace _idx with real req number
-                            responses.insert(_idx.try_into().unwrap(), BatchReply {
-                                response: from_utf8(&resp[0..len]).unwrap().to_string(),
-                                on_device_execution_time_ns: on_dev_time,
-                                device_queue_overhead_time_ns: queue_submit_time,
-                                queue_submit_count: num_queue_submits,
-                                num_unique_fns_called: num_unique_fns,
-                            });
-                        }
+        /*
+        let (tx, rx, vm_idx) = match vm_queue.try_pop() {
+            Some(idx) => {
+                ((*sender).get(idx).unwrap(), (*receiver).get(idx).unwrap(), idx)
+            },
+            // TODO, if we have no available GPU workers, try using backup CPU resources
+            None => return Ok(warp::reply::json(&format!("out of resources")).into_response()),
+        };
+        */
 
-                        rouille::Response::json(&BatchResponse{
-                            requests: responses,
-                        })
-                    },
-                    _ => rouille::Response::empty_404()
-                )
-            });
-        });
+        // Send the request body to the selected VM
+        // We can't await on the send because we have the mutex acquired here
+        tx.lock().await.send((body.to_vec(), body.len())).await.unwrap();
 
-        thandle
+        // Wait on response from the VM
+        let (resp, len, on_dev_time, queue_submit_time, num_queue_submits, num_unique_fns) = match rx.lock().await.recv().await{
+            Some(val) => val,
+            None => return Ok(warp::reply::json(&format!("failed to receive result from worker VM")).into_response())
+        };
+
+        let final_response = BatchReply {
+            response: from_utf8(&resp[0..len]).unwrap().to_string(),
+            on_device_execution_time_ns: on_dev_time,
+            device_queue_overhead_time_ns: queue_submit_time,
+            queue_submit_count: num_queue_submits,
+            num_unique_fns_called: num_unique_fns,
+        };
+
+        // Return the VM to the pool
+        vm_queue.push(vm_idx).await;
+
+        Ok(warp::reply::json(&final_response).into_response())
+    }
+
+    pub fn start_server(hcall_buf_size: usize, sender: Arc<Vec<Mutex<Sender<(Vec<u8>, usize)>>>>, receiver: Arc<Vec<Mutex<Receiver<(Vec<u8>, usize, u64, u64, u64, u64)>>>>, num_vms: u32, server_ip: String, server_port: String) -> () {
+        tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(async {{
+                    // Set up queue of available VMs (each VM has a unique communication channel)
+                    let queue = Arc::new(VmQueue::new(num_vms.try_into().unwrap()));
+                    for i in 0..num_vms {
+                        queue.push(i.try_into().unwrap()).await;
+                    }
+
+                    let warp_queue = warp::any().map(move || Arc::clone(&queue));
+                    let warp_senders = warp::any().map(move || Arc::clone(&sender));
+                    let warp_receivers = warp::any().map(move || Arc::clone(&receiver));
+
+
+                    let hello = warp::path!("batch_submit")
+                    .and(warp::body::bytes()).and(warp_queue).and(warp_senders).and(warp_receivers).and_then(BatchSubmitServer::response);
+
+                    warp::serve(hello).run(([127, 0, 0, 1], 8000)).await;
+            }});
     }
 }
