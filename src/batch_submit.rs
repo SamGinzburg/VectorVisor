@@ -3,8 +3,10 @@ use std::thread::JoinHandle;
 use std::str::from_utf8;
 use std::collections::HashMap;
 use std::convert::TryInto;
+use std::convert::Infallible;
 use std::sync::Arc;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::error::Error;
 
 use tokio::sync::mpsc::{Sender, Receiver};
 use tokio::sync::Mutex;
@@ -14,6 +16,7 @@ use serde::Serialize;
 use rayon::prelude::*;
 
 use warp::{Buf, Filter, Reply};
+
 use bytes::Bytes;
 
 pub struct BatchSubmitServer {}
@@ -45,22 +48,28 @@ struct BatchResponse {
 
 type VmQueue = deadqueue::limited::Queue<usize>;
 
+#[derive(Debug)]
+struct NoVmAvailable;
+
+impl warp::reject::Reject for NoVmAvailable {}
+
 impl BatchSubmitServer {
 
     async fn response(body: bytes::Bytes, vm_queue: Arc<VmQueue>, sender: Arc<Vec<Mutex<Sender<(Vec<u8>, usize)>>>>, receiver: Arc<Vec<Mutex<Receiver<(Vec<u8>, usize, u64, u64, u64, u64)>>>>) -> Result<impl warp::Reply, warp::Rejection> {
         // Get an available VM first
+        /*
         let vm_idx = vm_queue.pop().await;
         let tx: &Mutex<Sender<(Vec<u8>, usize)>> = (*sender).get(vm_idx).unwrap();
         let rx: &Mutex<Receiver<(Vec<u8>, usize, u64, u64, u64, u64)>> = (*receiver).get(vm_idx).unwrap();
-        /*
+        */
+
         let (tx, rx, vm_idx) = match vm_queue.try_pop() {
             Some(idx) => {
                 ((*sender).get(idx).unwrap(), (*receiver).get(idx).unwrap(), idx)
             },
             // TODO, if we have no available GPU workers, try using backup CPU resources
-            None => return Ok(warp::reply::json(&format!("out of resources")).into_response()),
+            None => return Err(warp::reject::custom(NoVmAvailable)),
         };
-        */
 
         // Send the request body to the selected VM
         // We can't await on the send because we have the mutex acquired here
@@ -69,7 +78,7 @@ impl BatchSubmitServer {
         // Wait on response from the VM
         let (resp, len, on_dev_time, queue_submit_time, num_queue_submits, num_unique_fns) = match rx.lock().await.recv().await{
             Some(val) => val,
-            None => return Ok(warp::reply::json(&format!("failed to receive result from worker VM")).into_response())
+            None => panic!("A VM died while processing a request, vm_idx: {}", vm_idx),
         };
 
         let final_response = BatchReply {
@@ -106,7 +115,8 @@ impl BatchSubmitServer {
 
 
                     let hello = warp::path!("batch_submit")
-                    .and(warp::body::bytes()).and(warp_queue).and(warp_senders).and(warp_receivers).and_then(BatchSubmitServer::response);
+                                .and(warp::body::bytes()).and(warp_queue).and(warp_senders).and(warp_receivers).and_then(BatchSubmitServer::response);
+
                     let socket: SocketAddr = format!("{}:{}", server_ip, server_port).parse().unwrap();
                     warp::serve(hello).run(socket).await;
             }});

@@ -64,18 +64,28 @@ func IssueRequests(ip string, port int, req [][]byte, data_ch chan<-[]byte, end_
 	for {
 		http_request.Body = ioutil.NopCloser(bytes.NewReader(req[rand.Intn(NUM_PARAMS)]))
 		start_read := time.Now()
+		_ = start_read
 		resp, err := client.Do(http_request)
 		if err != nil {
 			fmt.Printf("client err: %s\n", err)
 			continue
 		}
+
 		body, err := ioutil.ReadAll(resp.Body)
 		resp.Body.Close()
 		read_secs := time.Since(start_read)
+		_ = read_secs
 		if err != nil {
 			fmt.Printf("err: %s\n", err)
 		}
-		fmt.Printf("E2E req time: %s\n", read_secs)
+
+		// if we get a hangup from the server, continue
+		if resp.StatusCode != http.StatusOK {
+			continue
+		} else {
+			fmt.Printf("E2E req time: %s\n", read_secs)
+		}
+
 		select {
 			case data_ch <- body:
 			default:
