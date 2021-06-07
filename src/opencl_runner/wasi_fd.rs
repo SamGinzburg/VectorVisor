@@ -29,7 +29,7 @@ pub struct WasiFd {}
 
 impl WasiFd {
     pub fn hypercall_fd_write(ctx: &WasiCtx, vm_ctx: &VectorizedVM, hypercall: &mut HyperCall, sender: &Sender<HyperCallResult>) -> () {
-        let mut hcall_buf: &[u8] = &hypercall.hypercall_buffer.read().unwrap();
+        let mut hcall_buf: &[u8] = unsafe { *hypercall.hypercall_buffer.buf.get() };
         let hcall_buf_size: u32 = hcall_buf.len().try_into().unwrap();
 
         let memory = &vm_ctx.memory;
@@ -92,7 +92,7 @@ impl WasiFd {
     }
 
     pub fn hypercall_fd_prestat_get(ctx: &WasiCtx, _vm_ctx: &VectorizedVM, hypercall: &mut HyperCall, sender: &Sender<HyperCallResult>) -> () {
-        let mut hcall_buf: &mut [u8] = &mut hypercall.hypercall_buffer.write().unwrap();
+        let mut hcall_buf: &mut [u8] = unsafe { *hypercall.hypercall_buffer.buf.get() };
         let hcall_buf_size: u32 = hcall_buf.len().try_into().unwrap();
 
         //let memory = &vm_ctx.memory;
@@ -128,7 +128,7 @@ impl WasiFd {
         }).unwrap();
     }
     pub fn hypercall_fd_prestat_dir_name(ctx: &WasiCtx, vm_ctx: &VectorizedVM, hypercall: &mut HyperCall, sender: &Sender<HyperCallResult>) -> () {
-        let mut hcall_buf: &mut [u8] = &mut hypercall.hypercall_buffer.write().unwrap();
+        let mut hcall_buf: &mut [u8] = unsafe { *hypercall.hypercall_buffer.buf.get() };
         let hcall_buf_size: u32 = hcall_buf.len().try_into().unwrap();
 
         //let memory = &vm_ctx.memory;

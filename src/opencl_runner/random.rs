@@ -24,7 +24,7 @@ pub struct Random {}
 
 impl Random {
     pub fn hypercall_random_get(ctx: &WasiCtx, vm_ctx: &VectorizedVM, hypercall: &mut HyperCall, sender: &Sender<HyperCallResult>) -> () {
-        let mut hcall_buf: &mut [u8] = &mut hypercall.hypercall_buffer.write().unwrap();
+        let mut hcall_buf: &mut [u8] = unsafe { *hypercall.hypercall_buffer.buf.get() };
         
         let memory = &vm_ctx.memory;
         let wasm_mem = &vm_ctx.wasm_memory;

@@ -14,6 +14,7 @@ use crate::opencl_runner::WasiFd;
 use crate::opencl_runner::environment::Environment;
 use crate::opencl_runner::serverless::Serverless;
 use crate::opencl_runner::random::Random;
+use crate::opencl_runner::UnsafeCellWrapper;
 
 use ocl::core::CommandQueue;
 
@@ -21,7 +22,7 @@ use tokio::sync::mpsc::{Sender, Receiver};
 use crossbeam::channel::Sender as SyncSender;
 
 use std::sync::Arc;
-use std::sync::RwLock;
+use std::cell::UnsafeCell;
 use std::sync::Mutex;
 use std::collections::HashSet;
 
@@ -59,7 +60,7 @@ pub struct HyperCall<'a> {
     pub syscall: WasiSyscalls,
     pub is_interleaved_mem: bool,
     pub ocl_buffers: &'a OpenCLBuffers,
-    pub hypercall_buffer: Arc<RwLock<&'a mut [u8]>>,
+    pub hypercall_buffer: Arc<UnsafeCellWrapper>,
     pub queue: &'a CommandQueue,
 }
 
@@ -74,7 +75,7 @@ impl<'a> HyperCall<'a> {
                syscall: WasiSyscalls,
                is_interleaved_mem: bool,
                ocl_buffers: &'a OpenCLBuffers,
-               hypercall_buffer: Arc<RwLock<&'a mut [u8]>>,
+               hypercall_buffer: Arc<UnsafeCellWrapper>,
                queue: &'a CommandQueue) -> HyperCall<'a> {
         HyperCall {
             vm_id: vm_id,

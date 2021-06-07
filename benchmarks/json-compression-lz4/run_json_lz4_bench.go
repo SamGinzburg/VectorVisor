@@ -61,22 +61,21 @@ func IssueRequests(ip string, port int, req [][]byte, data_ch chan<-[]byte, end_
 	http_request, _ := http.NewRequest("GET", addr, nil)
 	http_request.Header.Add("Content-Type", "application/json; charset=utf-8")
 
-	read_cnt := int64(0)
 	for {
 		http_request.Body = ioutil.NopCloser(bytes.NewReader(req[rand.Intn(NUM_PARAMS)]))
+		//start_read := time.Now()
 		resp, err := client.Do(http_request)
 		if err != nil {
 			fmt.Printf("client err: %s\n", err)
 			continue
 		}
-		start_read := time.Now()
 		body, err := ioutil.ReadAll(resp.Body)
 		resp.Body.Close()
+		//read_secs := time.Since(start_read)
 		if err != nil {
 			fmt.Printf("err: %s\n", err)
 		}
-		read_secs := time.Since(start_read)
-		read_cnt += read_secs.Nanoseconds()
+		//fmt.Printf("E2E req time: %s\n", read_secs)
 		select {
 			case data_ch <- body:
 			default:
