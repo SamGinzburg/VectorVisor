@@ -63,7 +63,7 @@ func IssueRequests(ip string, port int, req [][]byte, data_ch chan<-[]byte, end_
 
 	for {
 		http_request.Body = ioutil.NopCloser(bytes.NewReader(req[rand.Intn(NUM_PARAMS)]))
-		//start_read := time.Now()
+		start_read := time.Now()
 		resp, err := client.Do(http_request)
 		if err != nil {
 			fmt.Printf("client err: %s\n", err)
@@ -71,11 +71,11 @@ func IssueRequests(ip string, port int, req [][]byte, data_ch chan<-[]byte, end_
 		}
 		body, err := ioutil.ReadAll(resp.Body)
 		resp.Body.Close()
-		//read_secs := time.Since(start_read)
+		read_secs := time.Since(start_read)
 		if err != nil {
 			fmt.Printf("err: %s\n", err)
 		}
-		//fmt.Printf("E2E req time: %s\n", read_secs)
+		fmt.Printf("E2E req time: %s\n", read_secs)
 		select {
 			case data_ch <- body:
 			default:
@@ -117,7 +117,7 @@ func main() {
 
 	reqs := make([][]byte, NUM_PARAMS)
 	for i := 0; i < NUM_PARAMS; i++ {
-		p := payload{Text: RandString(1024 * 64)}
+		p := payload{Text: RandString(1024 * 16)}
 		request_body, _ := json.Marshal(p)
 		reqs[i] = request_body
 	}

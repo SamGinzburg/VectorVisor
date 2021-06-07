@@ -1529,7 +1529,7 @@ impl OpenCLRunner {
             }
 
             // now it is time to dispatch hypercalls
-            vm_slice.as_slice().iter().for_each(|vm_id| {
+            vm_slice.as_slice().par_iter().for_each(|vm_id| {
                 let hypercall_id = match hypercall_num_temp[*vm_id as usize] as i64 {
                     0 => WasiSyscalls::FdWrite,
                     1 => WasiSyscalls::ProcExit,

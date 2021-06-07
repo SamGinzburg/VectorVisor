@@ -88,6 +88,8 @@ impl BatchSubmitServer {
 
     pub fn start_server(hcall_buf_size: usize, sender: Arc<Vec<Mutex<Sender<(Vec<u8>, usize)>>>>, receiver: Arc<Vec<Mutex<Receiver<(Vec<u8>, usize, u64, u64, u64, u64)>>>>, num_vms: u32, server_ip: String, server_port: String) -> () {
         tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(num_cpus::get())
+            .thread_stack_size(1024 * 256) // 256KiB per thread should be enough
             .enable_all()
             .build()
             .unwrap()

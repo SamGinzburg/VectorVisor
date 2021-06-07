@@ -1,6 +1,4 @@
 extern crate ocl;
-#[macro_use]
-extern crate rouille;
 
 mod opencl_writer;
 mod opencl_runner;
