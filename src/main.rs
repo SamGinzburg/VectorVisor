@@ -559,7 +559,7 @@ fn main() {
             let mut server_sender_vec = vec![];
             let mut vm_recv_vec = vec![];
             for x in 0..num_vms.clone() {
-                let (sender, recv): (tokio::sync::mpsc::Sender<(Vec<u8>, usize)>, tokio::sync::mpsc::Receiver<(Vec<u8>, usize)>) = mpsc::channel(100);
+                let (sender, recv): (tokio::sync::mpsc::Sender<(Vec<u8>, usize)>, tokio::sync::mpsc::Receiver<(Vec<u8>, usize)>) = mpsc::channel(16384);
                 server_sender_vec.push(AsyncMutex::new(sender));
                 vm_recv_vec.push(Mutex::new(recv));
             }
@@ -570,7 +570,7 @@ fn main() {
             let mut vm_sender_vec = vec![];
             let mut server_recv_vec = vec![];
             for x in 0..num_vms.clone() {
-                let (sender, recv): (tokio::sync::mpsc::Sender<(Vec<u8>, usize, u64, u64, u64, u64)>, tokio::sync::mpsc::Receiver<(Vec<u8>, usize, u64, u64, u64, u64)>) = mpsc::channel(100);
+                let (sender, recv): (tokio::sync::mpsc::Sender<(Vec<u8>, usize, u64, u64, u64, u64)>, tokio::sync::mpsc::Receiver<(Vec<u8>, usize, u64, u64, u64, u64)>) = mpsc::channel(16384);
                 vm_sender_vec.push(Mutex::new(sender));
                 server_recv_vec.push(AsyncMutex::new(recv));
             }
@@ -618,7 +618,7 @@ fn main() {
         let mut server_sender_vec = vec![];
         let mut vm_recv_vec = vec![];
         for x in 0..num_threads {
-            let (sender, recv): (tokio::sync::mpsc::Sender<(Vec<u8>, usize)>, tokio::sync::mpsc::Receiver<(Vec<u8>, usize)>) = mpsc::channel(100);
+            let (sender, recv): (tokio::sync::mpsc::Sender<(Vec<u8>, usize)>, tokio::sync::mpsc::Receiver<(Vec<u8>, usize)>) = mpsc::channel(16384);
             server_sender_vec.push(AsyncMutex::new(sender));
             vm_recv_vec.push(Mutex::new(recv));
         }
@@ -629,7 +629,7 @@ fn main() {
         let mut vm_sender_vec = vec![];
         let mut server_recv_vec = vec![];
         for x in 0..num_threads {
-            let (sender, recv): (tokio::sync::mpsc::Sender<(Vec<u8>, usize, u64, u64, u64, u64)>, tokio::sync::mpsc::Receiver<(Vec<u8>, usize, u64, u64, u64, u64)>) = mpsc::channel(100);
+            let (sender, recv): (tokio::sync::mpsc::Sender<(Vec<u8>, usize, u64, u64, u64, u64)>, tokio::sync::mpsc::Receiver<(Vec<u8>, usize, u64, u64, u64, u64)>) = mpsc::channel(16384);
             vm_sender_vec.push(Mutex::new(sender));
             server_recv_vec.push(AsyncMutex::new(recv));
         }
@@ -692,4 +692,3 @@ fn main() {
         wg.wait();
     }
 }
- 

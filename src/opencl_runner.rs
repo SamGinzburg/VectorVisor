@@ -30,6 +30,7 @@ use ocl::core::CommandQueueProperties;
 use crossbeam::channel::Sender as SyncSender;
 use crossbeam::channel::Receiver as SyncReceiver;
 use tokio::sync::mpsc::{Sender, Receiver};
+use tokio::runtime::Runtime;
 
 use std::fs::File;
 use std::io::Write;
@@ -40,6 +41,7 @@ use std::collections::HashSet;
 use std::fs::OpenOptions;
 use std::io::prelude::*;
 use std::mem::transmute;
+use std::collections::VecDeque;
 
 use std::convert::TryInto;
 use std::thread::JoinHandle;
@@ -1205,8 +1207,8 @@ impl OpenCLRunner {
             num_cpus::get() as u32
         };
         */
-
-        let num_threads = self.num_vms;
+        //let num_threads = self.num_vms;
+        let num_threads = num_cpus::get() as u32;
         let thread_pool = rayon::ThreadPoolBuilder::new().num_threads(num_threads.try_into().unwrap()).stack_size(1024*512).build().unwrap();
 
         let number_vms = self.num_vms.clone();
@@ -1222,18 +1224,15 @@ impl OpenCLRunner {
                 let receiver = recv.clone();
                 // create the WASI contexts for this thread
                 let mut wasi_ctxs = vec![];
+                let mut avail_ctx: VecDeque<u32> = std::ops::Range { start: 0, end: (number_vms/num_threads) }.collect();
                 // we divide up the number of VMs per thread evenly
-                /*
-                 * Example:
-                 *   If we have 32 threads and 64 VMs:
-                 *   Thread 0 gets VMs 0 and 312
-                 *   Thread 1 gets VMs 1 and 33
-                 *   ...
-                 *   Thread 31 gets VMs 31 and 63
-                 */
                 for vm in 0..(number_vms/num_threads) {
-                    let vm_index = (idx + (vm*num_threads)) as usize;
-                    wasi_ctxs.push(VectorizedVM::new(vm, hypercall_buffer_size, number_vms, Arc::new(vm_sender_copy.get(vm_index).unwrap()), Arc::new(vm_recv_copy.get(vm_index).unwrap())));
+                    let vm_index = (vm + (idx * (number_vms/num_threads))) as usize;
+                    wasi_ctxs.push(VectorizedVM::new(vm,
+                                                     hypercall_buffer_size,
+                                                     number_vms,
+                                                     Arc::new(vm_sender_copy.get(vm_index).unwrap()),
+                                                     Arc::new(vm_recv_copy.get(vm_index).unwrap())));
                 }
 
                 loop {
@@ -1242,15 +1241,18 @@ impl OpenCLRunner {
                     let mut incoming_msg = match receiver.recv() {
                         Ok(m) => m,
                         _ => {
-                            // if the main sending thread is closed, we will get an error
-                            // we are handling that error elsewhere, so we can just exit the thread in that case
-                            break;
+                            panic!("Server hcall dispatch thread #{}, crashed while waiting for input", idx)
                         },
                     };
                     // get the WASI context
-                    let wasi_context = &mut wasi_ctxs[(incoming_msg.vm_id % (number_vms/num_threads)) as usize];
+                    // we provide no guarantee as to which req gets which VM
+                    let ctx_id = avail_ctx.pop_front().unwrap();
+                    let wasi_context = &mut wasi_ctxs[ctx_id as usize];
 
                     wasi_context.dispatch_hypercall(&mut incoming_msg, &sender_copy.clone());
+
+                    // push the context back
+                    avail_ctx.push_back(ctx_id);
                 }
             });    
         }
@@ -1395,6 +1397,7 @@ impl OpenCLRunner {
             // warning - bugged kernels can cause GPU driver hangs! Will result in the driver restarting...
             // Hangs are frequently a sign of a segmentation faults from inside of the GPU kernel
             // Unfortunately the OpenCL API doesn't give us a good way to identify what happened - the OS logs (dmesg) do have a record of this though
+            
             profiling_event = ocl::Event::empty();
             unsafe {
                 num_queue_submits += 1;
@@ -1404,7 +1407,7 @@ impl OpenCLRunner {
             let queue_start_kernel = profiling_event.profiling_info(ocl::enums::ProfilingInfo::Queued).unwrap().time().unwrap();
             let start_start_kernel = profiling_event.profiling_info(ocl::enums::ProfilingInfo::Start).unwrap().time().unwrap();
             let end_start_kernel = profiling_event.profiling_info(ocl::enums::ProfilingInfo::End).unwrap().time().unwrap();
-
+            
             total_gpu_execution_time += end_start_kernel-start_start_kernel;
 
             if start_start_kernel-queue_start_kernel > max_queue_time {
@@ -1529,7 +1532,7 @@ impl OpenCLRunner {
             }
 
             // now it is time to dispatch hypercalls
-            vm_slice.as_slice().par_iter().for_each(|vm_id| {
+            vm_slice.as_slice().iter().for_each(|vm_id| {
                 let hypercall_id = match hypercall_num_temp[*vm_id as usize] as i64 {
                     0 => WasiSyscalls::FdWrite,
                     1 => WasiSyscalls::ProcExit,
@@ -1542,7 +1545,7 @@ impl OpenCLRunner {
                     10000 => WasiSyscalls::ServerlessResponse,
                     _ => WasiSyscalls::InvalidHyperCallNum,
                 };
-                hypercall_sender[(vm_id % num_threads) as usize].send(
+                hypercall_sender[(*vm_id % num_threads) as usize].send(
                     HyperCall::new((*vm_id as u32).clone(),
                                    number_vms,
                                    stack_pointer_temp[*vm_id as usize],
@@ -1572,6 +1575,7 @@ impl OpenCLRunner {
             }
 
             let end_hcall_dispatch = std::time::Instant::now();
+ 
             hcall_execution_time += (end_hcall_dispatch - start_hcall_dispatch).as_nanos();
 
             let vmm_post_overhead = std::time::Instant::now();
@@ -1617,6 +1621,7 @@ impl OpenCLRunner {
                 }
             }
             let vmm_post_overhead_end = std::time::Instant::now();
+    
             vmm_overhead += (vmm_post_overhead_end - vmm_post_overhead).as_nanos();
         }
 

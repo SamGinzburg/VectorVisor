@@ -28,9 +28,12 @@ impl Serverless {
 
         // copy the incoming request into the hcall_buffer
         if hypercall.is_interleaved_mem {
+            let start = std::time::Instant::now();
             for offset in 0..msg_len {
                 Interleave::write_u8(hcall_buf, offset.try_into().unwrap(), hypercall.num_total_vms, msg[offset], hypercall.vm_id);
             }
+			let end = std::time::Instant::now();
+			//println!("invoke copy time: {}", (end-start).as_nanos());
         } else {
             hcall_buf[0..msg_len].copy_from_slice(&msg[0..msg_len]);
         }
@@ -69,9 +72,12 @@ impl Serverless {
 
         // copy the data from the hcall_buffer
         if hypercall.is_interleaved_mem {
+            let start = std::time::Instant::now();
             for offset in 0..resp_buf_len {
                 resp_buf[offset] = Interleave::read_u8(hcall_buf, (4 + offset).try_into().unwrap(), hypercall.num_total_vms, hypercall.vm_id);
             }
+            let end = std::time::Instant::now();
+			//println!("resp copy time: {}", (end-start).as_nanos());
         } else {
             resp_buf[0..resp_buf_len].copy_from_slice(&hcall_buf[4..4+resp_buf_len]);
         }
