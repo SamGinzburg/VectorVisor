@@ -1304,6 +1304,15 @@ impl OpenCLRunner {
                     Err(e) => panic!("hypercall_num_result, Error: {}", e),
                     _ => (),
                 }
+
+
+                // set the hcall_size
+                let hcall_size_result = ocl::core::enqueue_write_buffer(&queue, &buffers.hcall_size, true, (idx * 4) as usize, &default_hcall_size, None::<Event>, None::<&mut Event>);
+
+                match hcall_size_result {
+                    Err(e) => panic!("hcall_size_result, Error: {}", e),
+                    _ => (),
+                }
             }
         }
 
