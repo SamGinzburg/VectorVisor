@@ -231,6 +231,46 @@ pub fn generate_read_write_calls(writer: &opencl_writer::OpenCLCWriter, interlea
     result += &format!("\n{}\n",
                        "}");
 
+
+    // emit a special de-interleave memcpy, that reads interleaved memory, and writes to linear
+    // memory
+    result += &format!("\n{}\n",
+        "void ___private_memcpy_gpu2cpu(ulong src, ulong mem_start_src, ulong dst, ulong mem_start_dst, ulong buf_len_bytes, uint warp_id) {");
+    result += &format!("\t{}\n",
+                       "char *dst_tmp = (char*)(mem_start_dst);");
+    result += &format!("\t{}\n",
+                       "for (uint idx = 0; idx < buf_len_bytes; idx++) {");
+
+    result += &format!("\t{} = {};\n",
+                       "*dst_tmp++",
+                       &emit_read_u8("(ulong)(src+idx)", "(ulong)(mem_start_src)", "warp_id"));
+
+    result += &format!("\t{}\n",
+                       "}");
+    
+    result += &format!("\n{}\n",
+                       "}");   
+
+    // emit another de-interleave memcpy, that reads linear memory and writes to interleaved
+    // memory
+    result += &format!("\n{}\n",
+        "void ___private_memcpy_cpu2gpu(ulong src, ulong mem_start_src, ulong dst, ulong mem_start_dst, ulong buf_len_bytes, uint warp_id) {");
+    result += &format!("\t{}\n",
+                       "char *src_tmp = (char*)(mem_start_src);");
+ 
+    result += &format!("\t{}\n",
+                       "for (uint idx = 0; idx < buf_len_bytes; idx++) {");
+
+    result += &format!("\t{};\n",
+                       emit_write_u8("(ulong)(dst+idx)", "(ulong)(mem_start_dst)",
+                       "*src_tmp++", "warp_id"));
+
+    result += &format!("\t{}\n",
+                       "}");
+    
+    result += &format!("\n{}\n",
+                       "}");   
+
     result += &format!("\n{}\n",
         "inline void * ___private_memcpy_nonmmu(void *dest, void *src, size_t len) {");
     result += &format!("\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n",

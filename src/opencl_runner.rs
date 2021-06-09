@@ -85,13 +85,12 @@ pub struct OpenCLBuffers {
     sfp: ocl::core::Mem,
     call_stack: ocl::core::Mem,
     call_return_stack: ocl::core::Mem,
-    branch_value_stack_state: ocl::core::Mem,
-    loop_value_stack_state: ocl::core::Mem,
     hypercall_num: ocl::core::Mem,
     hypercall_continuation: ocl::core::Mem,
     current_mem: ocl::core::Mem,
     max_mem: ocl::core::Mem,
     is_calling: ocl::core::Mem,
+    hcall_size: ocl::core::Mem,
     entry: ocl::core::Mem,
 }
 
@@ -104,13 +103,12 @@ impl OpenCLBuffers {
                sfp: ocl::core::Mem,
                call_stack: ocl::core::Mem,
                call_return_stack: ocl::core::Mem,
-               branch_value_stack_state: ocl::core::Mem,
-               loop_value_stack_state: ocl::core::Mem,
                hypercall_num: ocl::core::Mem,
                hypercall_continuation: ocl::core::Mem,
                current_mem: ocl::core::Mem,
                max_mem: ocl::core::Mem,
                is_calling: ocl::core::Mem,
+               hcall_size: ocl::core::Mem,
                entry: ocl::core::Mem) -> OpenCLBuffers {
                 OpenCLBuffers {
                     stack_buffer: stack_buffer,
@@ -121,13 +119,12 @@ impl OpenCLBuffers {
                     sfp: sfp,
                     call_stack: call_stack,
                     call_return_stack: call_return_stack,
-                    branch_value_stack_state: branch_value_stack_state,
-                    loop_value_stack_state: loop_value_stack_state,
                     hypercall_num: hypercall_num,
                     hypercall_continuation: hypercall_continuation,
                     current_mem: current_mem,
                     max_mem: max_mem,
                     is_calling: is_calling,
+                    hcall_size: hcall_size,
                     entry: entry,
                 }
     }
@@ -356,25 +353,6 @@ impl OpenCLRunner {
         };
         size_tracker += (call_stack_size * 8 * self.num_vms) as u64;
 
-        // max supported call stack depth of 256 calls
-        // TODO: make max call stack depth configurable
-        // we can store up to 128 loops and 128 branches within a func
-        let branch_value_stack_state = unsafe {
-            ocl::core::create_buffer::<_, u8>(&context,
-                                              ocl::core::MEM_READ_WRITE,
-                                              (64 * 512 * self.num_vms) as usize,
-                                              None).unwrap()
-        };
-        size_tracker += (64 * 512 * self.num_vms) as u64;
-
-        let loop_value_stack_state = unsafe {
-            ocl::core::create_buffer::<_, u8>(&context,
-                                              ocl::core::MEM_READ_WRITE,
-                                              (64 * 512 * self.num_vms) as usize,
-                                              None).unwrap()
-        };
-        size_tracker += (64 * 512 * self.num_vms) as u64;
-
         let hypercall_num = unsafe {
             ocl::core::create_buffer::<_, u8>(&context,
                                               ocl::core::MEM_READ_WRITE | ocl::core::MEM_ALLOC_HOST_PTR,
@@ -424,6 +402,13 @@ impl OpenCLRunner {
         };
         size_tracker += (self.num_vms) as u64;
 
+        let hcall_size = unsafe {
+            ocl::core::create_buffer::<_, u8>(&context,
+                                              ocl::core::MEM_READ_WRITE,
+                                              (self.num_vms * 4) as usize,
+                                              None).unwrap()
+        };
+        size_tracker += (self.num_vms * 4) as u64;
         println!("Allocated: {:.2} MB in OpenCL Buffers", size_tracker as f64 / 1024.0 / 1024.0);
 
         self.buffers = Some(OpenCLBuffers::new(stack_buffer,
@@ -434,13 +419,12 @@ impl OpenCLRunner {
                                                sfp,
                                                call_stack,
                                                call_return_stack,
-                                               branch_value_stack_state,
-                                               loop_value_stack_state,
                                                hypercall_num,
                                                hypercall_continuation,
                                                current_mem,
                                                max_mem,
                                                is_calling,
+                                               hcall_size,
                                                entry));
         (self, context)
     }
@@ -846,14 +830,15 @@ impl OpenCLRunner {
 
         println!("{:?}", buffers.stack_buffer);
 
-        let mut default_sp: [u8; 8] = unsafe { std::mem::transmute((0 as u64).to_be()) };
-        let mut default_hypercall_num: [u8; 4] = unsafe { std::mem::transmute((-2 as i32).to_be()) };
+        let mut default_hcall_size: [u8; 4] = unsafe { std::mem::transmute::<u32, [u8; 4]>((hypercall_buffer_size as u32)) };
+        let mut default_sp: [u8; 8] = unsafe { std::mem::transmute((0 as u64).to_le()) };
+        let mut default_hypercall_num: [u8; 4] = unsafe { std::mem::transmute((-2 as i32).to_le()) };
         // points to _start
-        let mut default_entry_point: [u8; 4] = unsafe { std::mem::transmute((self.entry_point as i32).to_be()) };
+        let mut default_entry_point: [u8; 4] = unsafe { std::mem::transmute((self.entry_point as i32).to_le()) };
         // Important!! std::mem::transmute puts the bytes in the reverse order, we have to change it back!
-        default_entry_point.reverse();
-        default_sp.reverse();
-        default_hypercall_num.reverse();
+        //default_entry_point.reverse();
+        //default_sp.reverse();
+        //default_hypercall_num.reverse();
 
         println!("{:?}", default_entry_point);
         // first, set up the default values for the VMs
@@ -890,6 +875,15 @@ impl OpenCLRunner {
 
                 match hypercall_num_result {
                     Err(e) => panic!("hypercall_num_result, Error: {}", e),
+                    _ => (),
+                }
+
+
+                // set the hcall_size
+                let hcall_size_result = ocl::core::enqueue_write_buffer(&queue, &buffers.hcall_size, true, (idx * 4) as usize, &default_hcall_size, None::<Event>, None::<&mut Event>);
+
+                match hcall_size_result {
+                    Err(e) => panic!("hcall_size_result, Error: {}", e),
                     _ => (),
                 }
             }
@@ -930,15 +924,14 @@ impl OpenCLRunner {
         ocl::core::set_kernel_arg(&start_kernel, 8, ArgVal::mem(&buffers.sfp)).unwrap();
         ocl::core::set_kernel_arg(&start_kernel, 9, ArgVal::mem(&buffers.call_stack)).unwrap();
         ocl::core::set_kernel_arg(&start_kernel, 10, ArgVal::mem(&buffers.call_return_stack)).unwrap();
-        ocl::core::set_kernel_arg(&start_kernel, 11, ArgVal::mem(&buffers.branch_value_stack_state)).unwrap();
-        ocl::core::set_kernel_arg(&start_kernel, 12, ArgVal::mem(&buffers.loop_value_stack_state)).unwrap();
-        ocl::core::set_kernel_arg(&start_kernel, 13, ArgVal::mem(&buffers.hypercall_num)).unwrap();
-        ocl::core::set_kernel_arg(&start_kernel, 14, ArgVal::mem(&buffers.hypercall_continuation)).unwrap();
-        ocl::core::set_kernel_arg(&start_kernel, 15, ArgVal::mem(&buffers.current_mem)).unwrap();
-        ocl::core::set_kernel_arg(&start_kernel, 16, ArgVal::mem(&buffers.max_mem)).unwrap();
-        ocl::core::set_kernel_arg(&start_kernel, 17, ArgVal::mem(&buffers.is_calling)).unwrap();
-        ocl::core::set_kernel_arg(&start_kernel, 18, ArgVal::mem(&buffers.entry)).unwrap();
-        ocl::core::set_kernel_arg(&start_kernel, 19, ArgVal::mem(&hcall_retval_buffer)).unwrap();
+        ocl::core::set_kernel_arg(&start_kernel, 11, ArgVal::mem(&buffers.hypercall_num)).unwrap();
+        ocl::core::set_kernel_arg(&start_kernel, 12, ArgVal::mem(&buffers.hypercall_continuation)).unwrap();
+        ocl::core::set_kernel_arg(&start_kernel, 13, ArgVal::mem(&buffers.current_mem)).unwrap();
+        ocl::core::set_kernel_arg(&start_kernel, 14, ArgVal::mem(&buffers.max_mem)).unwrap();
+        ocl::core::set_kernel_arg(&start_kernel, 15, ArgVal::mem(&buffers.is_calling)).unwrap();
+        ocl::core::set_kernel_arg(&start_kernel, 16, ArgVal::mem(&buffers.entry)).unwrap();
+        ocl::core::set_kernel_arg(&start_kernel, 17, ArgVal::mem(&hcall_retval_buffer)).unwrap();
+        ocl::core::set_kernel_arg(&start_kernel, 18, ArgVal::mem(&buffers.hcall_size)).unwrap();
 
         // this isn't used here at all, just needed for constructing hypercalls
         // for tracking profiling information
@@ -1208,7 +1201,7 @@ impl OpenCLRunner {
         };
         */
         //let num_threads = self.num_vms;
-        let num_threads = num_cpus::get() as u32;
+        let num_threads = 2 as u32; //num_cpus::get() as u32;
         let thread_pool = rayon::ThreadPoolBuilder::new().num_threads(num_threads.try_into().unwrap()).stack_size(1024*512).build().unwrap();
 
         let number_vms = self.num_vms.clone();
@@ -1264,14 +1257,15 @@ impl OpenCLRunner {
 
         println!("{:?}", buffers.stack_buffer);
 
-        let mut default_sp: [u8; 8] = unsafe { std::mem::transmute((0 as u64).to_be()) };
-        let mut default_hypercall_num: [u8; 4] = unsafe { std::mem::transmute((-2 as i32).to_be()) };
+        let mut default_hcall_size: [u8; 4] = unsafe { std::mem::transmute::<u32, [u8; 4]>((hypercall_buffer_size as u32)) };
+        let mut default_sp: [u8; 8] = unsafe { std::mem::transmute((0 as u64).to_le()) };
+        let mut default_hypercall_num: [u8; 4] = unsafe { std::mem::transmute((-2 as i32).to_le()) };
         // points to _start
-        let mut default_entry_point: [u8; 4] = unsafe { std::mem::transmute((self.entry_point as i32).to_be()) };
+        let mut default_entry_point: [u8; 4] = unsafe { std::mem::transmute((self.entry_point as i32).to_le()) };
         // Important!! std::mem::transmute puts the bytes in the reverse order, we have to change it back!
-        default_entry_point.reverse();
-        default_sp.reverse();
-        default_hypercall_num.reverse();
+        //default_entry_point.reverse();
+        //default_sp.reverse();
+        //default_hypercall_num.reverse();
 
         println!("{:?}", default_entry_point);
         // first, set up the default values for the VMs
@@ -1357,15 +1351,14 @@ impl OpenCLRunner {
                 ocl::core::set_kernel_arg(&value, 8, ArgVal::mem(&buffers.sfp)).unwrap();
                 ocl::core::set_kernel_arg(&value, 9, ArgVal::mem(&buffers.call_stack)).unwrap();
                 ocl::core::set_kernel_arg(&value, 10, ArgVal::mem(&buffers.call_return_stack)).unwrap();
-                ocl::core::set_kernel_arg(&value, 11, ArgVal::mem(&buffers.branch_value_stack_state)).unwrap();
-                ocl::core::set_kernel_arg(&value, 12, ArgVal::mem(&buffers.loop_value_stack_state)).unwrap();
-                ocl::core::set_kernel_arg(&value, 13, ArgVal::mem(&buffers.hypercall_num)).unwrap();
-                ocl::core::set_kernel_arg(&value, 14, ArgVal::mem(&buffers.hypercall_continuation)).unwrap();
-                ocl::core::set_kernel_arg(&value, 15, ArgVal::mem(&buffers.current_mem)).unwrap();
-                ocl::core::set_kernel_arg(&value, 16, ArgVal::mem(&buffers.max_mem)).unwrap();
-                ocl::core::set_kernel_arg(&value, 17, ArgVal::mem(&buffers.is_calling)).unwrap();
-                ocl::core::set_kernel_arg(&value, 18, ArgVal::mem(&buffers.entry)).unwrap();
-                ocl::core::set_kernel_arg(&value, 19, ArgVal::mem(&hcall_retval_buffer)).unwrap();
+                ocl::core::set_kernel_arg(&value, 11, ArgVal::mem(&buffers.hypercall_num)).unwrap();
+                ocl::core::set_kernel_arg(&value, 12, ArgVal::mem(&buffers.hypercall_continuation)).unwrap();
+                ocl::core::set_kernel_arg(&value, 13, ArgVal::mem(&buffers.current_mem)).unwrap();
+                ocl::core::set_kernel_arg(&value, 14, ArgVal::mem(&buffers.max_mem)).unwrap();
+                ocl::core::set_kernel_arg(&value, 15, ArgVal::mem(&buffers.is_calling)).unwrap();
+                ocl::core::set_kernel_arg(&value, 16, ArgVal::mem(&buffers.entry)).unwrap();
+                ocl::core::set_kernel_arg(&value, 17, ArgVal::mem(&hcall_retval_buffer)).unwrap();
+                ocl::core::set_kernel_arg(&value, 18, ArgVal::mem(&buffers.hcall_size)).unwrap();
             }
         }
 
@@ -1386,7 +1379,7 @@ impl OpenCLRunner {
         let mut curr_func_id = self.entry_point;
         is_first.insert(curr_func_id, true);
         called_funcs.insert(curr_func_id);
-
+        let mut num_batches = 0 as u128;
         let end_data_init_setup = std::time::Instant::now();
         vmm_overhead += (end_data_init_setup - data_init_setup).as_nanos();
 
@@ -1531,6 +1524,9 @@ impl OpenCLRunner {
                 ocl::core::enqueue_read_buffer(&queue, &hypercall_buffer, true, 0, buf, None::<Event>, None::<&mut Event>).unwrap();
             }
 
+            num_batches += 1;
+            println!("vmm overhead {}", vmm_overhead);
+
             // now it is time to dispatch hypercalls
             vm_slice.as_slice().iter().for_each(|vm_id| {
                 let hypercall_id = match hypercall_num_temp[*vm_id as usize] as i64 {
@@ -1575,7 +1571,7 @@ impl OpenCLRunner {
             }
 
             let end_hcall_dispatch = std::time::Instant::now();
- 
+            println!("hcall dispatch time: {}", (end_hcall_dispatch-start_hcall_dispatch).as_nanos()); 
             hcall_execution_time += (end_hcall_dispatch - start_hcall_dispatch).as_nanos();
 
             let vmm_post_overhead = std::time::Instant::now();
@@ -1606,6 +1602,7 @@ impl OpenCLRunner {
             // update all of the stack pointers
             // update the hypercall numbers to -1 to indicate that we are now returning from the hypercall
             // also don't forget to write the hcall buf back
+            let write_start = std::time::Instant::now();
             unsafe {
                 let mut hcall_buf = &*hcall_read_buffer.buf.get();
                 ocl::core::enqueue_write_buffer(&queue, &hypercall_buffer, true, 0, &mut hcall_buf, None::<Event>, None::<&mut Event>).unwrap();
@@ -1613,15 +1610,10 @@ impl OpenCLRunner {
                 ocl::core::enqueue_write_buffer(&queue, &buffers.sp, true, 0, &mut stack_pointer_temp, None::<Event>, None::<&mut Event>).unwrap();
                 ocl::core::enqueue_write_buffer(&queue, &buffers.hypercall_num, true, 0, &mut hypercall_num_temp, None::<Event>, None::<&mut Event>).unwrap();
                 ocl::core::enqueue_write_buffer(&queue, &hcall_retval_buffer, true, 0, &mut hypercall_retval_temp, None::<Event>, None::<&mut Event>).unwrap();
-                match ocl::core::finish(&queue) {
-                    Err(e) => {
-                        panic!("Unable to finish waiting on queue for kernel writes...\n\n{}", e);
-                    },
-                    Ok(_) => (),
-                }
             }
             let vmm_post_overhead_end = std::time::Instant::now();
-    
+            let write_end = std::time::Instant::now();
+            println!("write time: {}", (write_end-write_start).as_nanos());
             vmm_overhead += (vmm_post_overhead_end - vmm_post_overhead).as_nanos();
         }
 

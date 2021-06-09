@@ -30,7 +30,7 @@ pub struct WasiFd {}
 impl WasiFd {
     pub fn hypercall_fd_write(ctx: &WasiCtx, vm_ctx: &VectorizedVM, hypercall: &mut HyperCall, sender: &Sender<HyperCallResult>) -> () {
         let mut hcall_buf: &[u8] = unsafe { *hypercall.hypercall_buffer.buf.get() };
-        let hcall_buf_size: u32 = hcall_buf.len().try_into().unwrap();
+        let hcall_buf_size: u32 = vm_ctx.hcall_buf_size;
 
         let memory = &vm_ctx.memory;
         let wasm_mem = &vm_ctx.wasm_memory;

@@ -323,9 +323,9 @@ pub fn emit_serverless_invoke_post(writer: &opencl_writer::OpenCLCWriter, stack_
     let result_register = stack_ctx.vstack_alloc(StackType::i32);
 
     // we need to copy the data stored in the hcall buffer, to the json_buf_ptr
-
-    ret_str += &format!("\t___private_memcpy((ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), warp_idx);\n",
-                        "(ulong)((global char *)hypercall_buffer)", // src
+    // specifically, we need to de-interleave the data, so the CPU sees the data `normally`
+    ret_str += &format!("\t___private_memcpy_cpu2gpu((ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), warp_idx);\n",
+                        "(ulong)((global char *)hypercall_buffer + (hcall_size*warp_idx))", // src
                         "hypercall_buffer", // mem_start_src
                         &format!("(global char *)heap_u32+{}", json_buf_ptr), //dst
                         "heap_u32", // mem_start_dst
@@ -344,14 +344,14 @@ pub fn emit_serverless_response_pre(writer: &opencl_writer::OpenCLCWriter, stack
     let json_buf_ptr = stack_ctx.vstack_peak(StackType::i32, 1);
 
     // copy the buffer to the hcall buf so we can return it back via our middleware setup
-    ret_str += &format!("\t___private_memcpy((ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), warp_idx);\n",
+    ret_str += &format!("\t___private_memcpy_gpu2cpu((ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), warp_idx);\n",
                         &format!("(global char *)heap_u32+{}", json_buf_ptr),
                         "heap_u32", // mem_start_src
-                        "(ulong)((global char *)hypercall_buffer+4)", //dst, first 4 bytes are the len
+                        "(ulong)((global char *)hypercall_buffer+(hcall_size*warp_idx)+4)", //dst, first 4 bytes are the len
                         "hypercall_buffer", // mem_start_dst
                         &json_buf_len); // the length of the buffer
 
-    ret_str += &format!("\t{};\n", emit_write_u32("(ulong)(hypercall_buffer)", "(ulong)(hypercall_buffer)", &json_buf_len, "warp_idx"));
+    ret_str += &format!("\t*({}) = {};\n", "(global uint*)((global char*)hypercall_buffer+(hcall_size*warp_idx))", &json_buf_len);
 
     ret_str
 }
