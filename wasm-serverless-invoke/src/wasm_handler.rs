@@ -41,18 +41,22 @@ impl WasmHandler {
             };
 
             // now that we have the input in the buffer, parse the json
-            let json: Value = serde_json::from_slice(&buffer[..incoming_req_size as usize]).unwrap();
+            let ret_buf_len = match serde_json::from_slice(&buffer[..incoming_req_size as usize]) {
+                Ok(json) => {
+                    // run the function, get the response
+                    func_ret_val = (self.function)(json);
 
-            // run the function, get the response
-            func_ret_val = (self.function)(json);
-
-            // copy the response to the buffer
-            let func_ret_val_as_buffer = to_string(&func_ret_val).unwrap();
-            buffer[..func_ret_val_as_buffer.len()].clone_from_slice(func_ret_val_as_buffer.as_bytes());
+                    // copy the response to the buffer
+                    let func_ret_val_as_buffer = to_string(&func_ret_val).unwrap();
+                    buffer[..func_ret_val_as_buffer.len()].clone_from_slice(func_ret_val_as_buffer.as_bytes());
+                    func_ret_val_as_buffer.len()
+                },
+                Err(_) => 0,
+            };
 
             // return the response
             unsafe {
-                serverless_response(buffer.as_mut_ptr(), func_ret_val_as_buffer.len() as u32);
+                serverless_response(buffer.as_mut_ptr(), ret_buf_len as u32);
             }
         }
     }

@@ -74,7 +74,7 @@ impl BatchSubmitServer {
         // Send the request body to the selected VM
         // We can't await on the send because we have the mutex acquired here
         tx.lock().await.send((body.to_vec(), body.len())).await.unwrap();
-
+        
         // Wait on response from the VM
         let start = std::time::Instant::now();
         let (resp, len, on_dev_time, queue_submit_time, num_queue_submits, num_unique_fns) = match rx.lock().await.recv().await{
@@ -99,8 +99,8 @@ impl BatchSubmitServer {
 
     pub fn start_server(hcall_buf_size: usize, sender: Arc<Vec<Mutex<Sender<(Vec<u8>, usize)>>>>, receiver: Arc<Vec<Mutex<Receiver<(Vec<u8>, usize, u64, u64, u64, u64)>>>>, num_vms: u32, server_ip: String, server_port: String) -> () {
         tokio::runtime::Builder::new_multi_thread()
-            .worker_threads(4)
-            //.worker_threads(num_cpus::get())
+            //.worker_threads(4)
+            .worker_threads(num_cpus::get())
             .thread_stack_size(1024 * 256) // 256KiB per thread should be enough
             .enable_all()
             .build()

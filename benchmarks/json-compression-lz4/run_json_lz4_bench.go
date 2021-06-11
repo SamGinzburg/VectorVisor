@@ -68,6 +68,10 @@ func IssueRequests(ip string, port int, req [][]byte, data_ch chan<-[]byte, end_
 		resp, err := client.Do(http_request)
 		if err != nil {
 			fmt.Printf("client err: %s\n", err)
+			// check to see if we are done
+			if len(end_chan) > 0 {
+				return;
+			}
 			continue
 		}
 
@@ -83,7 +87,7 @@ func IssueRequests(ip string, port int, req [][]byte, data_ch chan<-[]byte, end_
 		if resp.StatusCode != http.StatusOK {
 			continue
 		} else {
-			fmt.Printf("E2E req time: %s\n", read_secs)
+			//fmt.Printf("E2E req time: %s\n", read_secs)
 		}
 
 		select {
@@ -127,7 +131,7 @@ func main() {
 
 	reqs := make([][]byte, NUM_PARAMS)
 	for i := 0; i < NUM_PARAMS; i++ {
-		p := payload{Text: RandString(1024 * 16)}
+		p := payload{Text: RandString(1024 * 64)}
 		request_body, _ := json.Marshal(p)
 		reqs[i] = request_body
 	}
@@ -167,6 +171,7 @@ func main() {
 
 	// calculate the total RPS	
 	total_rps := (float64(batches_completed)) / duration
+	fmt.Printf("Total RPS: %f\n", total_rps)
 
 	on_device_compute_time := 0.0
 	device_queue_overhead := 0.0
@@ -192,7 +197,6 @@ func main() {
 	queue_submit_count = queue_submit_count / req_count
 	num_unique_fns_called = num_unique_fns_called / req_count
 
-	fmt.Printf("Total RPS: %f\n", total_rps)
 	fmt.Printf("Average on device compute time (ns): %f\n", on_device_compute_time)
 	fmt.Printf("Average device queue overhead (ns): %f\n", device_queue_overhead)
 	fmt.Printf("Average queue submit count: %f\n", queue_submit_count)

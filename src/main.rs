@@ -542,19 +542,27 @@ fn main() {
         println!("{:?}", device_ids);
         println!("{:?}", device_id);
         // set up the device context
+
         let context_properties = ContextProperties::new().platform(platform_id);
-        let context = ocl::core::create_context(Some(&context_properties), &[device_id], None, None).unwrap();        
+        let temp_context = ocl::core::create_context(Some(&context_properties), &[device_id], None, None).unwrap();
+        let context: &'static ocl::core::Context = Box::leak(Box::new(temp_context));
+
+        /*
         let runner = opencl_runner::OpenCLRunner::new(num_vms, interleaved, is_gpu, entry_point, file.clone());
-        let (program, _, device_id) = runner.setup_kernel(context.clone(), device_id, fname, stack_size, heap_size, num_compiled_funcs, globals_buffer_size, compile_args.clone(), link_args.clone());
+        let (program, device_id) = runner.setup_kernel(context, device_id, fname, stack_size, heap_size, num_compiled_funcs, globals_buffer_size, compile_args.clone(), link_args.clone());
+        */
 
         (0..num_vm_groups).collect::<Vec<u32>>().par_iter().map(|idx| {
             // set up the device context
-            //let context_properties = ContextProperties::new().platform(platform_id);
-            //let context = ocl::core::create_context(Some(&context_properties), &[device_id], None, None).unwrap();        
+            /*
+            let context_properties = ContextProperties::new().platform(platform_id);
+            let temp_context = ocl::core::create_context(Some(&context_properties), &[device_id], None, None).unwrap();
+            let context: &'static ocl::core::Context = Box::leak(Box::new(temp_context));
 
             // Compile the input program
-            //let runner = opencl_runner::OpenCLRunner::new(num_vms, interleaved, is_gpu, entry_point, file.clone());
-            //let (program, _, device_id) = runner.setup_kernel(context.clone(), device_id, fname, stack_size, heap_size, num_compiled_funcs, globals_buffer_size, compile_args.clone(), link_args.clone());
+            */
+            let runner = opencl_runner::OpenCLRunner::new(num_vms, interleaved, is_gpu, entry_point, file.clone());
+            let (program, device_id) = runner.setup_kernel(context, device_id, fname, stack_size, heap_size, num_compiled_funcs, globals_buffer_size, compile_args.clone(), link_args.clone());
 
             let mut server_sender_vec = vec![];
             let mut vm_recv_vec = vec![];
@@ -589,7 +597,7 @@ fn main() {
                 });
             }
 
-            runner.clone().run(context.clone(), program.clone(), device_id, fname,
+            runner.clone().run(context, program.clone(), device_id, fname,
                        hcall_size,
                        stack_size,
                        heap_size, 

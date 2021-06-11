@@ -52,7 +52,6 @@ impl fmt::Debug for WasiSyscalls {
 pub struct HyperCall<'a> {
     pub vm_id: u32,
     pub num_total_vms: u32,
-    pub sp: u64,
     pub timestamp_counter: u64,
     pub queue_submit_delta: u64,
     pub num_queue_submits: u64,
@@ -67,7 +66,6 @@ pub struct HyperCall<'a> {
 impl<'a> HyperCall<'a> {
     pub fn new(vm_id: u32,
                num_total_vms: u32,
-               sp: u64,
                timestamp_counter: u64,
                queue_submit_delta: u64,
                num_queue_submits: u64,
@@ -80,7 +78,6 @@ impl<'a> HyperCall<'a> {
         HyperCall {
             vm_id: vm_id,
             num_total_vms: num_total_vms,
-            sp: sp,
             syscall: syscall,
             is_interleaved_mem: is_interleaved_mem,
             ocl_buffers: ocl_buffers,

@@ -27,19 +27,6 @@ impl Serverless {
 
         let (msg, msg_len) = recv_chan.lock().unwrap().blocking_recv().unwrap();
 
-        // copy the incoming request into the hcall_buffer
-        /*
-        if hypercall.is_interleaved_mem {
-            let start = std::time::Instant::now();
-            for offset in 0..msg_len {
-                Interleave::write_u8(hcall_buf, offset.try_into().unwrap(), hypercall.num_total_vms, msg[offset], hypercall.vm_id);
-            }
-			let end = std::time::Instant::now();
-			//println!("invoke copy time: {}", (end-start).as_nanos());
-        } else {
-            hcall_buf[0..msg_len].copy_from_slice(&msg[0..msg_len]);
-        }*/
-
         hcall_buf = &mut hcall_buf[(hypercall.vm_id * hcall_buf_size) as usize..((hypercall.vm_id+1) * hcall_buf_size) as usize];
         hcall_buf[0..msg_len].copy_from_slice(&msg[0..msg_len]);
 
@@ -69,31 +56,11 @@ impl Serverless {
 
         let mut resp_buf = vec![0u8; vm_ctx.hcall_buf_size.try_into().unwrap()];
         // the first 4 bytes are the length as a u32, the remainder is the buffer containing the json
-        //
-        /*
-        let msg_len = if hypercall.is_interleaved_mem {
-            Interleave::read_u32(hcall_buf, 0, hypercall.num_total_vms, hypercall.vm_id)
-        } else {
-            LittleEndian::read_u32(&hcall_buf[0..4])
-        };
-        */
 
         let msg_len = LittleEndian::read_u32(&hcall_buf[0..4]);
         let resp_buf_len: usize = msg_len.try_into().unwrap();
 
         // copy the data from the hcall_buffer
-        /*
-        if hypercall.is_interleaved_mem {
-            let start = std::time::Instant::now();
-            for offset in 0..resp_buf_len {
-                resp_buf[offset] = Interleave::read_u8(hcall_buf, (4 + offset).try_into().unwrap(), hypercall.num_total_vms, hypercall.vm_id);
-            }
-            let end = std::time::Instant::now();
-			//println!("resp copy time: {}", (end-start).as_nanos());
-        } else {
-            resp_buf[0..resp_buf_len].copy_from_slice(&hcall_buf[4..4+resp_buf_len]);
-        }
-        */
         resp_buf[0..resp_buf_len].copy_from_slice(&hcall_buf[4..4+resp_buf_len]);
 
         // calculate on device time and queue submit times
