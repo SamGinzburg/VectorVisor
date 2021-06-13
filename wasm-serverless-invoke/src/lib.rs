@@ -6,7 +6,11 @@ mod tests {
     use serde_json::Value;
     use serde_json::json;
 
-    fn test_serverless_function(event: Value) -> Value {
+    struct FuncInput {
+        s: String
+    }
+
+    fn test_serverless_function(event: FuncInput) -> Value {
         println!("{:?}", event);
         json!(null)
     }

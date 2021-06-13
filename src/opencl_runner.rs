@@ -1258,6 +1258,7 @@ impl OpenCLRunner {
         let mut default_hcall_size: [u8; 4] = unsafe { std::mem::transmute::<u32, [u8; 4]>((hypercall_buffer_size as u32)) };
         let mut default_sp: [u8; 8] = unsafe { std::mem::transmute((0 as u64).to_le()) };
         let mut default_hypercall_num: [u8; 4] = unsafe { std::mem::transmute((-2 as i32).to_le()) };
+        let mut default_hypercall_continuation: [u8; 4] = unsafe { std::mem::transmute((0 as i32).to_le()) };
         // points to _start
         let mut default_entry_point: [u8; 4] = unsafe { std::mem::transmute((self.entry_point as i32).to_le()) };
         // Important!! std::mem::transmute puts the bytes in the reverse order, we have to change it back!
@@ -1303,6 +1304,14 @@ impl OpenCLRunner {
                     _ => (),
                 }
 
+
+                // set the default hypercall number to -2
+                let hypercall_continuation_result = ocl::core::enqueue_write_buffer(&queue, &buffers.hypercall_continuation, true, (idx * 4) as usize, &default_hypercall_continuation, None::<Event>, None::<&mut Event>);
+
+                match hypercall_continuation_result {
+                    Err(e) => panic!("hypercall_continuation_result, Error: {}", e),
+                    _ => (),
+                }
 
                 // set the hcall_size
                 let hcall_size_result = ocl::core::enqueue_write_buffer(&queue, &buffers.hcall_size, true, (idx * 4) as usize, &default_hcall_size, None::<Event>, None::<&mut Event>);
@@ -1405,8 +1414,8 @@ impl OpenCLRunner {
             profiling_event = ocl::Event::empty();
             unsafe {
                 num_queue_submits += 1;
+                ocl::core::finish(&queue).unwrap();
                 ocl::core::enqueue_kernel(&queue, &start_kernel, 1, None, &[self.num_vms as usize, 1, 1], None, None::<Event>, Some(&mut profiling_event)).unwrap();
-                ocl::core::flush(&queue).unwrap();
             }
             ocl::core::wait_for_event(&profiling_event).unwrap();
             let kernel_end = std::time::Instant::now();
@@ -1445,7 +1454,7 @@ impl OpenCLRunner {
             let vmm_pre_overhead = std::time::Instant::now();
 
             unsafe {
-                ocl::core::enqueue_read_buffer(&queue, &buffers.entry, false, 0, &mut entry_point_temp, None::<Event>, None::<&mut Event>).unwrap();
+                ocl::core::enqueue_read_buffer(&queue, &buffers.entry, true, 0, &mut entry_point_temp, None::<Event>, None::<&mut Event>).unwrap();
                 ocl::core::enqueue_read_buffer(&queue, &buffers.hypercall_num, true, 0, &mut hypercall_num_temp, None::<Event>, None::<&mut Event>).unwrap();
             }
 
@@ -1504,7 +1513,7 @@ impl OpenCLRunner {
             // if we found a VM that needs to run another function, we do that first
             if found {
                 unsafe {
-                    ocl::core::enqueue_write_buffer(&queue, &buffers.entry, false, 0, &mut entry_point_temp, None::<Event>, None::<&mut Event>).unwrap();
+                    ocl::core::enqueue_write_buffer(&queue, &buffers.entry, true, 0, &mut entry_point_temp, None::<Event>, None::<&mut Event>).unwrap();
                 }
 
                 called_funcs.insert(curr_func_id);
@@ -1524,7 +1533,7 @@ impl OpenCLRunner {
                 }
 
                 unsafe {
-                    ocl::core::enqueue_write_buffer(&queue, &buffers.entry, false, 0, &mut entry_point_temp, None::<Event>, None::<&mut Event>).unwrap();
+                    ocl::core::enqueue_write_buffer(&queue, &buffers.entry, true, 0, &mut entry_point_temp, None::<Event>, None::<&mut Event>).unwrap();
                 }
 
                 let vmm_pre_overhead_end = std::time::Instant::now();
@@ -1631,7 +1640,7 @@ impl OpenCLRunner {
             unsafe {
                 if no_resp_counter != self.num_vms {
                     let mut hcall_buf = &*hcall_read_buffer.buf.get();
-                    /*
+
                     map_event = ocl::Event::empty();
                     let mut mapped_hcall_buf: MemMap<u8> = ocl::core::enqueue_map_buffer(&queue,
                                                                                          &hypercall_buffer,
@@ -1641,20 +1650,20 @@ impl OpenCLRunner {
                                                                                          hcall_buf.len(),
                                                                                          None::<Event>, Some(&mut map_event)).unwrap();
 
-                    //ocl::core::wait_for_event(&map_event).unwrap();
+                    ocl::core::wait_for_event(&map_event).unwrap();
                     mapped_hcall_buf.as_slice_mut(hcall_buf.len())[0..hcall_buf.len()].copy_from_slice(&hcall_buf[0..hcall_buf.len()]);
 
                     map_event = ocl::Event::empty();
                     ocl::core::enqueue_unmap_mem_object(&queue, &hypercall_buffer, &mapped_hcall_buf, None::<Event>, Some(&mut map_event)).unwrap();
-                    //ocl::core::wait_for_event(&map_event).unwrap();
-                    */
-                    ocl::core::enqueue_write_buffer(&queue, &hypercall_buffer, false, 0, &mut hcall_buf, None::<Event>, None::<&mut Event>).unwrap();
+                    ocl::core::wait_for_event(&map_event).unwrap();
+
+                    //ocl::core::enqueue_write_buffer(&queue, &hypercall_buffer, false, 0, &mut hcall_buf, None::<Event>, None::<&mut Event>).unwrap();
                 }
                 if set_entry_point {
                     ocl::core::enqueue_write_buffer(&queue, &buffers.entry, false, 0, &mut entry_point_temp, None::<Event>, None::<&mut Event>).unwrap();
                 }
                 ocl::core::enqueue_write_buffer(&queue, &buffers.hypercall_num, false, 0, &mut hypercall_num_temp, None::<Event>, None::<&mut Event>).unwrap();
-                ocl::core::enqueue_write_buffer(&queue, &hcall_retval_buffer, false, 0, &mut hypercall_retval_temp, None::<Event>, None::<&mut Event>).unwrap();
+                ocl::core::enqueue_write_buffer(&queue, &hcall_retval_buffer, true, 0, &mut hypercall_retval_temp, None::<Event>, None::<&mut Event>).unwrap();
             }
             let vmm_post_overhead_end = std::time::Instant::now();
             let write_end = std::time::Instant::now();

@@ -8,3 +8,4 @@ edition = "2018"
 
 [dependencies]
 serde_json = "1.0.62"
+serde = "1.0.62"

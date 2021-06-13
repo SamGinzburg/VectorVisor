@@ -2,10 +2,19 @@ use wasm_serverless_invoke::wasm_handler;
 use wasm_serverless_invoke::wasm_handler::WasmHandler;
 use serde_json::Value;
 use serde_json::json;
+use serde::Deserialize;
+
+#[derive(Debug, Deserialize)]
+struct FuncInput {
+    numbers: Vec<f64>
+}
+
 
 // Take in a list of numbers and compute the average
-fn average_json(event: Value) -> Value {
-    println!("unparsed event: {}", &event);
+fn average_json(event: FuncInput) -> Value {
+    println!("unparsed event: {:?}", &event);
+    json!(null)
+    /*
     let response = match event.get("numbers") {
         Some(Value::Array(number_vec)) => {
             println!("number vec: {:?}", &number_vec);
@@ -25,8 +34,9 @@ fn average_json(event: Value) -> Value {
             json!(null)
         }
     };
+    */
 
-    response
+    //response
 }
 
 fn main() {
