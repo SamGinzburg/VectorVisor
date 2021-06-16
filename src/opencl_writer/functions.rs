@@ -37,7 +37,24 @@ pub fn get_return_size(writer: &opencl_writer::OpenCLCWriter, ty: &wast::TypeUse
             }
         },
         _ => {
-            0
+            let index = ty.clone().index.unwrap();
+            let ty_name = match index {
+                Num(n, _) => format!("t{}", n),
+                Id(i) => i.name().to_string(),
+            };
+
+            let func_type = match writer.types.get(&ty_name).unwrap() {
+                Func(f) => f,
+                _ => panic!("non-function type found for function in get_return_size"),
+            };
+
+            let ret_val = if func_type.results.len() > 0 {
+                writer.get_size_valtype(&func_type.results[0])
+            } else {
+                0
+            };
+
+            ret_val
         },
     }
 }
@@ -128,19 +145,20 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stack
     match func_type_signature.inline {
         // if we can find the type signature
         Some(_) => {
-            for parameter in func_type_signature.clone().inline.unwrap().params.to_vec() {
+            for parameter in func_type_signature.inline.as_ref().unwrap().params.to_vec() {
                 match parameter {
                     (_, _, t) => {
                         if !is_indirect {
                             stack_sizes.pop().unwrap();
-                            stack_params_types.insert(0, StackCtx::convert_wast_types(&t));
-                            stack_params.insert(0, stack_ctx.vstack_pop(StackCtx::convert_wast_types(&t)));
+                            let (param, param_type) = stack_ctx.vstack_pop_any();
+                            stack_params.insert(0, param);
+                            stack_params_types.insert(0, param_type);
                         }
                         parameter_offset += writer.get_size_valtype(&t);
                     },
                 }
             }
-            if func_type_signature.clone().inline.unwrap().results.len() > 0 {
+            if func_type_signature.inline.as_ref().unwrap().results.len() > 0 {
                 return_type = Some(func_type_signature.clone().inline.unwrap().results[0]);
             } else {
                 return_type = None;
@@ -162,8 +180,9 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stack
                             (_, _, t) => {
                                 if !is_indirect {
                                     stack_sizes.pop().unwrap();
-                                    stack_params_types.insert(0, StackCtx::convert_wast_types(&t));
-                                    stack_params.insert(0, stack_ctx.vstack_pop(StackCtx::convert_wast_types(&t)));
+                                    let (param, param_type) = stack_ctx.vstack_pop_any();
+                                    stack_params.insert(0, param);
+                                    stack_params_types.insert(0, param_type);
                                 }
                                 parameter_offset += writer.get_size_valtype(&t);
                             },
@@ -345,9 +364,11 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stack
     if  is_fastcall {
         let calling_func_name = format!("{}{}", "__", id.replace(".", ""));
         let mut parameter_list = String::from("");
+
         for (param, ty) in stack_params.iter().zip(stack_params_types.iter()) {
             parameter_list += &format!("{}, ", param);
         }
+
         if return_size > 0 {
             let result_register = stack_ctx.vstack_alloc(StackCtx::convert_wast_types(&return_type.unwrap()));
             ret_str += &format!("\t{} = {}_fastcall({}heap_u32, current_mem_size, max_mem_size, globals_buffer, warp_idx); //calling\n", result_register, calling_func_name, parameter_list);
@@ -394,6 +415,7 @@ pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut St
         // if we cannot find the type signature, no-op
         // this seems to only come up in cases where there are no parameters
         None => {
+            //dbg!("Unable to find type signature for parameters in func_unwind: fn_name: {:?}", &fn_name);
             ()
         },
     }
@@ -612,8 +634,9 @@ pub fn emit_call_indirect(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut
             // First, pop off the parameters
             for (_, _, param_type) in func_type.params.iter() {
                 stack_sizes.pop().unwrap();
-                stack_params_types.insert(0, StackCtx::convert_wast_types(&param_type));
-                stack_params.insert(0, stack_ctx.vstack_pop(StackCtx::convert_wast_types(&param_type)));
+                let (param, param_type) = stack_ctx.vstack_pop_any();
+                stack_params.insert(0, param);
+                stack_params_types.insert(0, param_type);
             }
 
             // Next, push the result(s) back
@@ -631,6 +654,8 @@ pub fn emit_call_indirect(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut
 
     let restore_ctx = stack_ctx.restore_context(false, false);
 
+    stack_params.reverse();
+    stack_params_types.reverse();
     // Push the parameters to the stack
     for (param, ty) in stack_params.iter().zip(stack_params_types.iter()) {
         match ty {

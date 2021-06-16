@@ -60,6 +60,11 @@ impl Serverless {
         let msg_len = LittleEndian::read_u32(&hcall_buf[0..4]);
         let resp_buf_len: usize = msg_len.try_into().unwrap();
 
+        dbg!(msg_len);
+        dbg!(resp_buf_len);
+        dbg!(&hcall_buf[4..4+resp_buf_len]);
+
+
         // copy the data from the hcall_buffer
         resp_buf[0..resp_buf_len].copy_from_slice(&hcall_buf[4..4+resp_buf_len]);
 

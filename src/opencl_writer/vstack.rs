@@ -1342,7 +1342,7 @@ impl<'a> StackCtx {
      * This initialization happens if !*is_calling == False (function being called for the first time)
      * In that case we read the value of parameters from the stack context. Locals are 0s by default.
      */
-    pub fn emit_load_params(&self) -> String {
+    pub fn emit_load_params(&self, debug_call_print: bool) -> String {
         let mut ret_str = String::from("");
 
         // Read each parameter into intermediate value
@@ -1363,26 +1363,48 @@ impl<'a> StackCtx {
                 match local_type {
                     StackType::i32 => {
                         ret_str += &format!("\t\t{} = {};\n", local_name, param_lookup_u32);
+                        if debug_call_print {
+                            ret_str += &format!("\t\tprintf(\"param {}, value: %d\\n\", {});\n", local_name, local_name);
+                        }
                     },
                     StackType::i64 => {
                         ret_str += &format!("\t\t{} = {};\n", local_name, param_lookup_u64);
+                        if debug_call_print {
+                            ret_str += &format!("\t\tprintf(\"param {}, value: %d\\n\", {});\n", local_name, local_name);
+                        }
                     },
                     StackType::f32 => {
                         ret_str += &format!("\t\t{{\n");
                         ret_str += &format!("\t\t\tuint temp = {};\n", param_lookup_u32);
                         ret_str += &format!("\t\t\t___private_memcpy_nonmmu(&{}, &temp, sizeof(uint));\n", local_name);
                         ret_str += &format!("\t\t}}\n");
+                        if debug_call_print {
+                            ret_str += &format!("\t\tprintf(\"param {}, value: %f\\n\", {});\n", local_name, local_name);
+                        }
                     },
                     StackType::f64 => {
                         ret_str += &format!("\t\t{{\n");
                         ret_str += &format!("\t\t\tulong temp = {};\n", param_lookup_u64);
                         ret_str += &format!("\t\t\t___private_memcpy_nonmmu(&{}, &temp, sizeof(ulong));\n", local_name);
                         ret_str += &format!("\t\t}}\n");
+                        if debug_call_print {
+                            ret_str += &format!("\t\tprintf(\"param {}, value: %f\\n\", {});\n", local_name, local_name);
+                        }
                     }
                 }
             }
         }
         ret_str
+    }
+
+    /*
+     * Needed for emit_fn_call / indirect calls
+     * We need to pop the three most recent intermediates in order for proper function calls
+     */
+    pub fn vstack_pop_any(&mut self) -> (String, StackType) {
+        let pop_type = self.vstack_peak_type(0);
+        let intermediate_name = self.vstack_pop(pop_type.clone());
+        (intermediate_name, pop_type)
     }
 
     /*
@@ -1617,7 +1639,7 @@ impl<'a> StackCtx {
             for idx in f32_range {
                 ret_str += &format!("\t{{\n");
                 ret_str += &format!("\t\tuint temp = 0;\n");
-                ret_str += &format!("\t\t___private_memcpy_nonmmu(&temp, &{}, sizeof(float));\n", &self.f64_stack.get(idx).unwrap());
+                ret_str += &format!("\t\t___private_memcpy_nonmmu(&temp, &{}, sizeof(float));\n", &self.f32_stack.get(idx).unwrap());
                 ret_str += &format!("\t\t{};\n", &emit_write_u32(&format!("(ulong)(stack_u32+{}+*sp)", intermediate_offset),
                                                                 "(ulong)stack_u32",
                                                                 "temp",

@@ -1262,7 +1262,7 @@ impl<'a> OpenCLCWriter<'_> {
     
                     write!(final_string, "\t}} else {{\n").unwrap();
                     // If we are running the func for the first time, init param intermediates
-                    final_string += &stack_ctx.emit_load_params();
+                    final_string += &stack_ctx.emit_load_params(debug_call_print);
                     write!(final_string, "\t}}\n").unwrap();    
                 }
 

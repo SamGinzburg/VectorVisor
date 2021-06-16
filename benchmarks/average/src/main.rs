@@ -6,14 +6,14 @@ use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
 struct FuncInput {
-    numbers: Vec<f64>
+    numbers: Vec<i64>
 }
 
 
 // Take in a list of numbers and compute the average
 fn average_json(event: FuncInput) -> Value {
-    println!("unparsed event: {:?}", &event);
-    json!(null)
+    //println!("unparsed event: {:?}", &event);
+    json!(event.numbers)
     /*
     let response = match event.get("numbers") {
         Some(Value::Array(number_vec)) => {

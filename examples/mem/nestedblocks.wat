@@ -10,6 +10,7 @@
     i32.const 1 ;; i2
     block
       i32.const 1
+      br 0
       ;; save ctx (save everything)
       loop
         ;; restore ctx (restore only locals)
@@ -19,7 +20,7 @@
         local.tee $l1
         i32.eqz
         ;; save ctx (save only locals)
-        br_if 1
+        br_if 0
       end
       i32.const 1
       i32.add

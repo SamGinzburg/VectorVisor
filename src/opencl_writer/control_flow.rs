@@ -220,7 +220,7 @@ pub fn emit_block(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCt
     if !is_fastcall {
         result += &stack_ctx.save_context(false);
         stack_ctx.vstack_push_stack_frame();
-        stack_ctx.vstack_push_stack_info(stack_ctx.stack_frame_size().try_into().unwrap());    
+        stack_ctx.vstack_push_stack_info(stack_ctx.stack_frame_size().try_into().unwrap());
     }
 
     // we don't emit a label for block statements here, any br's goto the END of the block

@@ -1238,8 +1238,8 @@ impl OpenCLRunner {
                     // get the WASI context
                     // we provide no guarantee as to which req gets which VM
                     let ctx_id = avail_ctx.pop_front().unwrap();
-                    let wasi_context = &mut wasi_ctxs[ctx_id as usize];
 
+                    let wasi_context = &mut wasi_ctxs[ctx_id as usize];
                     wasi_context.dispatch_hypercall(&mut incoming_msg, &sender_copy.clone());
 
                     // push the context back
@@ -1569,6 +1569,8 @@ impl OpenCLRunner {
                     10000 => WasiSyscalls::ServerlessResponse,
                     _ => WasiSyscalls::InvalidHyperCallNum,
                 };
+
+
                 hypercall_sender[(*vm_id % num_threads) as usize].send(
                     HyperCall::new((*vm_id as u32).clone(),
                                    number_vms,
