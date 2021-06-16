@@ -52,8 +52,6 @@ impl<'a, T1: Deserialize<'a>, T2: Serialize> WasmHandler<T1, T2> {
                 serverless_invoke(buf_ptr, buffer.len() as u32)
             };
 
-            println!("{:?}", &buffer[0..64]);
-
             // now that we have the input in the buffer, parse the json
             match serde_json::from_slice(&buffer[..incoming_req_size as usize]) {
                 Ok(json) => {

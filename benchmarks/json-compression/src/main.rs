@@ -15,7 +15,7 @@ fn compress_json(event: Value) -> Value {
             let compressed_str = str.as_bytes()
                                 .into_iter()
                                 .cloned()
-                                .encode(&mut BZip2Encoder::new(9), Action::Finish)
+                                .encode(&mut BZip2Encoder::new(2), Action::Finish)
                                 .collect::<Result<Vec<_>, _>>()
                                 .unwrap();
             json!(encode(compressed_str))

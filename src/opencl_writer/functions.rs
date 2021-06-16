@@ -654,8 +654,6 @@ pub fn emit_call_indirect(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut
 
     let restore_ctx = stack_ctx.restore_context(false, false);
 
-    stack_params.reverse();
-    stack_params_types.reverse();
     // Push the parameters to the stack
     for (param, ty) in stack_params.iter().zip(stack_params_types.iter()) {
         match ty {

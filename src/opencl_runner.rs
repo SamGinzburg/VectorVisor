@@ -1232,7 +1232,8 @@ impl OpenCLRunner {
                     let mut incoming_msg = match receiver.recv() {
                         Ok(m) => m,
                         _ => {
-                            panic!("Server hcall dispatch thread #{}, crashed while waiting for input", idx)
+                            println!("Server hcall dispatch thread #{}, was terminated while waiting for input", idx);
+                            break;
                         },
                     };
                     // get the WASI context
@@ -1642,7 +1643,7 @@ impl OpenCLRunner {
             unsafe {
                 if no_resp_counter != self.num_vms {
                     let mut hcall_buf = &*hcall_read_buffer.buf.get();
-
+                    /*
                     map_event = ocl::Event::empty();
                     let mut mapped_hcall_buf: MemMap<u8> = ocl::core::enqueue_map_buffer(&queue,
                                                                                          &hypercall_buffer,
@@ -1658,8 +1659,8 @@ impl OpenCLRunner {
                     map_event = ocl::Event::empty();
                     ocl::core::enqueue_unmap_mem_object(&queue, &hypercall_buffer, &mapped_hcall_buf, None::<Event>, Some(&mut map_event)).unwrap();
                     ocl::core::wait_for_event(&map_event).unwrap();
-
-                    //ocl::core::enqueue_write_buffer(&queue, &hypercall_buffer, false, 0, &mut hcall_buf, None::<Event>, None::<&mut Event>).unwrap();
+                    */
+                    ocl::core::enqueue_write_buffer(&queue, &hypercall_buffer, true, 0, &mut hcall_buf, None::<Event>, None::<&mut Event>).unwrap();
                 }
                 if set_entry_point {
                     ocl::core::enqueue_write_buffer(&queue, &buffers.entry, false, 0, &mut entry_point_temp, None::<Event>, None::<&mut Event>).unwrap();
