@@ -22,12 +22,15 @@ use std::thread;
 use std::collections::HashMap;
 use crossbeam::channel::unbounded;
 use crossbeam::channel::bounded;
+use crossbeam::queue::ArrayQueue;
 
 use rayon::prelude::*;
 use ocl::core::CommandQueue;
 use ocl::core::CommandQueueProperties;
 use ocl::core::MapFlags;
 use ocl::core::types::abs::MemMap;
+
+use std::sync::atomic::{AtomicU32, Ordering};
 
 use crossbeam::channel::Sender as SyncSender;
 use crossbeam::channel::Receiver as SyncReceiver;
@@ -800,7 +803,7 @@ impl OpenCLRunner {
                 // we divide up the number of VMs per thread evenly
                 for vm in 0..(number_vms/num_threads) {
                     let vm_index = (vm + idx * (number_vms/num_threads)) as usize;
-                    wasi_ctxs.push(VectorizedVM::new(vm, hypercall_buffer_size, number_vms, Arc::new(vm_sender_copy.get(vm_index).unwrap()), Arc::new(vm_recv_copy.get(vm_index).unwrap())));
+                    wasi_ctxs.push(VectorizedVM::new(vm, hypercall_buffer_size, number_vms, vm_sender_copy.clone(), vm_recv_copy.clone()));
                 }
 
                 loop {
@@ -1149,7 +1152,7 @@ impl OpenCLRunner {
         let mut hypercall_retval_temp = vec![0i32; self.num_vms as usize];
         let mut entry_point_exit_flag;
         let vm_slice: Vec<u32> = std::ops::Range { start: 0, end: (self.num_vms) }.collect();
-        let mut hypercall_sender = vec![];
+        //let mut hypercall_sender = vec![];
         let hcall_read_buffer: Arc<UnsafeCellWrapper> = Arc::new(UnsafeCellWrapper::new(hypercall_buffer_read_buffer));
         let mut total_gpu_execution_time: u64 = 0;
         let mut queue_submit_delta: u64 = 0;
@@ -1199,52 +1202,56 @@ impl OpenCLRunner {
         };
         */
         //let num_threads = self.num_vms;
-        let num_threads = num_cpus::get() as u32;
-        let thread_pool = rayon::ThreadPoolBuilder::new().num_threads(num_threads.try_into().unwrap()).stack_size(1024*512).build().unwrap();
+        let num_threads = 1; //num_cpus::get() as u32;
+        let thread_pool = rayon::ThreadPoolBuilder::new().num_threads(num_threads.try_into().unwrap()).stack_size(1024*256).build().unwrap();
 
         let number_vms = self.num_vms.clone();
         let (result_sender, result_receiver): (SyncSender<HyperCallResult>, SyncReceiver<HyperCallResult>) = unbounded();
-        for idx in 0..num_threads {
-            let (sender, recv): (SyncSender<HyperCall>, SyncReceiver<HyperCall>) = unbounded();
-            let sender_copy = result_sender.clone();
-            hypercall_sender.push(sender.clone());
 
+        let (hcall_sender, hcall_recv): (SyncSender<Box<HyperCall>>, SyncReceiver<Box<HyperCall>>) = unbounded();
+        let mut hcall_queue: Arc<ArrayQueue<Box<HyperCall>>> = Arc::new(ArrayQueue::new((number_vms).try_into().unwrap()));
+        let mut vm_idx_count = Arc::new(AtomicU32::new(0)); 
+
+        for idx in 0..num_threads {
+            //let (sender, recv): (SyncSender<Box<HyperCall>>, SyncReceiver<Box<HyperCall>>) = unbounded();
+            let hcall_recv_clone = hcall_recv.clone();
+            let sender_copy = result_sender.clone();
+            //hypercall_sender.push(sender.clone());
+            let hcall_queue_cloned = hcall_queue.clone(); 
             let mut vm_sender_copy = vm_sender.clone();
             let mut vm_recv_copy = vm_recv.clone();
-            thread_pool.spawn(move || {
-                let receiver = recv.clone();
-                // create the WASI contexts for this thread
-                let mut wasi_ctxs = vec![];
-                let mut avail_ctx: VecDeque<u32> = std::ops::Range { start: 0, end: (number_vms/num_threads) }.collect();
-                // we divide up the number of VMs per thread evenly
-                for vm in 0..(number_vms/num_threads) {
-                    let vm_index = (vm + (idx * (number_vms/num_threads))) as usize;
-                    wasi_ctxs.push(VectorizedVM::new(vm,
-                                                     hypercall_buffer_size,
-                                                     number_vms,
-                                                     Arc::new(vm_sender_copy.get(vm_index).unwrap()),
-                                                     Arc::new(vm_recv_copy.get(vm_index).unwrap())));
-                }
+            let mut vm_counter = vm_idx_count.clone();
 
+            thread_pool.spawn(move || {
+                let receiver = hcall_recv_clone.clone();
+                let hcall_queue_cloned = hcall_queue_cloned.clone();
+                // copy the references to the WASI contexts for this thread
+                let mut worker_vms: Vec<VectorizedVM> = vec![];
+                for vm in 0..number_vms/num_threads {
+                    //let vm_index = (vm + idx * (number_vms/num_threads)) as usize;
+                    let mut vm_index = (vm_counter).fetch_add(1, Ordering::Relaxed);
+                    worker_vms.push(VectorizedVM::new((vm_index as u32).try_into().unwrap(),
+                                                      hypercall_buffer_size,
+                                                      number_vms,
+                                                      vm_sender_copy.clone(),
+                                                      vm_recv_copy.clone()));
+                }
                 loop {
                     // in the primary loop, we will block until someone sends us a hypercall
                     // to dispatch...
+                    for vm_idx in 0..(number_vms/num_threads) {
                     let mut incoming_msg = match receiver.recv() {
-                        Ok(m) => m,
+                        Ok(mut m) => {
+                            //let wasi_context = &mut worker_vms[(m.vm_id % (number_vms/num_threads)) as usize];
+                            let wasi_context = &mut worker_vms[(vm_idx) as usize];
+                            wasi_context.dispatch_hypercall(&mut *m, &sender_copy.clone());
+                        },
                         _ => {
                             println!("Server hcall dispatch thread #{}, was terminated while waiting for input", idx);
                             break;
                         },
                     };
-                    // get the WASI context
-                    // we provide no guarantee as to which req gets which VM
-                    let ctx_id = avail_ctx.pop_front().unwrap();
-
-                    let wasi_context = &mut wasi_ctxs[ctx_id as usize];
-                    wasi_context.dispatch_hypercall(&mut incoming_msg, &sender_copy.clone());
-
-                    // push the context back
-                    avail_ctx.push_back(ctx_id);
+                    }
                 }
             });    
         }
@@ -1271,7 +1278,7 @@ impl OpenCLRunner {
         // first, set up the default values for the VMs
         unsafe {
             for idx in 0..self.num_vms {
-                println!("setting up VM: {}", idx);
+                //println!("setting up VM: {}", idx);
                 // sizeof(ulong) * 8 - NOTE: if we update sp to be 4 bytes, we have to change this too
                 let sp_result = ocl::core::enqueue_write_buffer(&queue, &buffers.sp, true, (idx * 8) as usize, &default_sp, None::<Event>, None::<&mut Event>);
 
@@ -1455,7 +1462,7 @@ impl OpenCLRunner {
             let vmm_pre_overhead = std::time::Instant::now();
 
             unsafe {
-                ocl::core::enqueue_read_buffer(&queue, &buffers.entry, true, 0, &mut entry_point_temp, None::<Event>, None::<&mut Event>).unwrap();
+                ocl::core::enqueue_read_buffer(&queue, &buffers.entry, false, 0, &mut entry_point_temp, None::<Event>, None::<&mut Event>).unwrap();
                 ocl::core::enqueue_read_buffer(&queue, &buffers.hypercall_num, true, 0, &mut hypercall_num_temp, None::<Event>, None::<&mut Event>).unwrap();
             }
 
@@ -1514,7 +1521,7 @@ impl OpenCLRunner {
             // if we found a VM that needs to run another function, we do that first
             if found {
                 unsafe {
-                    ocl::core::enqueue_write_buffer(&queue, &buffers.entry, true, 0, &mut entry_point_temp, None::<Event>, None::<&mut Event>).unwrap();
+                    ocl::core::enqueue_write_buffer(&queue, &buffers.entry, false, 0, &mut entry_point_temp, None::<Event>, None::<&mut Event>).unwrap();
                 }
 
                 called_funcs.insert(curr_func_id);
@@ -1534,7 +1541,7 @@ impl OpenCLRunner {
                 }
 
                 unsafe {
-                    ocl::core::enqueue_write_buffer(&queue, &buffers.entry, true, 0, &mut entry_point_temp, None::<Event>, None::<&mut Event>).unwrap();
+                    ocl::core::enqueue_write_buffer(&queue, &buffers.entry, false, 0, &mut entry_point_temp, None::<Event>, None::<&mut Event>).unwrap();
                 }
 
                 let vmm_pre_overhead_end = std::time::Instant::now();
@@ -1557,7 +1564,9 @@ impl OpenCLRunner {
             println!("kernel_exec_time: {}", kernel_exec_time);
             kernel_exec_time = 0;
             // now it is time to dispatch hypercalls
-            vm_slice.as_slice().iter().for_each(|vm_id| {
+            //
+            let start_hcall_dispatch2 = std::time::Instant::now();
+            vm_slice.as_slice().par_iter().for_each(|vm_id| {
                 let hypercall_id = match hypercall_num_temp[*vm_id as usize] as i64 {
                     0 => WasiSyscalls::FdWrite,
                     1 => WasiSyscalls::ProcExit,
@@ -1571,26 +1580,37 @@ impl OpenCLRunner {
                     _ => WasiSyscalls::InvalidHyperCallNum,
                 };
 
-
-                hypercall_sender[(*vm_id % num_threads) as usize].send(
-                    HyperCall::new((*vm_id as u32).clone(),
+                hcall_sender.send(
+                    Box::new(HyperCall::new((*vm_id as u32).clone(),
                                    number_vms,
                                    total_gpu_execution_time,
                                    queue_submit_delta,
                                    num_queue_submits,
                                    called_funcs.clone(),
                                    hypercall_id,
-                                   self.is_memory_interleaved.clone(),
+                                   self.is_memory_interleaved,
                                    &buffers,
                                    hcall_read_buffer.clone(),
-                                   queue)
+                                   queue))
                 ).unwrap();
             });
 
+             let end_hcall_dispatch2 = std::time::Instant::now();
+            println!("hcall send time: {}", (end_hcall_dispatch2-start_hcall_dispatch2).as_nanos());
+
+            println!("messages in channel: {}", hcall_sender.len());
+            println!("responses in channel: {}", result_receiver.len());
+
             // now block until all of the hypercalls have been successfully dispatched
             let mut no_resp_counter = 0;
-            for _ in 0..self.num_vms {
+            let mut total_recv = 0;
+            for idx in 0..self.num_vms {
+                //dbg!(&idx);
+                let start_recv = std::time::Instant::now();
                 let result = result_receiver.recv().unwrap();
+                let end_recv = std::time::Instant::now();
+                //println!("hcall recv time: {}", (end_recv-start_recv).as_nanos());
+                total_recv += (end_recv-start_recv).as_nanos();
                 // we want to special case proc_exit to exit the VM
                 match result.get_type() {
                     WasiSyscalls::ProcExit => entry_point_temp[result.get_vm_id() as usize] = ((-1) as i32) as u32,
@@ -1606,6 +1626,7 @@ impl OpenCLRunner {
             println!("hcall dispatch time: {}", (end_hcall_dispatch-start_hcall_dispatch).as_nanos()); 
             hcall_execution_time += (end_hcall_dispatch - start_hcall_dispatch).as_nanos();
 
+            println!("hcall total recv time: {}", total_recv);
             let vmm_post_overhead = std::time::Instant::now();
 
             // check again for threads that may be done - this is because
@@ -1643,12 +1664,12 @@ impl OpenCLRunner {
             unsafe {
                 if no_resp_counter != self.num_vms {
                     let mut hcall_buf = &*hcall_read_buffer.buf.get();
-                    /*
+
                     map_event = ocl::Event::empty();
                     let mut mapped_hcall_buf: MemMap<u8> = ocl::core::enqueue_map_buffer(&queue,
                                                                                          &hypercall_buffer,
                                                                                          false,
-                                                                                         MapFlags::WRITE,
+                                                                                         MapFlags::WRITE_INVALIDATE_REGION,
                                                                                          0,
                                                                                          hcall_buf.len(),
                                                                                          None::<Event>, Some(&mut map_event)).unwrap();
@@ -1659,14 +1680,14 @@ impl OpenCLRunner {
                     map_event = ocl::Event::empty();
                     ocl::core::enqueue_unmap_mem_object(&queue, &hypercall_buffer, &mapped_hcall_buf, None::<Event>, Some(&mut map_event)).unwrap();
                     ocl::core::wait_for_event(&map_event).unwrap();
-                    */
-                    ocl::core::enqueue_write_buffer(&queue, &hypercall_buffer, true, 0, &mut hcall_buf, None::<Event>, None::<&mut Event>).unwrap();
+
+                    //ocl::core::enqueue_write_buffer(&queue, &hypercall_buffer, false, 0, &mut hcall_buf, None::<Event>, None::<&mut Event>).unwrap();
                 }
                 if set_entry_point {
                     ocl::core::enqueue_write_buffer(&queue, &buffers.entry, false, 0, &mut entry_point_temp, None::<Event>, None::<&mut Event>).unwrap();
                 }
                 ocl::core::enqueue_write_buffer(&queue, &buffers.hypercall_num, false, 0, &mut hypercall_num_temp, None::<Event>, None::<&mut Event>).unwrap();
-                ocl::core::enqueue_write_buffer(&queue, &hcall_retval_buffer, true, 0, &mut hypercall_retval_temp, None::<Event>, None::<&mut Event>).unwrap();
+                ocl::core::enqueue_write_buffer(&queue, &hcall_retval_buffer, false, 0, &mut hypercall_retval_temp, None::<Event>, None::<&mut Event>).unwrap();
             }
             let vmm_post_overhead_end = std::time::Instant::now();
             let write_end = std::time::Instant::now();

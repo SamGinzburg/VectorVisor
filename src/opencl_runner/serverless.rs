@@ -23,7 +23,7 @@ impl Serverless {
         let hcall_buf_size: u32 = vm_ctx.hcall_buf_size;
 
         // block until we get an incoming request
-        let recv_chan = (vm_ctx.vm_recv).clone();
+        let recv_chan = (vm_ctx.vm_recv).get(hypercall.vm_id as usize).unwrap();
 
         let (msg, msg_len) = recv_chan.lock().unwrap().blocking_recv().unwrap();
 
@@ -54,11 +54,13 @@ impl Serverless {
         let hcall_buf_size: u32 = vm_ctx.hcall_buf_size;
         hcall_buf = &hcall_buf[(hypercall.vm_id * hcall_buf_size) as usize..((hypercall.vm_id+1) * hcall_buf_size) as usize];
 
-        let mut resp_buf = vec![0u8; vm_ctx.hcall_buf_size.try_into().unwrap()];
+        let send_chan = (vm_ctx.vm_sender).get(hypercall.vm_id as usize).unwrap();
         // the first 4 bytes are the length as a u32, the remainder is the buffer containing the json
 
         let msg_len = LittleEndian::read_u32(&hcall_buf[0..4]);
         let resp_buf_len: usize = msg_len.try_into().unwrap();
+
+        let mut resp_buf = vec![0u8; (resp_buf_len+4).try_into().unwrap()];
 
         // copy the data from the hcall_buffer
         resp_buf[0..resp_buf_len].copy_from_slice(&hcall_buf[4..4+resp_buf_len]);
@@ -74,7 +76,7 @@ impl Serverless {
             count += 1;
         }
 
-        (*vm_ctx.vm_sender).lock().unwrap().blocking_send((resp_buf, resp_buf_len, on_device_time, queue_submit_time, queue_submit_count, count)).unwrap();
+        send_chan.lock().unwrap().blocking_send((resp_buf, resp_buf_len, on_device_time, queue_submit_time, queue_submit_count, count)).unwrap();
 
         sender.send({
             HyperCallResult::new(0, hypercall.vm_id, WasiSyscalls::ServerlessResponse)

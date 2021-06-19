@@ -126,7 +126,7 @@ impl HyperCallResult {
     }
 }
 
-pub struct VectorizedVM<'a> {
+pub struct VectorizedVM {
     // each VM has its own WASI state tracking object
     ctx: WasiCtx,
     engine: Engine,
@@ -141,12 +141,12 @@ pub struct VectorizedVM<'a> {
     pub queue_submit_counter: Arc<u64>,
     pub queue_submit_qty: Arc<u64>,
     pub called_fns_set: Arc<HashSet<u32>>,
-    pub vm_sender: Arc<&'a Mutex<Sender<(Vec<u8>, usize, u64, u64, u64, u64)>>>,
-    pub vm_recv:   Arc<&'a Mutex<Receiver<(Vec<u8>, usize)>>>,
+    pub vm_sender: Arc<Vec<Mutex<Sender<(Vec<u8>, usize, u64, u64, u64, u64)>>>>,
+    pub vm_recv: Arc<Vec<Mutex<Receiver<(Vec<u8>, usize)>>>>,
 }
 
-impl<'a> VectorizedVM<'_> {
-    pub fn new(vm_id: u32, hcall_buf_size: u32, _num_total_vms: u32, vm_sender: Arc<&'a Mutex<Sender<(Vec<u8>, usize, u64, u64, u64, u64)>>>, vm_recv: Arc<&'a Mutex<Receiver<(Vec<u8>, usize)>>>) -> VectorizedVM<'a> {
+impl VectorizedVM {
+    pub fn new(vm_id: u32, hcall_buf_size: u32, _num_total_vms: u32, vm_sender: Arc<Vec<Mutex<Sender<(Vec<u8>, usize, u64, u64, u64, u64)>>>>, vm_recv: Arc<Vec<Mutex<Receiver<(Vec<u8>, usize)>>>>) -> VectorizedVM {
         // default context with no args yet - we can inherit arguments from the CLI if we want
         // or we can pass them in some other config file
 
@@ -235,7 +235,7 @@ impl<'a> VectorizedVM<'_> {
     }
 }
 
-impl fmt::Debug for VectorizedVM<'_> {
+impl fmt::Debug for VectorizedVM {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("VectorizedVM")
         .field("vm_id", &self.vm_id)
