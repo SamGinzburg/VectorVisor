@@ -7,10 +7,6 @@ use crate::opencl_runner::vectorized_vm::WasiSyscalls;
 use crate::opencl_runner::interleave_offsets::Interleave;
 use crate::opencl_runner::vectorized_vm::VectorizedVM;
 
-use wasi_common::snapshots::preview_1::types::UserErrorConversion;
-
-use wasmtime::*;
-use wasmtime_wiggle::WasmtimeGuestMemory;
 use wiggle::GuestPtr;
 
 use byteorder::LittleEndian;
@@ -24,7 +20,7 @@ pub struct Random {}
 
 impl Random {
     pub fn hypercall_random_get(ctx: &WasiCtx, vm_ctx: &VectorizedVM, hypercall: &mut HyperCall, sender: &Sender<HyperCallResult>) -> () {
-        let mut hcall_buf: &mut [u8] = unsafe { *hypercall.hypercall_buffer.buf.get() };
+        let hcall_buf: &mut [u8] = unsafe { *hypercall.hypercall_buffer.buf.get() };
         
         let memory = &vm_ctx.memory;
         let wasm_mem = &vm_ctx.wasm_memory;
@@ -37,7 +33,7 @@ impl Random {
         };
 
         let buf = &GuestPtr::new(&wasm_mem, 0);
-        let result = ctx.random_get(buf, random_len).unwrap();
+        let _result = ctx.random_get(buf, random_len).unwrap();
 
         // now copy the random data back to the hcall_buffer
         if hypercall.is_interleaved_mem {

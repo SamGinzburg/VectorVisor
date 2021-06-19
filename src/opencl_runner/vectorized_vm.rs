@@ -1,11 +1,9 @@
 use wasi_common::WasiCtx;
 use wasi_cap_std_sync::WasiCtxBuilder;
-use wasi_cap_std_sync::file::*;
 
 use std::fmt;
 use wasmtime::*;
 use wasmtime_wiggle::WasmtimeGuestMemory;
-use wasi_cap_std_sync::dir::Dir as WasiDir;
 use cap_std::fs::Dir as CapDir;
 
 use crate::opencl_runner::OpenCLBuffers;
@@ -22,7 +20,6 @@ use tokio::sync::mpsc::{Sender, Receiver};
 use crossbeam::channel::Sender as SyncSender;
 
 use std::sync::Arc;
-use std::cell::UnsafeCell;
 use std::sync::Mutex;
 use std::collections::HashSet;
 
@@ -129,8 +126,8 @@ impl HyperCallResult {
 pub struct VectorizedVM {
     // each VM has its own WASI state tracking object
     ctx: WasiCtx,
-    engine: Engine,
-    store: Store,
+    _engine: Engine,
+    _store: Store,
     pub memory: Memory,
     pub wasm_memory: WasmtimeGuestMemory,
     pub enviroment_size: Option<u32>,
@@ -168,8 +165,8 @@ impl VectorizedVM {
 
         VectorizedVM {
             ctx: wasi_ctx,
-            engine: engine,
-            store: store,
+            _engine: engine,
+            _store: store,
             /*
              * Memories are internally reference counted so you can clone a Memory. The cloning process only performs a shallow clone, so two cloned Memory instances are equivalent in their functionality.
              * See: https://docs.wasmtime.dev/api/wasmtime/struct.Memory.html

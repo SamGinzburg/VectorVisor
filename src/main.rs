@@ -9,19 +9,14 @@ use std::fs;
 use std::path::Path;
 use std::fs::File;
 use std::io::Write;
-use std::collections::HashMap;
 use std::thread;
 
 use std::sync::Mutex;
 use tokio::sync::Mutex as AsyncMutex;
 
-use std::sync::Condvar;
 use std::sync::Arc;
 use std::convert::TryInto;
 
-use crossbeam::channel::Sender;
-use crossbeam::channel::Receiver;
-use crossbeam::channel::bounded;
 use crossbeam::sync::WaitGroup;
 
 use tokio::sync::mpsc;
@@ -290,8 +285,8 @@ fn main() {
         let pb_debug = ParseBuffer::new(&filedata).unwrap();
         let mut ast = opencl_writer::OpenCLCWriter::new(&pb);
         let mut ast_debug = opencl_writer::OpenCLCWriter::new(&pb_debug);
-        let result = ast.parse_file().unwrap();
-        let result_debug = ast_debug.parse_file().unwrap();
+        let _result = ast.parse_file().unwrap();
+        let _result_debug = ast_debug.parse_file().unwrap();
         let (compiled_kernel,
             fastcall_header,
             entry_point,
@@ -344,8 +339,8 @@ fn main() {
                 let pb_debug = ParseBuffer::new(&filedata).unwrap();
                 let mut ast = opencl_writer::OpenCLCWriter::new(&pb);
                 let mut ast_debug = opencl_writer::OpenCLCWriter::new(&pb_debug);
-                let result = ast.parse_file().unwrap();
-                let result_debug = ast_debug.parse_file().unwrap();
+                let _result = ast.parse_file().unwrap();
+                let _result_debug = ast_debug.parse_file().unwrap();
             
                 // apply our compilation pass to the source WASM 
                 let (compiled_kernel,
@@ -353,9 +348,9 @@ fn main() {
                     entry_point,
                     globals_buffer_size,
                     num_compiled_funcs,
-                    kernel_hashmap,
-                    kernel_compile_stats,
-                    kernel_partition_mappings) = ast.write_opencl_file(hcall_size.try_into().unwrap(),
+                    _kernel_hashmap,
+                    _kernel_compile_stats,
+                    _kernel_partition_mappings) = ast.write_opencl_file(hcall_size.try_into().unwrap(),
                                                                         interleaved as u32,
                                                                         stack_size,
                                                                         heap_size, 
@@ -372,7 +367,7 @@ fn main() {
                 println!("Globals buffer: {}", globals_buffer_size);
                 println!("interleaved: {}", interleaved);
     
-                (InputProgram::text(compiled_kernel.clone(), fastcall_header.clone()), entry_point, num_compiled_funcs, globals_buffer_size, interleaved)
+                (InputProgram::Text(compiled_kernel.clone(), fastcall_header.clone()), entry_point, num_compiled_funcs, globals_buffer_size, interleaved)
             },
             ("wasm", false) => {
                 let filedata_text = wasmprinter::print_file(file_path.clone()).unwrap();
@@ -380,8 +375,8 @@ fn main() {
                 let pb_debug = ParseBuffer::new(&filedata_text).unwrap();
                 let mut ast = opencl_writer::OpenCLCWriter::new(&pb);
                 let mut ast_debug = opencl_writer::OpenCLCWriter::new(&pb_debug);
-                let result = ast.parse_file().unwrap();
-                let result_debug = ast_debug.parse_file().unwrap();
+                let _result = ast.parse_file().unwrap();
+                let _result_debug = ast_debug.parse_file().unwrap();
             
                 // apply our compilation pass to the source WASM 
                 let (compiled_kernel,
@@ -389,9 +384,9 @@ fn main() {
                     entry_point,
                     globals_buffer_size,
                     num_compiled_funcs,
-                    kernel_hashmap,
-                    kernel_compile_stats,
-                    kernel_partition_mappings) = ast.write_opencl_file(hcall_size.try_into().unwrap(),
+                    _kernel_hashmap,
+                    _kernel_compile_stats,
+                    _kernel_partition_mappings) = ast.write_opencl_file(hcall_size.try_into().unwrap(),
                                                                         interleaved as u32,
                                                                         stack_size,
                                                                         heap_size, 
@@ -408,7 +403,7 @@ fn main() {
                 println!("Globals buffer: {}", globals_buffer_size);
                 println!("interleaved: {}", interleaved);
     
-                (InputProgram::text(compiled_kernel.clone(), fastcall_header.clone()), entry_point, num_compiled_funcs, globals_buffer_size, interleaved)
+                (InputProgram::Text(compiled_kernel.clone(), fastcall_header.clone()), entry_point, num_compiled_funcs, globals_buffer_size, interleaved)
             },
             ("wat", true) => {
                 let filedata = match fs::read_to_string(file_path.clone()) {
@@ -419,18 +414,18 @@ fn main() {
                 let pb_debug = ParseBuffer::new(&filedata).unwrap();
                 let mut ast = opencl_writer::OpenCLCWriter::new(&pb);
                 let mut ast_debug = opencl_writer::OpenCLCWriter::new(&pb_debug);
-                let result = ast.parse_file().unwrap();
-                let result_debug = ast_debug.parse_file().unwrap();
+                let _result = ast.parse_file().unwrap();
+                let _result_debug = ast_debug.parse_file().unwrap();
             
                 // apply our compilation pass to the source WASM 
-                let (compiled_kernel,
-                    fastcall_header,
-                    entry_point,
-                    globals_buffer_size,
-                    num_compiled_funcs,
-                    kernel_hashmap,
-                    kernel_compile_stats,
-                    kernel_partition_mappings) = ast.write_opencl_file(hcall_size.try_into().unwrap(),
+                let (_compiled_kernel,
+                     fastcall_header,
+                     entry_point,
+                     globals_buffer_size,
+                     num_compiled_funcs,
+                     kernel_hashmap,
+                     kernel_compile_stats,
+                     kernel_partition_mappings) = ast.write_opencl_file(hcall_size.try_into().unwrap(),
                                                                         interleaved as u32,
                                                                         stack_size,
                                                                         heap_size, 
@@ -447,7 +442,7 @@ fn main() {
                 println!("Globals buffer: {}", globals_buffer_size);
                 println!("interleaved: {}", interleaved);
     
-                (InputProgram::partitioned(kernel_hashmap.clone(), fastcall_header.clone(), kernel_compile_stats.clone(), kernel_partition_mappings.clone()), entry_point, num_compiled_funcs, globals_buffer_size, interleaved)
+                (InputProgram::Partitioned(kernel_hashmap.clone(), fastcall_header.clone(), kernel_compile_stats.clone(), kernel_partition_mappings.clone()), entry_point, num_compiled_funcs, globals_buffer_size, interleaved)
             },
             ("wasm", true) => {
                 let filedata_text = wasmprinter::print_file(file_path.clone()).unwrap();
@@ -455,11 +450,11 @@ fn main() {
                 let pb_debug = ParseBuffer::new(&filedata_text).unwrap();
                 let mut ast = opencl_writer::OpenCLCWriter::new(&pb);
                 let mut ast_debug = opencl_writer::OpenCLCWriter::new(&pb_debug);
-                let result = ast.parse_file().unwrap();
-                let result_debug = ast_debug.parse_file().unwrap();
+                let _result = ast.parse_file().unwrap();
+                let _result_debug = ast_debug.parse_file().unwrap();
 
                 // apply our compilation pass to the source WASM 
-                let (compiled_kernel,
+                let (_compiled_kernel,
                     fastcall_header,
                     entry_point,
                     globals_buffer_size,
@@ -483,7 +478,7 @@ fn main() {
                 println!("Globals buffer: {}", globals_buffer_size);
                 println!("interleaved: {}", interleaved);
     
-                (InputProgram::partitioned(kernel_hashmap.clone(), fastcall_header.clone(), kernel_compile_stats.clone(), kernel_partition_mappings.clone()), entry_point, num_compiled_funcs, globals_buffer_size, interleaved)
+                (InputProgram::Partitioned(kernel_hashmap.clone(), fastcall_header.clone(), kernel_compile_stats.clone(), kernel_partition_mappings.clone()), entry_point, num_compiled_funcs, globals_buffer_size, interleaved)
             },
             ("bin", _) => {
                 // read the binary file as a Vec<u8>
@@ -494,7 +489,7 @@ fn main() {
 
                 let program: SeralizedProgram = bincode::deserialize(&filedata).unwrap();
                 println!("Loaded program with entry point: {}, num_compiled_funcs: {}, globals_buffer_size: {}, is_interleaved: {}", program.entry_point, program.num_compiled_funcs, program.globals_buffer_size, program.interleaved);
-                (InputProgram::binary(program.program_data), program.entry_point, program.num_compiled_funcs, program.globals_buffer_size, program.interleaved)
+                (InputProgram::Binary(program.program_data), program.entry_point, program.num_compiled_funcs, program.globals_buffer_size, program.interleaved)
             },
             ("partbin", _) => {
                 // read the binary file as a Vec<u8>
@@ -521,7 +516,7 @@ fn main() {
                 let globals_buffer_size = value_t!(matches.value_of("globals-buffer-size"), u32).unwrap_or_else(|e| e.exit());
             
                 println!("Loaded program with entry point: {}, num_compiled_funcs: {}, globals_buffer_size: {}, is_interleaved: {}", entry, numfuncs, globals_buffer_size, interleaved);
-                (InputProgram::binary(filedata), entry, numfuncs, globals_buffer_size, interleaved)
+                (InputProgram::Binary(filedata), entry, numfuncs, globals_buffer_size, interleaved)
             }
             _ => panic!("Unrecognized input filetype: {:?}", (extension, partition)),
         };
@@ -564,7 +559,7 @@ fn main() {
 
             let mut server_sender_vec = vec![];
             let mut vm_recv_vec = vec![];
-            for x in 0..num_vms.clone() {
+            for _ in 0..num_vms.clone() {
                 let (sender, recv): (tokio::sync::mpsc::Sender<(Vec<u8>, usize)>, tokio::sync::mpsc::Receiver<(Vec<u8>, usize)>) = mpsc::channel(16384);
                 server_sender_vec.push(AsyncMutex::new(sender));
                 vm_recv_vec.push(Mutex::new(recv));
@@ -575,7 +570,7 @@ fn main() {
     
             let mut vm_sender_vec = vec![];
             let mut server_recv_vec = vec![];
-            for x in 0..num_vms.clone() {
+            for _ in 0..num_vms.clone() {
                 let (sender, recv): (tokio::sync::mpsc::Sender<(Vec<u8>, usize, u64, u64, u64, u64)>, tokio::sync::mpsc::Receiver<(Vec<u8>, usize, u64, u64, u64, u64)>) = mpsc::channel(16384);
                 vm_sender_vec.push(Mutex::new(sender));
                 server_recv_vec.push(AsyncMutex::new(recv));
@@ -617,13 +612,10 @@ fn main() {
         let num_threads = num_cpus::get();
         let wg = WaitGroup::new();
         let thread_pool = rayon::ThreadPoolBuilder::new().num_threads(num_threads.try_into().unwrap()).build().unwrap();
-
-        let (server_sender, vm_recv): (Sender<(Vec<u8>, usize)>, Receiver<(Vec<u8>, usize)>) = bounded(16384);
-        let (vm_sender, server_recv): (Sender<(Vec<u8>, usize, u64, u64, u64, u64)>, Receiver<(Vec<u8>, usize, u64, u64, u64, u64)>) = bounded(16384);
     
         let mut server_sender_vec = vec![];
         let mut vm_recv_vec = vec![];
-        for x in 0..num_threads {
+        for _ in 0..num_threads {
             let (sender, recv): (tokio::sync::mpsc::Sender<(Vec<u8>, usize)>, tokio::sync::mpsc::Receiver<(Vec<u8>, usize)>) = mpsc::channel(16384);
             server_sender_vec.push(AsyncMutex::new(sender));
             vm_recv_vec.push(Mutex::new(recv));
@@ -634,7 +626,7 @@ fn main() {
 
         let mut vm_sender_vec = vec![];
         let mut server_recv_vec = vec![];
-        for x in 0..num_threads {
+        for _ in 0..num_threads {
             let (sender, recv): (tokio::sync::mpsc::Sender<(Vec<u8>, usize, u64, u64, u64, u64)>, tokio::sync::mpsc::Receiver<(Vec<u8>, usize, u64, u64, u64, u64)>) = mpsc::channel(16384);
             vm_sender_vec.push(Mutex::new(sender));
             server_recv_vec.push(AsyncMutex::new(recv));
@@ -642,9 +634,6 @@ fn main() {
 
         let vm_sender_vec_arc = Arc::new(vm_sender_vec);
         let server_recv_vec_arc = Arc::new(server_recv_vec);
-
-        let vm_sender_mutex = Arc::new(Mutex::new(vm_sender));
-        let vm_recv_mutex = Arc::new(Mutex::new(vm_recv));
 
         // For each VM create a tracking context (contains sender/receiver pair for each VM)
     
@@ -675,8 +664,8 @@ fn main() {
                 }
             };
 
-            let mut vm_sender_mutex_clone = vm_sender_vec_arc.clone();
-            let mut vm_recv_mutex_clone = vm_recv_vec_arc.clone();
+            let vm_sender_mutex_clone = vm_sender_vec_arc.clone();
+            let vm_recv_mutex_clone = vm_recv_vec_arc.clone();
             let wg = wg.clone();
 
             thread::spawn(move || {

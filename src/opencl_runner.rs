@@ -35,7 +35,6 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use crossbeam::channel::Sender as SyncSender;
 use crossbeam::channel::Receiver as SyncReceiver;
 use tokio::sync::mpsc::{Sender, Receiver};
-use tokio::runtime::Runtime;
 
 use std::fs::File;
 use std::io::Write;
@@ -44,9 +43,7 @@ use std::sync::Mutex;
 use std::cell::UnsafeCell;
 use std::collections::HashSet;
 use std::fs::OpenOptions;
-use std::io::prelude::*;
 use std::mem::transmute;
-use std::collections::VecDeque;
 
 use std::convert::TryInto;
 use std::thread::JoinHandle;
@@ -156,9 +153,9 @@ pub struct PartitionedSeralizedProgram {
 
 #[derive(Clone)]
 pub enum InputProgram {
-    binary(Vec<u8>),
-    text(String, String),
-    partitioned(HashMap<u32, String>, String, HashMap<u32, (u32, u32, u32, u32, u32, u32)>, HashMap<u32, u32>),
+    Binary(Vec<u8>),
+    Text(String, String),
+    Partitioned(HashMap<u32, String>, String, HashMap<u32, (u32, u32, u32, u32, u32, u32)>, HashMap<u32, u32>),
     PartitionedBinary(HashMap<u32, Vec<u8>>, HashMap<u32, u32>),
 }
 
@@ -194,7 +191,7 @@ impl OpenCLRunner {
                context: &'static ocl::core::Context,
                program: ProgramType,
                device_id: ocl::core::DeviceId,
-               input_filename: &str,
+               _input_filename: &str,
                hcall_size: usize,
                stack_size: u32,
                heap_size: u32,
@@ -206,8 +203,8 @@ impl OpenCLRunner {
                globals_buffer_size: u32,
                vm_sender: Arc<Vec<Mutex<Sender<(Vec<u8>, usize, u64, u64, u64, u64)>>>>,
                vm_recv: Arc<Vec<Mutex<Receiver<(Vec<u8>, usize)>>>>,
-               compile_flags: String,
-               link_flags: String,
+               _compile_flags: String,
+               _link_flags: String,
                print_return: bool) -> JoinHandle<()> {
         let num_vms = self.num_vms.clone();
 
@@ -268,9 +265,9 @@ impl OpenCLRunner {
                           stack_frame_ptr_size: u32,
                           call_stack_size: u32,
                           // needed for loop/branch structures
-                          num_compiled_funcs: u32,
+                          _num_compiled_funcs: u32,
                           global_buffers_size: u32,
-                          context: &ocl::core::Context) -> (OpenCLRunner) {
+                          context: &ocl::core::Context) -> OpenCLRunner {
         let mut size_tracker: u64 = 0;
         
         let stack_buffer = unsafe {
@@ -428,7 +425,7 @@ impl OpenCLRunner {
                                                is_calling,
                                                hcall_size,
                                                entry));
-        (self)
+        self
     }
 
     /*
@@ -464,7 +461,7 @@ impl OpenCLRunner {
 
         // compile the GPU kernel(s)
         let program_to_run = match &self.input_program {
-            InputProgram::text(program, fastcall_header) => {
+            InputProgram::Text(program, fastcall_header) => {
                 let src_cstring = CString::new(program.clone()).unwrap();
                 let header_cstring = CString::new(fastcall_header.clone()).unwrap();
 
@@ -543,7 +540,7 @@ impl OpenCLRunner {
 
                 ProgramType::Standard(program_to_save)
             },
-            InputProgram::binary(b) => {
+            InputProgram::Binary(b) => {
                 let binary_start = std::time::Instant::now();
 
                 let program_to_run = match ocl::core::create_program_with_binary(context, &[device_id], &[&b]) {
@@ -557,7 +554,7 @@ impl OpenCLRunner {
                 println!("Time to load program from binary: {:?}", binary_prep_end-binary_start);
                 ProgramType::Standard(program_to_run)
             },
-            InputProgram::partitioned(map, fastcall_header, compile_stats_map, kernel_partition_mappings) => {
+            InputProgram::Partitioned(map, fastcall_header, compile_stats_map, kernel_partition_mappings) => {
                 let mut final_hashmap: HashMap<u32, ocl::core::Program> = HashMap::new();
                 let mut final_binarized_hashmap: HashMap<u32, Vec<u8>> = HashMap::new();
 
@@ -566,7 +563,7 @@ impl OpenCLRunner {
                 // Spin up N threads (n = ncpus)
                 // Evenly divide workload between threads
                 let num_threads = num_cpus::get();
-                let num_vms = self.num_vms.clone();
+                let _num_vms = self.num_vms.clone();
 
                 let (finished_sender, finished_receiver): (SyncSender<(u32, ocl::core::Program, u64)>, SyncReceiver<(u32, ocl::core::Program, u64)>) = unbounded();
 
@@ -574,12 +571,12 @@ impl OpenCLRunner {
 
                 for _idx in 0..num_threads {
                     let (compile_sender, compile_receiver): (SyncSender<(u32, ocl::core::Program, ocl::core::Program)>, SyncReceiver<(u32, ocl::core::Program, ocl::core::Program)>) = unbounded();
-                    let cflags = compile_flags.clone();
+                    let _cflags = compile_flags.clone();
                     let sender = finished_sender.clone();
                     let num_vms_clone = self.num_vms.clone();
                     let link_flags_clone = link_flags.clone();
                     let compile_flags_clone = compile_flags.clone();
-                    let context_clone = context.clone();
+                    let _context_clone = context.clone();
 
                     submit_compile_job.push(compile_sender);
 
@@ -597,7 +594,7 @@ impl OpenCLRunner {
                             };
                             let start = Utc::now().timestamp_nanos();
                             let options = &CString::new(format!("{} -DNUM_THREADS={} -DVMM_STACK_SIZE_BYTES={} -DVMM_HEAP_SIZE_BYTES={}", compile_flags_clone, num_vms_clone, stack_size, heap_size)).unwrap();
-                            let build_result = ocl::core::compile_program(&program_to_build, Some(&[device_id]), options, &[&fastcall_header], &[CString::new("fastcalls.cl").unwrap()], None, None, None);
+                            let _build_result = ocl::core::compile_program(&program_to_build, Some(&[device_id]), options, &[&fastcall_header], &[CString::new("fastcalls.cl").unwrap()], None, None, None);
                             let final_program = match ocl::core::link_program(context, Some(&[device_id]), &CString::new(format!("{}", link_flags_clone)).unwrap(), &[&program_to_build], None, None, None) {
                                 Ok(p) => p,
                                 Err(e) => {
@@ -803,15 +800,15 @@ impl OpenCLRunner {
             let (sender, recv): (SyncSender<HyperCall>, SyncReceiver<HyperCall>) = unbounded();
             let sender_copy = result_sender.clone();
             hypercall_sender.push(sender.clone());
-            let mut vm_sender_copy = vm_sender.clone();
-            let mut vm_recv_copy = vm_recv.clone();
+            let vm_sender_copy = vm_sender.clone();
+            let vm_recv_copy = vm_recv.clone();
             thread_pool.spawn(move || {
                 let receiver = recv.clone();
                 // create the WASI contexts for this thread
                 let mut wasi_ctxs = vec![];
                 // we divide up the number of VMs per thread evenly
                 for vm in 0..(number_vms/num_threads) {
-                    let vm_index = (vm + idx * (number_vms/num_threads)) as usize;
+                    //let vm_index = (vm + idx * (number_vms/num_threads)) as usize;
                     wasi_ctxs.push(VectorizedVM::new(vm, hypercall_buffer_size, number_vms, vm_sender_copy.clone(), vm_recv_copy.clone()));
                 }
 
@@ -841,15 +838,11 @@ impl OpenCLRunner {
 
         println!("{:?}", buffers.stack_buffer);
 
-        let mut default_hcall_size: [u8; 4] = unsafe { std::mem::transmute::<u32, [u8; 4]>((hypercall_buffer_size as u32)) };
-        let mut default_sp: [u8; 8] = unsafe { std::mem::transmute((0 as u64).to_le()) };
-        let mut default_hypercall_num: [u8; 4] = unsafe { std::mem::transmute((-2 as i32).to_le()) };
+        let default_hcall_size: [u8; 4] = unsafe { std::mem::transmute::<u32, [u8; 4]>(hypercall_buffer_size as u32) };
+        let default_sp: [u8; 8] = unsafe { std::mem::transmute((0 as u64).to_le()) };
+        let default_hypercall_num: [u8; 4] = unsafe { std::mem::transmute((-2 as i32).to_le()) };
         // points to _start
-        let mut default_entry_point: [u8; 4] = unsafe { std::mem::transmute((self.entry_point as i32).to_le()) };
-        // Important!! std::mem::transmute puts the bytes in the reverse order, we have to change it back!
-        //default_entry_point.reverse();
-        //default_sp.reverse();
-        //default_hypercall_num.reverse();
+        let default_entry_point: [u8; 4] = unsafe { std::mem::transmute((self.entry_point as i32).to_le()) };
 
         println!("{:?}", default_entry_point);
         // first, set up the default values for the VMs
@@ -946,7 +939,7 @@ impl OpenCLRunner {
 
         // this isn't used here at all, just needed for constructing hypercalls
         // for tracking profiling information
-        let mut called_funcs = HashSet::new();
+        let called_funcs = HashSet::new();
 
         // now the data in the program has been initialized, we can run the main loop
         println!("start: {}", Utc::now().timestamp());
@@ -1218,27 +1211,27 @@ impl OpenCLRunner {
         let (result_sender, result_receiver): (SyncSender<HyperCallResult>, SyncReceiver<HyperCallResult>) = unbounded();
 
         let (hcall_sender, hcall_recv): (SyncSender<Box<HyperCall>>, SyncReceiver<Box<HyperCall>>) = unbounded();
-        let mut hcall_queue: Arc<ArrayQueue<Box<HyperCall>>> = Arc::new(ArrayQueue::new((number_vms).try_into().unwrap()));
-        let mut vm_idx_count = Arc::new(AtomicU32::new(0)); 
+        //let hcall_queue: Arc<ArrayQueue<Box<HyperCall>>> = Arc::new(ArrayQueue::new((number_vms).try_into().unwrap()));
+        let vm_idx_count = Arc::new(AtomicU32::new(0)); 
 
         for idx in 0..num_threads {
             //let (sender, recv): (SyncSender<Box<HyperCall>>, SyncReceiver<Box<HyperCall>>) = unbounded();
             let hcall_recv_clone = hcall_recv.clone();
             let sender_copy = result_sender.clone();
             //hypercall_sender.push(sender.clone());
-            let hcall_queue_cloned = hcall_queue.clone(); 
-            let mut vm_sender_copy = vm_sender.clone();
-            let mut vm_recv_copy = vm_recv.clone();
-            let mut vm_counter = vm_idx_count.clone();
+            //let hcall_queue_cloned = hcall_queue.clone(); 
+            let vm_sender_copy = vm_sender.clone();
+            let vm_recv_copy = vm_recv.clone();
+            let vm_counter = vm_idx_count.clone();
 
             thread_pool.spawn(move || {
                 let receiver = hcall_recv_clone.clone();
-                let hcall_queue_cloned = hcall_queue_cloned.clone();
+                //let hcall_queue_cloned = hcall_queue_cloned.clone();
                 // copy the references to the WASI contexts for this thread
                 let mut worker_vms: Vec<VectorizedVM> = vec![];
-                for vm in 0..number_vms/num_threads {
+                for _ in 0..number_vms/num_threads {
                     //let vm_index = (vm + idx * (number_vms/num_threads)) as usize;
-                    let mut vm_index = (vm_counter).fetch_add(1, Ordering::Relaxed);
+                    let vm_index = vm_counter.fetch_add(1, Ordering::Relaxed);
                     worker_vms.push(VectorizedVM::new((vm_index as u32).try_into().unwrap(),
                                                       hypercall_buffer_size,
                                                       number_vms,
@@ -1249,17 +1242,17 @@ impl OpenCLRunner {
                     // in the primary loop, we will block until someone sends us a hypercall
                     // to dispatch...
                     for vm_idx in 0..(number_vms/num_threads) {
-                    let mut incoming_msg = match receiver.recv() {
-                        Ok(mut m) => {
-                            //let wasi_context = &mut worker_vms[(m.vm_id % (number_vms/num_threads)) as usize];
-                            let wasi_context = &mut worker_vms[(vm_idx) as usize];
-                            wasi_context.dispatch_hypercall(&mut *m, &sender_copy.clone());
-                        },
-                        _ => {
-                            println!("Server hcall dispatch thread #{}, was terminated while waiting for input", idx);
-                            break;
-                        },
-                    };
+                        match receiver.recv() {
+                            Ok(mut m) => {
+                                //let wasi_context = &mut worker_vms[(m.vm_id % (number_vms/num_threads)) as usize];
+                                let wasi_context = &mut worker_vms[(vm_idx) as usize];
+                                wasi_context.dispatch_hypercall(&mut *m, &sender_copy.clone());
+                            },
+                            _ => {
+                                println!("Server hcall dispatch thread #{}, was terminated while waiting for input", idx);
+                                break;
+                            },
+                        };
                     }
                 }
             });    
@@ -1272,12 +1265,12 @@ impl OpenCLRunner {
 
         println!("{:?}", buffers.stack_buffer);
 
-        let mut default_hcall_size: [u8; 4] = unsafe { std::mem::transmute::<u32, [u8; 4]>((hypercall_buffer_size as u32)) };
-        let mut default_sp: [u8; 8] = unsafe { std::mem::transmute((0 as u64).to_le()) };
-        let mut default_hypercall_num: [u8; 4] = unsafe { std::mem::transmute((-2 as i32).to_le()) };
-        let mut default_hypercall_continuation: [u8; 4] = unsafe { std::mem::transmute((0 as i32).to_le()) };
+        let default_hcall_size: [u8; 4] = unsafe { std::mem::transmute::<u32, [u8; 4]>(hypercall_buffer_size as u32) };
+        let default_sp: [u8; 8] = unsafe { std::mem::transmute((0 as u64).to_le()) };
+        let default_hypercall_num: [u8; 4] = unsafe { std::mem::transmute((-2 as i32).to_le()) };
+        let default_hypercall_continuation: [u8; 4] = unsafe { std::mem::transmute((0 as i32).to_le()) };
         // points to _start
-        let mut default_entry_point: [u8; 4] = unsafe { std::mem::transmute((self.entry_point as i32).to_le()) };
+        let default_entry_point: [u8; 4] = unsafe { std::mem::transmute((self.entry_point as i32).to_le()) };
         // Important!! std::mem::transmute puts the bytes in the reverse order, we have to change it back!
         //default_entry_point.reverse();
         //default_sp.reverse();
@@ -1672,7 +1665,7 @@ impl OpenCLRunner {
             let write_start = std::time::Instant::now();
             unsafe {
                 if no_resp_counter != self.num_vms {
-                    let mut hcall_buf = &*hcall_read_buffer.buf.get();
+                    let hcall_buf = &*hcall_read_buffer.buf.get();
 
                     map_event = ocl::Event::empty();
                     let mut mapped_hcall_buf: MemMap<u8> = ocl::core::enqueue_map_buffer(&queue,

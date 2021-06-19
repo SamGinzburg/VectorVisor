@@ -759,7 +759,7 @@ impl<'a> OpenCLCWriter<'_> {
                     // right now we only support WASI imports
                     match self.func_map.get(id) {
                         Some(_) => {
-                            let func_type_signature = &self.func_map.get(id).unwrap().ty;
+                            let _func_type_signature = &self.func_map.get(id).unwrap().ty;
 
                             // We emit fastcalls either if the function itself is a fastcall, or if we are a CPS-style function making a fastcall
                             let make_fastcall = is_fastcall || fastcall_set.contains(id);
