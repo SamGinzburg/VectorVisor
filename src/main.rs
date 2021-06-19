@@ -1,6 +1,4 @@
 extern crate ocl;
-#[macro_use]
-extern crate rouille;
 
 mod opencl_writer;
 mod opencl_runner;
@@ -12,7 +10,11 @@ use std::path::Path;
 use std::fs::File;
 use std::io::Write;
 use std::collections::HashMap;
+use std::thread;
+
 use std::sync::Mutex;
+use tokio::sync::Mutex as AsyncMutex;
+
 use std::sync::Condvar;
 use std::sync::Arc;
 use std::convert::TryInto;
@@ -20,6 +22,9 @@ use std::convert::TryInto;
 use crossbeam::channel::Sender;
 use crossbeam::channel::Receiver;
 use crossbeam::channel::bounded;
+use crossbeam::sync::WaitGroup;
+
+use tokio::sync::mpsc;
 
 use wast::parser::{ParseBuffer};
 
@@ -30,6 +35,7 @@ use clap::{Arg, App, value_t};
 use opencl_runner::InputProgram;
 use opencl_runner::SeralizedProgram;
 use opencl_runner::PartitionedSeralizedProgram;
+use ocl::core::ContextProperties;
 
 use batch_submit::BatchSubmitServer;
 use wasmtime_runner::WasmtimeRunner;
@@ -216,7 +222,7 @@ fn main() {
         .arg(Arg::with_name("ip")
             .long("ip")
             .value_name("Listen on this IP for incoming requests")
-            .default_value("localhost")
+            .default_value("127.0.0.1")
             .help("Listen on different IPs locally")
             .multiple(false)
             .number_of_values(1)
@@ -260,10 +266,9 @@ fn main() {
     let partition = value_t!(matches.value_of("partition"), bool).unwrap_or_else(|e| e.exit());
     let wasmtime = value_t!(matches.value_of("wasmtime"), bool).unwrap_or_else(|e| e.exit());
     let serverless = value_t!(matches.value_of("serverless"), bool).unwrap_or_else(|e| e.exit());
-    let hcall_size = value_t!(matches.value_of("hcallsize"), u32).unwrap_or_else(|e| e.exit());
-    
+    let hcall_size = value_t!(matches.value_of("hcallsize"), usize).unwrap_or_else(|e| e.exit());
     let batch_submit_ip = value_t!(matches.value_of("ip"), String).unwrap_or_else(|e| e.exit());
-    let batch_submit_port = value_t!(matches.value_of("port"), String).unwrap_or_else(|e| e.exit());
+    let batch_submit_port = value_t!(matches.value_of("port"), u32).unwrap_or_else(|e| e.exit());
 
     dbg!(compile_args.clone());
 
@@ -287,17 +292,22 @@ fn main() {
         let mut ast_debug = opencl_writer::OpenCLCWriter::new(&pb_debug);
         let result = ast.parse_file().unwrap();
         let result_debug = ast_debug.parse_file().unwrap();
-        let (compiled_kernel, entry_point, globals_buffer_size, num_compiled_funcs, _) = ast.write_opencl_file(interleaved as u32,
-                                                                                                            stack_size,
-                                                                                                            heap_size, 
-                                                                                                            call_stack_size, 
-                                                                                                            stack_frames_size, 
-                                                                                                            sfp_size, 
-                                                                                                            predictor_size,
-                                                                                                            debug_call_print,
-                                                                                                            force_inline,
-                                                                                                            is_gpu,
-                                                                                                            false);
+        let (compiled_kernel,
+            fastcall_header,
+            entry_point,
+            globals_buffer_size,
+            num_compiled_funcs, _, _, _) = ast.write_opencl_file(hcall_size.try_into().unwrap(),
+                                                                    interleaved as u32,
+                                                                    stack_size,
+                                                                    heap_size, 
+                                                                    call_stack_size, 
+                                                                    stack_frames_size, 
+                                                                    sfp_size, 
+                                                                    predictor_size,
+                                                                    debug_call_print,
+                                                                    force_inline,
+                                                                    is_gpu,
+                                                                    false);
 
         println!("The following info is needed to later run compiled pre-compiled/externally compiled binaries");
         println!("Compiled: {} functions", num_compiled_funcs);
@@ -307,23 +317,16 @@ fn main() {
 
         let mut file = File::create(format!("{}.cl", file_path)).unwrap();
         file.write_all(&compiled_kernel.clone().into_bytes()).unwrap();
+
+        let mut file = File::create(format!("{}_fastcalls.cl", file_path)).unwrap();
+        file.write_all(&fastcall_header.clone().into_bytes()).unwrap();
+
         return;
     }
 
     // start an HTTP endpoint for submitting batch jobs/
     // pass in the channels we use to send requests back and forth
-    let (server_sender, vm_recv): (Sender<(Vec<u8>, usize)>, Receiver<(Vec<u8>, usize)>) = bounded(num_vms.try_into().unwrap());
-    let (vm_sender, server_recv): (Sender<(Vec<u8>, usize, u64, u64, u64, u64)>, Receiver<(Vec<u8>, usize, u64, u64, u64, u64)>) = bounded(num_vms.try_into().unwrap());
 
-    let vm_recv_condvar = Arc::new(Condvar::new());
-    let vm_sender_mutex = Arc::new(Mutex::new(vm_sender));
-    let vm_recv_mutex = Arc::new(Mutex::new(vm_recv));
-
-    let join_handle = if serverless {
-        Some(BatchSubmitServer::start_server(server_sender, server_recv, num_vms, batch_submit_ip, batch_submit_port))
-    } else {
-        None
-    };
 
     if !wasmtime {
         let extension = match Path::new(&file_path).extension() {
@@ -345,23 +348,31 @@ fn main() {
                 let result_debug = ast_debug.parse_file().unwrap();
             
                 // apply our compilation pass to the source WASM 
-                let (compiled_kernel, entry_point, globals_buffer_size, num_compiled_funcs, kernel_hashmap) = ast.write_opencl_file(interleaved as u32,
-                                                                                                                    stack_size,
-                                                                                                                    heap_size, 
-                                                                                                                    call_stack_size, 
-                                                                                                                    stack_frames_size, 
-                                                                                                                    sfp_size, 
-                                                                                                                    predictor_size,
-                                                                                                                    debug_call_print,
-                                                                                                                    force_inline,
-                                                                                                                    is_gpu,
-                                                                                                                    false);
+                let (compiled_kernel,
+                    fastcall_header,
+                    entry_point,
+                    globals_buffer_size,
+                    num_compiled_funcs,
+                    kernel_hashmap,
+                    kernel_compile_stats,
+                    kernel_partition_mappings) = ast.write_opencl_file(hcall_size.try_into().unwrap(),
+                                                                        interleaved as u32,
+                                                                        stack_size,
+                                                                        heap_size, 
+                                                                        call_stack_size, 
+                                                                        stack_frames_size, 
+                                                                        sfp_size, 
+                                                                        predictor_size,
+                                                                        debug_call_print,
+                                                                        force_inline,
+                                                                        is_gpu,
+                                                                        false);
                 println!("Compiled: {} functions", num_compiled_funcs);
                 println!("Entry point: {}", entry_point);
                 println!("Globals buffer: {}", globals_buffer_size);
                 println!("interleaved: {}", interleaved);
     
-                (InputProgram::text(compiled_kernel.clone()), entry_point, num_compiled_funcs, globals_buffer_size, interleaved)
+                (InputProgram::text(compiled_kernel.clone(), fastcall_header.clone()), entry_point, num_compiled_funcs, globals_buffer_size, interleaved)
             },
             ("wasm", false) => {
                 let filedata_text = wasmprinter::print_file(file_path.clone()).unwrap();
@@ -373,23 +384,31 @@ fn main() {
                 let result_debug = ast_debug.parse_file().unwrap();
             
                 // apply our compilation pass to the source WASM 
-                let (compiled_kernel, entry_point, globals_buffer_size, num_compiled_funcs, kernel_hashmap) = ast.write_opencl_file(interleaved as u32,
-                                                                                                                    stack_size,
-                                                                                                                    heap_size, 
-                                                                                                                    call_stack_size, 
-                                                                                                                    stack_frames_size, 
-                                                                                                                    sfp_size, 
-                                                                                                                    predictor_size,
-                                                                                                                    debug_call_print,
-                                                                                                                    force_inline,
-                                                                                                                    is_gpu,
-                                                                                                                    false);
+                let (compiled_kernel,
+                    fastcall_header,
+                    entry_point,
+                    globals_buffer_size,
+                    num_compiled_funcs,
+                    kernel_hashmap,
+                    kernel_compile_stats,
+                    kernel_partition_mappings) = ast.write_opencl_file(hcall_size.try_into().unwrap(),
+                                                                        interleaved as u32,
+                                                                        stack_size,
+                                                                        heap_size, 
+                                                                        call_stack_size, 
+                                                                        stack_frames_size, 
+                                                                        sfp_size, 
+                                                                        predictor_size,
+                                                                        debug_call_print,
+                                                                        force_inline,
+                                                                        is_gpu,
+                                                                        false);
                 println!("Compiled: {} functions", num_compiled_funcs);
                 println!("Entry point: {}", entry_point);
                 println!("Globals buffer: {}", globals_buffer_size);
                 println!("interleaved: {}", interleaved);
     
-                (InputProgram::text(compiled_kernel.clone()), entry_point, num_compiled_funcs, globals_buffer_size, interleaved)
+                (InputProgram::text(compiled_kernel.clone(), fastcall_header.clone()), entry_point, num_compiled_funcs, globals_buffer_size, interleaved)
             },
             ("wat", true) => {
                 let filedata = match fs::read_to_string(file_path.clone()) {
@@ -404,23 +423,31 @@ fn main() {
                 let result_debug = ast_debug.parse_file().unwrap();
             
                 // apply our compilation pass to the source WASM 
-                let (compiled_kernel, entry_point, globals_buffer_size, num_compiled_funcs, kernel_hashmap) = ast.write_opencl_file(interleaved as u32,
-                                                                                                                    stack_size,
-                                                                                                                    heap_size, 
-                                                                                                                    call_stack_size, 
-                                                                                                                    stack_frames_size, 
-                                                                                                                    sfp_size, 
-                                                                                                                    predictor_size,
-                                                                                                                    debug_call_print,
-                                                                                                                    force_inline,
-                                                                                                                    is_gpu,
-                                                                                                                    false);
+                let (compiled_kernel,
+                    fastcall_header,
+                    entry_point,
+                    globals_buffer_size,
+                    num_compiled_funcs,
+                    kernel_hashmap,
+                    kernel_compile_stats,
+                    kernel_partition_mappings) = ast.write_opencl_file(hcall_size.try_into().unwrap(),
+                                                                        interleaved as u32,
+                                                                        stack_size,
+                                                                        heap_size, 
+                                                                        call_stack_size, 
+                                                                        stack_frames_size, 
+                                                                        sfp_size, 
+                                                                        predictor_size,
+                                                                        debug_call_print,
+                                                                        force_inline,
+                                                                        is_gpu,
+                                                                        false);
                 println!("Compiled: {} functions", num_compiled_funcs);
                 println!("Entry point: {}", entry_point);
                 println!("Globals buffer: {}", globals_buffer_size);
                 println!("interleaved: {}", interleaved);
     
-                (InputProgram::partitioned(kernel_hashmap.clone()), entry_point, num_compiled_funcs, globals_buffer_size, interleaved)
+                (InputProgram::partitioned(kernel_hashmap.clone(), fastcall_header.clone(), kernel_compile_stats.clone(), kernel_partition_mappings.clone()), entry_point, num_compiled_funcs, globals_buffer_size, interleaved)
             },
             ("wasm", true) => {
                 let filedata_text = wasmprinter::print_file(file_path.clone()).unwrap();
@@ -432,23 +459,31 @@ fn main() {
                 let result_debug = ast_debug.parse_file().unwrap();
 
                 // apply our compilation pass to the source WASM 
-                let (compiled_kernel, entry_point, globals_buffer_size, num_compiled_funcs, kernel_hashmap) = ast.write_opencl_file(interleaved as u32,
-                                                                                                                    stack_size,
-                                                                                                                    heap_size, 
-                                                                                                                    call_stack_size, 
-                                                                                                                    stack_frames_size, 
-                                                                                                                    sfp_size, 
-                                                                                                                    predictor_size,
-                                                                                                                    debug_call_print,
-                                                                                                                    force_inline,
-                                                                                                                    is_gpu,
-                                                                                                                    false);
+                let (compiled_kernel,
+                    fastcall_header,
+                    entry_point,
+                    globals_buffer_size,
+                    num_compiled_funcs,
+                    kernel_hashmap,
+                    kernel_compile_stats,
+                    kernel_partition_mappings) = ast.write_opencl_file(hcall_size.try_into().unwrap(),
+                                                                        interleaved as u32,
+                                                                        stack_size,
+                                                                        heap_size, 
+                                                                        call_stack_size, 
+                                                                        stack_frames_size, 
+                                                                        sfp_size, 
+                                                                        predictor_size,
+                                                                        debug_call_print,
+                                                                        force_inline,
+                                                                        is_gpu,
+                                                                        false);
                 println!("Compiled: {} functions", num_compiled_funcs);
                 println!("Entry point: {}", entry_point);
                 println!("Globals buffer: {}", globals_buffer_size);
                 println!("interleaved: {}", interleaved);
     
-                (InputProgram::partitioned(kernel_hashmap.clone()), entry_point, num_compiled_funcs, globals_buffer_size, interleaved)
+                (InputProgram::partitioned(kernel_hashmap.clone(), fastcall_header.clone(), kernel_compile_stats.clone(), kernel_partition_mappings.clone()), entry_point, num_compiled_funcs, globals_buffer_size, interleaved)
             },
             ("bin", _) => {
                 // read the binary file as a Vec<u8>
@@ -471,9 +506,10 @@ fn main() {
                 let program: PartitionedSeralizedProgram = bincode::deserialize(&filedata).unwrap();
                 println!("Loaded partitioned program with entry point: {}, num_compiled_funcs: {}, globals_buffer_size: {}, is_interleaved: {}", program.entry_point, program.num_compiled_funcs, program.globals_buffer_size, program.interleaved);
 
-                (InputProgram::PartitionedBinary(program.program_data), program.entry_point, program.num_compiled_funcs, program.globals_buffer_size, program.interleaved)
+                (InputProgram::PartitionedBinary(program.program_data, program.partition_mapping), program.entry_point, program.num_compiled_funcs, program.globals_buffer_size, program.interleaved)
             },
             // nvidia specific assembly code, prebuilt
+            // this is a legacy stub from earlier testing, it still works though
             ("ptx", _) => {
                 // read the binary file as a Vec<u8>
                 let filedata = match fs::read(file_path.clone()) {
@@ -491,9 +527,76 @@ fn main() {
         };
         let fname = &file_path.as_str();
         //let mut spawned_threads = Vec::new();
-        (0..num_vm_groups).collect::<Vec<u32>>().par_iter().map(|_idx| {
-            let runner = opencl_runner::OpenCLRunner::new(num_vms, interleaved, is_gpu, entry_point, file.clone());
-            runner.run(fname,
+
+        // Create a single context for all vmgroups
+        let platform_id = ocl::core::default_platform().unwrap();
+        let device_type = if is_gpu {
+            Some(ocl::core::DEVICE_TYPE_GPU)
+        } else {
+            Some(ocl::core::DEVICE_TYPE_CPU)
+        };
+
+        let device_ids = ocl::core::get_device_ids(&platform_id, device_type, None).unwrap();
+        let device_id = device_ids[0];
+        println!("{:?}", platform_id);
+        println!("{:?}", device_ids);
+        println!("{:?}", device_id);
+        // set up the device context
+
+        let context_properties = ContextProperties::new().platform(platform_id);
+        let temp_context = ocl::core::create_context(Some(&context_properties), &[device_id], None, None).unwrap();
+        let context: &'static ocl::core::Context = Box::leak(Box::new(temp_context));
+
+        let runner = opencl_runner::OpenCLRunner::new(num_vms, interleaved, is_gpu, entry_point, file.clone());
+        let (program, device_id) = runner.setup_kernel(context, device_id, fname, stack_size, heap_size, num_compiled_funcs, globals_buffer_size, compile_args.clone(), link_args.clone());
+
+        (0..num_vm_groups).collect::<Vec<u32>>().par_iter().map(|idx| {
+            // set up the device context
+            /*
+            let context_properties = ContextProperties::new().platform(platform_id);
+            let temp_context = ocl::core::create_context(Some(&context_properties), &[device_id], None, None).unwrap();
+            let context: &'static ocl::core::Context = Box::leak(Box::new(temp_context));
+
+            // Compile the input program
+            */
+            //let runner = opencl_runner::OpenCLRunner::new(num_vms, interleaved, is_gpu, entry_point, file.clone());
+            //let (program, device_id) = runner.setup_kernel(context, device_id, fname, stack_size, heap_size, num_compiled_funcs, globals_buffer_size, compile_args.clone(), link_args.clone());
+
+            let mut server_sender_vec = vec![];
+            let mut vm_recv_vec = vec![];
+            for x in 0..num_vms.clone() {
+                let (sender, recv): (tokio::sync::mpsc::Sender<(Vec<u8>, usize)>, tokio::sync::mpsc::Receiver<(Vec<u8>, usize)>) = mpsc::channel(16384);
+                server_sender_vec.push(AsyncMutex::new(sender));
+                vm_recv_vec.push(Mutex::new(recv));
+            }
+    
+            let server_sender_vec_arc = Arc::new(server_sender_vec);
+            let vm_recv_vec_arc = Arc::new(vm_recv_vec);
+    
+            let mut vm_sender_vec = vec![];
+            let mut server_recv_vec = vec![];
+            for x in 0..num_vms.clone() {
+                let (sender, recv): (tokio::sync::mpsc::Sender<(Vec<u8>, usize, u64, u64, u64, u64)>, tokio::sync::mpsc::Receiver<(Vec<u8>, usize, u64, u64, u64, u64)>) = mpsc::channel(16384);
+                vm_sender_vec.push(Mutex::new(sender));
+                server_recv_vec.push(AsyncMutex::new(recv));
+            }
+    
+            let vm_sender_vec_arc = Arc::new(vm_sender_vec);
+            let server_recv_vec_arc = Arc::new(server_recv_vec);
+
+            // we don't need to join the server handle, this will be active as long as the runtime is
+            if serverless {
+                println!("Starting server on: {}:{}/batch_submit", batch_submit_ip.clone(), (batch_submit_port+idx).to_string());
+               
+                let batch_submit_ip_clone = batch_submit_ip.clone();
+                let port = (batch_submit_port + idx).to_string();
+                thread::spawn(move || {
+                    BatchSubmitServer::start_server(hcall_size, server_sender_vec_arc, server_recv_vec_arc, num_vms, batch_submit_ip_clone.clone(), port.clone());
+                });
+            }
+
+            runner.clone().run(context, program.clone(), device_id, fname,
+                       hcall_size,
                        stack_size,
                        heap_size, 
                        call_stack_size, 
@@ -501,8 +604,8 @@ fn main() {
                        sfp_size, 
                        num_compiled_funcs,
                        globals_buffer_size,
-                       vm_sender_mutex.clone(),
-                       vm_recv_mutex.clone(),
+                       vm_sender_vec_arc.clone(),
+                       vm_recv_vec_arc.clone(),
                        compile_args.clone(),
                        link_args.clone(),
                        print_return)
@@ -512,7 +615,45 @@ fn main() {
     } else {
         // If we are running the wasmtime runtime
         let num_threads = num_cpus::get();
+        let wg = WaitGroup::new();
         let thread_pool = rayon::ThreadPoolBuilder::new().num_threads(num_threads.try_into().unwrap()).build().unwrap();
+
+        let (server_sender, vm_recv): (Sender<(Vec<u8>, usize)>, Receiver<(Vec<u8>, usize)>) = bounded(16384);
+        let (vm_sender, server_recv): (Sender<(Vec<u8>, usize, u64, u64, u64, u64)>, Receiver<(Vec<u8>, usize, u64, u64, u64, u64)>) = bounded(16384);
+    
+        let mut server_sender_vec = vec![];
+        let mut vm_recv_vec = vec![];
+        for x in 0..num_threads {
+            let (sender, recv): (tokio::sync::mpsc::Sender<(Vec<u8>, usize)>, tokio::sync::mpsc::Receiver<(Vec<u8>, usize)>) = mpsc::channel(16384);
+            server_sender_vec.push(AsyncMutex::new(sender));
+            vm_recv_vec.push(Mutex::new(recv));
+        }
+
+        let server_sender_vec_arc = Arc::new(server_sender_vec);
+        let vm_recv_vec_arc = Arc::new(vm_recv_vec);
+
+        let mut vm_sender_vec = vec![];
+        let mut server_recv_vec = vec![];
+        for x in 0..num_threads {
+            let (sender, recv): (tokio::sync::mpsc::Sender<(Vec<u8>, usize, u64, u64, u64, u64)>, tokio::sync::mpsc::Receiver<(Vec<u8>, usize, u64, u64, u64, u64)>) = mpsc::channel(16384);
+            vm_sender_vec.push(Mutex::new(sender));
+            server_recv_vec.push(AsyncMutex::new(recv));
+        }
+
+        let vm_sender_vec_arc = Arc::new(vm_sender_vec);
+        let server_recv_vec_arc = Arc::new(server_recv_vec);
+
+        let vm_sender_mutex = Arc::new(Mutex::new(vm_sender));
+        let vm_recv_mutex = Arc::new(Mutex::new(vm_recv));
+
+        // For each VM create a tracking context (contains sender/receiver pair for each VM)
+    
+        if serverless {
+            println!("Starting server on: {}:{}/batch_submit", batch_submit_ip.clone(), batch_submit_port.to_string());
+            thread_pool.spawn(move || {
+                BatchSubmitServer::start_server(hcall_size, server_sender_vec_arc, server_recv_vec_arc, num_threads.try_into().unwrap(), batch_submit_ip, batch_submit_port.to_string());
+            });
+        }
 
         for idx in 0..num_threads {
             println!("Starting Wasmtime VM: {:?}", idx);
@@ -534,12 +675,16 @@ fn main() {
                 }
             };
 
-            let vm_sender_mutex_clone = vm_sender_mutex.clone();
-            let vm_recv_mutex_clone = vm_recv_mutex.clone();
-            let vm_recv_condvar_clone = vm_recv_condvar.clone();
-            thread_pool.spawn(move || {
+            let mut vm_sender_mutex_clone = vm_sender_vec_arc.clone();
+            let mut vm_recv_mutex_clone = vm_recv_vec_arc.clone();
+            let wg = wg.clone();
+
+            thread::spawn(move || {
+                let wasmtime_runner = WasmtimeRunner::new(idx, vm_sender_mutex_clone.clone(), vm_recv_mutex_clone.clone());
+                let leaked_runner: &'static WasmtimeRunner = Box::leak(Box::new(wasmtime_runner));
+
                 // run the WASM VM...
-                match WasmtimeRunner::run(filedata.clone(), vm_sender_mutex_clone, vm_recv_mutex_clone, vm_recv_condvar_clone) {
+                match leaked_runner.run(filedata.clone(), hcall_size) {
                     Ok(()) => {
                         println!("Wasmtime VM: {:?} finished running!", idx);
                     },
@@ -547,12 +692,9 @@ fn main() {
                         println!("An error occured while running VM: {:?}, error: {:?}", idx, e);
                     }
                 }
+                drop(wg);
             });
         }
-
-        if serverless {
-            join_handle.unwrap().join().unwrap();
-        }
+        wg.wait();
     }
 }
- 

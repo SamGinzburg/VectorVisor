@@ -4,6 +4,8 @@ use crate::opencl_writer::mem_interleave::emit_read_u32;
 use crate::opencl_writer::mem_interleave::emit_write_u32;
 use crate::opencl_writer::mem_interleave::emit_read_u64;
 use crate::opencl_writer::mem_interleave::emit_write_u64;
+use crate::opencl_writer::StackCtx;
+use crate::opencl_writer::StackType;
 
 use wast::Index::*;
 use wast::TypeDef::*;
@@ -35,13 +37,92 @@ pub fn get_return_size(writer: &opencl_writer::OpenCLCWriter, ty: &wast::TypeUse
             }
         },
         _ => {
-            0
+            let index = ty.clone().index.unwrap();
+            let ty_name = match index {
+                Num(n, _) => format!("t{}", n),
+                Id(i) => i.name().to_string(),
+            };
+
+            let func_type = match writer.types.get(&ty_name).unwrap() {
+                Func(f) => f,
+                _ => panic!("non-function type found for function in get_return_size"),
+            };
+
+            let ret_val = if func_type.results.len() > 0 {
+                writer.get_size_valtype(&func_type.results[0])
+            } else {
+                0
+            };
+
+            ret_val
         },
     }
 }
 
+pub fn get_func_params(writer: &opencl_writer::OpenCLCWriter, ty: &wast::TypeUse<wast::FunctionType>) -> Vec<StackType> {
+    let mut return_params = vec![];
 
-pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, fn_name: String, idx: wast::Index, call_ret_map: &mut HashMap<&str, u32>, call_ret_idx: &mut u32, function_id_map: &HashMap<&str, u32>, stack_sizes: &mut Vec<u32>, is_indirect: bool, debug: bool) -> String {
+    match (ty.index.as_ref(), ty.inline.as_ref()) {
+        (Some(index), _) => {
+            // if we have an index, we need to look it up in the global structure
+            let type_index = match index {
+                Num(n, _) => format!("t{}", n),
+                Id(i) => i.name().to_string(),
+            };
+
+            let func_type = match writer.types.get(&type_index).unwrap() {
+                Func(ft) => ft,
+                _ => panic!("Indirect call cannot have a type of something other than a func"),
+            };
+
+            for (_, _, param_type) in func_type.params.iter() {
+                return_params.push(StackCtx::convert_wast_types(&param_type));
+            }
+        },
+        (_, Some(inline)) => {
+            for (_, _, param_type) in inline.params.iter() {
+                return_params.push(StackCtx::convert_wast_types(&param_type));
+            }
+        },
+        _ => panic!("Neither inline or index type found for func in get_func_params!"),
+    }
+
+    return_params
+}
+
+pub fn get_func_result(writer: &opencl_writer::OpenCLCWriter, ty: &wast::TypeUse<wast::FunctionType>) -> Option<StackType> {
+    let mut ret_val = None;
+
+    match (ty.index.as_ref(), ty.inline.as_ref()) {
+        (Some(index), _) => {
+            // if we have an index, we need to look it up in the global structure
+            let type_index = match index {
+                Num(n, _) => format!("t{}", n),
+                Id(i) => i.name().to_string(),
+            };
+
+            let func_type = match writer.types.get(&type_index).unwrap() {
+                Func(ft) => ft,
+                _ => panic!("get_func_result cannot have a type of something other than a func"),
+            };
+            if func_type.results.len() > 0 {
+                ret_val = Some(StackCtx::convert_wast_types(&func_type.results[0]));
+            }
+        },
+        (_, Some(inline)) => {
+            if inline.results.len() > 0 {
+                ret_val = Some(StackCtx::convert_wast_types(&inline.results[0]));
+            }
+        },
+        _ => panic!("Neither inline or index type found for func in get_func_result!"),
+    }
+
+    ret_val
+}
+
+
+pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, fn_name: String, idx: wast::Index, call_ret_map: &mut HashMap<&str, u32>, call_ret_idx: &mut u32, function_id_map: &HashMap<&str, u32>, stack_sizes: &mut Vec<u32>, is_indirect: bool, is_fastcall: bool, debug: bool) -> String {
+    let mut ret_str = String::from("");
     let id = match idx {
         wast::Index::Id(id) => id.name(),
         _ => panic!("Unable to get Id for function call!"),
@@ -55,19 +136,32 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, fn_name: String, idx:
      * We have to recompute the parameter offset, because this is the offset for the function
      * we are about to call, not the current function
      */
+    let mut stack_params = vec![];
+    let mut stack_params_types = vec![];
+
+    let mut return_type = None;
+
     let mut parameter_offset: u32 = 0;
     match func_type_signature.inline {
         // if we can find the type signature
         Some(_) => {
-            for parameter in func_type_signature.clone().inline.unwrap().params.to_vec() {
+            for parameter in func_type_signature.inline.as_ref().unwrap().params.to_vec() {
                 match parameter {
                     (_, _, t) => {
                         if !is_indirect {
-                            stack_sizes.pop();
+                            stack_sizes.pop().unwrap();
+                            let (param, param_type) = stack_ctx.vstack_pop_any();
+                            stack_params.insert(0, param);
+                            stack_params_types.insert(0, param_type);
                         }
                         parameter_offset += writer.get_size_valtype(&t);
                     },
                 }
+            }
+            if func_type_signature.inline.as_ref().unwrap().results.len() > 0 {
+                return_type = Some(func_type_signature.clone().inline.unwrap().results[0]);
+            } else {
+                return_type = None;
             }
         },
         // if we cannot find the type signature, we need to look it up to check for the param offset
@@ -85,17 +179,63 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, fn_name: String, idx:
                         match parameter {
                             (_, _, t) => {
                                 if !is_indirect {
-                                    stack_sizes.pop();
+                                    stack_sizes.pop().unwrap();
+                                    let (param, param_type) = stack_ctx.vstack_pop_any();
+                                    stack_params.insert(0, param);
+                                    stack_params_types.insert(0, param_type);
                                 }
                                 parameter_offset += writer.get_size_valtype(&t);
                             },
                         }
+                    }
+                    if ft.results.len() > 0 {
+                        return_type = Some(ft.results[0]);
+                    } else {
+                        return_type = None;
                     }
                 },
                 None => (),
                 _ => panic!("Non-function type referenced from function")
             };
         },
+    }
+
+    // Now, we need to save the intermediate context
+    if !is_indirect && !is_fastcall {
+        ret_str += &stack_ctx.save_context(false);
+    }
+
+    // We need to manually write the parameters to the stack
+    // For indirect function calls we need to do this before the switch case to over allocating registers
+    if !is_indirect && !is_fastcall {
+        for (param, ty) in stack_params.iter().zip(stack_params_types.iter()) {
+            match ty {
+                StackType::i32 => {
+                    ret_str += &format!("\t{};\n\t*sp += 1;\n",
+                                            emit_write_u32("(ulong)(stack_u32+*sp)", "(ulong)(stack_u32)", &param, "warp_idx"));
+                },
+                StackType::i64 => {
+                    ret_str += &format!("\t{};\n\t*sp += 2;\n",
+                                            emit_write_u64("(ulong)(stack_u32+*sp)", "(ulong)(stack_u32)", &param, "warp_idx"));
+                },
+                StackType::f32 => {
+                    ret_str += &format!("\t{{\n");
+                    ret_str += &format!("\t\tuint temp = 0;\n");
+                    ret_str += &format!("\t\t___private_memcpy_nonmmu(&temp, &{}, sizeof(uint));\n", param);
+                    ret_str += &format!("\t\t{};\n\t*sp += 1;\n",
+                                        emit_write_u32("(ulong)(stack_u32+*sp)", "(ulong)(stack_u32)", "temp", "warp_idx"));
+                    ret_str += &format!("\t}}\n");
+                },
+                StackType::f64 => {
+                    ret_str += &format!("\t{{\n");
+                    ret_str += &format!("\t\tulong temp = 0;\n");
+                    ret_str += &format!("\t\t___private_memcpy_nonmmu(&temp, &{}, sizeof(double));\n", param);
+                    ret_str += &format!("\t\t{};\n\t*sp += 2;\n",
+                                        emit_write_u64("(ulong)(stack_u32+*sp)", "(ulong)(stack_u32)", "temp", "warp_idx"));
+                    ret_str += &format!("\t}}\n");
+                },
+            }
+        }
     }
 
     // for each function call, map the call to an index
@@ -106,12 +246,13 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, fn_name: String, idx:
     
     // get the return type of the function
     let return_size = get_return_size(writer, &func_type_signature.clone());
+
     if !is_indirect {
         stack_sizes.push(return_size);
     }
 
-    let result = if return_size > 0 {
-        format!("\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n{}\n\t{}\n",
+    let result = if return_size > 0 && !is_fastcall {
+        format!("\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n",
         // move the stack pointer back by the offset required by calling parameters
         // the sp should point at the start of the locals for the function
         // increment stack frame pointer
@@ -138,7 +279,7 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, fn_name: String, idx:
         format!("{}_call_return_stub_{}:", format!("{}{}", "__", fn_name.replace(".", "")), *call_ret_idx),
         format!("*sp += {};", return_size),
         format!("*sp -= {};", parameter_offset))
-    } else {
+    } else if return_size <= 0 && !is_fastcall {
         format!("\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n{}\n",
                 // increment stack frame pointer
                 "*sfp += 1;",
@@ -162,14 +303,85 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, fn_name: String, idx:
                 "return;",
                 format!("{}_call_return_stub_{}:", format!("{}{}", "__", fn_name.replace(".", "")), *call_ret_idx),
                 format!("*sp -= {};", parameter_offset))
+    } else {
+        // No-op for fastcalls
+        format!("")
     };
-    *call_ret_idx += 1;
 
-    result
+    // only increment the call ret idx if we are not a fastcall
+    if !is_fastcall {
+        *call_ret_idx += 1;
+    }
+
+    ret_str += &result;
+
+    // Restore the intermediate context, generate the string here
+    // We do this here because if we alloc for the return value, we don't want to delete more space
+
+    let restore_context = if !is_indirect && !is_fastcall {
+        stack_ctx.restore_context(false, false)
+    } else {
+        String::from("")
+    };
+
+    // after returning, the top of the stack is our return var (if we have one)
+    if return_size > 0 && !is_indirect && !is_fastcall {
+        let result_register = stack_ctx.vstack_alloc(StackCtx::convert_wast_types(&return_type.unwrap()));
+        match StackCtx::convert_wast_types(&return_type.unwrap()) {
+            StackType::i32 => {
+                ret_str += &format!("\t{} = {};\n\t{};\n", result_register, 
+                                    emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx"),
+                                    "*sp -= 1");
+            },
+            StackType::i64 => {
+                ret_str += &format!("\t{} = {};\n\t{};\n", result_register, 
+                                    emit_read_u64("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx"),
+                                    "*sp -= 2;");
+            },
+            StackType::f32 => {
+                ret_str += &format!("\t{{\n");
+                ret_str += &format!("\t\tuint temp = {};\n", emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx"));
+                ret_str += &format!("\t\t___private_memcpy_nonmmu(&{}, &temp, sizeof(uint));\n", result_register);
+                ret_str += &format!("\t\t*sp -= 1;\n");
+                ret_str += &format!("\t}}\n");
+            },
+            StackType::f64 => {
+                ret_str += &format!("\t{{\n");
+                ret_str += &format!("\t\tulong temp = {};\n", emit_read_u64("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx"));
+                ret_str += &format!("\t\t___private_memcpy_nonmmu(&{}, &temp, sizeof(ulong));\n", result_register);
+                ret_str += &format!("\t\t*sp -= 2;\n");
+                ret_str += &format!("\t}}\n");
+            }
+        }
+    }
+
+    // restore the intermediate context, increment the call ret idx
+    if !is_indirect && !is_fastcall {
+        ret_str += &restore_context;
+    }
+
+    // Insert the code for fastcalls here
+    if  is_fastcall {
+        let calling_func_name = format!("{}{}", "__", id.replace(".", ""));
+        let mut parameter_list = String::from("");
+
+        for (param, ty) in stack_params.iter().zip(stack_params_types.iter()) {
+            parameter_list += &format!("{}, ", param);
+        }
+
+        if return_size > 0 {
+            let result_register = stack_ctx.vstack_alloc(StackCtx::convert_wast_types(&return_type.unwrap()));
+            ret_str += &format!("\t{} = {}_fastcall({}heap_u32, current_mem_size, max_mem_size, globals_buffer, warp_idx); //calling\n", result_register, calling_func_name, parameter_list);
+        } else {
+            ret_str += &format!("\t{}_fastcall({}heap_u32, current_mem_size, max_mem_size, globals_buffer, warp_idx); //calling\n", calling_func_name, parameter_list);
+        }
+    }
+
+    ret_str
 }
 
 // TODO: this needs to take the function type into account
-pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, fn_name: &str, func_ret_info: &Option<wast::FunctionType>, is_start_fn: bool, debug: bool) -> String {
+pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, fn_name: &str, func_ret_info: &Option<wast::FunctionType>, is_start_fn: bool, is_fastcall: bool, debug: bool) -> String {
     let mut final_str = String::from("");
     let results: Vec<wast::ValType> = match func_ret_info {
         Some(s) => (*s.results).to_vec(),
@@ -179,8 +391,6 @@ pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, fn_name: &str, fun
     };
     
     final_str += &format!("\t{}\n", "/* function unwind */");
-    // strip illegal chars from func name
-    final_str += &format!("{}_return:\n", format!("{}{}", "__", fn_name.replace(".", "")));
     // for each value returned by the function, return it on the stack
     // keep track of the change to stack ptr from previous returns
     let mut sp_counter = 0;
@@ -205,83 +415,161 @@ pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, fn_name: &str, fun
         // if we cannot find the type signature, no-op
         // this seems to only come up in cases where there are no parameters
         None => {
+            //dbg!("Unable to find type signature for parameters in func_unwind: fn_name: {:?}", &fn_name);
             ()
         },
     }
-    
-    let mut offset;
-    for value in results {
-        match value {
-            wast::ValType::I32 => {
-                // compute the offset to read from the bottom of the stack
-                if sp_counter > 0 {
-                    offset = format!("write_u32((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), warp_idx)),
-                                                (ulong)stack_u32,
-                                                read_u32((ulong)(stack_u32+*sp-{}-1), (ulong)stack_u32, warp_idx),
-                                                warp_idx);", parameter_offset, sp_counter);
-                } else {
-                    offset = format!("write_u32((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx)),
-                                                (ulong)stack_u32,
-                                                read_u32((ulong)(stack_u32+*sp-1), (ulong)stack_u32, warp_idx),
-                                                warp_idx);", parameter_offset);
-                }
-                final_str += &format!("\t{}\n", offset);
-                sp_counter += 1;
-            },
-            wast::ValType::I64 => {
-                // compute the offset to read from the bottom of the stack
-                if sp_counter > 0 {
-                    offset = format!("write_u64((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx)),
-                                                (ulong)stack_u32,
-                                                read_u64((ulong)(stack_u32+*sp-{}-2), (ulong)stack_u32, warp_idx),
-                                                warp_idx);", parameter_offset, sp_counter);
-                } else {
-                    offset = format!("write_u64((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx)),
-                                                (ulong)stack_u32,
-                                                read_u64((ulong)(stack_u32+*sp-2), (ulong)stack_u32, warp_idx),
-                                                warp_idx);", parameter_offset);
-                }
-                final_str += &format!("\t{}\n", offset);
-                sp_counter += 2;
-            },
-            wast::ValType::F32 => {
-                // compute the offset to read from the bottom of the stack
-                if sp_counter > 0 {
-                    offset = format!("write_u32((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx)),
-                                                (ulong)stack_u32,
-                                                read_u32((ulong)(stack_u32+*sp-{}-1), (ulong)stack_u32, warp_idx),
-                                                warp_idx);", parameter_offset, sp_counter);
-                } else {
-                    offset = format!("write_u32((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx)),
-                                                (ulong)stack_u32,
-                                                read_u32((ulong)(stack_u32+*sp-1), (ulong)stack_u32, warp_idx),
-                                                warp_idx);", parameter_offset);
-                }
-                final_str += &format!("\t{}\n", offset);
-                sp_counter += 1;
-            },
-            wast::ValType::F64 => {
-                // compute the offset to read from the bottom of the stack
-                if sp_counter > 0 {
-                    offset = format!("write_u64((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx)),
-                                                (ulong)stack_u32,
-                                                read_u64((ulong)(stack_u32+*sp-{}-2), (ulong)stack_u32, warp_idx),
-                                                warp_idx);", parameter_offset, sp_counter);
-                } else {
-                    offset = format!("write_u64((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx)),
-                                                (ulong)stack_u32,
-                                                read_u64((ulong)(stack_u32+*sp-2), (ulong)stack_u32, warp_idx),
-                                                warp_idx);", parameter_offset);
-                }
-                final_str += &format!("\t{}\n", offset);
-                sp_counter += 2;
-            },
-            _ => panic!("Unimplemented function return type!!!"),
+
+    if is_fastcall {
+        // Get the return type
+        if results.len() > 0 {
+            match results[0] {
+                wast::ValType::I32 => {
+                    let reg = if !stack_ctx.vstack_is_empty(StackType::i32) {
+                        stack_ctx.vstack_pop(StackType::i32)
+                    } else {
+                        String::from("(uint)(-1)")
+                    };
+                    final_str += &format!("\treturn {};\n", reg);
+                },
+                wast::ValType::I64 => {
+                    let reg = if !stack_ctx.vstack_is_empty(StackType::i64) {
+                        stack_ctx.vstack_pop(StackType::i64)
+                    } else {
+                        String::from("(ulong)(-1)")
+                    };
+                    final_str += &format!("\treturn {};\n", reg);
+                },
+                wast::ValType::F32 => {
+                    let reg = if !stack_ctx.vstack_is_empty(StackType::f32) {
+                        stack_ctx.vstack_pop(StackType::f32)
+                    } else {
+                        String::from("(float)(-1)")
+                    };
+                    final_str += &format!("\treturn {};\n", reg);
+                },
+                wast::ValType::F64 => {
+                    let reg = if !stack_ctx.vstack_is_empty(StackType::f64) {
+                        stack_ctx.vstack_pop(StackType::f64)
+                    } else {
+                        String::from("(double)(-1)")
+                    };
+                    final_str += &format!("\treturn {};\n", reg);
+                },
+                _ => panic!("Unimplemented function return type in fastcall unwind!!!"),
+            }
+        } else {
+            final_str += &format!("\treturn;\n");
         }
+    } else {
+        let mut offset;
+        for value in results {
+            match value {
+                wast::ValType::I32 => {
+                    // compute the offset to read from the bottom of the stack
+                    let reg = if !stack_ctx.vstack_is_empty(StackType::i32) {
+                        stack_ctx.vstack_pop(StackType::i32)
+                    } else {
+                        String::from("(uint)(-1)")
+                    };
+    
+                    if sp_counter > 0 {
+                        offset = format!("write_u32((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), warp_idx)),
+                                                    (ulong)stack_u32,
+                                                    {},
+                                                    warp_idx);", parameter_offset, reg);
+                    } else {
+                        offset = format!("write_u32((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx)),
+                                                    (ulong)stack_u32,
+                                                    {},
+                                                    warp_idx);", parameter_offset, reg);
+                    }
+                    final_str += &format!("\t{}\n", offset);
+                    sp_counter += 1;
+                },
+                wast::ValType::I64 => {
+                    // compute the offset to read from the bottom of the stack
+                    let reg = if !stack_ctx.vstack_is_empty(StackType::i64) {
+                        stack_ctx.vstack_pop(StackType::i64)
+                    } else {
+                        String::from("(uint)(-1)")
+                    };
+    
+                    if sp_counter > 0 {
+                        offset = format!("write_u64((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx)),
+                                                    (ulong)stack_u32,
+                                                    {},
+                                                    warp_idx);", parameter_offset, reg);
+                    } else {
+                        offset = format!("write_u64((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx)),
+                                                    (ulong)stack_u32,
+                                                    {},
+                                                    warp_idx);", parameter_offset, reg);
+                    }
+                    final_str += &format!("\t{}\n", offset);
+                    sp_counter += 2;
+                },
+                wast::ValType::F32 => {
+                    // compute the offset to read from the bottom of the stack
+                    let reg = if !stack_ctx.vstack_is_empty(StackType::f32) {
+                        stack_ctx.vstack_pop(StackType::f32)
+                    } else {
+                        String::from("(uint)(-1)")
+                    };
+    
+                    if sp_counter > 0 {
+                        offset = format!("write_u32((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx)),
+                                                    (ulong)stack_u32,
+                                                    {},
+                                                    warp_idx);", parameter_offset, "temp");
+                    } else {
+                        offset = format!("write_u32((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx)),
+                                                    (ulong)stack_u32,
+                                                    {},
+                                                    warp_idx);", parameter_offset, "temp");
+                    }
+                    final_str += &format!("\t{{\n");
+                    final_str += &format!("\t\tuint temp = 0;\n");
+                    final_str += &format!("\t\t___private_memcpy_nonmmu(&temp, &{}, sizeof(float));\n", reg);
+                    final_str += &format!("\t\t{}\n", offset);
+                    final_str += &format!("\t}}\n");
+                    sp_counter += 1;
+                },
+                wast::ValType::F64 => {
+                    // compute the offset to read from the bottom of the stack
+                    // compute the offset to read from the bottom of the stack
+                    let reg = if !stack_ctx.vstack_is_empty(StackType::f64) {
+                        stack_ctx.vstack_pop(StackType::f64)
+                    } else {
+                        String::from("(uint)(-1)")
+                    };
+    
+                    if sp_counter > 0 {
+                        offset = format!("write_u64((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx)),
+                                                    (ulong)stack_u32,
+                                                    {},
+                                                    warp_idx);", parameter_offset, "temp");
+                    } else {
+                        offset = format!("write_u64((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx)),
+                                                    (ulong)stack_u32,
+                                                    {},
+                                                    warp_idx);", parameter_offset, "temp");
+                    }
+                    final_str += &format!("\t{{\n");
+                    final_str += &format!("\t\tulong temp = 0;\n");
+                    final_str += &format!("\t\t___private_memcpy_nonmmu(&temp, &{}, sizeof(double));\n", &reg);
+                    final_str += &format!("\t\t{}\n", offset);
+                    final_str += &format!("\t}}\n");
+    
+                    sp_counter += 2;
+                },
+                _ => panic!("Unimplemented function return type!!!"),
+            }
+        }    
     }
 
     // If we aren't the start function we need to properly unwind
-    if !is_start_fn {
+    if !is_start_fn && !is_fastcall {
         // load the entry point to return to in the control function
         final_str += &format!("\t*entry_point = {};\n", emit_read_u32("(ulong)(call_return_stack+*sfp)", "(ulong)(call_return_stack)", "warp_idx"));
 
@@ -311,7 +599,7 @@ pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, fn_name: &str, fun
  *  each other, so we must process them sequentially.
  * 
  */
-pub fn emit_call_indirect(writer: &opencl_writer::OpenCLCWriter, call_indirect: &wast::CallIndirect, fn_name: String, arameter_offset: i32, table: &HashMap<u32, &wast::Index>, call_ret_map: &mut HashMap<&str, u32>, call_ret_idx: &mut u32, function_id_map: HashMap<&str, u32>, stack_sizes: &mut Vec<u32>, debug: bool) -> String {
+pub fn emit_call_indirect(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, call_indirect: &wast::CallIndirect, fn_name: String, _parameter_offset: i32, table: &HashMap<u32, &wast::Index>, call_ret_map: &mut HashMap<&str, u32>, call_ret_idx: &mut u32, function_id_map: HashMap<&str, u32>, stack_sizes: &mut Vec<u32>, debug: bool) -> String {
     let mut result = String::from("");
     // set up a switch case statement, we read the last value on the stack and determine what function we are going to call
     // this adds code bloat, but it reduces the complexity of the compiler.
@@ -322,8 +610,14 @@ pub fn emit_call_indirect(writer: &opencl_writer::OpenCLCWriter, call_indirect: 
         panic!("Function table index for indirect call must be of type i32");
     }
 
+    let index_register = stack_ctx.vstack_pop(StackType::i32);
+
+    let mut stack_params = vec![];
+    let mut stack_params_types = vec![];
+
     // Get the type information for the indirect call! We need this to handle parametric
     // statements after a call such as select
+    let mut result_types = vec![];
     match (call_indirect.ty.index.as_ref(), call_indirect.ty.inline.as_ref()) {
         (Some(index), _) => {
             // if we have an index, we need to look it up in the global structure
@@ -339,31 +633,72 @@ pub fn emit_call_indirect(writer: &opencl_writer::OpenCLCWriter, call_indirect: 
 
             // First, pop off the parameters
             for (_, _, param_type) in func_type.params.iter() {
-                let stack_param = stack_sizes.pop().unwrap();
-                if stack_param != writer.get_size_valtype(param_type) {
-                    panic!("Parameters on the stack don't match required function parameters!");
-                }
+                stack_sizes.pop().unwrap();
+                let (param, param_type) = stack_ctx.vstack_pop_any();
+                stack_params.insert(0, param);
+                stack_params_types.insert(0, param_type);
             }
 
             // Next, push the result(s) back
             for return_type in func_type.results.iter() {
                 stack_sizes.push(writer.get_size_valtype(return_type));
+                result_types.push(return_type);
             }
         },
         (_, Some(inline)) => panic!("Inline types for call_indirect not implemented yet"),
         _ => (),
     };
 
+    // Save the context before entering the switch case
+    result += &stack_ctx.save_context(false);
+
+    let restore_ctx = stack_ctx.restore_context(false, false);
+
+    // Push the parameters to the stack
+    for (param, ty) in stack_params.iter().zip(stack_params_types.iter()) {
+        match ty {
+            StackType::i32 => {
+                result += &format!("\t\t{};\n\t\t*sp += 1;\n",
+                                        emit_write_u32("(ulong)(stack_u32+*sp)", "(ulong)(stack_u32)", &param, "warp_idx"));
+            },
+            StackType::i64 => {
+                result += &format!("\t\t{};\n\t\t*sp += 2;\n",
+                                        emit_write_u64("(ulong)(stack_u32+*sp)", "(ulong)(stack_u32)", &param, "warp_idx"));
+            },
+            StackType::f32 => {
+                result += &format!("\t{{\n");
+                result += &format!("\t\tuint temp = 0;\n");
+                result += &format!("\t\t___private_memcpy_nonmmu(&temp, &{}, sizeof(uint));\n", param);
+                result += &format!("\t\t{};\n\t\t*sp += 1;\n",
+                                    emit_write_u32("(ulong)(stack_u32+*sp)", "(ulong)(stack_u32)", "temp", "warp_idx"));
+                result += &format!("\t}}\n");
+            },
+            StackType::f64 => {
+                result += &format!("\t{{\n");
+                result += &format!("\t\tulong temp = 0;\n");
+                result += &format!("\t\t___private_memcpy_nonmmu(&temp, &{}, sizeof(double));\n", param);
+                result += &format!("\t\t{};\n\t\t*sp += 2;\n",
+                                    emit_write_u64("(ulong)(stack_u32+*sp)", "(ulong)(stack_u32)", "temp", "warp_idx"));
+                result += &format!("\t}}\n");
+            }
+        }
+    }
+
+    // Allocate a register for return values
+    let result_register = if result_types.len() > 0 {
+        stack_ctx.vstack_alloc(StackCtx::convert_wast_types(&result_types[0]))
+    } else {
+        String::from("")
+    };
 
     result += &format!("\t{}\n",
-                       &format!("switch({}) {{", emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx")));
+                       &format!("switch({}) {{", index_register));
     // generate all of the cases in the table, all uninitialized values will trap to the default case
     for (key, value) in table {
         result += &format!("\t\t{}\n", format!("case {}:", key));
-        // now that we have found the appropriate call, we can pop the value off of the stack
-        result += &format!("\t\t\t{}\n", format!("*sp -= 1;"));
         // emit the function call here!
-        result += &format!("{}", emit_fn_call(writer, fn_name.clone(), **value, call_ret_map, call_ret_idx, &function_id_map, stack_sizes, true, debug));
+        // we never emit fastcall code for indirect calls
+        result += &format!("{}", emit_fn_call(writer, stack_ctx, fn_name.clone(), **value, call_ret_map, call_ret_idx, &function_id_map, stack_sizes, true, false, debug));
         result += &format!("\t\t\t{}\n", format!("break;"));
     }
 
@@ -371,6 +706,39 @@ pub fn emit_call_indirect(writer: &opencl_writer::OpenCLCWriter, call_indirect: 
     result += &format!("\t\t{}\n", "default:");
     result += &format!("\t\t\t{}\n", "return;");
     result += &format!("\t}}\n");
+
+    // Read the result value into a register
+    if result_types.len() > 0 {
+        match StackCtx::convert_wast_types(&result_types[0]) {
+            StackType::i32 => {
+                result += &format!("\t{} = {};\n\t{};\n", result_register, 
+                                    emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx"),
+                                    "*sp -= 1");
+            },
+            StackType::i64 => {
+                result += &format!("\t{} = {};\n\t{};\n", result_register, 
+                                    emit_read_u64("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx"),
+                                    "*sp -= 2;");
+            },
+            StackType::f32 => {
+                result += &format!("\t{{\n");
+                result += &format!("\t\tuint temp = {};\n", emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx"));
+                result += &format!("\t\t___private_memcpy_nonmmu(&{}, &temp, sizeof(uint));\n", result_register);
+                result += &format!("\t\t*sp -= 1;\n");
+                result += &format!("\t}}\n");
+            },
+            StackType::f64 => {
+                result += &format!("\t{{\n");
+                result += &format!("\t\tulong temp = {};\n", emit_read_u64("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx"));
+                result += &format!("\t\t___private_memcpy_nonmmu(&{}, &temp, sizeof(ulong));\n", result_register);
+                result += &format!("\t\t*sp -= 2;\n");
+                result += &format!("\t}}\n");
+            }
+        }
+    }
+
+    // Restore the context
+    result += &restore_ctx;
 
     result
 }

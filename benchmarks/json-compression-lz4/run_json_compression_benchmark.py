@@ -34,7 +34,6 @@ def send_request_batch(req_list_ip_tuple):
             queue_submit_count.append(r.json()['requests'][resp]['queue_submit_count'])
             num_unique_fns_called.append(r.json()['requests'][resp]['num_unique_fns_called'])
 
-
         e2e_times.append(t1-t0)
         average_on_device_times.append(sum(on_device_times) / len(on_device_times))
         average_queue_times.append(sum(device_queue_times) / len(device_queue_times))
@@ -76,8 +75,8 @@ if __name__ == '__main__':
         req_list = []
         for x in range(BATCH_SIZE):
             # generate random string
-            random_str = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(random.randint(4096,4096)))
-
+            random_str = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(random.randint(4096*2,4096*2)))
+            #random_str = "text"
             # what we are sending the serverless function
             payload = {
                 "text": random_str,
@@ -93,13 +92,15 @@ if __name__ == '__main__':
 
 
     # we can use this to ping multiple VMMs in parallel
-    p = Pool(5)
-    times = p.map(send_request_batch, req_submit_list)
+    p = Pool(processes=16)
 
+    t0 = time()
+    times = p.map(send_request_batch, req_submit_list)
+    t1 = time()
 
     print ("Batch size for each req: ", BATCH_SIZE)
     print ("Total number of batches: ", NUM_BATCHES_TO_RUN)
-
+    total_rps = 0
     for vmm, idx in zip(times, range(len(times))):
         e2e_times = vmm[0]
         on_device_time = vmm[1]
@@ -107,7 +108,7 @@ if __name__ == '__main__':
         average_queue_submit_count = vmm[3]
         num_unique_fns_called = vmm[4]
         total_on_dev_times = vmm[5]
-
+        total_rps +=  (BATCH_SIZE * NUM_BATCHES_TO_RUN) / sum(e2e_times)
         print ("VMM: ", idx)
         print ("Total E2E (s): ", sum(e2e_times))
         print ("Requests Per Second: ", (BATCH_SIZE * NUM_BATCHES_TO_RUN) / sum(e2e_times))
@@ -117,3 +118,5 @@ if __name__ == '__main__':
         print ("Average queue submit overhead (ns): ", sum(queue) / len(queue))
         print ("Average # queue submits: ", sum(average_queue_submit_count) / len(average_queue_submit_count))
         print ("Average # num_unique_fns_called: ", sum(num_unique_fns_called) / len(num_unique_fns_called))
+    print ("=" * 80)
+    print ("Total RPS (including net delay): ", (BATCH_SIZE * NUM_BATCHES_TO_RUN * NUM_VMM) / (t1-t0))

@@ -4,11 +4,12 @@ use crate::opencl_writer::mem_interleave::emit_read_u32;
 use crate::opencl_writer::mem_interleave::emit_write_u32;
 use crate::opencl_writer::mem_interleave::emit_read_u64;
 use crate::opencl_writer::mem_interleave::emit_write_u64;
-
+use crate::opencl_writer::StackCtx;
+use crate::opencl_writer::StackType;
 
 use std::collections::HashMap;
 
-pub fn emit_local_get(writer: &opencl_writer::OpenCLCWriter, parameter_offset: i32, id: &str, offsets: &HashMap<String, u32>, type_info: &HashMap<String, ValType>, stack_sizes: &mut Vec<u32>, debug: bool) -> String {
+pub fn emit_local_get(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, parameter_offset: i32, id: &str, offsets: &HashMap<String, u32>, type_info: &HashMap<String, ValType>, stack_sizes: &mut Vec<u32>, debug: bool) -> String {
     let offset: i32 = *offsets.get(id).unwrap() as i32 + parameter_offset;
     let t = type_info.get(id).unwrap();
 
@@ -17,110 +18,68 @@ pub fn emit_local_get(writer: &opencl_writer::OpenCLCWriter, parameter_offset: i
 
             stack_sizes.push(1);
 
-            format!("\t{};\n\t{}\n",
-            &emit_write_u32("(ulong)(stack_u32+*sp)",
-                            "(ulong)stack_u32",
-                            &emit_read_u32(&format!("(ulong)(stack_u32+{}+{})",
-                                                    offset, 
-                                                    &emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx")),
-                                            "(ulong)stack_u32",
-                                            "warp_idx"),
-                            "warp_idx"),
-            "*sp += 1;")
+            let register = stack_ctx.vstack_alloc(StackType::i32);
+            format!("\t{} = {};\n", register, id)
         },
         wast::ValType::I64 => {
 
             stack_sizes.push(2);
 
-            format!("\t{};\n\t{}\n",
-            &emit_write_u64("(ulong)(stack_u32+*sp)",
-                           "(ulong)stack_u32",
-                           &emit_read_u64(&format!("(ulong)(stack_u32+{}+{})",
-                                                  offset, 
-                                                  &emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx")),
-                                         "(ulong)stack_u32",
-                                         "warp_idx"),
-                           "warp_idx"),
-            "*sp += 2;")
+            let register = stack_ctx.vstack_alloc(StackType::i64);
+            format!("\t{} = {};\n", register, id)
         },
         wast::ValType::F32 => {
 
             stack_sizes.push(1);
 
-            format!("\t{};\n\t{}\n",
-            &emit_write_u32("(ulong)(stack_u32+*sp)",
-                           "(ulong)stack_u32",
-                           &emit_read_u32(&format!("(ulong)(stack_u32+{}+{})",
-                                                  offset, 
-                                                  &emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx")),
-                                         "(ulong)stack_u32",
-                                         "warp_idx"),
-                           "warp_idx"),
-            "*sp += 1;")
+            let register = stack_ctx.vstack_alloc(StackType::f32);
+            format!("\t{} = {};\n", register, id)
         },
         wast::ValType::F64 => {
 
             stack_sizes.push(2);
 
-                format!("\t{};\n\t{}\n",
-                &emit_write_u64("(ulong)(stack_u32+*sp)",
-                               "(ulong)stack_u32",
-                               &emit_read_u64(&format!("(ulong)(stack_u32+{}+{})",
-                                                     offset, 
-                                                     &emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx")),
-                                             "(ulong)stack_u32",
-                                             "warp_idx"),
-                               "warp_idx"),
-                "*sp += 2;")
+            let register = stack_ctx.vstack_alloc(StackType::f64);
+            format!("\t{} = {};\n", register, id)
         },
         _ => panic!("emit_local_get type not handled")
     }
 }
 
-pub fn emit_local_set(writer: &opencl_writer::OpenCLCWriter, parameter_offset: i32, id: &str, offsets: &HashMap<String, u32>, type_info: &HashMap<String, ValType>, stack_sizes: &mut Vec<u32>, debug: bool) -> String {
+pub fn emit_local_set(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, parameter_offset: i32, id: &str, offsets: &HashMap<String, u32>, type_info: &HashMap<String, ValType>, stack_sizes: &mut Vec<u32>, is_fastcall: bool, debug: bool) -> String {
     let offset: i32 = *offsets.get(id).unwrap() as i32 + parameter_offset;
+    let cache_offset: u32 = *offsets.get(id).unwrap();
     let t = type_info.get(id).unwrap();
+    let cache = if !is_fastcall {
+        format!("\tlocal_cache[{}] = 1;\n", cache_offset)
+    }else {
+        String::from("")
+    };
 
     stack_sizes.pop();
 
     match t {
         wast::ValType::I32 => {
-            format!("\t{};\n\t{};\n",
-                    emit_write_u32(&format!("(ulong)(stack_u32+{}+{})", offset, &emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx")),
-                                   "(ulong)stack_u32",
-                                   &emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)stack_u32", "warp_idx"),
-                                   "warp_idx"),
-                    "*sp -= 1")
+            let register = stack_ctx.vstack_pop(StackType::i32);
+            format!("\t{} = {};\n{}", id, register, cache)
         },
         wast::ValType::I64 => {
-            format!("\t{};\n\t{};\n",
-                    emit_write_u64(&format!("(ulong)(stack_u32+{}+{})", offset, &emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx")),
-                                   "(ulong)stack_u32",
-                                   &emit_read_u64("(ulong)(stack_u32+*sp-2)", "(ulong)stack_u32", "warp_idx"),
-                                   "warp_idx"),
-                    "*sp -= 2")
+            let register = stack_ctx.vstack_pop(StackType::i64);
+            format!("\t{} = {};\n{}", id, register, cache)
         },
         wast::ValType::F32 => {
-            format!("\t{};\n\t{};\n",
-                    emit_write_u32(&format!("(ulong)(stack_u32+{}+{})", offset, &emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx")),
-                                   "(ulong)stack_u32",
-                                   &emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)stack_u32", "warp_idx"),
-                                   "warp_idx"),
-                    "*sp -= 1")
+            let register = stack_ctx.vstack_pop(StackType::f32);
+            format!("\t{} = {};\n{}", id, register, cache)
         },
         wast::ValType::F64 => {
-            format!("\t{};\n\t{};\n",
-                    emit_write_u64(&format!("(ulong)(stack_u32+{}+{})", offset, &emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx")),
-                                   "(ulong)stack_u32",
-                                   &emit_read_u64("(ulong)(stack_u32+*sp-2)", "(ulong)stack_u32", "warp_idx"),
-                                   "warp_idx"),
-                    "*sp -= 2")
+            let register = stack_ctx.vstack_pop(StackType::f64);
+            format!("\t{} = {};\n{}", id, register, cache)
         },
         _ => panic!("emit_local_set type not handled")
     }
 }
 
-pub fn emit_local_tee(writer: &opencl_writer::OpenCLCWriter, parameter_offset: i32, id: &str, offsets: &HashMap<String, u32>, type_info: &HashMap<String, ValType>, stack_sizes: &mut Vec<u32>, debug: bool) -> String {
+pub fn emit_local_tee(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, parameter_offset: i32, id: &str, offsets: &HashMap<String, u32>, type_info: &HashMap<String, ValType>, stack_sizes: &mut Vec<u32>, is_fastcall: bool, debug: bool) -> String {
     /*
      * peak the top of the stack, push the most recent value again
      * call local.set [x]
@@ -130,52 +89,28 @@ pub fn emit_local_tee(writer: &opencl_writer::OpenCLCWriter, parameter_offset: i
 
     match t {
         wast::ValType::I32 => {
-
             stack_sizes.push(1);
-
-            format!("\t{};\n\t{}\n{}",
-                    &emit_write_u32("(ulong)(stack_u32+*sp)",
-                                    "(ulong)(stack_u32)",
-                                    &emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx"),
-                                    "warp_idx"),
-                    "*sp += 1;",
-                    format!("{}", emit_local_set(writer, parameter_offset, id, offsets, type_info, stack_sizes, debug)))
+            let reg1 = stack_ctx.vstack_peak(StackType::i32, 0);
+            let reg2 = stack_ctx.vstack_alloc(StackType::i32);
+            format!("\t{} = {};\n{}", reg2, reg1, emit_local_set(writer, stack_ctx, parameter_offset, id, offsets, type_info, stack_sizes, is_fastcall, debug))
         },
         wast::ValType::I64 => {
-
             stack_sizes.push(2);
-
-            format!("\t{};\n\t{}\n{}",
-                    &emit_write_u64("(ulong)(stack_u32+*sp)",
-                                    "(ulong)(stack_u32)",
-                                    &emit_read_u64("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx"),
-                                    "warp_idx"),
-                    "*sp += 2;",
-                    format!("{}", emit_local_set(writer, parameter_offset, id, offsets, type_info, stack_sizes, debug)))
+            let reg1 = stack_ctx.vstack_peak(StackType::i64, 0);
+            let reg2 = stack_ctx.vstack_alloc(StackType::i64);
+            format!("\t{} = {};\n{}", reg2, reg1, emit_local_set(writer, stack_ctx, parameter_offset, id, offsets, type_info, stack_sizes, is_fastcall, debug))
         },
         wast::ValType::F32 => {
-
             stack_sizes.push(1);
-
-            format!("\t{};\n\t{}\n{}",
-                    &emit_write_u32("(ulong)(stack_u32+*sp)",
-                                    "(ulong)(stack_u32)",
-                                    &emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx"),
-                                    "warp_idx"),
-                    "*sp += 1;",
-                    format!("{}", emit_local_set(writer, parameter_offset, id, offsets, type_info, stack_sizes, debug)))
+            let reg1 = stack_ctx.vstack_peak(StackType::f32, 0);
+            let reg2 = stack_ctx.vstack_alloc(StackType::f32);
+            format!("\t{} = {};\n{}", reg2, reg1, emit_local_set(writer, stack_ctx, parameter_offset, id, offsets, type_info, stack_sizes, is_fastcall, debug))
         },
         wast::ValType::F64 => {
-
             stack_sizes.push(2);
-
-            format!("\t{};\n\t{}\n{}",
-                    &emit_write_u64("(ulong)(stack_u32+*sp)",
-                                    "(ulong)(stack_u32)",
-                                    &emit_read_u64("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx"),
-                                    "warp_idx"),
-                    "*sp += 2;",
-                    format!("{}", emit_local_set(writer, parameter_offset, id, offsets, type_info, stack_sizes, debug)))
+            let reg1 = stack_ctx.vstack_peak(StackType::f64, 0);
+            let reg2 = stack_ctx.vstack_alloc(StackType::f64);
+            format!("\t{} = {};\n{}", reg2, reg1, emit_local_set(writer, stack_ctx, parameter_offset, id, offsets, type_info, stack_sizes, is_fastcall, debug))
         },
         _ => panic!("emit_local_tee type not handled")
     }
@@ -224,39 +159,33 @@ pub fn emit_local(writer: &opencl_writer::OpenCLCWriter, local: &wast::Local, de
     }
 }
 
-pub fn emit_i32_const(writer: &opencl_writer::OpenCLCWriter, val: &i32, debug: bool) -> String {
-    format!("\t{};\n\t{}\n",
-            &emit_write_u32("(ulong)(stack_u32+*sp)",
-                            "(ulong)(stack_u32)",
-                            &format!("{}", val),
-                            "warp_idx"),
-            "*sp += 1;")
+pub fn emit_i32_const(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, val: &i32, debug: bool) -> String {
+    format!("\t{} = {};\n", stack_ctx.vstack_alloc(StackType::i32), val)
 }
 
-pub fn emit_i64_const(writer: &opencl_writer::OpenCLCWriter, val: &i64, debug: bool) -> String {
-    format!("\t{};\n\t{}\n",
-            &emit_write_u64("(ulong)(stack_u32+*sp)",
-                            "(ulong)(stack_u32)",
-                            &format!("{}", val),
-                            "warp_idx"),
-            "*sp += 2;")
+pub fn emit_i64_const(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, val: &i64, debug: bool) -> String {
+    format!("\t{} = {};\n", stack_ctx.vstack_alloc(StackType::i64), val)
 }
 
 // the float bits are passed as unsigned integer values
-pub fn emit_f32_const(writer: &opencl_writer::OpenCLCWriter, val: &u32, debug: bool) -> String {
-    format!("\t{};\n\t{}\n",
-            &emit_write_u32("(ulong)(stack_u32+*sp)",
-                            "(ulong)(stack_u32)",
-                            &format!("{}", val),
-                            "warp_idx"),
-            "*sp += 1;")
+pub fn emit_f32_const(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, val: &u32, debug: bool) -> String {
+    let mut ret_val = String::from("");
+
+    ret_val += &format!("\t{{\n");
+    ret_val += &format!("\t\tulong temp = {};\n", *val);
+    ret_val += &format!("\t\t___private_memcpy_nonmmu(&{}, &temp, sizeof(float));\n", stack_ctx.vstack_alloc(StackType::f32));
+    ret_val += &format!("\t}}\n");
+
+    ret_val
 }
 
-pub fn emit_f64_const(writer: &opencl_writer::OpenCLCWriter, val: &u64, debug: bool) -> String {
-    format!("\t{};\n\t{}\n",
-            &emit_write_u64("(ulong)(stack_u32+*sp)",
-                            "(ulong)(stack_u32)",
-                            &format!("{}", val),
-                            "warp_idx"),
-            "*sp += 2;")
+pub fn emit_f64_const(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, val: &u64, debug: bool) -> String {    
+    let mut ret_val = String::from("");
+
+    ret_val += &format!("\t{{\n");
+    ret_val += &format!("\t\tulong temp = {};\n", *val);
+    ret_val += &format!("\t\t___private_memcpy_nonmmu(&{}, &temp, sizeof(double));\n", stack_ctx.vstack_alloc(StackType::f64));
+    ret_val += &format!("\t}}\n");
+
+    ret_val
 }

@@ -28,7 +28,7 @@ def send_request_batch(req_list_ip_tuple):
         queue_submit_count = []
         num_unique_fns_called = []
         for resp in r.json()['requests']:
-            #print (r.json()['requests'][resp])
+            print (r.json()['requests'][resp])
             on_device_times.append(r.json()['requests'][resp]['on_device_execution_time_ns'])
             device_queue_times.append(r.json()['requests'][resp]['device_queue_overhead_time_ns'])
             queue_submit_count.append(r.json()['requests'][resp]['queue_submit_count'])

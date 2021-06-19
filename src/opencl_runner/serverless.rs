@@ -9,6 +9,7 @@ use crate::opencl_runner::vectorized_vm::VectorizedVM;
 
 use byteorder::LittleEndian;
 use byteorder::ByteOrder;
+
 use crossbeam::channel::Sender;
 
 use std::convert::TryInto;
@@ -18,21 +19,16 @@ pub struct Serverless {}
 
 impl Serverless {
     pub fn hypercall_serverless_invoke(vm_ctx: &mut VectorizedVM, hypercall: &mut HyperCall, sender: &Sender<HyperCallResult>) -> () {
-        let hcall_buf: &mut [u8] = &mut hypercall.hypercall_buffer.lock().unwrap();
+        let mut hcall_buf: &mut [u8] = unsafe { *hypercall.hypercall_buffer.buf.get() };
+        let hcall_buf_size: u32 = vm_ctx.hcall_buf_size;
 
         // block until we get an incoming request
-        let recv_chan = (vm_ctx.vm_recv).clone();
+        let recv_chan = (vm_ctx.vm_recv).get(hypercall.vm_id as usize).unwrap();
 
-        let (msg, msg_len) = recv_chan.lock().unwrap().recv().unwrap();
+        let (msg, msg_len) = recv_chan.lock().unwrap().blocking_recv().unwrap();
 
-        // copy the incoming request into the hcall_buffer
-        if hypercall.is_interleaved_mem {
-            for offset in 0..msg_len {
-                Interleave::write_u8(hcall_buf, offset.try_into().unwrap(), hypercall.num_total_vms, msg[offset], hypercall.vm_id);
-            }
-        } else {
-            hcall_buf[0..msg_len].copy_from_slice(&msg[0..msg_len]);
-        }
+        hcall_buf = &mut hcall_buf[(hypercall.vm_id * hcall_buf_size) as usize..((hypercall.vm_id+1) * hcall_buf_size) as usize];
+        hcall_buf[0..msg_len].copy_from_slice(&msg[0..msg_len]);
 
         // store this in the vmctx for when we return
         *Arc::make_mut(&mut vm_ctx.timestamp_counter) = hypercall.timestamp_counter;
@@ -53,27 +49,21 @@ impl Serverless {
     }
 
 
-    pub fn hypercall_serverless_response(ctx: &WasiCtx, vm_ctx: &VectorizedVM, hypercall: &mut HyperCall, sender: &Sender<HyperCallResult>) -> () {
-        let hcall_buf: &mut [u8] = &mut hypercall.hypercall_buffer.lock().unwrap();
+    pub fn hypercall_serverless_response(_ctx: &WasiCtx, vm_ctx: &VectorizedVM, hypercall: &mut HyperCall, sender: &Sender<HyperCallResult>) -> () {
+        let mut hcall_buf: &[u8] = unsafe { *hypercall.hypercall_buffer.buf.get() };
+        let hcall_buf_size: u32 = vm_ctx.hcall_buf_size;
+        hcall_buf = &hcall_buf[(hypercall.vm_id * hcall_buf_size) as usize..((hypercall.vm_id+1) * hcall_buf_size) as usize];
 
-        let mut resp_buf = [0u8; 16384];
+        let send_chan = (vm_ctx.vm_sender).get(hypercall.vm_id as usize).unwrap();
         // the first 4 bytes are the length as a u32, the remainder is the buffer containing the json
-        let msg_len = if hypercall.is_interleaved_mem {
-            Interleave::read_u32(hcall_buf, 0, hypercall.num_total_vms, hypercall.vm_id)
-        } else {
-            LittleEndian::read_u32(&hcall_buf[0..4])
-        };
 
+        let msg_len = LittleEndian::read_u32(&hcall_buf[0..4]);
         let resp_buf_len: usize = msg_len.try_into().unwrap();
 
+        let mut resp_buf = vec![0u8; (resp_buf_len+4).try_into().unwrap()];
+
         // copy the data from the hcall_buffer
-        if hypercall.is_interleaved_mem {
-            for offset in 0..resp_buf_len {
-                resp_buf[offset] = Interleave::read_u8(hcall_buf, (4 + offset).try_into().unwrap(), hypercall.num_total_vms, hypercall.vm_id);
-            }
-        } else {
-            resp_buf[0..resp_buf_len].copy_from_slice(&hcall_buf[4..4+resp_buf_len]);
-        }
+        resp_buf[0..resp_buf_len].copy_from_slice(&hcall_buf[4..4+resp_buf_len]);
 
         // calculate on device time and queue submit times
         let on_device_time = hypercall.timestamp_counter - *vm_ctx.timestamp_counter;
@@ -86,7 +76,7 @@ impl Serverless {
             count += 1;
         }
 
-        (*vm_ctx.vm_sender).lock().unwrap().send((resp_buf.to_vec(), resp_buf_len, on_device_time, queue_submit_time, queue_submit_count, count)).unwrap();
+        send_chan.lock().unwrap().blocking_send((resp_buf, resp_buf_len, on_device_time, queue_submit_time, queue_submit_count, count)).unwrap();
 
         sender.send({
             HyperCallResult::new(0, hypercall.vm_id, WasiSyscalls::ServerlessResponse)

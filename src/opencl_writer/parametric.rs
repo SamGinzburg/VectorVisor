@@ -3,56 +3,43 @@ use crate::opencl_writer::mem_interleave::emit_read_u32;
 use crate::opencl_writer::mem_interleave::emit_write_u32;
 use crate::opencl_writer::mem_interleave::emit_read_u64;
 use crate::opencl_writer::mem_interleave::emit_write_u64;
+use crate::opencl_writer::StackCtx;
+use crate::opencl_writer::StackType;
 
-pub fn emit_select(writer: &opencl_writer::OpenCLCWriter, stack_sizes: &mut Vec<u32>, fn_name: &str, debug: bool) -> String {
+pub fn emit_select(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, stack_sizes: &mut Vec<u32>, fn_name: &str, debug: bool) -> String {
     let mut ret_str = String::from("");
 
-    // pop c
-    let c = emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx");
+    let c = stack_ctx.vstack_pop(StackType::i32);
 
     if stack_sizes.pop().unwrap() != 1 {
         panic!("select in fn: {}, the top of the stack must be of type i32", fn_name);
     }
 
     // we have to make sure that the values are the same size
-    let size1 = stack_sizes.pop().unwrap();
-    let size2 = stack_sizes.pop().unwrap();
+    stack_sizes.pop().unwrap();
+    stack_sizes.pop().unwrap();
 
-    if size1 != size2 {
-        panic!("Unequal sizes for select operation: {}", fn_name);
+    let type1 = stack_ctx.vstack_peak_type(0);
+    let type2 = stack_ctx.vstack_peak_type(1);
+
+    if type1 != type2 {
+        panic!("Unequal sizes for select operation: {}, StackCtx: {:?}", fn_name, stack_ctx);
     }
 
-    let write_val2;
-    let write_val1;
-    let sp_modifier;
-    if size1 == 1 {
-        // pop val 2
-        let val2 = &emit_read_u32("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx");
-        // pop val 1
-        let val1 = &emit_read_u32("(ulong)(stack_u32+*sp-3)", "(ulong)(stack_u32)", "warp_idx");
-    
-        write_val1 = emit_write_u32("(ulong)(stack_u32+*sp-3)", "(ulong)(stack_u32)", val1, "warp_idx");
-        write_val2 = emit_write_u32("(ulong)(stack_u32+*sp-3)", "(ulong)(stack_u32)", val2, "warp_idx");
+    let val2 = stack_ctx.vstack_pop(type1.clone());
+    let val1 = stack_ctx.vstack_pop(type1.clone());
+    let result_register = stack_ctx.vstack_alloc(type1.clone());
 
-        sp_modifier = 2;
-        stack_sizes.push(1);
-    } else {
-        // pop val 2
-        let val2 = &emit_read_u64("(ulong)(stack_u32+*sp-3)", "(ulong)(stack_u32)", "warp_idx");
-        // pop val 1
-        let val1 = &emit_read_u64("(ulong)(stack_u32+*sp-5)", "(ulong)(stack_u32)", "warp_idx");
-    
-        write_val1 = emit_write_u64("(ulong)(stack_u32+*sp-5)", "(ulong)(stack_u32)", val1, "warp_idx");
-        write_val2 = emit_write_u64("(ulong)(stack_u32+*sp-5)", "(ulong)(stack_u32)", val2, "warp_idx");
-   
-        sp_modifier = 3;
-        stack_sizes.push(2);
+    let write_val1 = format!("{} = {}", result_register, val1);
+    let write_val2 = format!("{} = {}", result_register, val2);
+
+    match type1.clone() {
+        StackType::i32 | StackType::f32 => stack_sizes.push(1),
+        StackType::i64 | StackType::f64 => stack_sizes.push(2),
     }
 
     ret_str += &format!("\t({} != 0) ? ({}) : ({});\n",
                         c, write_val1, write_val2);
-
-    ret_str += &format!("\t{}{};\n", "*sp -= ", sp_modifier);
 
     ret_str
 }

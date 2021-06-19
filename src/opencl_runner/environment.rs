@@ -7,23 +7,23 @@ use crate::opencl_runner::vectorized_vm::WasiSyscalls;
 use crate::opencl_runner::interleave_offsets::Interleave;
 use crate::opencl_runner::vectorized_vm::VectorizedVM;
 
-use wasi_common::snapshots::preview_1::types::CiovecArray;
-use wasi_common::snapshots::preview_1::types::Fd;
 use wasi_common::snapshots::preview_1::types::UserErrorConversion;
 
-use wasmtime::*;
-use wasmtime_wiggle::WasmtimeGuestMemory;
 use wiggle::GuestPtr;
 
 use byteorder::LittleEndian;
 use byteorder::ByteOrder;
+
 use crossbeam::channel::Sender;
+
+use std::convert::TryInto;
 
 pub struct Environment {}
 
 impl Environment {
     pub fn hypercall_environ_sizes_get(ctx: &WasiCtx, hypercall: &mut HyperCall, sender: &Sender<HyperCallResult>) -> () {
-        let mut hcall_buf: &mut [u8] = &mut hypercall.hypercall_buffer.lock().unwrap();
+        let mut hcall_buf: &mut [u8] = unsafe { *hypercall.hypercall_buffer.buf.get() };
+        let hcall_buf_size: u32 = hcall_buf.len().try_into().unwrap();
         let result = match ctx.environ_sizes_get() {
             Ok(tuple) => {
                 // now that we have retreived the sizes
@@ -32,7 +32,7 @@ impl Environment {
                     Interleave::write_u32(hcall_buf, 0, hypercall.num_total_vms, tuple.0, hypercall.vm_id);
                     Interleave::write_u32(hcall_buf, 4, hypercall.num_total_vms, tuple.1, hypercall.vm_id);
                 } else {
-                    hcall_buf = &mut hcall_buf[(hypercall.vm_id * 16384) as usize..((hypercall.vm_id+1) * 16384) as usize];
+                    hcall_buf = &mut hcall_buf[(hypercall.vm_id * hcall_buf_size) as usize..((hypercall.vm_id+1) * hcall_buf_size) as usize];
                     LittleEndian::write_u32(&mut hcall_buf[0..4], tuple.0);
                     LittleEndian::write_u32(&mut hcall_buf[4..8], tuple.1);
                 }
@@ -49,8 +49,9 @@ impl Environment {
     }
 
     pub fn hypercall_environ_get(ctx: &WasiCtx, vm_ctx: &VectorizedVM, hypercall: &mut HyperCall, sender: &Sender<HyperCallResult>) -> () {
-        let mut hcall_buf: &mut [u8] = &mut hypercall.hypercall_buffer.lock().unwrap();
-        
+        let mut hcall_buf: &mut [u8] = unsafe { *hypercall.hypercall_buffer.buf.get() };
+        let hcall_buf_size: u32 = hcall_buf.len().try_into().unwrap();
+
         let memory = &vm_ctx.memory;
         let wasm_mem = &vm_ctx.wasm_memory;
         let raw_mem: &mut [u8] = unsafe { memory.data_unchecked_mut() };
@@ -80,7 +81,7 @@ impl Environment {
                 Interleave::write_u8(&mut hcall_buf, idx, hypercall.num_total_vms, raw_mem[idx as usize], hypercall.vm_id);
             }    
         } else {
-            hcall_buf = &mut hcall_buf[(hypercall.vm_id * 16384) as usize..((hypercall.vm_id+1) * 16384) as usize];
+            hcall_buf = &mut hcall_buf[(hypercall.vm_id * hcall_buf_size) as usize..((hypercall.vm_id+1) * hcall_buf_size) as usize];
             LittleEndian::write_u32(&mut hcall_buf[0..4], num_env_vars);
             LittleEndian::write_u32(&mut hcall_buf[4..8], env_str_size);
             for idx in 8..(num_env_vars * 4 + env_str_size) {

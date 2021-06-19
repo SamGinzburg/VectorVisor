@@ -14,18 +14,18 @@ use crate::opencl_runner::WasiFd;
 use crate::opencl_runner::environment::Environment;
 use crate::opencl_runner::serverless::Serverless;
 use crate::opencl_runner::random::Random;
+use crate::opencl_runner::UnsafeCellWrapper;
 
 use ocl::core::CommandQueue;
 
-use crossbeam::channel::Sender;
-use crossbeam::channel::Receiver;
+use tokio::sync::mpsc::{Sender, Receiver};
+use crossbeam::channel::Sender as SyncSender;
 
 use std::sync::Arc;
+use std::cell::UnsafeCell;
 use std::sync::Mutex;
-use std::collections::BTreeSet;
+use std::collections::HashSet;
 
-
-use std::convert::TryInto;
 use std::fs::File;
 use std::path::Path;
 
@@ -52,35 +52,32 @@ impl fmt::Debug for WasiSyscalls {
 pub struct HyperCall<'a> {
     pub vm_id: u32,
     pub num_total_vms: u32,
-    pub sp: u64,
     pub timestamp_counter: u64,
     pub queue_submit_delta: u64,
     pub num_queue_submits: u64,
-    pub called_fns: BTreeSet<u32>,
+    pub called_fns: HashSet<u32>,
     pub syscall: WasiSyscalls,
     pub is_interleaved_mem: bool,
     pub ocl_buffers: &'a OpenCLBuffers,
-    pub hypercall_buffer: Arc<Mutex<&'a mut [u8]>>,
+    pub hypercall_buffer: Arc<UnsafeCellWrapper>,
     pub queue: &'a CommandQueue,
 }
 
 impl<'a> HyperCall<'a> {
     pub fn new(vm_id: u32,
                num_total_vms: u32,
-               sp: u64,
                timestamp_counter: u64,
                queue_submit_delta: u64,
                num_queue_submits: u64,
-               called_funcs: BTreeSet<u32>,
+               called_funcs: HashSet<u32>,
                syscall: WasiSyscalls,
                is_interleaved_mem: bool,
                ocl_buffers: &'a OpenCLBuffers,
-               hypercall_buffer: Arc<Mutex<&'a mut [u8]>>,
+               hypercall_buffer: Arc<UnsafeCellWrapper>,
                queue: &'a CommandQueue) -> HyperCall<'a> {
         HyperCall {
             vm_id: vm_id,
             num_total_vms: num_total_vms,
-            sp: sp,
             syscall: syscall,
             is_interleaved_mem: is_interleaved_mem,
             ocl_buffers: ocl_buffers,
@@ -139,16 +136,17 @@ pub struct VectorizedVM {
     pub enviroment_size: Option<u32>,
     pub environment_str_size: Option<u32>,
     vm_id: u32,
+    pub hcall_buf_size: u32,
     pub timestamp_counter: Arc<u64>,
     pub queue_submit_counter: Arc<u64>,
     pub queue_submit_qty: Arc<u64>,
-    pub called_fns_set: Arc<BTreeSet<u32>>,
-    pub vm_sender: Arc<Mutex<Sender<(Vec<u8>, usize, u64, u64, u64, u64)>>>,
-    pub vm_recv:   Arc<Mutex<Receiver<(Vec<u8>, usize)>>>,
+    pub called_fns_set: Arc<HashSet<u32>>,
+    pub vm_sender: Arc<Vec<Mutex<Sender<(Vec<u8>, usize, u64, u64, u64, u64)>>>>,
+    pub vm_recv: Arc<Vec<Mutex<Receiver<(Vec<u8>, usize)>>>>,
 }
 
 impl VectorizedVM {
-    pub fn new(vm_id: u32, num_total_vms: u32, vm_sender: Arc<Mutex<Sender<(Vec<u8>, usize, u64, u64, u64, u64)>>>, vm_recv: Arc<Mutex<Receiver<(Vec<u8>, usize)>>>) -> VectorizedVM {
+    pub fn new(vm_id: u32, hcall_buf_size: u32, _num_total_vms: u32, vm_sender: Arc<Vec<Mutex<Sender<(Vec<u8>, usize, u64, u64, u64, u64)>>>>, vm_recv: Arc<Vec<Mutex<Receiver<(Vec<u8>, usize)>>>>) -> VectorizedVM {
         // default context with no args yet - we can inherit arguments from the CLI if we want
         // or we can pass them in some other config file
 
@@ -165,7 +163,7 @@ impl VectorizedVM {
 
         let engine = Engine::default();
         let store = Store::new(&engine);
-        let memory_ty = MemoryType::new(Limits::new(1, None));
+        let memory_ty = MemoryType::new(Limits::new(hcall_buf_size / (1024 * 64), None));
         let memory = Memory::new(&store, memory_ty);
 
         VectorizedVM {
@@ -181,10 +179,11 @@ impl VectorizedVM {
             enviroment_size: None,
             environment_str_size: None,
             vm_id: vm_id,
+            hcall_buf_size: hcall_buf_size,
             timestamp_counter: Arc::new(0),
             queue_submit_counter: Arc::new(0),
             queue_submit_qty: Arc::new(0),
-            called_fns_set: Arc::new(BTreeSet::new()),
+            called_fns_set: Arc::new(HashSet::new()),
             vm_sender: vm_sender,
             vm_recv: vm_recv,
         }
@@ -198,7 +197,7 @@ impl VectorizedVM {
      */
     pub fn dispatch_hypercall(&mut self,
                               hypercall: &mut HyperCall,
-                              sender: &Sender<HyperCallResult>) -> () {
+                              sender: &SyncSender<HyperCallResult>) -> () {
         match hypercall.syscall {
             WasiSyscalls::FdWrite => {
                 WasiFd::hypercall_fd_write(&self.ctx, self, hypercall, sender);
