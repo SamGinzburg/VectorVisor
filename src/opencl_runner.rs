@@ -570,7 +570,7 @@ impl OpenCLRunner {
                 let mut submit_compile_job = vec![];
 
                 for _idx in 0..num_threads {
-                    let (compile_sender, compile_receiver): (SyncSender<(u32, ocl::core::Program, ocl::core::Program)>, SyncReceiver<(u32, ocl::core::Program, ocl::core::Program)>) = unbounded();
+                    let (compile_sender, compile_receiver): (SyncSender<(u32, ocl::core::Program, ocl::core::Program, String)>, SyncReceiver<(u32, ocl::core::Program, ocl::core::Program, String)>) = unbounded();
                     let _cflags = compile_flags.clone();
                     let sender = finished_sender.clone();
                     let num_vms_clone = self.num_vms.clone();
@@ -584,7 +584,7 @@ impl OpenCLRunner {
                         let receiver = compile_receiver.clone();
                         loop {
                             // receive the function to compile
-                            let (key, program_to_build, fastcall_header) = match receiver.recv() {
+                            let (key, program_to_build, fastcall_header, program_as_string) = match receiver.recv() {
                                 Ok(m) => m,
                                 _ => {
                                     // if the main sending thread is closed, we will get an error
@@ -602,7 +602,9 @@ impl OpenCLRunner {
                                     // Dump the build log too
                                     let mut file = File::create(format!("{}.buildlog", key)).unwrap();
                                     file.write_all(&buildinfo.to_string().into_bytes()).unwrap();
-                                    panic!("Error: {} has occured, dumping build log to file: {:?}.buildlog\n", e, key);
+                                    let mut file = File::create(format!("{}.cl", key)).unwrap();
+                                    file.write_all(&program_as_string.into_bytes()).unwrap();
+                                    panic!("Error: {} has occured, dumping build log to file: {:?}.buildlog, kernel written to file {:?}.cl\n", e, key, key);
                                 }
                             };
                             let end = Utc::now().timestamp_nanos();
@@ -620,7 +622,7 @@ impl OpenCLRunner {
                     let compiled_program = ocl::core::create_program_with_source(context, &[src_cstring.clone()]).unwrap();
                     let fastcall_header = ocl::core::create_program_with_source(context, &[header_cstring.clone()]).unwrap();
 
-                    submit_compile_job[counter % submit_compile_job.len() as usize].send((*key, compiled_program, fastcall_header)).unwrap();
+                    submit_compile_job[counter % submit_compile_job.len() as usize].send((*key, compiled_program, fastcall_header, String::from(value))).unwrap();
                     counter += 1;
                 }
                 let pb = ProgressBar::new(map.len().try_into().unwrap());
@@ -1689,7 +1691,7 @@ impl OpenCLRunner {
                     ocl::core::enqueue_write_buffer(&queue, &buffers.entry, false, 0, &mut entry_point_temp, None::<Event>, None::<&mut Event>).unwrap();
                 }
                 ocl::core::enqueue_write_buffer(&queue, &buffers.hypercall_num, false, 0, &mut hypercall_num_temp, None::<Event>, None::<&mut Event>).unwrap();
-                ocl::core::enqueue_write_buffer(&queue, &hcall_retval_buffer, false, 0, &mut hypercall_retval_temp, None::<Event>, None::<&mut Event>).unwrap();
+                ocl::core::enqueue_write_buffer(&queue, &hcall_retval_buffer, true, 0, &mut hypercall_retval_temp, None::<Event>, None::<&mut Event>).unwrap();
             }
             let vmm_post_overhead_end = std::time::Instant::now();
             let write_end = std::time::Instant::now();
