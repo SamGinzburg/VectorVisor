@@ -15,7 +15,7 @@ use rand_core::OsRng;
 
 lazy_static! {
     static ref SALT: SaltString = SaltString::generate(&mut OsRng);
-    static ref PBKDF2_PARAMS: pbkdf2::Params = Params { rounds: 50000, output_length: 32 }; 
+    static ref PBKDF2_PARAMS: pbkdf2::Params = Params { rounds: 100100, output_length: 32 }; 
 }
 
 fn compress_json(event: Value) -> Value {

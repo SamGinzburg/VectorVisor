@@ -13,7 +13,7 @@ import (
 )
 
 type payload struct {
-	Text string `json:"text"`
+	Text string `json:"password"`
 }
 
 type Message struct {
@@ -37,10 +37,10 @@ var NUM_PARAMS = 256;
 
 var client = &http.Client{}
 
-func RandIntSlice(n int) []int {
-    b := make([]int, n)
+func RandIntSlice(n int) []string {
+    b := make([]string, n)
     for i := range b {
-        b[i] = rand.Intn(10000)
+        b[i] = RandString(rand.Intn(10)) //rand.Float64() * (10000)
     }
     return b
 }
@@ -67,7 +67,7 @@ func IssueRequests(ip string, port int, req [][]byte, data_ch chan<-[]byte, end_
 		_ = start_read
 		resp, err := client.Do(http_request)
 		if err != nil {
-			//fmt.Printf("client err: %s\n", err)
+			fmt.Printf("client err: %s\n", err)
 			// check to see if we are done
 			if len(end_chan) > 0 {
 				return;
@@ -76,6 +76,7 @@ func IssueRequests(ip string, port int, req [][]byte, data_ch chan<-[]byte, end_
 		}
 
 		body, err := ioutil.ReadAll(resp.Body)
+		//fmt.Printf("%s\n", body)
 		resp.Body.Close()
 		read_secs := time.Since(start_read)
 		_ = read_secs
@@ -88,7 +89,6 @@ func IssueRequests(ip string, port int, req [][]byte, data_ch chan<-[]byte, end_
 			continue
 		} else {
 			//fmt.Printf("E2E req time: %s\n", read_secs)
-			//fmt.Printf("%s\n", body)
 		}
 
 		select {
@@ -132,7 +132,7 @@ func main() {
 
 	reqs := make([][]byte, NUM_PARAMS)
 	for i := 0; i < NUM_PARAMS; i++ {
-		p := payload{Text: RandString(1024 * 64)}
+		p := payload{Text: RandString(16)}
 		request_body, _ := json.Marshal(p)
 		reqs[i] = request_body
 	}

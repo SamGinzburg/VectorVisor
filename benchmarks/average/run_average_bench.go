@@ -13,7 +13,7 @@ import (
 )
 
 type payload struct {
-	Text []int `json:"numbers"`
+	Text []float64 `json:"numbers"`
 }
 
 type Message struct {
@@ -37,10 +37,10 @@ var NUM_PARAMS = 256;
 
 var client = &http.Client{}
 
-func RandIntSlice(n int) []int {
-    b := make([]int, n)
+func RandIntSlice(n int) []float64 {
+    b := make([]float64, n)
     for i := range b {
-        b[i] = rand.Intn(10000)
+        b[i] = 100.5 //rand.Float64() * 10000
     }
     return b
 }
@@ -76,6 +76,7 @@ func IssueRequests(ip string, port int, req [][]byte, data_ch chan<-[]byte, end_
 		}
 
 		body, err := ioutil.ReadAll(resp.Body)
+		fmt.Printf("%s\n", body)
 		resp.Body.Close()
 		read_secs := time.Since(start_read)
 		_ = read_secs
@@ -131,7 +132,7 @@ func main() {
 
 	reqs := make([][]byte, NUM_PARAMS)
 	for i := 0; i < NUM_PARAMS; i++ {
-		p := payload{Text: RandIntSlice(2)}
+		p := payload{Text: RandIntSlice(100)}
 		request_body, _ := json.Marshal(p)
 		reqs[i] = request_body
 	}

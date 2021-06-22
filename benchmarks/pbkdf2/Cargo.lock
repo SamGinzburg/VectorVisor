@@ -208,5 +208,6 @@ checksum = "fd6fbd9a79829dd1ad0cc20627bf1ed606756a7f77edff7b66b7064f9cb327c6"
 name = "wasm-serverless-invoke"
 version = "0.1.0"
 dependencies = [
+ "serde",
  "serde_json",
 ]

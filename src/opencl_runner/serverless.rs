@@ -61,6 +61,7 @@ impl Serverless {
         let mut resp_buf = vec![0u8; (resp_buf_len+4).try_into().unwrap()];
 
         // copy the data from the hcall_buffer
+        //println!("buf len: {:?}, vmidx: {:?}", resp_buf_len, hypercall.vm_id);
         resp_buf[0..resp_buf_len].copy_from_slice(&hcall_buf[4..4+resp_buf_len]);
 
         // calculate on device time and queue submit times

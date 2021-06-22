@@ -237,7 +237,7 @@ pub fn generate_read_write_calls(writer: &opencl_writer::OpenCLCWriter, interlea
     result += &format!("\n{}\n",
         "void ___private_memcpy_gpu2cpu(ulong src, ulong mem_start_src, ulong dst, ulong mem_start_dst, ulong buf_len_bytes, uint warp_id) {");
     result += &format!("\t{}\n",
-                       "char *dst_tmp = (char*)(mem_start_dst);");
+                       "char *dst_tmp = (char*)(dst);");
     result += &format!("\t{}\n",
                        "for (uint idx = 0; idx < buf_len_bytes; idx++) {");
 
@@ -256,7 +256,7 @@ pub fn generate_read_write_calls(writer: &opencl_writer::OpenCLCWriter, interlea
     result += &format!("\n{}\n",
         "void ___private_memcpy_cpu2gpu(ulong src, ulong mem_start_src, ulong dst, ulong mem_start_dst, ulong buf_len_bytes, uint warp_id) {");
     result += &format!("\t{}\n",
-                       "char *src_tmp = (char*)(mem_start_src);");
+                       "char *src_tmp = (char*)(src);");
  
     result += &format!("\t{}\n",
                        "for (uint idx = 0; idx < buf_len_bytes; idx++) {");

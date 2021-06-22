@@ -13,7 +13,8 @@ fn compress_json(event: Value) -> Value {
     let response = match event.get("text") {
         Some(Value::String(str)) => {
             let compressed_str = compress(&str.as_bytes());
-            json!(encode(compressed_str))
+            let result = encode(compressed_str);
+            json!(result)
         },
         _ => {
             // input is not a string we can compress!, no-op

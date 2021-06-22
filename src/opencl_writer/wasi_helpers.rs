@@ -322,6 +322,10 @@ pub fn emit_serverless_invoke_post(writer: &opencl_writer::OpenCLCWriter, stack_
     let json_buf_ptr = stack_ctx.vstack_pop(StackType::i32);
     let result_register = stack_ctx.vstack_alloc(StackType::i32);
 
+    //ret_str += &format!("\tprintf(\"json_buf_ptr: %p\\n\", {});\n", json_buf_ptr);
+    //ret_str += &format!("\tprintf(\"json_buf_len: %p\\n\", {});\n", json_buf_len);
+    //ret_str += &format!("\tprintf(\"hcall_ret_val: %p\\n\", {});\n", "hcall_ret_val");
+
     // we need to copy the data stored in the hcall buffer, to the json_buf_ptr
     // specifically, we need to de-interleave the data, so the CPU sees the data `normally`
     ret_str += &format!("\t___private_memcpy_cpu2gpu((ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), warp_idx);\n",

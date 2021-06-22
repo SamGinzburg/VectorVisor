@@ -42,6 +42,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::cell::UnsafeCell;
 use std::collections::HashSet;
+use std::collections::BTreeSet;
 use std::fs::OpenOptions;
 use std::mem::transmute;
 
@@ -1240,7 +1241,7 @@ impl OpenCLRunner {
                                                       vm_sender_copy.clone(),
                                                       vm_recv_copy.clone()));
                 }
-                loop {
+                'outer: loop {
                     // in the primary loop, we will block until someone sends us a hypercall
                     // to dispatch...
                     for vm_idx in 0..(number_vms/num_threads) {
@@ -1252,7 +1253,7 @@ impl OpenCLRunner {
                             },
                             _ => {
                                 println!("Server hcall dispatch thread #{}, was terminated while waiting for input", idx);
-                                break;
+                                break 'outer;
                             },
                         };
                     }
@@ -1402,6 +1403,13 @@ impl OpenCLRunner {
 
         let mut called_funcs = HashSet::new();
 
+        // We keep track of functions that we have currently blocked off here
+        let mut divergence_stack = BTreeSet::new();
+        // Also keep track of encountered hypercall entry points
+        let mut hcall_divergence_stack = BTreeSet::new();
+
+
+
         let mut is_first: HashMap<u32, bool> = HashMap::new();
         let mut first_invokes: Vec<u64> = vec![];
         let mut repeat_invokes: Vec<u64> = vec![];
@@ -1466,7 +1474,7 @@ impl OpenCLRunner {
             let vmm_pre_overhead = std::time::Instant::now();
 
             unsafe {
-                ocl::core::enqueue_read_buffer(&queue, &buffers.entry, false, 0, &mut entry_point_temp, None::<Event>, None::<&mut Event>).unwrap();
+                ocl::core::enqueue_read_buffer(&queue, &buffers.entry, true, 0, &mut entry_point_temp, None::<Event>, None::<&mut Event>).unwrap();
                 ocl::core::enqueue_read_buffer(&queue, &buffers.hypercall_num, true, 0, &mut hypercall_num_temp, None::<Event>, None::<&mut Event>).unwrap();
             }
 
@@ -1501,34 +1509,44 @@ impl OpenCLRunner {
              * 
              */
 
-            let mut found = false;
             // for each VM, add to the set of kernels that we need to run next
             for idx in 0..(self.num_vms as usize) {
-                // if we find a VM that isn't blocked on a hypercall
-                if !found && hypercall_num_temp[idx] == -2 {
-                    // set the next function to run to be this targeted function
-                    start_kernel = kernels.get(&kernel_partition_mappings.get(&entry_point_temp[idx]).unwrap()).unwrap();
-                    curr_func_id = entry_point_temp[idx];
-                    found = true;
-                } if hypercall_num_temp[idx] != -2 && entry_point_temp[idx] != ((-1) as i32) as u32 {
-                    /*
-                     * We need to block off all VMs blocked on a hypercall to prevent double
-                     * execution of their functions. We don't need to track the entry point for
-                     * each VM because we guarantee that all VMs will serialize on the same
-                     * hypercall.
-                     */
+                // For each VM, add the next function to run to the divergence stack
+                // If the following conditions are met:
+                // 1) We are not blocked on a hypercall
+                // 2) The VM is not currently masked off
+                //if entry_point_temp[idx] != ((-1) as i32) as u32 && (hypercall_num_temp[idx] == -2) {
+                if entry_point_temp[idx] != ((-1) as i32) as u32 && (hypercall_num_temp[idx] == -2 || hypercall_num_temp[idx] == -1) {
+                    divergence_stack.insert(entry_point_temp[idx]);
+                } else if hypercall_num_temp[idx] != -2 && entry_point_temp[idx] != ((-1) as i32) as u32 {
+                    hcall_divergence_stack.insert(entry_point_temp[idx]);
                     backup_entry_point_temp = entry_point_temp[idx];
                     entry_point_temp[idx] = ((-1) as i32) as u32;
                 }
             }
 
+            //println!("divergence stack: {:?}", &divergence_stack);
+            //println!("hcall divergence stack: {:?}", &hcall_divergence_stack);
+
             // if we found a VM that needs to run another function, we do that first
-            if found {
+            if divergence_stack.len() > 0 {
+                // Pop off the next function to run
+                let first_item = divergence_stack.clone().into_iter().collect::<Vec<u32>>()[0];
+                let next_func = divergence_stack.take(&first_item).unwrap();
+
+                start_kernel = kernels.get(kernel_partition_mappings.get(&next_func).unwrap()).unwrap();
+                curr_func_id = next_func;
+                called_funcs.insert(curr_func_id);
+
+                for idx in 0..(self.num_vms as usize) {
+                    if entry_point_temp[idx] != ((-1) as i32) as u32 {
+                        // entry_point_temp[idx] = next_func;
+                    }
+                }
+
                 unsafe {
                     ocl::core::enqueue_write_buffer(&queue, &buffers.entry, false, 0, &mut entry_point_temp, None::<Event>, None::<&mut Event>).unwrap();
                 }
-
-                called_funcs.insert(curr_func_id);
 
                 let vmm_pre_overhead_end = std::time::Instant::now();
                 vmm_overhead += (vmm_pre_overhead_end - vmm_pre_overhead).as_nanos();
@@ -1536,12 +1554,23 @@ impl OpenCLRunner {
             } else {
                 // if we don't have any VMs to run, reset the next function to run to be that of the hcall
                 // we are returning to and dispatch the calls
-                start_kernel = kernels.get(&kernel_partition_mappings.get(&backup_entry_point_temp).unwrap()).unwrap();
-                curr_func_id = backup_entry_point_temp;
+                
+                // To do this, we pop from the hcall_divergence stack, and set this as the next
+                // function to execute. The rest of the hcall_divergence stack gets added to the
+                // regular divergence stack.
+                let first_item = hcall_divergence_stack.clone().into_iter().collect::<Vec<u32>>()[0];
+                let next_func = hcall_divergence_stack.take(&first_item).unwrap();
+
+                start_kernel = kernels.get(kernel_partition_mappings.get(&next_func).unwrap()).unwrap();
+                curr_func_id = next_func;
                 called_funcs.insert(curr_func_id);
 
+                for func_to_return_to in hcall_divergence_stack.clone().into_iter() {
+                    divergence_stack.insert(hcall_divergence_stack.take(&func_to_return_to).unwrap());
+                }
+
                 for idx in 0..(self.num_vms as usize) {
-                    entry_point_temp[idx] = backup_entry_point_temp;
+                    entry_point_temp[idx] = next_func;
                 }
 
                 unsafe {
@@ -1568,7 +1597,9 @@ impl OpenCLRunner {
             println!("kernel_exec_time: {}", kernel_exec_time);
             kernel_exec_time = 0;
             // now it is time to dispatch hypercalls
-            //
+            
+            //dbg!(&hypercall_num_temp);
+            
             let start_hcall_dispatch2 = std::time::Instant::now();
             vm_slice.as_slice().par_iter().for_each(|vm_id| {
                 let hypercall_id = match hypercall_num_temp[*vm_id as usize] as i64 {
@@ -1583,6 +1614,8 @@ impl OpenCLRunner {
                     10000 => WasiSyscalls::ServerlessResponse,
                     _ => WasiSyscalls::InvalidHyperCallNum,
                 };
+
+                //dbg!(&hypercall_num_temp[*vm_id as usize]);
 
                 hcall_sender.send(
                     Box::new(HyperCall::new((*vm_id as u32).clone(),
@@ -1667,7 +1700,7 @@ impl OpenCLRunner {
             let write_start = std::time::Instant::now();
             unsafe {
                 if no_resp_counter != self.num_vms {
-                    let hcall_buf = &*hcall_read_buffer.buf.get();
+                    let mut hcall_buf = &*hcall_read_buffer.buf.get();
 
                     map_event = ocl::Event::empty();
                     let mut mapped_hcall_buf: MemMap<u8> = ocl::core::enqueue_map_buffer(&queue,
@@ -1685,12 +1718,12 @@ impl OpenCLRunner {
                     ocl::core::enqueue_unmap_mem_object(&queue, &hypercall_buffer, &mapped_hcall_buf, None::<Event>, Some(&mut map_event)).unwrap();
                     ocl::core::wait_for_event(&map_event).unwrap();
 
-                    //ocl::core::enqueue_write_buffer(&queue, &hypercall_buffer, false, 0, &mut hcall_buf, None::<Event>, None::<&mut Event>).unwrap();
+                    //ocl::core::enqueue_write_buffer(&queue, &hypercall_buffer, true, 0, &mut hcall_buf, None::<Event>, None::<&mut Event>).unwrap();
                 }
                 if set_entry_point {
-                    ocl::core::enqueue_write_buffer(&queue, &buffers.entry, false, 0, &mut entry_point_temp, None::<Event>, None::<&mut Event>).unwrap();
+                    ocl::core::enqueue_write_buffer(&queue, &buffers.entry, true, 0, &mut entry_point_temp, None::<Event>, None::<&mut Event>).unwrap();
                 }
-                ocl::core::enqueue_write_buffer(&queue, &buffers.hypercall_num, false, 0, &mut hypercall_num_temp, None::<Event>, None::<&mut Event>).unwrap();
+                ocl::core::enqueue_write_buffer(&queue, &buffers.hypercall_num, true, 0, &mut hypercall_num_temp, None::<Event>, None::<&mut Event>).unwrap();
                 ocl::core::enqueue_write_buffer(&queue, &hcall_retval_buffer, true, 0, &mut hypercall_retval_temp, None::<Event>, None::<&mut Event>).unwrap();
             }
             let vmm_post_overhead_end = std::time::Instant::now();
