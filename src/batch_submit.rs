@@ -72,15 +72,13 @@ impl BatchSubmitServer {
         // Send the request body to the selected VM
         // We can't await on the send because we have the mutex acquired here
         tx.lock().await.send((body.to_vec(), body.len())).await.unwrap();
-        
+
         // Wait on response from the VM
-        let start = std::time::Instant::now();
-        let (resp, len, on_dev_time, queue_submit_time, num_queue_submits, num_unique_fns) = match rx.lock().await.recv().await{
+        let (resp, len, on_dev_time, queue_submit_time, num_queue_submits, num_unique_fns) = match rx.lock().await.recv().await {
             Some(val) => val,
             None => panic!("A VM died while processing a request, vm_idx: {}", vm_idx),
         };
-        let end = std::time::Instant::now();
-        //println!("time waiting for req processing: {}", (end-start).as_nanos());
+
         let final_response = BatchReply {
             response: from_utf8(&resp[0..len]).unwrap().to_string(),
             on_device_execution_time_ns: on_dev_time,

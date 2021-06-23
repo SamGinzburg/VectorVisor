@@ -132,7 +132,7 @@ func main() {
 
 	reqs := make([][]byte, NUM_PARAMS)
 	for i := 0; i < NUM_PARAMS; i++ {
-		p := payload{Text: RandString(1024 * 64)}
+		p := payload{Text: RandString(1024 * 16)}
 		request_body, _ := json.Marshal(p)
 		reqs[i] = request_body
 	}
