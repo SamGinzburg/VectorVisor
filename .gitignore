@@ -12,6 +12,7 @@ wasm-parser.d
 wasm-serverless-invoke/target/*
 benchmarks/json-compression/target/*
 benchmarks/pbkdf2/target/*
+benchmarks/imageblur/target/*
 benchmarks/*/target/*
 
 *.rlib
@@ -20,3 +21,11 @@ benchmarks/*/target/*
 *.cl
 *.wat.bin
 *.wat.cl
+*.wat
+*.wasm
+*.log
+*.buildlog
+*.csv
+*.out
+*.partbin
+*.bc

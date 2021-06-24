@@ -1,16 +1,13 @@
 use crate::opencl_writer;
 use crate::opencl_writer::ValType;
-use crate::opencl_writer::mem_interleave::emit_read_u32;
 use crate::opencl_writer::mem_interleave::emit_write_u32;
-use crate::opencl_writer::mem_interleave::emit_read_u64;
 use crate::opencl_writer::mem_interleave::emit_write_u64;
 use crate::opencl_writer::StackCtx;
 use crate::opencl_writer::StackType;
 
 use std::collections::HashMap;
 
-pub fn emit_local_get(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, parameter_offset: i32, id: &str, offsets: &HashMap<String, u32>, type_info: &HashMap<String, ValType>, stack_sizes: &mut Vec<u32>, debug: bool) -> String {
-    let offset: i32 = *offsets.get(id).unwrap() as i32 + parameter_offset;
+pub fn emit_local_get(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _parameter_offset: i32, id: &str, _offsets: &HashMap<String, u32>, type_info: &HashMap<String, ValType>, stack_sizes: &mut Vec<u32>, _debug: bool) -> String {
     let t = type_info.get(id).unwrap();
 
     match t {
@@ -46,8 +43,7 @@ pub fn emit_local_get(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Sta
     }
 }
 
-pub fn emit_local_set(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, parameter_offset: i32, id: &str, offsets: &HashMap<String, u32>, type_info: &HashMap<String, ValType>, stack_sizes: &mut Vec<u32>, is_fastcall: bool, debug: bool) -> String {
-    let offset: i32 = *offsets.get(id).unwrap() as i32 + parameter_offset;
+pub fn emit_local_set(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _parameter_offset: i32, id: &str, offsets: &HashMap<String, u32>, type_info: &HashMap<String, ValType>, stack_sizes: &mut Vec<u32>, is_fastcall: bool, _debug: bool) -> String {
     let cache_offset: u32 = *offsets.get(id).unwrap();
     let t = type_info.get(id).unwrap();
     let cache = if !is_fastcall {
@@ -84,7 +80,6 @@ pub fn emit_local_tee(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Sta
      * peak the top of the stack, push the most recent value again
      * call local.set [x]
      */
-    let offset = offsets.get(id).unwrap();
     let t = type_info.get(id).unwrap();
 
     match t {
@@ -116,7 +111,7 @@ pub fn emit_local_tee(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Sta
     }
 }
 
-pub fn emit_local(writer: &opencl_writer::OpenCLCWriter, local: &wast::Local, debug: bool) -> String {
+pub fn emit_local(_writer: &opencl_writer::OpenCLCWriter, local: &wast::Local, _debug: bool) -> String {
     /*
      * When emitting locals we know we have access to the global stack.
      * We zero-init all values.
@@ -159,16 +154,16 @@ pub fn emit_local(writer: &opencl_writer::OpenCLCWriter, local: &wast::Local, de
     }
 }
 
-pub fn emit_i32_const(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, val: &i32, debug: bool) -> String {
+pub fn emit_i32_const(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, val: &i32, _debug: bool) -> String {
     format!("\t{} = {};\n", stack_ctx.vstack_alloc(StackType::i32), val)
 }
 
-pub fn emit_i64_const(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, val: &i64, debug: bool) -> String {
+pub fn emit_i64_const(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, val: &i64, _debug: bool) -> String {
     format!("\t{} = {};\n", stack_ctx.vstack_alloc(StackType::i64), val)
 }
 
 // the float bits are passed as unsigned integer values
-pub fn emit_f32_const(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, val: &u32, debug: bool) -> String {
+pub fn emit_f32_const(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, val: &u32, _debug: bool) -> String {
     let mut ret_val = String::from("");
 
     ret_val += &format!("\t{{\n");
@@ -179,7 +174,7 @@ pub fn emit_f32_const(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Sta
     ret_val
 }
 
-pub fn emit_f64_const(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, val: &u64, debug: bool) -> String {    
+pub fn emit_f64_const(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, val: &u64, _debug: bool) -> String {    
     let mut ret_val = String::from("");
 
     ret_val += &format!("\t{{\n");

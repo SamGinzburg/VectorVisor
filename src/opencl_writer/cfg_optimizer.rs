@@ -1,9 +1,7 @@
-use crate::opencl_writer;
 use crate::opencl_writer::compile_stats::*;
 
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::collections::BTreeSet;
 use std::iter::FromIterator;
 
 /*
@@ -23,7 +21,7 @@ fn get_called_funcs(func: &wast::Func, fastcalls: &HashSet<String>, func_map: &H
             // (func (type 3) (import "foo" "bar"))
             panic!("InlineImport functions not yet implemented");
         },
-        (wast::FuncKind::Inline{locals, expression}, Some(id), typeuse) => {
+        (wast::FuncKind::Inline{locals, expression}, Some(_id), _typeuse) => {
             for instr in expression.instrs.iter() {
                 match instr {
                     wast::Instruction::Call(idx) => {

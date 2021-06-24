@@ -1,13 +1,9 @@
 use crate::opencl_writer;
-use crate::opencl_writer::mem_interleave::emit_read_u32;
-use crate::opencl_writer::mem_interleave::emit_write_u32;
-use crate::opencl_writer::mem_interleave::emit_read_u64;
-use crate::opencl_writer::mem_interleave::emit_write_u64;
 use crate::opencl_writer::StackCtx;
 use crate::opencl_writer::StackType;
 
 // binops have both values popped off the stack
-pub fn emit_i32_add(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, debug: bool) -> String {
+pub fn emit_i32_add(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _debug: bool) -> String {
     let reg1 = stack_ctx.vstack_pop(StackType::i32);
     let reg2 = stack_ctx.vstack_pop(StackType::i32);
     let result_register = stack_ctx.vstack_alloc(StackType::i32);
@@ -15,7 +11,7 @@ pub fn emit_i32_add(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stack
     format!("\t{} = (int)({}) + (int)({});\n", result_register, reg2, reg1)
 }
 
-pub fn emit_i64_add(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, debug: bool) -> String {
+pub fn emit_i64_add(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _debug: bool) -> String {
     let reg1 = stack_ctx.vstack_pop(StackType::i64);
     let reg2 = stack_ctx.vstack_pop(StackType::i64);
     let result_register = stack_ctx.vstack_alloc(StackType::i64);
@@ -23,7 +19,7 @@ pub fn emit_i64_add(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stack
     format!("\t{} = (long)({}) + (long)({});\n", result_register, reg2, reg1)
 }
 
-pub fn emit_f64_add(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, debug: bool) -> String {
+pub fn emit_f64_add(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _debug: bool) -> String {
     let reg1 = stack_ctx.vstack_pop(StackType::f64);
     let reg2 = stack_ctx.vstack_pop(StackType::f64);
     let result_register = stack_ctx.vstack_alloc(StackType::f64);
@@ -31,7 +27,31 @@ pub fn emit_f64_add(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stack
     format!("\t{} = {} + {};\n", result_register, reg2, reg1)
 }
 
-pub fn emit_f64_ne(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, debug: bool) -> String {
+pub fn emit_f32_sub(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _debug: bool) -> String {
+    let reg1 = stack_ctx.vstack_pop(StackType::f32);
+    let reg2 = stack_ctx.vstack_pop(StackType::f32);
+    let result_register = stack_ctx.vstack_alloc(StackType::f32);
+
+    format!("\t{} = {} - {};\n", result_register, reg2, reg1)
+}
+
+pub fn emit_f32_add(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _debug: bool) -> String {
+    let reg1 = stack_ctx.vstack_pop(StackType::f32);
+    let reg2 = stack_ctx.vstack_pop(StackType::f32);
+    let result_register = stack_ctx.vstack_alloc(StackType::f32);
+
+    format!("\t{} = {} + {};\n", result_register, reg2, reg1)
+}
+
+pub fn emit_f32_mul(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _debug: bool) -> String {
+    let reg1 = stack_ctx.vstack_pop(StackType::f32);
+    let reg2 = stack_ctx.vstack_pop(StackType::f32);
+    let result_register = stack_ctx.vstack_alloc(StackType::f32);
+
+    format!("\t{} = (float){} * (float){};\n", result_register, reg2, reg1)
+}
+
+pub fn emit_f64_ne(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _debug: bool) -> String {
     let reg1 = stack_ctx.vstack_pop(StackType::f64);
     let reg2 = stack_ctx.vstack_pop(StackType::f64);
     let result_register = stack_ctx.vstack_alloc(StackType::i32);
@@ -39,7 +59,7 @@ pub fn emit_f64_ne(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackC
     format!("\t{} = {} != {};\n", result_register, reg2, reg1)
 }
 
-pub fn emit_f64_div(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, debug: bool) -> String {
+pub fn emit_f64_div(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _debug: bool) -> String {
     let reg1 = stack_ctx.vstack_pop(StackType::f64);
     let reg2 = stack_ctx.vstack_pop(StackType::f64);
     let result_register = stack_ctx.vstack_alloc(StackType::f64);
@@ -47,7 +67,15 @@ pub fn emit_f64_div(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stack
     format!("\t{} = {} / {};\n", result_register, reg2, reg1)
 }
 
-pub fn emit_f64_mul(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, debug: bool) -> String {
+pub fn emit_f32_div(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _debug: bool) -> String {
+    let reg1 = stack_ctx.vstack_pop(StackType::f32);
+    let reg2 = stack_ctx.vstack_pop(StackType::f32);
+    let result_register = stack_ctx.vstack_alloc(StackType::f32);
+
+    format!("\t{} = {} / {};\n", result_register, reg2, reg1)
+}
+
+pub fn emit_f64_mul(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _debug: bool) -> String {
     let reg1 = stack_ctx.vstack_pop(StackType::f64);
     let reg2 = stack_ctx.vstack_pop(StackType::f64);
     let result_register = stack_ctx.vstack_alloc(StackType::f64);
@@ -55,7 +83,7 @@ pub fn emit_f64_mul(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stack
     format!("\t{} = {} * {};\n", result_register, reg2, reg1)
 }
 
-pub fn emit_i32_sub(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, debug: bool) -> String {
+pub fn emit_i32_sub(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _debug: bool) -> String {
     let reg1 = stack_ctx.vstack_pop(StackType::i32);
     let reg2 = stack_ctx.vstack_pop(StackType::i32);
     let result_register = stack_ctx.vstack_alloc(StackType::i32);
@@ -63,7 +91,7 @@ pub fn emit_i32_sub(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stack
     format!("\t{} = (int)({}) - (int)({});\n", result_register, reg2, reg1)
 }
 
-pub fn emit_i64_sub(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, debug: bool) -> String {
+pub fn emit_i64_sub(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _debug: bool) -> String {
     let reg1 = stack_ctx.vstack_pop(StackType::i64);
     let reg2 = stack_ctx.vstack_pop(StackType::i64);
     let result_register = stack_ctx.vstack_alloc(StackType::i64);
@@ -71,7 +99,7 @@ pub fn emit_i64_sub(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stack
     format!("\t{} = (long)({}) - (long)({});\n", result_register, reg2, reg1)
 }
 
-pub fn emit_i32_and(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, debug: bool) -> String {
+pub fn emit_i32_and(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _debug: bool) -> String {
     let reg1 = stack_ctx.vstack_pop(StackType::i32);
     let reg2 = stack_ctx.vstack_pop(StackType::i32);
     let result_register = stack_ctx.vstack_alloc(StackType::i32);
@@ -79,7 +107,7 @@ pub fn emit_i32_and(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stack
     format!("\t{} = (uint)({}) & (uint)({});\n", result_register, reg2, reg1)
 }
 
-pub fn emit_i64_and(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, debug: bool) -> String {
+pub fn emit_i64_and(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _debug: bool) -> String {
     let reg1 = stack_ctx.vstack_pop(StackType::i64);
     let reg2 = stack_ctx.vstack_pop(StackType::i64);
     let result_register = stack_ctx.vstack_alloc(StackType::i64);
@@ -87,7 +115,7 @@ pub fn emit_i64_and(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stack
     format!("\t{} = (ulong)({}) & (ulong)({});\n", result_register, reg2, reg1)
 }
 
-pub fn emit_i32_or(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, debug: bool) -> String {
+pub fn emit_i32_or(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _debug: bool) -> String {
     let reg1 = stack_ctx.vstack_pop(StackType::i32);
     let reg2 = stack_ctx.vstack_pop(StackType::i32);
     let result_register = stack_ctx.vstack_alloc(StackType::i32);
@@ -95,7 +123,7 @@ pub fn emit_i32_or(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackC
     format!("\t{} = (uint)({}) | (uint)({});\n", result_register, reg2, reg1)
 }
 
-pub fn emit_i32_shr_u(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, debug: bool) -> String {
+pub fn emit_i32_shr_u(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _debug: bool) -> String {
     let reg1 = stack_ctx.vstack_pop(StackType::i32);
     let reg2 = stack_ctx.vstack_pop(StackType::i32);
     let result_register = stack_ctx.vstack_alloc(StackType::i32);
@@ -103,7 +131,7 @@ pub fn emit_i32_shr_u(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Sta
     format!("\t{} = (uint)({}) >> (uint)({});\n", result_register, reg2, reg1)
 }
 
-pub fn emit_i64_shr_u(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, debug: bool) -> String {
+pub fn emit_i64_shr_u(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _debug: bool) -> String {
     let reg1 = stack_ctx.vstack_pop(StackType::i64);
     let reg2 = stack_ctx.vstack_pop(StackType::i64);
     let result_register = stack_ctx.vstack_alloc(StackType::i64);
@@ -111,7 +139,7 @@ pub fn emit_i64_shr_u(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Sta
     format!("\t{} = (ulong)({}) >> (ulong)({});\n", result_register, reg2, reg1)
 }
 
-pub fn emit_i32_shr_s(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, debug: bool) -> String {
+pub fn emit_i32_shr_s(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _debug: bool) -> String {
     let reg1 = stack_ctx.vstack_pop(StackType::i32);
     let reg2 = stack_ctx.vstack_pop(StackType::i32);
     let result_register = stack_ctx.vstack_alloc(StackType::i32);
@@ -119,7 +147,7 @@ pub fn emit_i32_shr_s(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Sta
     format!("\t{} = (int)({}) >> (int)({});\n", result_register, reg2, reg1)
 }
 
-pub fn emit_i32_shl(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, debug: bool) -> String {
+pub fn emit_i32_shl(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _debug: bool) -> String {
     let reg1 = stack_ctx.vstack_pop(StackType::i32);
     let reg2 = stack_ctx.vstack_pop(StackType::i32);
     let result_register = stack_ctx.vstack_alloc(StackType::i32);
@@ -127,7 +155,7 @@ pub fn emit_i32_shl(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stack
     format!("\t{} = (uint)({}) << (uint)({});\n", result_register, reg2, reg1)
 }
 
-pub fn emit_i64_shl(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, debug: bool) -> String {
+pub fn emit_i64_shl(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _debug: bool) -> String {
     let reg1 = stack_ctx.vstack_pop(StackType::i64);
     let reg2 = stack_ctx.vstack_pop(StackType::i64);
     let result_register = stack_ctx.vstack_alloc(StackType::i64);
@@ -135,7 +163,7 @@ pub fn emit_i64_shl(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stack
     format!("\t{} = (ulong)({}) << {};\n", result_register, reg2, reg1)
 }
 
-pub fn emit_i32_xor(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, debug: bool) -> String {
+pub fn emit_i32_xor(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _debug: bool) -> String {
     let reg1 = stack_ctx.vstack_pop(StackType::i32);
     let reg2 = stack_ctx.vstack_pop(StackType::i32);
     let result_register = stack_ctx.vstack_alloc(StackType::i32);
@@ -143,7 +171,7 @@ pub fn emit_i32_xor(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stack
     format!("\t{} = {} ^ {};\n", result_register, reg2, reg1)
 }
 
-pub fn emit_i32_mul(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, debug: bool) -> String {
+pub fn emit_i32_mul(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _debug: bool) -> String {
     let reg1 = stack_ctx.vstack_pop(StackType::i32);
     let reg2 = stack_ctx.vstack_pop(StackType::i32);
     let result_register = stack_ctx.vstack_alloc(StackType::i32);
@@ -151,7 +179,7 @@ pub fn emit_i32_mul(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stack
     format!("\t{} = (int)({}) * (int)({});\n", result_register, reg2, reg1)
 }
 
-pub fn emit_i64_div_u(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, debug: bool) -> String {
+pub fn emit_i64_div_u(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _debug: bool) -> String {
     let reg1 = stack_ctx.vstack_pop(StackType::i64);
     let reg2 = stack_ctx.vstack_pop(StackType::i64);
     let result_register = stack_ctx.vstack_alloc(StackType::i64);
@@ -159,7 +187,7 @@ pub fn emit_i64_div_u(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Sta
     format!("\t{} = (ulong)({}) / (ulong)({});\n", result_register, reg2, reg1)
 }
 
-pub fn emit_i64_div_s(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, debug: bool) -> String {
+pub fn emit_i64_div_s(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _debug: bool) -> String {
     let reg1 = stack_ctx.vstack_pop(StackType::i64);
     let reg2 = stack_ctx.vstack_pop(StackType::i64);
     let result_register = stack_ctx.vstack_alloc(StackType::i64);
@@ -167,7 +195,7 @@ pub fn emit_i64_div_s(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Sta
     format!("\t{} = (long)({}) / (long)({});\n", result_register, reg2, reg1)
 }
 
-pub fn emit_i32_div_u(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, debug: bool) -> String {
+pub fn emit_i32_div_u(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _debug: bool) -> String {
     let reg1 = stack_ctx.vstack_pop(StackType::i32);
     let reg2 = stack_ctx.vstack_pop(StackType::i32);
     let result_register = stack_ctx.vstack_alloc(StackType::i32);
@@ -175,7 +203,7 @@ pub fn emit_i32_div_u(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Sta
     format!("\t{} = (uint)({}) / (uint)({});\n", result_register, reg2, reg1)
 }
 
-pub fn emit_i32_div_s(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, debug: bool) -> String {
+pub fn emit_i32_div_s(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _debug: bool) -> String {
     let reg1 = stack_ctx.vstack_pop(StackType::i32);
     let reg2 = stack_ctx.vstack_pop(StackType::i32);
     let result_register = stack_ctx.vstack_alloc(StackType::i32);
@@ -183,7 +211,7 @@ pub fn emit_i32_div_s(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Sta
     format!("\t{} = (int)({}) / (int)({});\n", result_register, reg2, reg1)
 }
 
-pub fn emit_i32_rem_u(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, debug: bool) -> String {
+pub fn emit_i32_rem_u(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _debug: bool) -> String {
     let reg1 = stack_ctx.vstack_pop(StackType::i32);
     let reg2 = stack_ctx.vstack_pop(StackType::i32);
     let result_register = stack_ctx.vstack_alloc(StackType::i32);
@@ -191,7 +219,7 @@ pub fn emit_i32_rem_u(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Sta
     format!("\t{} = (uint)({}) % (uint)({});\n", result_register, reg2, reg1)
 }
 
-pub fn emit_i64_rem_u(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, debug: bool) -> String {
+pub fn emit_i64_rem_u(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _debug: bool) -> String {
     let reg1 = stack_ctx.vstack_pop(StackType::i64);
     let reg2 = stack_ctx.vstack_pop(StackType::i64);
     let result_register = stack_ctx.vstack_alloc(StackType::i64);
@@ -199,7 +227,7 @@ pub fn emit_i64_rem_u(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Sta
     format!("\t{} = (ulong)({}) % (ulong)({});\n", result_register, reg2, reg1)
 }
 
-pub fn emit_i32_rem_s(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, debug: bool) -> String {
+pub fn emit_i32_rem_s(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _debug: bool) -> String {
     let reg1 = stack_ctx.vstack_pop(StackType::i32);
     let reg2 = stack_ctx.vstack_pop(StackType::i32);
     let result_register = stack_ctx.vstack_alloc(StackType::i32);
@@ -207,7 +235,7 @@ pub fn emit_i32_rem_s(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Sta
     format!("\t{} = (int)({}) % (int)({});\n", result_register, reg2, reg1)
 }
 
-pub fn emit_i64_rem_s(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, debug: bool) -> String {
+pub fn emit_i64_rem_s(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _debug: bool) -> String {
     let reg1 = stack_ctx.vstack_pop(StackType::i64);
     let reg2 = stack_ctx.vstack_pop(StackType::i64);
     let result_register = stack_ctx.vstack_alloc(StackType::i64);
@@ -215,7 +243,7 @@ pub fn emit_i64_rem_s(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Sta
     format!("\t{} = (long)({}) % (long)({});\n", result_register, reg2, reg1)
 }
 
-pub fn emit_i64_mul(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, debug: bool) -> String {
+pub fn emit_i64_mul(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _debug: bool) -> String {
     let reg1 = stack_ctx.vstack_pop(StackType::i64);
     let reg2 = stack_ctx.vstack_pop(StackType::i64);
     let result_register = stack_ctx.vstack_alloc(StackType::i64);
@@ -223,7 +251,7 @@ pub fn emit_i64_mul(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stack
     format!("\t{} = (long)({}) * (long)({});\n", result_register, reg2, reg1)
 }
 
-pub fn emit_i64_eq(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, debug: bool) -> String {
+pub fn emit_i64_eq(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _debug: bool) -> String {
     let reg1 = stack_ctx.vstack_pop(StackType::i64);
     let reg2 = stack_ctx.vstack_pop(StackType::i64);
     let result_register = stack_ctx.vstack_alloc(StackType::i32);
@@ -231,7 +259,7 @@ pub fn emit_i64_eq(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackC
     format!("\t{} = (ulong)({}) == (ulong)({});\n", result_register, reg2, reg1)
 }
 
-pub fn emit_f64_eq(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, debug: bool) -> String {
+pub fn emit_f64_eq(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _debug: bool) -> String {
     let reg1 = stack_ctx.vstack_pop(StackType::f64);
     let reg2 = stack_ctx.vstack_pop(StackType::f64);
     let result_register = stack_ctx.vstack_alloc(StackType::i32);
@@ -239,7 +267,7 @@ pub fn emit_f64_eq(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackC
     format!("\t{} = (double)({}) == (double)({});\n", result_register, reg2, reg1)
 }
 
-pub fn emit_i64_ne(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, debug: bool) -> String {
+pub fn emit_i64_ne(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _debug: bool) -> String {
     let reg1 = stack_ctx.vstack_pop(StackType::i64);
     let reg2 = stack_ctx.vstack_pop(StackType::i64);
     let result_register = stack_ctx.vstack_alloc(StackType::i32);
@@ -247,7 +275,7 @@ pub fn emit_i64_ne(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackC
     format!("\t{} = (ulong)({}) != (ulong)({});\n", result_register, reg2, reg1)
 }
 
-pub fn emit_i64_xor(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, debug: bool) -> String {
+pub fn emit_i64_xor(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _debug: bool) -> String {
     let reg1 = stack_ctx.vstack_pop(StackType::i64);
     let reg2 = stack_ctx.vstack_pop(StackType::i64);
     let result_register = stack_ctx.vstack_alloc(StackType::i64);
@@ -255,7 +283,7 @@ pub fn emit_i64_xor(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stack
     format!("\t{} = (ulong)({}) ^ (ulong)({});\n", result_register, reg2, reg1)
 }
 
-pub fn emit_i64_or(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, debug: bool) -> String {
+pub fn emit_i64_or(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _debug: bool) -> String {
     let reg1 = stack_ctx.vstack_pop(StackType::i64);
     let reg2 = stack_ctx.vstack_pop(StackType::i64);
     let result_register = stack_ctx.vstack_alloc(StackType::i64);
@@ -263,7 +291,7 @@ pub fn emit_i64_or(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackC
     format!("\t{} = (ulong)({}) | (ulong)({});\n", result_register, reg2, reg1)
 }
 
-pub fn emit_i64_shr_s(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, debug: bool) -> String {
+pub fn emit_i64_shr_s(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _debug: bool) -> String {
     let reg1 = stack_ctx.vstack_pop(StackType::i64);
     let reg2 = stack_ctx.vstack_pop(StackType::i64);
     let result_register = stack_ctx.vstack_alloc(StackType::i64);
@@ -274,7 +302,7 @@ pub fn emit_i64_shr_s(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Sta
 /*
  * Implementing rotl safely in software: https://blog.regehr.org/archives/1063
  */
-pub fn emit_i32_rotl(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, debug: bool) -> String {
+pub fn emit_i32_rotl(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, debug: bool) -> String {
     if !debug {
         let reg1 = stack_ctx.vstack_pop(StackType::i32);
         let reg2 = stack_ctx.vstack_pop(StackType::i32);
@@ -290,7 +318,7 @@ pub fn emit_i32_rotl(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stac
     }
 }
 
-pub fn emit_i64_rotl(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, debug: bool) -> String {
+pub fn emit_i64_rotl(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, debug: bool) -> String {
     if !debug {
         let reg1 = stack_ctx.vstack_pop(StackType::i64);
         let reg2 = stack_ctx.vstack_pop(StackType::i64);

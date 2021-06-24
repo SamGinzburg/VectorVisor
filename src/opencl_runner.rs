@@ -22,7 +22,6 @@ use std::thread;
 use std::collections::HashMap;
 use crossbeam::channel::unbounded;
 use crossbeam::channel::bounded;
-use crossbeam::queue::ArrayQueue;
 
 use rayon::prelude::*;
 use ocl::core::CommandQueue;
@@ -799,7 +798,7 @@ impl OpenCLRunner {
 
         let number_vms = self.num_vms.clone();
         let (result_sender, result_receiver): (SyncSender<HyperCallResult>, SyncReceiver<HyperCallResult>) = bounded(0);
-        for idx in 0..num_threads {
+        for _idx in 0..num_threads {
             let (sender, recv): (SyncSender<HyperCall>, SyncReceiver<HyperCall>) = unbounded();
             let sender_copy = result_sender.clone();
             hypercall_sender.push(sender.clone());
@@ -1246,7 +1245,7 @@ impl OpenCLRunner {
                     // in the primary loop, we will block until someone sends us a hypercall
                     // to dispatch...
                     match receiver.recv() {
-                        Ok(mut m) => {
+                        Ok(m) => {
                             for mut hcall in m {
                                 let wasi_context = &mut worker_vms[(counter % (number_vms/num_threads)) as usize];
                                 wasi_context.dispatch_hypercall(&mut *hcall, &sender_copy.clone());
@@ -1632,7 +1631,7 @@ impl OpenCLRunner {
             // now block until all of the hypercalls have been successfully dispatched
             let mut no_resp_counter = 0;
             let mut total_recv = 0;
-            for idx in 0..self.num_vms {
+            for _idx in 0..self.num_vms {
                 //dbg!(&idx);
                 let start_recv = std::time::Instant::now();
                 let result = result_receiver.recv().unwrap();

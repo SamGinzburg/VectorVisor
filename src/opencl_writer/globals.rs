@@ -8,12 +8,12 @@ use crate::opencl_writer::StackType;
 
 use std::collections::HashMap;
 
-pub fn emit_global_get(writer: &opencl_writer::OpenCLCWriter,
+pub fn emit_global_get(_writer: &opencl_writer::OpenCLCWriter,
                        stack_ctx: &mut StackCtx,
                        global_id: &str,
                        global_mappings: &HashMap<String, (u32, u32)>,
                        stack_sizes: &mut Vec<u32>,
-                       debug: bool) -> String {
+                       _debug: bool) -> String {
     let mut ret_str = String::from("");
     let (offset, size) = global_mappings.get(global_id).unwrap();
 
@@ -42,12 +42,12 @@ pub fn emit_global_get(writer: &opencl_writer::OpenCLCWriter,
     ret_str
 }
 
-pub fn emit_global_set(writer: &opencl_writer::OpenCLCWriter,
+pub fn emit_global_set(_writer: &opencl_writer::OpenCLCWriter,
                        stack_ctx: &mut StackCtx,
                        global_id: &str,
                        global_mappings: &HashMap<String, (u32, u32)>,
                        stack_sizes: &mut Vec<u32>,
-                       debug: bool) -> String {
+                       _debug: bool) -> String {
     let mut ret_str = String::from("");
     let (offset, size) = global_mappings.get(global_id).unwrap();
     stack_sizes.pop().unwrap();

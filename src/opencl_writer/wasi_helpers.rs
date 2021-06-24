@@ -41,7 +41,7 @@ pub fn emit_hypercall_helpers(writer: &opencl_writer::OpenCLCWriter, call_name: 
  * The format of the hypercall_buffer is: [stack_params][iovec_arr][all buffers to write]
  * 
  */
-pub fn emit_fd_write_helpers(writer: &opencl_writer::OpenCLCWriter, _debug: bool) -> String {
+pub fn emit_fd_write_helpers(_writer: &opencl_writer::OpenCLCWriter, _debug: bool) -> String {
     let mut result = String::from("");
 
 
@@ -224,7 +224,7 @@ pub fn emit_fd_prestat_get_post(_writer: &opencl_writer::OpenCLCWriter, stack_ct
 }
 
 
-pub fn emit_environ_sizes_get_post(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _debug: bool) -> String {
+pub fn emit_environ_sizes_get_post(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _debug: bool) -> String {
     let mut ret_str = String::from("");
     // This function takes two u32 arguments, so we need to pop those off
     // arg1: offset for size, arg2: offset for arg string data size
@@ -254,7 +254,7 @@ pub fn emit_environ_sizes_get_post(writer: &opencl_writer::OpenCLCWriter, stack_
     ret_str
 }
 
-pub fn emit_environ_get_post(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _debug: bool) -> String {
+pub fn emit_environ_get_post(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _debug: bool) -> String {
     let mut ret_str = String::from("");
     // This function takes two u32 arguments, so we need to pop those off
     // arg1: pointer to a buffer of pointers
@@ -289,12 +289,12 @@ pub fn emit_environ_get_post(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &
     ret_str
 }
 
-pub fn emit_fd_write_post(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _debug: bool) -> String {
+pub fn emit_fd_write_post(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _debug: bool) -> String {
     let mut ret_str = String::from("");
     let buf_len = stack_ctx.vstack_pop(StackType::i32);
-    let iovec_count = stack_ctx.vstack_pop(StackType::i32);
-    let iovec_ptr = stack_ctx.vstack_pop(StackType::i32);
-    let fd = stack_ctx.vstack_pop(StackType::i32);
+    let _iovec_count = stack_ctx.vstack_pop(StackType::i32);
+    let _iovec_ptr = stack_ctx.vstack_pop(StackType::i32);
+    let _fd = stack_ctx.vstack_pop(StackType::i32);
     let result_register = stack_ctx.vstack_alloc(StackType::i32);
 
 
@@ -310,15 +310,15 @@ pub fn emit_fd_write_post(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut
 }
 
 pub fn emit_serverless_invoke_pre(_writer: &opencl_writer::OpenCLCWriter, _debug: bool) -> String {
-    let mut ret_str = String::from("");
+    let ret_str = String::from("");
 
     ret_str
 }
 
-pub fn emit_serverless_invoke_post(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _debug: bool) -> String {
+pub fn emit_serverless_invoke_post(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _debug: bool) -> String {
     let mut ret_str = String::from("");
 
-    let json_buf_len = stack_ctx.vstack_pop(StackType::i32);
+    let _json_buf_len = stack_ctx.vstack_pop(StackType::i32);
     let json_buf_ptr = stack_ctx.vstack_pop(StackType::i32);
     let result_register = stack_ctx.vstack_alloc(StackType::i32);
 
@@ -341,7 +341,7 @@ pub fn emit_serverless_invoke_post(writer: &opencl_writer::OpenCLCWriter, stack_
     ret_str
 }
 
-pub fn emit_serverless_response_pre(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, debug: bool) -> String {
+pub fn emit_serverless_response_pre(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _debug: bool) -> String {
     let mut ret_str = String::from("");
 
     let json_buf_len = stack_ctx.vstack_peak(StackType::i32, 0);
@@ -360,8 +360,8 @@ pub fn emit_serverless_response_pre(writer: &opencl_writer::OpenCLCWriter, stack
     ret_str
 }
 
-pub fn emit_serverless_response_post(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, debug: bool) -> String {
-    let mut ret_str = String::from("");
+pub fn emit_serverless_response_post(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _debug: bool) -> String {
+    let ret_str = String::from("");
 
     let _json_buf_len = stack_ctx.vstack_pop(StackType::i32);
     let _json_buf_ptr = stack_ctx.vstack_pop(StackType::i32);
@@ -369,7 +369,7 @@ pub fn emit_serverless_response_post(writer: &opencl_writer::OpenCLCWriter, stac
     ret_str
 }
 
-pub fn emit_random_get_pre(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, debug: bool) -> String {
+pub fn emit_random_get_pre(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _debug: bool) -> String {
     let mut ret_str = String::from("");
 
     let random_buf_len = stack_ctx.vstack_peak(StackType::i32, 0);
@@ -381,7 +381,7 @@ pub fn emit_random_get_pre(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mu
 }
 
 
-pub fn emit_random_get_post(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, debug: bool) -> String {
+pub fn emit_random_get_post(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _debug: bool) -> String {
     let mut ret_str = String::from("");
 
     let random_buf_len = stack_ctx.vstack_pop(StackType::i32);

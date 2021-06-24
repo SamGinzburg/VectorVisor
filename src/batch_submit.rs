@@ -1,21 +1,16 @@
 use std::str::from_utf8;
 use std::collections::HashMap;
 use std::convert::TryInto;
-use std::convert::Infallible;
 use std::sync::Arc;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::error::Error;
+use std::net::{SocketAddr};
 
 use tokio::sync::mpsc::{Sender, Receiver};
 use tokio::sync::Mutex;
 
 use serde::Deserialize;
 use serde::Serialize;
-use rayon::prelude::*;
 
-use warp::{Buf, Filter, Reply};
-
-use bytes::Bytes;
+use warp::{Filter, Reply};
 
 pub struct BatchSubmitServer {}
 
@@ -93,7 +88,7 @@ impl BatchSubmitServer {
         Ok(warp::reply::json(&final_response).into_response())
     }
 
-    pub fn start_server(hcall_buf_size: usize, sender: Arc<Vec<Mutex<Sender<(Vec<u8>, usize)>>>>, receiver: Arc<Vec<Mutex<Receiver<(Vec<u8>, usize, u64, u64, u64, u64)>>>>, num_vms: u32, server_ip: String, server_port: String) -> () {
+    pub fn start_server(_hcall_buf_size: usize, sender: Arc<Vec<Mutex<Sender<(Vec<u8>, usize)>>>>, receiver: Arc<Vec<Mutex<Receiver<(Vec<u8>, usize, u64, u64, u64, u64)>>>>, num_vms: u32, server_ip: String, server_port: String) -> () {
         tokio::runtime::Builder::new_multi_thread()
             //.worker_threads(4)
             .worker_threads(num_cpus::get())

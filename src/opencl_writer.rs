@@ -374,6 +374,11 @@ impl<'a> OpenCLCWriter<'_> {
                 stack_sizes.push(2);
                 emit_memload_f64(self, stack_ctx, memarg, debug)
             },
+            wast::Instruction::F32Load(memarg) => {
+                stack_sizes.pop();
+                stack_sizes.push(1);
+                emit_memload_f32(self, stack_ctx, memarg, debug)
+            },
             wast::Instruction::I64Store(memarg) => {
                 stack_sizes.pop();
                 stack_sizes.pop();
@@ -383,6 +388,11 @@ impl<'a> OpenCLCWriter<'_> {
                 stack_sizes.pop();
                 stack_sizes.pop();
                 emit_memstore_f64(self, stack_ctx, memarg, debug)
+            },
+            wast::Instruction::F32Store(memarg) => {
+                stack_sizes.pop();
+                stack_sizes.pop();
+                emit_memstore_f32(self, stack_ctx, memarg, debug)
             },
             wast::Instruction::GlobalGet(idx) => {
                 match idx {
@@ -510,11 +520,35 @@ impl<'a> OpenCLCWriter<'_> {
                 stack_sizes.push(2);
                 emit_f64_add(self, stack_ctx, debug)
             },
+            wast::Instruction::F32Add => {
+                stack_sizes.pop();
+                stack_sizes.pop();
+                stack_sizes.push(1);
+                emit_f32_add(self, stack_ctx, debug)
+            },
+            wast::Instruction::F32Sub => {
+                stack_sizes.pop();
+                stack_sizes.pop();
+                stack_sizes.push(1);
+                emit_f32_sub(self, stack_ctx, debug)
+            },
+            wast::Instruction::F32Mul => {
+                stack_sizes.pop();
+                stack_sizes.pop();
+                stack_sizes.push(1);
+                emit_f32_mul(self, stack_ctx, debug)
+            },
             wast::Instruction::F64Div => {
                 stack_sizes.pop();
                 stack_sizes.pop();
                 stack_sizes.push(2);
                 emit_f64_div(self, stack_ctx, debug)
+            },
+            wast::Instruction::F32Div => {
+                stack_sizes.pop();
+                stack_sizes.pop();
+                stack_sizes.push(1);
+                emit_f32_div(self, stack_ctx, debug)
             },
             wast::Instruction::F64Mul => {
                 stack_sizes.pop();
@@ -524,6 +558,9 @@ impl<'a> OpenCLCWriter<'_> {
             },
             wast::Instruction::F64Neg => {
                 emit_f64_neg(self, stack_ctx, debug)
+            },
+            wast::Instruction::F32Neg => {
+                emit_f32_neg(self, stack_ctx, debug)
             },
             wast::Instruction::F64Ne => {
                 stack_sizes.pop();
@@ -537,11 +574,29 @@ impl<'a> OpenCLCWriter<'_> {
                 stack_sizes.push(1);
                 emit_f64_lt(self, stack_ctx, debug)
             },
+            wast::Instruction::F32Gt => {
+                stack_sizes.pop();
+                stack_sizes.pop();
+                stack_sizes.push(1);
+                emit_f32_gt(self, stack_ctx, debug)
+            },
+            wast::Instruction::F32Lt => {
+                stack_sizes.pop();
+                stack_sizes.pop();
+                stack_sizes.push(1);
+                emit_f32_lt(self, stack_ctx, debug)
+            },
             wast::Instruction::F64Le => {
                 stack_sizes.pop();
                 stack_sizes.pop();
                 stack_sizes.push(1);
                 emit_f64_le(self, stack_ctx, debug)
+            },
+            wast::Instruction::F32Le => {
+                stack_sizes.pop();
+                stack_sizes.pop();
+                stack_sizes.push(1);
+                emit_f32_le(self, stack_ctx, debug)
             },
             wast::Instruction::I64LtU => {
                 stack_sizes.pop();
@@ -1350,10 +1405,10 @@ impl<'a> OpenCLCWriter<'_> {
         final_string
     }
 
-    fn emit_memcpy_arr(&self, debug: bool) -> String {
+    fn emit_memcpy_arr(&self, _debug: bool) -> String {
         let mut result = String::from("");
         let mut counter = 0;
-        let mut offset_val = 0;
+        let mut offset_val;
         let mut arr_len = 0;
         for temp in &self.data {
             result += &format!("\t{}{}[] = {{\n", "uchar data_segment_data_", counter);
@@ -1397,7 +1452,7 @@ impl<'a> OpenCLCWriter<'_> {
         result
     }
 
-    fn emit_global_init(&self, global_mappings: &HashMap<String, (u32, u32)>, debug: bool) -> String {
+    fn emit_global_init(&self, global_mappings: &HashMap<String, (u32, u32)>, _debug: bool) -> String {
         let mut ret_str = String::from("");
 
         // needed for case where globals are auto-indexed
@@ -1434,7 +1489,7 @@ impl<'a> OpenCLCWriter<'_> {
      * There can be multiple elements in a WASM module, so we must enumerate all of them
      * to provide a mapping of table indicies to function names
      */
-    fn process_elements(&self, debug: bool) -> HashMap<u32, &wast::Index> {
+    fn process_elements(&self, _debug: bool) -> HashMap<u32, &wast::Index> {
         let elements_vec = &self.elements;
         let mut table_mapping: HashMap<u32, &wast::Index> = HashMap::new();
         for element in elements_vec {
@@ -1465,13 +1520,13 @@ impl<'a> OpenCLCWriter<'_> {
 
     fn generate_function_prelude(&self,
                                  fn_name: &str,
-                                 hcall_size: u32,
+                                 _hcall_size: u32,
                                  interleave: u32,
                                  stack_size_bytes: u32,
                                  heap_size_bytes: u32,
                                  stack_frames_size_bytes: u32,
                                  call_stack_size_bytes: u32,
-                                 predictor_size_bytes: u32,
+                                 _predictor_size_bytes: u32,
                                  globals_buffer_size: u32,
                                  stack_frame_ptr_size_bytes: u32,
                                  is_control_fn: bool,
@@ -1682,14 +1737,14 @@ void {}(global uint   *stack_u32,
             Some(mem) => match mem.kind {
                 wast::MemoryKind::Normal(memtype) => {
                     match memtype {
-                        wast::MemoryType::B32{limits, shared} => {
+                        wast::MemoryType::B32{limits, ..} => {
                             let max = match limits.max {
                                 Some(val) => val,
                                 None => heap_size/(1024*64),
                             };
                             (limits.min as u64, max as u64)
                         },
-                        wast::MemoryType::B64{limits, shared} => {
+                        wast::MemoryType::B64{limits, ..} => {
                             let max = match limits.max {
                                 Some(val) => val,
                                 None => heap_size as u64/(1024*64),
@@ -2059,7 +2114,7 @@ r#"
                     (wast::FuncKind::Import(_), _, _) => {
                         panic!("InlineImport functions not yet implemented");
                     },
-                    (wast::FuncKind::Inline{locals, expression}, Some(id), typeuse) => {
+                    (wast::FuncKind::Inline{locals, expression}, Some(id), _typeuse) => {
                         id.name()
                     },
                     (_, _, _) => panic!("Inline function must always have a valid identifier in wasm")

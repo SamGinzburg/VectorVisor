@@ -121,7 +121,7 @@ pub fn get_func_result(writer: &opencl_writer::OpenCLCWriter, ty: &wast::TypeUse
 }
 
 
-pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, fn_name: String, idx: wast::Index, call_ret_map: &mut HashMap<&str, u32>, call_ret_idx: &mut u32, function_id_map: &HashMap<&str, u32>, stack_sizes: &mut Vec<u32>, is_indirect: bool, is_fastcall: bool, debug: bool) -> String {
+pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, fn_name: String, idx: wast::Index, call_ret_map: &mut HashMap<&str, u32>, call_ret_idx: &mut u32, function_id_map: &HashMap<&str, u32>, stack_sizes: &mut Vec<u32>, is_indirect: bool, is_fastcall: bool, _debug: bool) -> String {
     let mut ret_str = String::from("");
     let id = match idx {
         wast::Index::Id(id) => id.name(),
@@ -365,7 +365,7 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stack
         let calling_func_name = format!("{}{}", "__", id.replace(".", ""));
         let mut parameter_list = String::from("");
 
-        for (param, ty) in stack_params.iter().zip(stack_params_types.iter()) {
+        for (param, _ty) in stack_params.iter().zip(stack_params_types.iter()) {
             parameter_list += &format!("{}, ", param);
         }
 
@@ -381,7 +381,7 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stack
 }
 
 // TODO: this needs to take the function type into account
-pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, fn_name: &str, func_ret_info: &Option<wast::FunctionType>, is_start_fn: bool, is_fastcall: bool, debug: bool) -> String {
+pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, fn_name: &str, func_ret_info: &Option<wast::FunctionType>, is_start_fn: bool, is_fastcall: bool, _debug: bool) -> String {
     let mut final_str = String::from("");
     let results: Vec<wast::ValType> = match func_ret_info {
         Some(s) => (*s.results).to_vec(),
@@ -632,7 +632,7 @@ pub fn emit_call_indirect(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut
             };
 
             // First, pop off the parameters
-            for (_, _, param_type) in func_type.params.iter() {
+            for (_, _, _) in func_type.params.iter() {
                 stack_sizes.pop().unwrap();
                 let (param, param_type) = stack_ctx.vstack_pop_any();
                 stack_params.insert(0, param);
@@ -645,7 +645,7 @@ pub fn emit_call_indirect(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut
                 result_types.push(return_type);
             }
         },
-        (_, Some(inline)) => panic!("Inline types for call_indirect not implemented yet"),
+        (_, Some(_inline)) => panic!("Inline types for call_indirect not implemented yet"),
         _ => (),
     };
 

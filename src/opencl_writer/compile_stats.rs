@@ -28,7 +28,7 @@ pub fn function_stats(func: &wast::Func, fastcalls: &HashSet<String>, func_map: 
             // (func (type 3) (import "foo" "bar"))
             panic!("InlineImport functions not yet implemented");
         },
-        (wast::FuncKind::Inline{locals, expression}, Some(id), typeuse) => {
+        (wast::FuncKind::Inline{locals, expression}, Some(_id), _typeuse) => {
             total_instr_count = expression.instrs.len().try_into().unwrap();
             for instr in expression.instrs.iter() {
                 match instr {
@@ -49,6 +49,7 @@ pub fn function_stats(func: &wast::Func, fastcalls: &HashSet<String>, func_map: 
                             total_indirect_count += nested_total_indirect_count;
                             total_loop_count += nested_total_loop_count;
                             total_block_count += nested_total_block_count;
+                            total_fastcall_count += nested_total_fastcall_count;
                         } else {
                             total_func_count += 1;
                         }

@@ -32,7 +32,7 @@ use crate::opencl_writer;
  * 
  */
 
-pub fn generate_read_write_calls(writer: &opencl_writer::OpenCLCWriter, interleave: u32, debug: bool) -> String {
+pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interleave: u32, _debug: bool) -> String {
     let mut result = String::from("");
     // we need the warp id to generate the interleave
     // the write functions

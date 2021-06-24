@@ -1,6 +1,5 @@
 use crate::opencl_writer;
 use crate::opencl_writer::Regex;
-use crate::opencl_writer::mem_interleave::emit_read_u32;
 use crate::opencl_writer::mem_interleave::emit_write_u64;
 use crate::opencl_writer::StackCtx;
 use crate::opencl_writer::StackType;
@@ -30,7 +29,7 @@ pub fn emit_return(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackC
 }
 
 // this function is semantically equivalent to function_unwind
-pub fn emit_br(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, idx: wast::Index, fn_name: &str, control_stack: &mut Vec<(String, u32, i32)>, function_id_map: HashMap<&str, u32>, is_fastcall: bool, debug: bool) -> String {
+pub fn emit_br(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, idx: wast::Index, fn_name: &str, control_stack: &mut Vec<(String, u32, i32)>, function_id_map: HashMap<&str, u32>, is_fastcall: bool, _debug: bool) -> String {
     let mut ret_str = String::from("");
 
     // we need to do linear scans for blocks that are pre-named
@@ -70,7 +69,7 @@ pub fn emit_br(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, 
             let mut control_stack_copy = control_stack.clone();
             control_stack_copy.reverse();
             let mut block_count: u32 = 0;
-            for (label, is_loop, _) in control_stack_copy.iter() {
+            for (label, _is_loop, _) in control_stack_copy.iter() {
                 if label == block_name {
                     break;
                 }
@@ -132,7 +131,7 @@ pub fn emit_br_if(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCt
 
 // semantically, the end statement pops from the control stack,
 // in our compiler, this is a no-op
-pub fn emit_end<'a>(writer: &opencl_writer::OpenCLCWriter<'a>, stack_ctx: &mut StackCtx, id: &Option<wast::Id<'a>>, label: &str, block_type: u32, fn_name: &str, function_id_map: HashMap<&str, u32>, is_fastcall: bool, debug: bool) -> String {
+pub fn emit_end<'a>(_writer: &opencl_writer::OpenCLCWriter<'a>, stack_ctx: &mut StackCtx, _id: &Option<wast::Id<'a>>, label: &str, block_type: u32, fn_name: &str, _function_id_map: HashMap<&str, u32>, is_fastcall: bool, _debug: bool) -> String {
 
     if !is_fastcall {
         // unwind the stack frame
@@ -181,7 +180,7 @@ pub fn emit_end<'a>(writer: &opencl_writer::OpenCLCWriter<'a>, stack_ctx: &mut S
 
 // basically the same as emit_block, except we have to reset the stack pointer
 // at the *top* of the block, since we are doing a backwards jump not a forward jump
-pub fn emit_loop(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, block: &wast::BlockType, label: String, branch_idx_u32: u32, fn_name: &str, function_id_map: HashMap<&str, u32>, call_ret_idx: &mut u32, is_fastcall: bool, debug: bool) -> String {
+pub fn emit_loop(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _block: &wast::BlockType, label: String, _branch_idx_u32: u32, fn_name: &str, _function_id_map: HashMap<&str, u32>, call_ret_idx: &mut u32, is_fastcall: bool, _debug: bool) -> String {
     let mut result: String = String::from("");
 
     if !is_fastcall {
@@ -213,7 +212,7 @@ pub fn emit_loop(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx
     result
 }
 
-pub fn emit_block(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, block: &wast::BlockType, label: String, branch_idx_u32: u32, fn_name: &str, function_id_map: HashMap<&str, u32>, is_fastcall: bool, debug: bool) -> String {
+pub fn emit_block(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _block: &wast::BlockType, _label: String, _branch_idx_u32: u32, _fn_name: &str, _function_id_map: HashMap<&str, u32>, is_fastcall: bool, _debug: bool) -> String {
     let mut result: String = String::from("");
 
 

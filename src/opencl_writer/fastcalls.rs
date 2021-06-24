@@ -1,14 +1,7 @@
 use crate::opencl_writer;
-use crate::opencl_writer::mem_interleave::emit_read_u32;
-use crate::opencl_writer::mem_interleave::emit_write_u32;
-use crate::opencl_writer::mem_interleave::emit_read_u64;
-use crate::opencl_writer::mem_interleave::emit_write_u64;
-use crate::opencl_writer::StackCtx;
-use crate::opencl_writer::StackType;
 use crate::opencl_writer::WASI_SNAPSHOT_PREVIEW1;
 
 use std::collections::HashSet;
-use std::iter::FromIterator;
 
 /*
  * Our CPS-style transform is too expensive for most function calls, so we perform some basic static analysis
@@ -55,7 +48,7 @@ pub enum FastcallPassStatus {
         (wast::FuncKind::Import(_), _, _) => {
             panic!("InlineImport functions not yet implemented (fastcall pass)");
         },
-        (wast::FuncKind::Inline{locals, expression}, Some(id), typeuse) => {
+        (wast::FuncKind::Inline{locals, expression}, Some(id), _typeuse) => {
 
             // Is this function the start function?
             if id.name() == "_start" {
@@ -130,7 +123,7 @@ pub enum FastcallPassStatus {
     let mut known_bad_calls = HashSet::new();
 
     let mut fastcall_count = 0;
-    let mut ambiguous_fastcalls = vec![];
+    let mut ambiguous_fastcalls;
 
     loop {
         //println!("Fastcall analysis pass, found: {:?} functions to optimize", fastcall_count);
