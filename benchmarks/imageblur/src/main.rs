@@ -38,7 +38,6 @@ fn image_blur(event: FuncInput) -> FuncResponse {
     let png_encoder = PngEncoder::new(&mut output_buf);
 
     let (nwidth, nheight) = blurred.dimensions();
-    println!("{:?}", decoded_image.color());
     match png_encoder.encode(&mut blurred.as_bytes(), nwidth, nheight, ColorType::Rgba8) {
         Ok(_) => (),
         Err(err) => println!("Unable to encode image to PNG: {:?}", err),
