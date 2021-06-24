@@ -56,7 +56,7 @@ func RandString(n int) string {
     return string(b)
 }
 
-func IssueRequests(ip string, port int, req [][]byte, data_ch chan<-[]byte, end_chan chan bool) {
+func IssueRequests(ip string, port int, req [][]byte, exec_time chan<-float64, queue_time chan<-float64, submit_count chan<-float64, unique_fns chan<-float64, end_chan chan bool) {
 	addr := fmt.Sprintf("http://%s:%d/batch_submit/", ip, port)
 	http_request, _ := http.NewRequest("GET", addr, nil)
 	http_request.Header.Add("Content-Type", "application/json; charset=utf-8")
@@ -67,7 +67,6 @@ func IssueRequests(ip string, port int, req [][]byte, data_ch chan<-[]byte, end_
 		_ = start_read
 		resp, err := client.Do(http_request)
 		if err != nil {
-			//fmt.Printf("client err: %s\n", err)
 			// check to see if we are done
 			if len(end_chan) > 0 {
 				return;
@@ -76,12 +75,13 @@ func IssueRequests(ip string, port int, req [][]byte, data_ch chan<-[]byte, end_
 		}
 
 		body, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			panic(err)
+		}
+		_ = body
 		resp.Body.Close()
 		read_secs := time.Since(start_read)
 		_ = read_secs
-		if err != nil {
-			//fmt.Printf("err: %s\n", err)
-		}
 
 		// if we get a hangup from the server, continue
 		if resp.StatusCode != http.StatusOK {
@@ -90,13 +90,35 @@ func IssueRequests(ip string, port int, req [][]byte, data_ch chan<-[]byte, end_
 			//fmt.Printf("E2E req time: %s\n", read_secs)
 			//fmt.Printf("%s\n", body)
 		}
-
+		m := map[string]interface{}{}
+		err = json.Unmarshal(body, &m)
+		if err != nil {
+			panic(err)
+		}
+		on_device_compute_time := m["on_device_execution_time_ns"].(float64)
+		device_queue_overhead := m["device_queue_overhead_time_ns"].(float64)
+		queue_submit_count := m["queue_submit_count"].(float64)
+		num_unique_fns_called := m["num_unique_fns_called"].(float64)
 		select {
-			case data_ch <- body:
+			case exec_time <- on_device_compute_time:
 			default:
 				return;
 		}
-
+		select {
+			case queue_time <- device_queue_overhead:
+			default:
+				return;
+		}
+		select {
+			case submit_count <- queue_submit_count:
+			default:
+				return;
+		}
+		select {
+			case unique_fns <- num_unique_fns_called:
+			default:
+				return;
+		}
 		// check to see if we are done
 		if len(end_chan) > 0 {
 			return;
@@ -132,7 +154,7 @@ func main() {
 
 	reqs := make([][]byte, NUM_PARAMS)
 	for i := 0; i < NUM_PARAMS; i++ {
-		p := payload{Text: RandString(1024 * 16)}
+		p := payload{Text: RandString(1024 * 64)}
 		request_body, _ := json.Marshal(p)
 		reqs[i] = request_body
 	}
@@ -143,27 +165,39 @@ func main() {
 	client = &http.Client{Transport: tr}
 
 
-	ch := make(chan []byte, num_vms*100000) // we prob won't exceed ~6.4M RPS ever
+	ch_exec_time := make(chan float64, 1000000)
+	ch_queue_time := make(chan float64, 1000000)
+	ch_submit := make(chan float64, 1000000)
+	ch_unique_fns := make(chan float64, 1000000)
 	termination_chan := make(chan bool, num_vms)
 
 	benchmark_duration := time.Duration(timeout_secs) * time.Second
 	bench_timer := time.NewTimer(benchmark_duration)
 	for vmgroup := 0 ; vmgroup < num_vmgroups; vmgroup++ {
 		for i := 0; i < num_vms; i++ {
-			go IssueRequests(os.Args[1], port+vmgroup, reqs, ch, termination_chan)
+			go IssueRequests(os.Args[1], port+vmgroup, reqs, ch_exec_time, ch_queue_time, ch_submit, ch_unique_fns, termination_chan)
 		}
 	}
 
 	<-bench_timer.C
-	batches_completed := len(ch)
-	fmt.Printf("Benchmark complete: %d batches completed\n", batches_completed)
-	responses := make([][]byte, batches_completed)
+	batches_completed := len(ch_exec_time)
+	fmt.Printf("Benchmark complete: %d requests completed\n", batches_completed)
+	exec_time := 0.0
+	queue_time := 0.0
+	submit_count := 0.0
+	unique_fns := 0.0
 	for i := 0; i < batches_completed; i++ {
-		responses[i] = <-ch
+		exec_time += <-ch_exec_time
+		queue_time += <-ch_queue_time
+		submit_count += <-ch_submit
+		unique_fns += <-ch_unique_fns
 	}
 
 	duration := float64(benchmark_duration.Seconds())
-
+	exec_time = exec_time / float64(batches_completed)
+	queue_time = queue_time / float64(batches_completed)
+	submit_count = submit_count / float64(batches_completed)
+	unique_fns = unique_fns / float64(batches_completed)
 	fmt.Printf("duration: %f\n", duration)
 
 	for i := 0; i < num_vms; i++ {
@@ -173,7 +207,11 @@ func main() {
 	// calculate the total RPS	
 	total_rps := (float64(batches_completed)) / duration
 	fmt.Printf("Total RPS: %f\n", total_rps)
-
+	fmt.Printf("On device execution time: %f\n", exec_time)
+	fmt.Printf("queue submit time: %f\n", queue_time)
+	fmt.Printf("submit count: %f\n", submit_count)
+	fmt.Printf("unique fns: %f\n", unique_fns)
+	/*
 	on_device_compute_time := 0.0
 	device_queue_overhead := 0.0
 	queue_submit_count := 0.0
@@ -189,8 +227,6 @@ func main() {
 		on_device_compute_time += m["on_device_execution_time_ns"].(float64)
 		device_queue_overhead += m["device_queue_overhead_time_ns"].(float64)
 		queue_submit_count += m["queue_submit_count"].(float64)
-		num_unique_fns_called += m["num_unique_fns_called"].(float64)
-		req_count += 1
 	}
 
 	on_device_compute_time = on_device_compute_time / req_count
@@ -204,4 +240,5 @@ func main() {
 	fmt.Printf("Average num of unique fns called: %f\n", num_unique_fns_called)
 
 	fmt.Printf("Parallel fraction of function (only applicable to GPU funcs): %f\n", (((on_device_compute_time+device_queue_overhead)/1000000000)) / duration)
+	*/
 }
