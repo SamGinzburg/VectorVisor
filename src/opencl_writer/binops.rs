@@ -27,6 +27,46 @@ pub fn emit_f64_add(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stac
     format!("\t{} = {} + {};\n", result_register, reg2, reg1)
 }
 
+pub fn emit_f64_max(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _debug: bool) -> String {
+    let reg1 = stack_ctx.vstack_pop(StackType::f64);
+    let reg2 = stack_ctx.vstack_pop(StackType::f64);
+    let result_register = stack_ctx.vstack_alloc(StackType::f64);
+
+    format!("\t{} = FMAX({}, {});\n", result_register, reg2, reg1)
+}
+
+pub fn emit_f32_max(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _debug: bool) -> String {
+    let reg1 = stack_ctx.vstack_pop(StackType::f32);
+    let reg2 = stack_ctx.vstack_pop(StackType::f32);
+    let result_register = stack_ctx.vstack_alloc(StackType::f32);
+
+    format!("\t{} = FMAX({}, {});\n", result_register, reg2, reg1)
+}
+
+pub fn emit_f64_min(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _debug: bool) -> String {
+    let reg1 = stack_ctx.vstack_pop(StackType::f64);
+    let reg2 = stack_ctx.vstack_pop(StackType::f64);
+    let result_register = stack_ctx.vstack_alloc(StackType::f64);
+
+    format!("\t{} = FMIN({}, {});\n", result_register, reg2, reg1)
+}
+
+pub fn emit_f32_min(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _debug: bool) -> String {
+    let reg1 = stack_ctx.vstack_pop(StackType::f32);
+    let reg2 = stack_ctx.vstack_pop(StackType::f32);
+    let result_register = stack_ctx.vstack_alloc(StackType::f32);
+
+    format!("\t{} = FMIN({}, {});\n", result_register, reg2, reg1)
+}
+
+pub fn emit_f64_sub(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _debug: bool) -> String {
+    let reg1 = stack_ctx.vstack_pop(StackType::f64);
+    let reg2 = stack_ctx.vstack_pop(StackType::f64);
+    let result_register = stack_ctx.vstack_alloc(StackType::f64);
+
+    format!("\t{} = {} - {};\n", result_register, reg2, reg1)
+}
+
 pub fn emit_f32_sub(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _debug: bool) -> String {
     let reg1 = stack_ctx.vstack_pop(StackType::f32);
     let reg2 = stack_ctx.vstack_pop(StackType::f32);

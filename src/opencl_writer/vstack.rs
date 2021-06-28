@@ -412,7 +412,37 @@ impl<'a> StackCtx {
 
                     current_i64_count -= 1;
                 },
+                wast::Instruction::F64Max => {
+                    stack_sizes.pop();
+                    stack_sizes.pop();
+                    stack_sizes.push(StackType::f64);
+                    current_f64_count -= 1;
+                },
+                wast::Instruction::F64Min => {
+                    stack_sizes.pop();
+                    stack_sizes.pop();
+                    stack_sizes.push(StackType::f64);
+                    current_f64_count -= 1;
+                },
+                wast::Instruction::F32Max => {
+                    stack_sizes.pop();
+                    stack_sizes.pop();
+                    stack_sizes.push(StackType::f32);
+                    current_f32_count -= 1;
+                },
+                wast::Instruction::F32Min => {
+                    stack_sizes.pop();
+                    stack_sizes.pop();
+                    stack_sizes.push(StackType::f32);
+                    current_f32_count -= 1;
+                },
                 wast::Instruction::F64Add => {
+                    stack_sizes.pop();
+                    stack_sizes.pop();
+                    stack_sizes.push(StackType::f64);
+                    current_f64_count -= 1;
+                },
+                wast::Instruction::F64Sub => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::f64);
@@ -494,7 +524,21 @@ impl<'a> StackCtx {
                     current_f64_count -= 2;
                     update_counter(&mut current_i32_count, &mut max_i32_count);
                 },
+                wast::Instruction::F64Ge => {
+                    stack_sizes.pop();
+                    stack_sizes.pop();
+                    stack_sizes.push(StackType::i32);
+                    current_f64_count -= 2;
+                    update_counter(&mut current_i32_count, &mut max_i32_count);
+                },
                 wast::Instruction::F32Le => {
+                    stack_sizes.pop();
+                    stack_sizes.pop();
+                    stack_sizes.push(StackType::i32);
+                    current_f32_count -= 2;
+                    update_counter(&mut current_i32_count, &mut max_i32_count);
+                },
+                wast::Instruction::F32Ge => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i32);
@@ -1048,6 +1092,46 @@ impl<'a> StackCtx {
                     current_f32_count -= 1;
                     update_counter(&mut current_i32_count, &mut max_i32_count);
                 },
+                wast::Instruction::F64Ceil => {
+                    // No-op
+                },
+                wast::Instruction::F32Ceil => {
+                    // No-op
+                },
+                wast::Instruction::F64Floor => {
+                    // No-op
+                },
+                wast::Instruction::F32Floor => {
+                    // No-op
+                },
+                wast::Instruction::F64PromoteF32 => {
+                    stack_sizes.pop();
+                    stack_sizes.push(StackType::f64);
+
+                    current_f32_count -= 1;
+                    update_counter(&mut current_f64_count, &mut max_f64_count);
+                },
+                wast::Instruction::F32DemoteF64 => {
+                    stack_sizes.pop();
+                    stack_sizes.push(StackType::f32);
+
+                    current_f64_count -= 1;
+                    update_counter(&mut current_f32_count, &mut max_f32_count);
+                },
+                wast::Instruction::I64TruncF32U => {
+                    stack_sizes.pop();
+                    stack_sizes.push(StackType::i64);
+
+                    current_f32_count -= 1;
+                    update_counter(&mut current_i64_count, &mut max_i64_count);
+                },
+                wast::Instruction::I64TruncF32S => {
+                    stack_sizes.pop();
+                    stack_sizes.push(StackType::i64);
+
+                    current_f32_count -= 1;
+                    update_counter(&mut current_i64_count, &mut max_i64_count);
+                },
                 wast::Instruction::F64ConvertI32S => {
                     stack_sizes.pop();
                     stack_sizes.push(StackType::f64);
@@ -1061,6 +1145,13 @@ impl<'a> StackCtx {
 
                     current_i32_count -= 1;
                     update_counter(&mut current_f64_count, &mut max_f64_count);
+                },
+                wast::Instruction::F32ConvertI32U => {
+                    stack_sizes.pop();
+                    stack_sizes.push(StackType::f32);
+
+                    current_i32_count -= 1;
+                    update_counter(&mut current_f32_count, &mut max_f32_count);
                 },
                 wast::Instruction::F64ConvertI64U => {
                     stack_sizes.pop();

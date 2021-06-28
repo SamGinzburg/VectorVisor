@@ -15,6 +15,7 @@ mod vstack;
 mod fastcalls;
 mod compile_stats;
 mod cfg_optimizer;
+mod trap;
 
 use relops::*;
 use mem_interleave::*;
@@ -33,6 +34,7 @@ use vstack::*;
 use fastcalls::*;
 use compile_stats::*;
 use cfg_optimizer::*;
+use trap::*;
 
 use wast::Wat;
 use wast::parser::{self, ParseBuffer};
@@ -520,6 +522,36 @@ impl<'a> OpenCLCWriter<'_> {
                 stack_sizes.push(2);
                 emit_f64_add(self, stack_ctx, debug)
             },
+            wast::Instruction::F64Max => {
+                stack_sizes.pop();
+                stack_sizes.pop();
+                stack_sizes.push(2);
+                emit_f64_max(self, stack_ctx, debug)
+            },
+            wast::Instruction::F64Min => {
+                stack_sizes.pop();
+                stack_sizes.pop();
+                stack_sizes.push(2);
+                emit_f64_min(self, stack_ctx, debug)
+            },
+            wast::Instruction::F32Max => {
+                stack_sizes.pop();
+                stack_sizes.pop();
+                stack_sizes.push(1);
+                emit_f32_max(self, stack_ctx, debug)
+            },
+            wast::Instruction::F32Min => {
+                stack_sizes.pop();
+                stack_sizes.pop();
+                stack_sizes.push(1);
+                emit_f32_min(self, stack_ctx, debug)
+            },
+            wast::Instruction::F64Sub => {
+                stack_sizes.pop();
+                stack_sizes.pop();
+                stack_sizes.push(2);
+                emit_f64_sub(self, stack_ctx, debug)
+            },
             wast::Instruction::F32Add => {
                 stack_sizes.pop();
                 stack_sizes.pop();
@@ -592,11 +624,23 @@ impl<'a> OpenCLCWriter<'_> {
                 stack_sizes.push(1);
                 emit_f64_le(self, stack_ctx, debug)
             },
+            wast::Instruction::F64Ge => {
+                stack_sizes.pop();
+                stack_sizes.pop();
+                stack_sizes.push(1);
+                emit_f64_ge(self, stack_ctx, debug)
+            },
             wast::Instruction::F32Le => {
                 stack_sizes.pop();
                 stack_sizes.pop();
                 stack_sizes.push(1);
                 emit_f32_le(self, stack_ctx, debug)
+            },
+            wast::Instruction::F32Ge => {
+                stack_sizes.pop();
+                stack_sizes.pop();
+                stack_sizes.push(1);
+                emit_f32_ge(self, stack_ctx, debug)
             },
             wast::Instruction::I64LtU => {
                 stack_sizes.pop();
@@ -967,6 +1011,28 @@ impl<'a> OpenCLCWriter<'_> {
             wast::Instruction::I32ReinterpretF32 => {
                 emit_i32_reinterpret_f32(self, stack_ctx, debug)
             },
+            wast::Instruction::F64Ceil => {
+                emit_f64_ceil(self, stack_ctx, debug)
+            },
+            wast::Instruction::F32Ceil => {
+                emit_f32_ceil(self, stack_ctx, debug)
+            },
+            wast::Instruction::F64Floor => {
+                emit_f64_floor(self, stack_ctx, debug)
+            },
+            wast::Instruction::F32Floor => {
+                emit_f32_floor(self, stack_ctx, debug)
+            },
+            wast::Instruction::F64PromoteF32 => {
+                stack_sizes.pop();
+                stack_sizes.push(2);
+                emit_f64_promote_f32(self, stack_ctx, debug)
+            },
+            wast::Instruction::F32DemoteF64 => {
+                stack_sizes.pop();
+                stack_sizes.push(1);
+                emit_f32_demote_f64(self, stack_ctx, debug)
+            },
             wast::Instruction::F64ConvertI32S => {
                 stack_sizes.pop();
                 stack_sizes.push(2);
@@ -977,6 +1043,11 @@ impl<'a> OpenCLCWriter<'_> {
                 stack_sizes.push(2);
                 emit_f64_convert_i32u(self, stack_ctx, debug)
             },
+            wast::Instruction::F32ConvertI32U => {
+                stack_sizes.pop();
+                stack_sizes.push(1);
+                emit_f32_convert_i32u(self, stack_ctx, debug)
+            },
             wast::Instruction::F64ConvertI64U => {
                 stack_sizes.pop();
                 stack_sizes.push(2);
@@ -986,6 +1057,16 @@ impl<'a> OpenCLCWriter<'_> {
                 stack_sizes.pop();
                 stack_sizes.push(2);
                 emit_f64_convert_i64s(self, stack_ctx, debug)
+            },
+            wast::Instruction::I64TruncF32U => {
+                stack_sizes.pop();
+                stack_sizes.push(2);
+                emit_i64_trunc_f32_u(self, stack_ctx, debug)
+            },
+            wast::Instruction::I64TruncF32S => {
+                stack_sizes.pop();
+                stack_sizes.push(2);
+                emit_i64_trunc_f32_s(self, stack_ctx, debug)
             },
             wast::Instruction::I32Clz => {
                 stack_sizes.pop();
@@ -1059,7 +1140,7 @@ impl<'a> OpenCLCWriter<'_> {
             wast::Instruction::Unreachable => {
                 if is_fastcall {
                     // if we are in a fastcall, just dereference some invalid memory address
-                    String::from("\t*((unsigned long *)0x133713371337) = 0x42;\n")
+                    emit_trap(TrapCode::TrapUnreachable, true)
                 } else {
                     let skip_label = if debug {
                         false
@@ -1956,6 +2037,21 @@ r#"
 #endif
 // we always want this
 #pragma OPENCL EXTENSION cl_khr_byte_addressable_store : enable
+
+// Emit some utility macros
+
+#define FMIN(x, y)                                \
+   (((x) != (x)) ? NAN                            \
+  : ((y) != (y)) ? NAN                            \
+  : ((x) == 0 && (y) == 0) ? (signbit(x) ? x : y) \
+  : (x < y) ? x : y)
+
+#define FMAX(x, y)                                \
+   (((x) != (x)) ? NAN                            \
+  : ((y) != (y)) ? NAN                            \
+  : ((x) == 0 && (y) == 0) ? (signbit(x) ? y : x) \
+  : (x > y) ? x : y)
+
 "#).unwrap();
 
         // generate the read/write functions

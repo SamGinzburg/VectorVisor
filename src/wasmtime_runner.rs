@@ -78,7 +78,7 @@ impl WasmtimeRunner {
             match mem {
                 Ok(memory) => {
                     // Debug memory usage of functions
-                    //dbg!(memory.size());
+                    dbg!(memory.size());
 
                     let chan = self.vm_sender.get(self.vm_idx).unwrap();
                     unsafe {
