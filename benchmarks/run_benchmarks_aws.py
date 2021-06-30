@@ -17,9 +17,13 @@ userdata = """#cloud-config
      - yum install -y curl
      - yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
      - yum update -y
-     - yum install -y ocl-icd-2.2.12-1.el7.x86_64
+     - yum install -y ocl*
      - curl https://sh.rustup.rs -sSf | sh -s -- -y
-""" % region   
+     - ~/.cargo/bin/rustup target add wasm32-wasi
+     - git clone https://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:x-oauth-basic@github.com/SamGinzburg/wasm2opencl.git
+     - cd /tmp/wasm2opencl/
+     - ~/.cargo/bin/cargo build --release
+""" % region
 
 
 
@@ -62,7 +66,17 @@ while True:
 
 ssm_client = boto3.client('ssm')
 
-build_command = "cd ~ && git clone https://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:x-oauth-basic@github.com/SamGinzburg/wasm2opencl.git && cd wasm2opencl/ && cargo build --release"
+build_command = """#!/bin/bash
+sudo su
+
+x=$(cloud-init status)
+until [ "$x" == "status: done" ]; do
+  sleep 10
+  x=$(cloud-init status)
+done
+
+/tmp/wasm2opencl/target/release/wasm2opencl --help
+"""
 
 while True:
     try:
