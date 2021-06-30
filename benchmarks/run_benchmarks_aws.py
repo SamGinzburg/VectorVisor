@@ -3,6 +3,7 @@ import time
 
 
 ec2 = boto3.resource('ec2')
+ec2_client = boto3.client('ec2')
 
 region = "us-east-2"
 userdata = """#cloud-config
@@ -11,6 +12,13 @@ userdata = """#cloud-config
      - cd /tmp
      - curl https://amazon-ssm-%s.s3.amazonaws.com/latest/linux_amd64/amazon-ssm-agent.rpm -o amazon-ssm-agent.rpm
      - yum install -y amazon-ssm-agent.rpm
+     - yum install -y git
+     - yum install -y gcc
+     - yum install -y curl
+     - yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+     - yum update -y
+     - yum install -y ocl-icd-2.2.12-1.el7.x86_64
+     - curl https://sh.rustup.rs -sSf | sh -s -- -y
 """ % region   
 
 
@@ -39,21 +47,51 @@ print ("now waiting...")
 instance[0].wait_until_running()
 print ("Instance is now running")
 
+# Wait until initialization is complete
+while True:
+    resp = ec2_client.describe_instance_status(InstanceIds=[instance[0].id])
+    done_waiting = True
+    for status in resp['InstanceStatuses']:
+        if status['InstanceStatus']['Status'] != 'ok':
+            done_waiting = False
+    if done_waiting:
+        break
+    else:
+        print ("Still waiting on allocated VMs to finish waiting...")
+        time.sleep(10)
+
 ssm_client = boto3.client('ssm')
 
-response = ssm_client.send_command(
-            InstanceIds=[instance[0].id],
-            DocumentName="AWS-RunShellScript",
-            Parameters={'commands': ['ls -lah']}, )
+build_command = "cd ~ && git clone https://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:x-oauth-basic@github.com/SamGinzburg/wasm2opencl.git && cd wasm2opencl/ && cargo build --release"
+
+while True:
+    try:
+        response = ssm_client.send_command(
+                InstanceIds=[instance[0].id],
+                DocumentName="AWS-RunShellScript",
+                Parameters={'commands': [build_command, ]}, )
+        break
+    except:
+        print ("Failed to send command, retrying...")
+        time.sleep(10)
 
 command_id = response['Command']['CommandId']
 
 print ("SSM command ID: " + str(command_id))
 
-# Needs to be done for each instance
-output = ssm_client.get_command_invocation(
-      CommandId=command_id,
-      InstanceId=str(instance[0].id),
-    )
+time.sleep(20)
 
-print (output)
+# Needs to be done for each instance
+while True:
+    output = ssm_client.get_command_invocation(
+          CommandId=command_id,
+          InstanceId=str(instance[0].id),
+        )
+    if output['Status'] == 'InProgress':
+        print ("Command is still running...")
+        time.sleep(10)
+    else:
+        print ("Command has completed with status: " + str(output['Status']))
+        print (output)
+        break
+
