@@ -74,8 +74,8 @@ print ("Instances are now running")
 instance[0].load()
 gpu_instance[0].load()
 
-print("CPU instance private addr: ", instance.private_dns_name)
-print("GPU instance private addr: ", gpu_instance.private_dns_name)
+print("CPU instance private addr: ", instance[0].private_dns_name)
+print("GPU instance private addr: ", gpu_instance[0].private_dns_name)
 
 
 # Wait until initialization is complete
@@ -132,7 +132,7 @@ until [ "$x" == "status: done" ]; do
 done
 
 go run /tmp/wasm2opencl/benchmarks/json-compression-lz4/run_json_lz4_bench.go {addr} 8000 4096 1 60
-""".format(addr=gpu_instance.private_dns_name)
+""".format(addr=gpu_instance[0].private_dns_name)
 
 while True:
     try:

@@ -503,6 +503,13 @@ impl<'a> StackCtx {
                     current_f64_count -= 2;
                     update_counter(&mut current_i32_count, &mut max_i32_count);
                 },
+                wast::Instruction::F64Gt => {
+                    stack_sizes.pop();
+                    stack_sizes.pop();
+                    stack_sizes.push(StackType::i32);
+                    current_f64_count -= 2;
+                    update_counter(&mut current_i32_count, &mut max_i32_count);
+                },
                 wast::Instruction::F32Gt => {
                     stack_sizes.pop();
                     stack_sizes.pop();
