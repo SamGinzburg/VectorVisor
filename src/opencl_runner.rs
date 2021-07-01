@@ -1629,9 +1629,25 @@ impl OpenCLRunner {
             println!("responses in channel: {}", result_receiver.len());
 
             // now block until all of the hypercalls have been successfully dispatched
+            // first, check for how many hcalls we have to wait on
+            let mut number_hcalls_blocking = 0;
+            for hypercall_idx in 0..hypercall_num_temp.len() {
+                match hypercall_num_temp[hypercall_idx] {
+                    // We are performing async responses for all serverless_response calls
+                    10000 => {
+                        hypercall_num_temp[hypercall_idx] = -1;
+                        hypercall_retval_temp[hypercall_idx] = 0;
+                    },
+                    _ => {
+                        number_hcalls_blocking += 1;
+                    },
+                };
+            }
+            
+            
             let mut no_resp_counter = 0;
             let mut total_recv = 0;
-            for _idx in 0..self.num_vms {
+            for _idx in 0..number_hcalls_blocking {
                 //dbg!(&idx);
                 let start_recv = std::time::Instant::now();
                 let result = result_receiver.recv().unwrap();
@@ -1714,7 +1730,7 @@ impl OpenCLRunner {
                     ocl::core::enqueue_write_buffer(&queue, &buffers.entry, false, 0, &mut entry_point_temp, None::<Event>, None::<&mut Event>).unwrap();
                 }
                 ocl::core::enqueue_write_buffer(&queue, &buffers.hypercall_num, false, 0, &mut hypercall_num_temp, None::<Event>, None::<&mut Event>).unwrap();
-                ocl::core::enqueue_write_buffer(&queue, &hcall_retval_buffer, true, 0, &mut hypercall_retval_temp, None::<Event>, None::<&mut Event>).unwrap();
+                ocl::core::enqueue_write_buffer(&queue, &hcall_retval_buffer, false, 0, &mut hypercall_retval_temp, None::<Event>, None::<&mut Event>).unwrap();
             }
             let vmm_post_overhead_end = std::time::Instant::now();
             let write_end = std::time::Instant::now();

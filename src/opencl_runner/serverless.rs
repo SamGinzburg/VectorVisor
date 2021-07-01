@@ -77,9 +77,12 @@ impl Serverless {
 
         send_chan.lock().unwrap().blocking_send((resp_buf, resp_buf_len, on_device_time, queue_submit_time, queue_submit_count, count)).unwrap();
 
+        // Perform async replies, no need to block in the critical path
+        /*
         sender.send({
             HyperCallResult::new(0, hypercall.vm_id, WasiSyscalls::ServerlessResponse)
         }).unwrap();
+        */
     }
 
 }

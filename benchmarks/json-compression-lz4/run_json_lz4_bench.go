@@ -56,7 +56,7 @@ func RandString(n int) string {
     return string(b)
 }
 
-func IssueRequests(ip string, port int, req [][]byte, exec_time chan<-float64, queue_time chan<-float64, submit_count chan<-float64, unique_fns chan<-float64, end_chan chan bool) {
+func IssueRequests(ip string, port int, req [][]byte, exec_time chan<-float64, latency chan<-float64, queue_time chan<-float64, submit_count chan<-float64, unique_fns chan<-float64, end_chan chan bool) {
 	addr := fmt.Sprintf("http://%s:%d/batch_submit/", ip, port)
 	http_request, _ := http.NewRequest("GET", addr, nil)
 	http_request.Header.Add("Content-Type", "application/json; charset=utf-8")
@@ -101,6 +101,11 @@ func IssueRequests(ip string, port int, req [][]byte, exec_time chan<-float64, q
 		num_unique_fns_called := m["num_unique_fns_called"].(float64)
 		select {
 			case exec_time <- on_device_compute_time:
+			default:
+				return;
+		}
+		select {
+			case latency <- float64(read_secs):
 			default:
 				return;
 		}
@@ -187,6 +192,7 @@ func main() {
 
 
 	ch_exec_time := make(chan float64, 1000000)
+	ch_latency := make(chan float64, 1000000)
 	ch_queue_time := make(chan float64, 1000000)
 	ch_submit := make(chan float64, 1000000)
 	ch_unique_fns := make(chan float64, 1000000)
@@ -196,7 +202,7 @@ func main() {
 	bench_timer := time.NewTimer(benchmark_duration)
 	for vmgroup := 0 ; vmgroup < num_vmgroups; vmgroup++ {
 		for i := 0; i < num_vms; i++ {
-			go IssueRequests(os.Args[1], port+vmgroup, reqs, ch_exec_time, ch_queue_time, ch_submit, ch_unique_fns, termination_chan)
+			go IssueRequests(os.Args[1], port+vmgroup, reqs, ch_exec_time, ch_latency, ch_queue_time, ch_submit, ch_unique_fns, termination_chan)
 		}
 	}
 
@@ -204,11 +210,13 @@ func main() {
 	batches_completed := len(ch_exec_time)
 	fmt.Printf("Benchmark complete: %d requests completed\n", batches_completed)
 	exec_time := 0.0
+	latency := 0.0
 	queue_time := 0.0
 	submit_count := 0.0
 	unique_fns := 0.0
 	for i := 0; i < batches_completed; i++ {
 		exec_time += <-ch_exec_time
+		latency += <-ch_latency
 		queue_time += <-ch_queue_time
 		submit_count += <-ch_submit
 		unique_fns += <-ch_unique_fns
@@ -216,6 +224,7 @@ func main() {
 
 	duration := float64(benchmark_duration.Seconds())
 	exec_time = exec_time / float64(batches_completed)
+	latency = latency / float64(batches_completed)
 	queue_time = queue_time / float64(batches_completed)
 	submit_count = submit_count / float64(batches_completed)
 	unique_fns = unique_fns / float64(batches_completed)
@@ -229,6 +238,7 @@ func main() {
 	total_rps := (float64(batches_completed)) / duration
 	fmt.Printf("Total RPS: %f\n", total_rps)
 	fmt.Printf("On device execution time: %f\n", exec_time)
+	fmt.Printf("Average request latency: %f\n", latency)
 	fmt.Printf("queue submit time: %f\n", queue_time)
 	fmt.Printf("submit count: %f\n", submit_count)
 	fmt.Printf("unique fns: %f\n", unique_fns)
