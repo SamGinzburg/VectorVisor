@@ -189,7 +189,7 @@ func main() {
 		}
 	}
 	fmt.Printf("server is active... starting benchmark\n")
-
+	time.Sleep(5000 * time.Millisecond)
 
 	ch_exec_time := make(chan float64, 1000000)
 	ch_latency := make(chan float64, 1000000)
