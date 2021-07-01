@@ -51,11 +51,14 @@ impl warp::reject::Reject for NoVmAvailable {}
 impl BatchSubmitServer {
 
     async fn response(body: bytes::Bytes, vm_idx: usize, vm_queue: Arc<VmQueue>, sender: Arc<Vec<Mutex<Sender<(Vec<u8>, usize)>>>>, receiver: Arc<Vec<Mutex<Receiver<(Vec<u8>, usize, u64, u64, u64, u64)>>>>) -> Result<impl warp::Reply, warp::Rejection> {
-        // Get an available VM first
-        let tx: &Mutex<Sender<(Vec<u8>, usize)>> = (*sender).get(vm_idx).unwrap();
-        let rx: &Mutex<Receiver<(Vec<u8>, usize, u64, u64, u64, u64)>> = (*receiver).get(vm_idx as usize).unwrap();
 
         /*
+        dbg!(&vm_idx);
+        // Get an available VM first
+        let tx: &Mutex<Sender<(Vec<u8>, usize)>> = (*sender).get(vm_idx).unwrap();
+        let rx: &Mutex<Receiver<(Vec<u8>, usize, u64, u64, u64, u64)>> = (*receiver).get(vm_idx).unwrap();
+        */
+
         let (tx, rx, vm_idx) = match vm_queue.try_pop() {
             Some(idx) => {
                 ((*sender).get(idx).unwrap(), (*receiver).get(idx).unwrap(), idx)
@@ -63,11 +66,12 @@ impl BatchSubmitServer {
             // TODO, if we have no available GPU workers, try using backup CPU resources
             None => return Err(warp::reject::custom(NoVmAvailable)),
         };
-        */
 
         // Send the request body to the selected VM
         // We can't await on the send because we have the mutex acquired here
-        tx.lock().await.send((body.to_vec(), body.len())).await.unwrap();
+        let sender = tx.lock().await;
+        
+        sender.send((body.to_vec(), body.len())).await.unwrap();
 
         // Wait on response from the VM
         let (resp, len, on_dev_time, queue_submit_time, num_queue_submits, num_unique_fns) = match rx.lock().await.recv().await {
@@ -90,7 +94,7 @@ impl BatchSubmitServer {
         
         tokio::runtime::Builder::new_multi_thread()
             //.worker_threads(4)
-            .worker_threads(num_cpus::get())
+            .worker_threads(num_cpus::get() * 2)
             .thread_stack_size(1024 * 256) // 256KiB per thread should be enough
             .enable_all()
             .build()

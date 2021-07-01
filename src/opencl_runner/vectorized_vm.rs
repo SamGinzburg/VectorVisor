@@ -226,6 +226,13 @@ impl VectorizedVM {
             WasiSyscalls::RandomGet => {
                 Random::hypercall_random_get(&self.ctx, self, hypercall, sender);
             },
+            /*
+            _ => {
+                sender.send({
+                    HyperCallResult::new(-1, hypercall.vm_id, WasiSyscalls::InvalidHyperCallNum)
+                }).unwrap();
+            },
+            */
             _ => panic!("Unsupported hypercall invoked! {:?}", hypercall),
         }
 
