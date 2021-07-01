@@ -2,6 +2,7 @@ use std::str::from_utf8;
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::sync::Arc;
+use std::sync::Mutex as SyncMutex;
 use std::net::{SocketAddr};
 
 use tokio::sync::mpsc::{Sender, Receiver};
@@ -88,7 +89,7 @@ impl BatchSubmitServer {
         Ok(warp::reply::json(&final_response).into_response())
     }
 
-    pub fn start_server(_hcall_buf_size: usize, sender: Arc<Vec<Mutex<Sender<(Vec<u8>, usize)>>>>, receiver: Arc<Vec<Mutex<Receiver<(Vec<u8>, usize, u64, u64, u64, u64)>>>>, num_vms: u32, server_ip: String, server_port: String) -> () {
+    pub fn start_server(_hcall_buf_size: usize, is_active: Arc<SyncMutex<bool>>, sender: Arc<Vec<Mutex<Sender<(Vec<u8>, usize)>>>>, receiver: Arc<Vec<Mutex<Receiver<(Vec<u8>, usize, u64, u64, u64, u64)>>>>, num_vms: u32, server_ip: String, server_port: String) -> () {
         tokio::runtime::Builder::new_multi_thread()
             //.worker_threads(4)
             .worker_threads(num_cpus::get())
@@ -107,11 +108,23 @@ impl BatchSubmitServer {
                     let warp_senders = warp::any().map(move || Arc::clone(&sender));
                     let warp_receivers = warp::any().map(move || Arc::clone(&receiver));
 
-                    let hello = warp::path!("batch_submit")
-                                .and(warp::body::bytes()).and(warp_queue).and(warp_senders).and(warp_receivers).and_then(BatchSubmitServer::response);
+                    let batch_submit = warp::path!("batch_submit")
+                                        .and(warp::body::bytes()).and(warp_queue).and(warp_senders).and(warp_receivers).and_then(BatchSubmitServer::response);
+
+
+                    let is_active_param = warp::any().map(move || Arc::clone(&is_active));
+                    let active = warp::path!("is_active").and(is_active_param).map(|is_active: Arc<SyncMutex<bool>>| {
+                        let temp = is_active.lock().unwrap();
+                        format!("{}", temp)
+                    });
+
+                    let terminate = warp::path!("terminate").map(|| {
+                        std::process::exit(0);
+                        format!("terminate")
+                    });
 
                     let socket: SocketAddr = format!("{}:{}", server_ip, server_port).parse().unwrap();
-                    warp::serve(hello).run(socket).await;
+                    warp::serve(batch_submit.or(active).or(terminate)).run(socket).await;
             }});
     }
 }

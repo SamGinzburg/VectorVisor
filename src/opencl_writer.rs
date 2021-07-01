@@ -2195,7 +2195,7 @@ r#"
 
         // Compute the function groups, we will then enumerate the groups to emit the functions
         // kernel_partition_mapping get the partition ID from a function idx
-        let partitions = form_partitions(20, self.func_map.keys().collect(), &_fast_function_set, &func_mapping, &self.imports_map, &mut kernel_compile_stats);
+        let partitions = form_partitions(100, self.func_map.keys().collect(), &_fast_function_set, &func_mapping, &self.imports_map, &mut kernel_compile_stats);
 
         dbg!(&partitions);
 

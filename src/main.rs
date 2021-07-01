@@ -581,13 +581,15 @@ fn main() {
             let server_recv_vec_arc = Arc::new(server_recv_vec);
 
             // we don't need to join the server handle, this will be active as long as the runtime is
+            let is_active = Arc::new(Mutex::new(false));
+
             if serverless {
                 println!("Starting server on: {}:{}/batch_submit", batch_submit_ip.clone(), (batch_submit_port+idx).to_string());
                
                 let batch_submit_ip_clone = batch_submit_ip.clone();
                 let port = (batch_submit_port + idx).to_string();
                 thread::spawn(move || {
-                    BatchSubmitServer::start_server(hcall_size, server_sender_vec_arc, server_recv_vec_arc, num_vms, batch_submit_ip_clone.clone(), port.clone());
+                    BatchSubmitServer::start_server(hcall_size, is_active, server_sender_vec_arc, server_recv_vec_arc, num_vms, batch_submit_ip_clone.clone(), port.clone());
                 });
             }
 
@@ -635,13 +637,14 @@ fn main() {
 
         let vm_sender_vec_arc = Arc::new(vm_sender_vec);
         let server_recv_vec_arc = Arc::new(server_recv_vec);
+        let is_active = Arc::new(Mutex::new(true));
 
         // For each VM create a tracking context (contains sender/receiver pair for each VM)
     
         if serverless {
             println!("Starting server on: {}:{}/batch_submit", batch_submit_ip.clone(), batch_submit_port.to_string());
             thread_pool.spawn(move || {
-                BatchSubmitServer::start_server(hcall_size, server_sender_vec_arc, server_recv_vec_arc, num_threads.try_into().unwrap(), batch_submit_ip, batch_submit_port.to_string());
+                BatchSubmitServer::start_server(hcall_size, is_active, server_sender_vec_arc, server_recv_vec_arc, num_threads.try_into().unwrap(), batch_submit_ip, batch_submit_port.to_string());
             });
         }
 
