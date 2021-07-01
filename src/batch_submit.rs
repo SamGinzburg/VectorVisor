@@ -4,6 +4,7 @@ use std::convert::TryInto;
 use std::sync::Arc;
 use std::sync::Mutex as SyncMutex;
 use std::net::{SocketAddr};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use tokio::sync::mpsc::{Sender, Receiver};
 use tokio::sync::Mutex;
@@ -49,14 +50,12 @@ impl warp::reject::Reject for NoVmAvailable {}
 
 impl BatchSubmitServer {
 
-    async fn response(body: bytes::Bytes, vm_queue: Arc<VmQueue>, sender: Arc<Vec<Mutex<Sender<(Vec<u8>, usize)>>>>, receiver: Arc<Vec<Mutex<Receiver<(Vec<u8>, usize, u64, u64, u64, u64)>>>>) -> Result<impl warp::Reply, warp::Rejection> {
+    async fn response(body: bytes::Bytes, vm_idx: usize, vm_queue: Arc<VmQueue>, sender: Arc<Vec<Mutex<Sender<(Vec<u8>, usize)>>>>, receiver: Arc<Vec<Mutex<Receiver<(Vec<u8>, usize, u64, u64, u64, u64)>>>>) -> Result<impl warp::Reply, warp::Rejection> {
         // Get an available VM first
-        /*
-        let vm_idx = vm_queue.pop().await;
         let tx: &Mutex<Sender<(Vec<u8>, usize)>> = (*sender).get(vm_idx).unwrap();
-        let rx: &Mutex<Receiver<(Vec<u8>, usize, u64, u64, u64, u64)>> = (*receiver).get(vm_idx).unwrap();
-        */
+        let rx: &Mutex<Receiver<(Vec<u8>, usize, u64, u64, u64, u64)>> = (*receiver).get(vm_idx as usize).unwrap();
 
+        /*
         let (tx, rx, vm_idx) = match vm_queue.try_pop() {
             Some(idx) => {
                 ((*sender).get(idx).unwrap(), (*receiver).get(idx).unwrap(), idx)
@@ -64,6 +63,7 @@ impl BatchSubmitServer {
             // TODO, if we have no available GPU workers, try using backup CPU resources
             None => return Err(warp::reject::custom(NoVmAvailable)),
         };
+        */
 
         // Send the request body to the selected VM
         // We can't await on the send because we have the mutex acquired here
@@ -83,13 +83,11 @@ impl BatchSubmitServer {
             num_unique_fns_called: num_unique_fns,
         };
 
-        // Return the VM to the pool
-        vm_queue.push(vm_idx).await;
-
         Ok(warp::reply::json(&final_response).into_response())
     }
 
     pub fn start_server(_hcall_buf_size: usize, is_active: Arc<SyncMutex<bool>>, sender: Arc<Vec<Mutex<Sender<(Vec<u8>, usize)>>>>, receiver: Arc<Vec<Mutex<Receiver<(Vec<u8>, usize, u64, u64, u64, u64)>>>>, num_vms: u32, server_ip: String, server_port: String) -> () {
+        
         tokio::runtime::Builder::new_multi_thread()
             //.worker_threads(4)
             .worker_threads(num_cpus::get())
@@ -108,8 +106,17 @@ impl BatchSubmitServer {
                     let warp_senders = warp::any().map(move || Arc::clone(&sender));
                     let warp_receivers = warp::any().map(move || Arc::clone(&receiver));
 
+                    let vm_idx_counter = Arc::new(AtomicU64::new(0));
+
+                    let num_vms_u64: u64 = num_vms as u64;
+                    let warp_scheduler = warp::any().map(move || {
+                        let current_idx = vm_idx_counter.fetch_add(1, Ordering::SeqCst);
+
+                        (current_idx % num_vms_u64) as usize
+                    });
+
                     let batch_submit = warp::path!("batch_submit")
-                                        .and(warp::body::bytes()).and(warp_queue).and(warp_senders).and(warp_receivers).and_then(BatchSubmitServer::response);
+                                        .and(warp::body::bytes()).and(warp_scheduler).and(warp_queue).and(warp_senders).and(warp_receivers).and_then(BatchSubmitServer::response);
 
 
                     let is_active_param = warp::any().map(move || Arc::clone(&is_active));
