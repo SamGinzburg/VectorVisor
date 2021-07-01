@@ -14,7 +14,7 @@ userdata = """#cloud-config
      - yum install -y amazon-ssm-agent.rpm
      - yum install -y git
      - yum install -y gcc
-     - yum install -y go
+     - yum install -y golang
      - yum install -y curl
      - yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
      - yum update -y
@@ -102,7 +102,7 @@ until [ "$x" == "status: done" ]; do
   x=$(cloud-init status)
 done
 
-/tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/json-compression-lz4/target/wasm32-wasi/release/json-compression.wasm --heap=3145728 --stack=262144 --hcallsize=131072 --partition=true --serverless=true --vmcount=4096
+/tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/json-compression-lz4/target/wasm32-wasi/release/json-compression.wasm --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=131072 --partition=true --serverless=true --vmcount=4096
 """
 
 while True:
@@ -124,6 +124,13 @@ print ("running SSM command ID to run json-compression-lz4 benchmark: " + str(co
 
 run_invoker = """#!/bin/bash
 sudo su
+
+mkdir -p ~/gocache/
+mkdir -p ~/xdg/
+export GOCACHE=~/gocache/
+export XDG_CACHE_HOME=~/xdg/
+
+go env
 
 x=$(cloud-init status)
 until [ "$x" == "status: done" ]; do
