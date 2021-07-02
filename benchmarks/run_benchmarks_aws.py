@@ -44,7 +44,7 @@ Create VMs for the test
 # ImageID = Ubuntu Server 18.04 LTS
 # Specific to us-east-2
 gpu_instance = ec2.create_instances(ImageId='ami-0414f41139d36fb50',
-                                InstanceType="g4dn.xlarge",
+                                InstanceType="g4dn.2xlarge",
                                 MinCount=1,
                                 MaxCount=1,
                                 UserData=userdata,
@@ -139,6 +139,8 @@ until [ "$x" == "status: done" ]; do
 done
 
 go run /tmp/wasm2opencl/benchmarks/json-compression-lz4/run_json_lz4_bench.go {addr} 8000 4096 1 60
+
+go run /tmp/wasm2opencl/benchmarks/json-compression-lz4/run_json_lz4_bench.go {addr} 8000 4096 1 60
 """.format(addr=gpu_instance[0].private_dns_name)
 
 while True:
@@ -172,3 +174,4 @@ while True:
         print (output)
         break
 
+ec2.instances.filter(InstanceIds = [instance[0].id, gpu_instance[0].id]).terminate()
