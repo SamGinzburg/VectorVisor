@@ -36,13 +36,41 @@ userdata = """#cloud-config
 """ % region
 
 
+def run_command(command, command_name, instance_id):
+    while True:
+        try:
+            response = ssm_client.send_command(
+                    InstanceIds=[instance_id],
+                    DocumentName="AWS-RunShellScript",
+                    Parameters={'commands': [command, ]}, )
+            break
+        except:
+            print ("Failed to send [run_json_lz4_command] command, retrying...")
+            time.sleep(10)
+
+    command_id = response['Command']['CommandId']
+
+    print ("running SSM command ID to run {command_name}: {id}".format(command_name=command_name, id=command_id))
+    return command_id
+
+def block_on_command(command_id, instance_id):
+    while True:
+        output = ssm_client.get_command_invocation(
+            CommandId=command_id,
+            InstanceId=str(instance_id),
+            )
+        if output['Status'] == 'InProgress':
+            print ("Command is still running...")
+            time.sleep(10)
+        else:
+            print ("Command has completed with status: " + str(output['Status']))
+            return output
 
 """
 Create VMs for the test
 1 GPU VM, 1 CPU VM, and 1 VM for issuing requests
 """
-# ImageID = Ubuntu Server 18.04 LTS
-# Specific to us-east-2
+# AMIs specific to us-east-2
 gpu_instance = ec2.create_instances(ImageId='ami-0414f41139d36fb50',
                                 InstanceType="g4dn.2xlarge",
                                 MinCount=1,
@@ -53,7 +81,18 @@ gpu_instance = ec2.create_instances(ImageId='ami-0414f41139d36fb50',
                                     #'Name': "ec2-ssm"
                                 })
 
-instance = ec2.create_instances(ImageId='ami-0277b52859bac6f4b',
+# cpu wasmtime instance
+cpu_bench_instance = ec2.create_instances(ImageId='ami-0277b52859bac6f4b',
+                                InstanceType="c5.large",
+                                MinCount=1,
+                                MaxCount=1,
+                                UserData=userdata,
+                                IamInstanceProfile={
+                                    'Arn': 'arn:aws:iam::573062721377:instance-profile/ec2-ssm',
+                                    #'Name': "ec2-ssm"
+                                })
+
+invoker_instance = ec2.create_instances(ImageId='ami-0277b52859bac6f4b',
                                 InstanceType="t2.medium",
                                 MinCount=1,
                                 MaxCount=1,
@@ -63,24 +102,31 @@ instance = ec2.create_instances(ImageId='ami-0277b52859bac6f4b',
                                     #'Name': "ec2-ssm"
                                 })
 
-print ("Started: " + str(instance) + " with id: " + str(instance[0].id))
+print ("Started: " + str(invoker_instance) + " with id: " + str(invoker_instance[0].id))
 print ("Started: " + str(gpu_instance) + " with id: " + str(gpu_instance[0].id))
+print ("Started: " + str(cpu_bench_instance) + " with id: " + str(cpu_bench_instance[0].id))
+
+instance_id_list = [invoker_instance[0].id, gpu_instance[0].id, cpu_bench_instance[0].id]
+print ("Instance id list: ", instance_id_list)
 
 print ("now waiting...")
-instance[0].wait_until_running()
+invoker_instance[0].wait_until_running()
 gpu_instance[0].wait_until_running()
+cpu_bench_instance[0].wait_until_running()
 print ("Instances are now running")
 
-instance[0].load()
+invoker_instance[0].load()
 gpu_instance[0].load()
+cpu_bench_instance[0].load()
 
-print("CPU instance private addr: ", instance[0].private_dns_name)
+print("CPU instance private addr: ", invoker_instance[0].private_dns_name)
 print("GPU instance private addr: ", gpu_instance[0].private_dns_name)
+print("CPU bench instance private addr: ", cpu_bench_instance[0].private_dns_name)
 
 
 # Wait until initialization is complete
 while True:
-    resp = ec2_client.describe_instance_status(InstanceIds=[instance[0].id])
+    resp = ec2_client.describe_instance_status(InstanceIds=instance_id_list)
     done_waiting = True
     for status in resp['InstanceStatuses']:
         if status['InstanceStatus']['Status'] != 'ok':
@@ -92,6 +138,20 @@ while True:
         time.sleep(10)
 
 ssm_client = boto3.client('ssm')
+
+run_json_lz4_command_wasmtime = """#!/bin/bash
+sudo su
+
+x=$(cloud-init status)
+until [ "$x" == "status: done" ]; do
+  sleep 10
+  x=$(cloud-init status)
+done
+
+/tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/json-compression-lz4/target/wasm32-wasi/release/json-compression.wasm --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=131072 --partition=true --serverless=true --vmcount=4096 --wasmtime=true
+"""
+
+run_command(run_json_lz4_command_wasmtime, "run_json_lz4_command_wasmtime", cpu_bench_instance[0].id)
 
 run_json_lz4_command = """#!/bin/bash
 sudo su
@@ -105,20 +165,10 @@ done
 /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/json-compression-lz4/target/wasm32-wasi/release/json-compression.wasm --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=131072 --partition=true --serverless=true --vmcount=4096
 """
 
-while True:
-    try:
-        response = ssm_client.send_command(
-                InstanceIds=[gpu_instance[0].id],
-                DocumentName="AWS-RunShellScript",
-                Parameters={'commands': [run_json_lz4_command, ]}, )
-        break
-    except:
-        print ("Failed to send [run_json_lz4_command] command, retrying...")
-        time.sleep(10)
 
-command_id = response['Command']['CommandId']
+run_command(run_json_lz4_command, "run_json_lz4_command", gpu_instance[0].id)
 
-print ("running SSM command ID to run json-compression-lz4 benchmark: " + str(command_id))
+
 
 # Now set up the invoker
 
@@ -143,35 +193,50 @@ go run /tmp/wasm2opencl/benchmarks/json-compression-lz4/run_json_lz4_bench.go {a
 go run /tmp/wasm2opencl/benchmarks/json-compression-lz4/run_json_lz4_bench.go {addr} 8000 4096 1 60
 """.format(addr=gpu_instance[0].private_dns_name)
 
-while True:
-    try:
-        response = ssm_client.send_command(
-                InstanceIds=[instance[0].id],
-                DocumentName="AWS-RunShellScript",
-                Parameters={'commands': [run_invoker, ]}, )
-        break
-    except:
-        print ("Failed to send [invoker json lz4] command, retrying...")
-        time.sleep(10)
 
-command_id = response['Command']['CommandId']
-
-print ("running SSM command ID to run the invoker for the json-lz4 benchmark: " + str(command_id))
+command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
 
 time.sleep(20)
 
-# Needs to be done for each instance
-while True:
-    output = ssm_client.get_command_invocation(
-          CommandId=command_id,
-          InstanceId=str(instance[0].id),
-        )
-    if output['Status'] == 'InProgress':
-        print ("Command is still running...")
-        time.sleep(10)
-    else:
-        print ("Command has completed with status: " + str(output['Status']))
-        print (output)
-        break
+# Block until benchmark is complete
+output = block_on_command(command_id, invoker_instance[0].id)
+print (output)
 
-ec2.instances.filter(InstanceIds = [instance[0].id, gpu_instance[0].id]).terminate()
+# save output
+with open("gpu_bench.txt", "w") as text_file:
+    text_file.write(str(output))
+
+run_invoker_wasmtime = """#!/bin/bash
+sudo su
+
+mkdir -p ~/gocache/
+mkdir -p ~/xdg/
+export GOCACHE=~/gocache/
+export XDG_CACHE_HOME=~/xdg/
+
+go env
+
+x=$(cloud-init status)
+until [ "$x" == "status: done" ]; do
+  sleep 10
+  x=$(cloud-init status)
+done
+
+go run /tmp/wasm2opencl/benchmarks/json-compression-lz4/run_json_lz4_bench.go {addr} 8000 4096 1 60
+
+go run /tmp/wasm2opencl/benchmarks/json-compression-lz4/run_json_lz4_bench.go {addr} 8000 4096 1 60
+""".format(addr=cpu_bench_instance[0].private_dns_name)
+
+command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
+
+time.sleep(20)
+
+# Block until benchmark is complete
+output = block_on_command(command_id, invoker_instance[0].id)
+print (output)
+# save output
+with open("cpu_bench.txt", "w") as text_file:
+    text_file.write(str(output))
+
+# clean up all instances at end
+ec2.instances.filter(InstanceIds = instance_id_list).terminate()
