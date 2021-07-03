@@ -156,10 +156,15 @@ func main() {
 		os.Exit(2)
 	}
 
+	input_size, err := strconv.Atoi(os.Args[6])
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(2)
+	}
 
 	reqs := make([][]byte, NUM_PARAMS)
 	for i := 0; i < NUM_PARAMS; i++ {
-		p := payload{Text: RandString(1024 * 64)}
+		p := payload{Text: RandString(1024 * input_size)}
 		request_body, _ := json.Marshal(p)
 		reqs[i] = request_body
 	}

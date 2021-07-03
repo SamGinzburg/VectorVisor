@@ -1,7 +1,6 @@
 import boto3
 import time
 
-
 ec2 = boto3.resource('ec2')
 ec2_client = boto3.client('ec2')
 
@@ -69,10 +68,15 @@ def block_on_command(command_id, instance_id):
 """
 Create VMs for the test
 1 GPU VM, 1 CPU VM, and 1 VM for issuing requests
+
+g4dn.xlarge  => 1 T4, 16GiB memory,  4 vCPU
+g4dn.4xlarge => 1 T4, 16GiB memory, 16 vCPU
+p3.2xlarge   => 1 V100, 16GiB memory, 8 vCPU
+
 """
 # AMIs specific to us-east-2
 gpu_instance = ec2.create_instances(ImageId='ami-0414f41139d36fb50',
-                                InstanceType="g4dn.2xlarge",
+                                InstanceType="g4dn.xlarge",
                                 MinCount=1,
                                 MaxCount=1,
                                 UserData=userdata,
@@ -93,7 +97,7 @@ cpu_bench_instance = ec2.create_instances(ImageId='ami-0277b52859bac6f4b',
                                 })
 
 invoker_instance = ec2.create_instances(ImageId='ami-0277b52859bac6f4b',
-                                InstanceType="t2.medium",
+                                InstanceType="t2.2xlarge",
                                 MinCount=1,
                                 MaxCount=1,
                                 UserData=userdata,
@@ -148,7 +152,7 @@ until [ "$x" == "status: done" ]; do
   x=$(cloud-init status)
 done
 
-/tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/json-compression-lz4/target/wasm32-wasi/release/json-compression.wasm --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=131072 --partition=true --serverless=true --vmcount=4096 --wasmtime=true
+/tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/json-compression-lz4/target/wasm32-wasi/release/json-compression.wasm --ip=0.0.0.0 --heap=5242880 --stack=262144 --hcallsize=524288 --partition=true --serverless=true --vmcount=2048 --wasmtime=true
 """
 
 run_command(run_json_lz4_command_wasmtime, "run_json_lz4_command_wasmtime", cpu_bench_instance[0].id)
@@ -162,7 +166,7 @@ until [ "$x" == "status: done" ]; do
   x=$(cloud-init status)
 done
 
-/tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/json-compression-lz4/target/wasm32-wasi/release/json-compression.wasm --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=131072 --partition=true --serverless=true --vmcount=4096
+/tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/json-compression-lz4/target/wasm32-wasi/release/json-compression.wasm --ip=0.0.0.0 --heap=5242880 --stack=262144 --hcallsize=524288 --partition=true --serverless=true --vmcount=2048
 """
 
 
@@ -188,10 +192,10 @@ until [ "$x" == "status: done" ]; do
   x=$(cloud-init status)
 done
 
-go run /tmp/wasm2opencl/benchmarks/json-compression-lz4/run_json_lz4_bench.go {addr} 8000 4096 1 60
+go run /tmp/wasm2opencl/benchmarks/json-compression-lz4/run_json_lz4_bench.go {addr} 8000 2048 1 60 {input_size}
 
-go run /tmp/wasm2opencl/benchmarks/json-compression-lz4/run_json_lz4_bench.go {addr} 8000 4096 1 60
-""".format(addr=gpu_instance[0].private_dns_name)
+go run /tmp/wasm2opencl/benchmarks/json-compression-lz4/run_json_lz4_bench.go {addr} 8000 2048 1 60 {input_size}
+""".format(addr=gpu_instance[0].private_dns_name, input_size=256)
 
 
 command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
@@ -222,10 +226,10 @@ until [ "$x" == "status: done" ]; do
   x=$(cloud-init status)
 done
 
-go run /tmp/wasm2opencl/benchmarks/json-compression-lz4/run_json_lz4_bench.go {addr} 8000 4096 1 60
+go run /tmp/wasm2opencl/benchmarks/json-compression-lz4/run_json_lz4_bench.go {addr} 8000 64 1 60 {input_size}
 
-go run /tmp/wasm2opencl/benchmarks/json-compression-lz4/run_json_lz4_bench.go {addr} 8000 4096 1 60
-""".format(addr=cpu_bench_instance[0].private_dns_name)
+go run /tmp/wasm2opencl/benchmarks/json-compression-lz4/run_json_lz4_bench.go {addr} 8000 64 1 60 {input_size}
+""".format(addr=cpu_bench_instance[0].private_dns_name, input_size=256)
 
 command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
 
