@@ -10,5 +10,5 @@ edition = "2018"
 wasm-serverless-invoke = { path = "../../wasm-serverless-invoke" }
 serde_json = "1.0.62"
 serde = { version = "1.0.62", features = ["derive"] }
-image = { version = "*", default-features = false, features = ["png"] } 
+image = { version = "*", default-features = false, features = ["jpeg"] } 
 base64 = "0.13.0"

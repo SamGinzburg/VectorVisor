@@ -59,7 +59,7 @@ func RandString(n int) string {
 
 func RandImage(n int) string {
 	// no more than 1MB
-    file_data, err := ioutil.ReadFile(fmt.Sprintf("testimages/%d.png", n))
+    file_data, err := ioutil.ReadFile(fmt.Sprintf("testimages/%d.jpg", n))
 	if err != nil {
 		panic(err)
 	}

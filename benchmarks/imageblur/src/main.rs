@@ -10,7 +10,8 @@ use std::io::Cursor;
 
 use image::io::Reader as ImageReader;
 use image::{GenericImageView, imageops};
-use image::codecs::png::PngEncoder;
+use image::codecs::jpeg::JpegEncoder;
+
 use image::EncodableLayout;
 use image::load_from_memory_with_format;
 use image::ImageFormat;
@@ -30,15 +31,15 @@ struct FuncResponse {
 
 fn image_blur(event: FuncInput) -> FuncResponse {
     let mut image = decode(event.image).unwrap();
-    let mut decoded_image = load_from_memory_with_format(&image, ImageFormat::Png).unwrap();
+    let mut decoded_image = load_from_memory_with_format(&image, ImageFormat::Jpeg).unwrap();
 
     let mut blurred = imageops::blur(&mut decoded_image, 4.0);
 
     let mut output_buf = vec![];
-    let png_encoder = PngEncoder::new(&mut output_buf);
+    let mut jpeg_encoder = JpegEncoder::new(&mut output_buf);
 
     let (nwidth, nheight) = blurred.dimensions();
-    match png_encoder.encode(&mut blurred.as_bytes(), nwidth, nheight, ColorType::Rgba8) {
+    match jpeg_encoder.encode(&mut blurred.as_bytes(), nwidth, nheight, ColorType::Rgba8) {
         Ok(_) => (),
         Err(err) => println!("Unable to encode image to PNG: {:?}", err),
     }
