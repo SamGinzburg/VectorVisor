@@ -99,6 +99,14 @@ pub fn emit_f64_ne(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stack
     format!("\t{} = {} != {};\n", result_register, reg2, reg1)
 }
 
+pub fn emit_f32_ne(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _debug: bool) -> String {
+    let reg1 = stack_ctx.vstack_pop(StackType::f32);
+    let reg2 = stack_ctx.vstack_pop(StackType::f32);
+    let result_register = stack_ctx.vstack_alloc(StackType::i32);
+
+    format!("\t{} = {} != {};\n", result_register, reg2, reg1)
+}
+
 pub fn emit_f64_div(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _debug: bool) -> String {
     let reg1 = stack_ctx.vstack_pop(StackType::f64);
     let reg2 = stack_ctx.vstack_pop(StackType::f64);
