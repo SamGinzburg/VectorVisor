@@ -91,7 +91,7 @@ fn get_called_funcs(func: &wast::Func, fastcalls: &HashSet<String>, func_map: &H
  * each other into the same OpenCL kernel.
  */
 
-pub fn form_partitions(num_funcs_in_partition: u32, func_names: Vec<&String>, fastcalls: &HashSet<String>, func_map: &HashMap<String, &wast::Func>, imports_map: &HashMap<&str, (&str, Option<&str>, wast::ItemSig)>, kernel_compile_stats: &mut HashMap<u32, (u32, u32, u32, u32, u32, u32)>) -> Vec<(u32, HashSet<String>)> {
+pub fn form_partitions(num_funcs_in_partition: u32, instr_count_limit: u32, func_names: Vec<&String>, fastcalls: &HashSet<String>, func_map: &HashMap<String, &wast::Func>, imports_map: &HashMap<&str, (&str, Option<&str>, wast::ItemSig)>, kernel_compile_stats: &mut HashMap<u32, (u32, u32, u32, u32, u32, u32)>) -> Vec<(u32, HashSet<String>)> {
 
     let mut func_set = HashSet::<&String>::from_iter(func_names);
     let mut partitions = vec![];
@@ -136,6 +136,7 @@ pub fn form_partitions(num_funcs_in_partition: u32, func_names: Vec<&String>, fa
               * - Doesn't violate the instruction count constraint
               */
               if current_partition_count < num_funcs_in_partition &&
+                 current_instruction_count + instr_count <= instr_count_limit &&
                  func_set.contains(&func) {
                     // add the func to the set
                     current_partition.insert(String::from(&func));
@@ -154,6 +155,7 @@ pub fn form_partitions(num_funcs_in_partition: u32, func_names: Vec<&String>, fa
              * - Doesn't violate the instruction count constraint
              */
              if current_partition_count < num_funcs_in_partition &&
+                current_instruction_count + instr_count <= instr_count_limit &&
                 func_set.contains(&func) {
                    // add the func to the set
                    current_partition.insert(String::from(&func));

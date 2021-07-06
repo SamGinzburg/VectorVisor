@@ -238,6 +238,22 @@ fn main() {
             .multiple(false)
             .number_of_values(1)
             .takes_value(true))
+        .arg(Arg::with_name("partitions")
+            .long("partitions")
+            .value_name("Maximum number of functions that can be grouped together in the same GPU kernel")
+            .default_value("100")
+            .help("Maximum number of functions that can be grouped together in the same GPU kernel")
+            .multiple(false)
+            .number_of_values(1)
+            .takes_value(true))
+        .arg(Arg::with_name("maxloc")
+            .long("maxloc")
+            .value_name("Maximum number of lines of code that can be in a partitioned GPU kernel")
+            .default_value("500000")
+            .help("Maximum number of lines of code that can be in a partitioned GPU kernel")
+            .multiple(false)
+            .number_of_values(1)
+            .takes_value(true))
         .get_matches();
 
     dbg!(matches.clone());
@@ -264,6 +280,8 @@ fn main() {
     let hcall_size = value_t!(matches.value_of("hcallsize"), usize).unwrap_or_else(|e| e.exit());
     let batch_submit_ip = value_t!(matches.value_of("ip"), String).unwrap_or_else(|e| e.exit());
     let batch_submit_port = value_t!(matches.value_of("port"), u32).unwrap_or_else(|e| e.exit());
+    let max_part = value_t!(matches.value_of("partitions"), u32).unwrap_or_else(|e| e.exit());
+    let max_loc = value_t!(matches.value_of("maxloc"), u32).unwrap_or_else(|e| e.exit());
 
     dbg!(compile_args.clone());
 
@@ -299,6 +317,8 @@ fn main() {
                                                                     stack_frames_size, 
                                                                     sfp_size, 
                                                                     predictor_size,
+                                                                    max_part,
+                                                                    max_loc,
                                                                     debug_call_print,
                                                                     force_inline,
                                                                     is_gpu,
@@ -358,6 +378,8 @@ fn main() {
                                                                         stack_frames_size, 
                                                                         sfp_size, 
                                                                         predictor_size,
+                                                                        max_part,
+                                                                        max_loc,
                                                                         debug_call_print,
                                                                         force_inline,
                                                                         is_gpu,
@@ -394,6 +416,8 @@ fn main() {
                                                                         stack_frames_size, 
                                                                         sfp_size, 
                                                                         predictor_size,
+                                                                        max_part,
+                                                                        max_loc,
                                                                         debug_call_print,
                                                                         force_inline,
                                                                         is_gpu,
@@ -433,6 +457,8 @@ fn main() {
                                                                         stack_frames_size, 
                                                                         sfp_size, 
                                                                         predictor_size,
+                                                                        max_part,
+                                                                        max_loc,
                                                                         debug_call_print,
                                                                         force_inline,
                                                                         is_gpu,
@@ -469,6 +495,8 @@ fn main() {
                                                                         stack_frames_size, 
                                                                         sfp_size, 
                                                                         predictor_size,
+                                                                        max_part,
+                                                                        max_loc,
                                                                         debug_call_print,
                                                                         force_inline,
                                                                         is_gpu,
