@@ -1074,6 +1074,11 @@ impl<'a> OpenCLCWriter<'_> {
                 stack_sizes.push(2);
                 emit_i64_trunc_f32_s(self, stack_ctx, debug)
             },
+            wast::Instruction::I32TruncF32S => {
+                stack_sizes.pop();
+                stack_sizes.push(1);
+                emit_i32_trunc_f32_s(self, stack_ctx, debug)
+            },
             wast::Instruction::I32Clz => {
                 stack_sizes.pop();
                 stack_sizes.push(1);

@@ -1139,6 +1139,13 @@ impl<'a> StackCtx {
                     current_f32_count -= 1;
                     update_counter(&mut current_i64_count, &mut max_i64_count);
                 },
+                wast::Instruction::I32TruncF32S => {
+                    stack_sizes.pop();
+                    stack_sizes.push(StackType::i32);
+
+                    current_f32_count -= 1;
+                    update_counter(&mut current_i32_count, &mut max_i32_count);
+                },
                 wast::Instruction::F64ConvertI32S => {
                     stack_sizes.pop();
                     stack_sizes.push(StackType::f64);
