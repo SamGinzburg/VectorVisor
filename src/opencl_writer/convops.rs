@@ -44,6 +44,12 @@ pub fn emit_f32_convert_i32u(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: 
     format!("\t{} = (float)({});\n", result_register, reg)
 }
 
+pub fn emit_f32_convert_i32s(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _debug: bool) -> String {
+    let reg = stack_ctx.vstack_pop(StackType::i32);
+    let result_register = stack_ctx.vstack_alloc(StackType::f32);
+    format!("\t{} = (float)(int)({});\n", result_register, reg)
+}
+
 pub fn emit_f64_convert_i64u(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _debug: bool) -> String {
     let reg = stack_ctx.vstack_pop(StackType::i64);
     let result_register = stack_ctx.vstack_alloc(StackType::f64);
@@ -109,7 +115,17 @@ pub fn emit_i64_trunc_f32_u(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &
     let result_register = stack_ctx.vstack_alloc(StackType::i64);
 
     format!("\t{};\n",
-            format!("({} != {}) ? ({}) : !({} > (double)-1 && {} < 4294967296.f) ? ({}) : ({} = (ulong)({}))",
+            format!("({} != {}) ? ({}) : !({} > (float)-1 && {} < (float)ULONG_MAX) ? ({}) : ({} = (ulong)({}))",
+                    reg, reg, emit_trap(TrapCode::TrapInvalidConversion, false),
+                    reg, reg, emit_trap(TrapCode::TrapIntOverflow, false), result_register, reg))
+}
+
+pub fn emit_i32_trunc_f32_u(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _debug: bool) -> String {
+    let reg = stack_ctx.vstack_pop(StackType::f32);
+    let result_register = stack_ctx.vstack_alloc(StackType::i32);
+
+    format!("\t{};\n",
+            format!("({} != {}) ? ({}) : !({} > (float)-1 && {} < 4294967296.f) ? ({}) : ({} = (uint)({}))",
                     reg, reg, emit_trap(TrapCode::TrapInvalidConversion, false),
                     reg, reg, emit_trap(TrapCode::TrapIntOverflow, false), result_register, reg))
 }

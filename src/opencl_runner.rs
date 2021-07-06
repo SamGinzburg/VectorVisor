@@ -1525,8 +1525,8 @@ impl OpenCLRunner {
                 }
             }
 
-            //println!("divergence stack: {:?}", &divergence_stack);
-            //println!("hcall divergence stack: {:?}", &hcall_divergence_stack);
+            println!("divergence stack: {:?}", &divergence_stack);
+            println!("hcall divergence stack: {:?}", &hcall_divergence_stack);
 
             // if we found a VM that needs to run another function, we do that first
             if divergence_stack.len() > 0 {
@@ -1622,11 +1622,11 @@ impl OpenCLRunner {
                 hcall_sender.send(hcall_batch).unwrap();
             });
 
-             let end_hcall_dispatch2 = std::time::Instant::now();
+            let end_hcall_dispatch2 = std::time::Instant::now();
             println!("hcall send time: {}", (end_hcall_dispatch2-start_hcall_dispatch2).as_nanos());
 
-            println!("messages in channel: {}", hcall_sender.len());
-            println!("responses in channel: {}", result_receiver.len());
+            //println!("messages in channel: {}", hcall_sender.len());
+            //println!("responses in channel: {}", result_receiver.len());
 
             // now block until all of the hypercalls have been successfully dispatched
             // first, check for how many hcalls we have to wait on

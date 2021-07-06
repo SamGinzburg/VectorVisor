@@ -516,6 +516,12 @@ impl<'a> OpenCLCWriter<'_> {
                 stack_sizes.push(2);
                 emit_i64_add(self, stack_ctx, debug)
             },
+            wast::Instruction::F32Trunc => {
+                emit_f32_trunc(self, stack_ctx, debug)
+            },
+            wast::Instruction::F64Trunc => {
+                emit_f64_trunc(self, stack_ctx, debug)
+            },
             wast::Instruction::F64Add => {
                 stack_sizes.pop();
                 stack_sizes.pop();
@@ -1066,6 +1072,11 @@ impl<'a> OpenCLCWriter<'_> {
                 stack_sizes.push(1);
                 emit_f32_convert_i32u(self, stack_ctx, debug)
             },
+            wast::Instruction::F32ConvertI32S => {
+                stack_sizes.pop();
+                stack_sizes.push(1);
+                emit_f32_convert_i32s(self, stack_ctx, debug)
+            },
             wast::Instruction::F64ConvertI64U => {
                 stack_sizes.pop();
                 stack_sizes.push(2);
@@ -1075,6 +1086,11 @@ impl<'a> OpenCLCWriter<'_> {
                 stack_sizes.pop();
                 stack_sizes.push(2);
                 emit_f64_convert_i64s(self, stack_ctx, debug)
+            },
+            wast::Instruction::I32TruncF32U => {
+                stack_sizes.pop();
+                stack_sizes.push(1);
+                emit_i32_trunc_f32_u(self, stack_ctx, debug)
             },
             wast::Instruction::I64TruncF32U => {
                 stack_sizes.pop();

@@ -4,29 +4,29 @@ use wasm_serverless_invoke::wasm_handler;
 use wasm_serverless_invoke::wasm_handler::WasmHandler;
 use serde_json::Value;
 use serde_json::json;
+use serde::Deserialize;
+use serde::Serialize;
+use base64::{encode, decode};
+use compress::lz4::*;
+use std::io::BufWriter;
+use std::io::Write;
 
-use compression::prelude::*;
-use base64::encode;
+#[derive(Debug, Deserialize)]
+struct FuncInput {
+    encoded_str: String
+}
 
+#[derive(Debug, Serialize)]
+struct FuncResponse {
+    encoded_resp: String
+}
 
-fn compress_json(event: Value) -> Value {
-    let response = match event.get("text") {
-        Some(Value::String(str)) => {
-            let compressed_str = str.as_bytes()
-                                .into_iter()
-                                .cloned()
-                                .encode(&mut BZip2Encoder::new(2), Action::Finish)
-                                .collect::<Result<Vec<_>, _>>()
-                                .unwrap();
-            json!(encode(compressed_str))
-        },
-        _ => {
-            // input is not a string we can compress!, no-op
-            json!(null)
-        }
-    };
-
-    response
+fn compress_json(event: FuncInput) -> FuncResponse {
+    let mut decoded_str = decode(event.encoded_str).unwrap();
+    let mut encoder = Encoder::new(BufWriter::new(Vec::new()));
+    encoder.write(&decoded_str).unwrap();
+    let (compressed_bytes, _) = encoder.finish();
+    FuncResponse { encoded_resp: encode(compressed_bytes.into_inner().unwrap()) }
 }
 
 fn main() {

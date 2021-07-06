@@ -484,6 +484,10 @@ impl<'a> StackCtx {
                     stack_sizes.push(StackType::f64);
                     current_f64_count -= 1;
                 },
+                wast::Instruction::F32Trunc => {
+                },
+                wast::Instruction::F64Trunc => {
+                },
                 wast::Instruction::F64Neg => {
                 },
                 wast::Instruction::F32Neg => {
@@ -581,7 +585,7 @@ impl<'a> StackCtx {
                     current_f64_count -= 2;
                     update_counter(&mut current_i32_count, &mut max_i32_count);
                 },
-                wast::Instruction::F64Eq => {
+                wast::Instruction::F32Eq => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i32);
@@ -1140,6 +1144,13 @@ impl<'a> StackCtx {
                     current_f64_count -= 1;
                     update_counter(&mut current_f32_count, &mut max_f32_count);
                 },
+                wast::Instruction::I32TruncF32U => {
+                    stack_sizes.pop();
+                    stack_sizes.push(StackType::i32);
+
+                    current_f32_count -= 1;
+                    update_counter(&mut current_i32_count, &mut max_i32_count);
+                },
                 wast::Instruction::I64TruncF32U => {
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i64);
@@ -1176,6 +1187,13 @@ impl<'a> StackCtx {
                     update_counter(&mut current_f64_count, &mut max_f64_count);
                 },
                 wast::Instruction::F32ConvertI32U => {
+                    stack_sizes.pop();
+                    stack_sizes.push(StackType::f32);
+
+                    current_i32_count -= 1;
+                    update_counter(&mut current_f32_count, &mut max_f32_count);
+                },
+                wast::Instruction::F32ConvertI32S => {
                     stack_sizes.pop();
                     stack_sizes.push(StackType::f32);
 
