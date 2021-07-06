@@ -672,6 +672,12 @@ impl<'a> OpenCLCWriter<'_> {
                 stack_sizes.push(1);
                 emit_f64_eq(self, stack_ctx, debug)
             },
+            wast::Instruction::F32Eq => {
+                stack_sizes.pop();
+                stack_sizes.pop();
+                stack_sizes.push(1);
+                emit_f32_eq(self, stack_ctx, debug)
+            },
             wast::Instruction::I32TruncF64U => {
                 stack_sizes.pop();
                 stack_sizes.push(1);
