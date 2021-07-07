@@ -142,6 +142,26 @@ func main() {
 	}
 	client = &http.Client{Transport: tr}
 
+	addr := fmt.Sprintf("http://%s:%d/is_active/", os.Args[1], port)
+	http_request, _ := http.NewRequest("GET", addr, nil)
+	http_request.Header.Add("Content-Type", "application/json; charset=utf-8")
+	for {
+		resp, err := client.Do(http_request)
+		if err != nil {
+			//fmt.Printf("is_active route not running yet...\n")
+			time.Sleep(2000 * time.Millisecond)
+			continue
+		}
+		if resp.StatusCode != http.StatusOK {
+			//fmt.Printf("is_active route not running yet...\n")
+			time.Sleep(2000 * time.Millisecond)
+			continue
+		} else {
+			break
+		}
+	}
+	//fmt.Printf("server is active... starting benchmark\n")
+	time.Sleep(5000 * time.Millisecond)
 
 	ch := make(chan []byte, num_vms*100000) // we prob won't exceed ~6.4M RPS ever
 	termination_chan := make(chan bool, num_vms)

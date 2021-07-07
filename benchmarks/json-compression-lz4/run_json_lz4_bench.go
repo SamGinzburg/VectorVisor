@@ -181,19 +181,19 @@ func main() {
 	for {
 		resp, err := client.Do(http_request)
 		if err != nil {
-			fmt.Printf("is_active route not running yet...\n")
+			//fmt.Printf("is_active route not running yet...\n")
 			time.Sleep(2000 * time.Millisecond)
 			continue
 		}
 		if resp.StatusCode != http.StatusOK {
-			fmt.Printf("is_active route not running yet...\n")
+			//fmt.Printf("is_active route not running yet...\n")
 			time.Sleep(2000 * time.Millisecond)
 			continue
 		} else {
 			break
 		}
 	}
-	fmt.Printf("server is active... starting benchmark\n")
+	//fmt.Printf("server is active... starting benchmark\n")
 	time.Sleep(5000 * time.Millisecond)
 
 	ch_exec_time := make(chan float64, 1000000)

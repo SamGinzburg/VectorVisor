@@ -27,6 +27,9 @@ userdata = """#cloud-config
      - cd json-compression-lz4/
      - ~/.cargo/bin/cargo build --release
      - cd ..
+     - cd json-compression/
+     - ~/.cargo/bin/cargo build --release
+     - cd ..
      - cd average/
      - ~/.cargo/bin/cargo build --release
      - cd ..
@@ -152,7 +155,7 @@ until [ "$x" == "status: done" ]; do
   x=$(cloud-init status)
 done
 
-/tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/json-compression-lz4/target/wasm32-wasi/release/json-compression.wasm --ip=0.0.0.0 --heap=5242880 --stack=262144 --hcallsize=524288 --partition=true --serverless=true --vmcount=2048 --wasmtime=true
+/tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/json-compression/target/wasm32-wasi/release/json-compression.wasm --ip=0.0.0.0 --heap=4194304 --stack=262144 --hcallsize=524288 --partition=true --serverless=true --vmcount=3072 --wasmtime=true &> /tmp/json-compression.log &
 """
 
 run_command(run_json_lz4_command_wasmtime, "run_json_lz4_command_wasmtime", cpu_bench_instance[0].id)
@@ -166,7 +169,7 @@ until [ "$x" == "status: done" ]; do
   x=$(cloud-init status)
 done
 
-/tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/json-compression-lz4/target/wasm32-wasi/release/json-compression.wasm --ip=0.0.0.0 --heap=5242880 --stack=262144 --hcallsize=524288 --partition=true --serverless=true --vmcount=2048
+/tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/json-compression/target/wasm32-wasi/release/json-compression.wasm --ip=0.0.0.0 --heap=4194304 --stack=262144 --hcallsize=524288 --partition=true --serverless=true --vmcount=3072 --vmgroups=1 &> /tmp/json-compression.log &
 """
 
 
@@ -192,10 +195,10 @@ until [ "$x" == "status: done" ]; do
   x=$(cloud-init status)
 done
 
-go run /tmp/wasm2opencl/benchmarks/json-compression-lz4/run_json_lz4_bench.go {addr} 8000 2048 1 60 {input_size}
+go run /tmp/wasm2opencl/benchmarks/json-compression/run_json_lz4.go {addr} 8000 3072 1 60 {input_size}
 
-go run /tmp/wasm2opencl/benchmarks/json-compression-lz4/run_json_lz4_bench.go {addr} 8000 2048 1 60 {input_size}
-""".format(addr=gpu_instance[0].private_dns_name, input_size=256)
+go run /tmp/wasm2opencl/benchmarks/json-compression/run_json_lz4.go {addr} 8000 3072 1 60 {input_size}
+""".format(addr=gpu_instance[0].private_dns_name, input_size=200)
 
 
 command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
@@ -226,10 +229,10 @@ until [ "$x" == "status: done" ]; do
   x=$(cloud-init status)
 done
 
-go run /tmp/wasm2opencl/benchmarks/json-compression-lz4/run_json_lz4_bench.go {addr} 8000 64 1 60 {input_size}
+go run /tmp/wasm2opencl/benchmarks/json-compression/run_json_lz4.go {addr} 8000 3072 1 60 {input_size}
 
-go run /tmp/wasm2opencl/benchmarks/json-compression-lz4/run_json_lz4_bench.go {addr} 8000 64 1 60 {input_size}
-""".format(addr=cpu_bench_instance[0].private_dns_name, input_size=256)
+go run /tmp/wasm2opencl/benchmarks/json-compression/run_json_lz4.go {addr} 8000 3072 1 60 {input_size}
+""".format(addr=cpu_bench_instance[0].private_dns_name, input_size=200)
 
 command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
 
