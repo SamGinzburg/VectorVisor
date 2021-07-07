@@ -1525,8 +1525,8 @@ impl OpenCLRunner {
                 }
             }
 
-            println!("divergence stack: {:?}", &divergence_stack);
-            println!("hcall divergence stack: {:?}", &hcall_divergence_stack);
+            //println!("divergence stack: {:?}", &divergence_stack);
+            //println!("hcall divergence stack: {:?}", &hcall_divergence_stack);
 
             // if we found a VM that needs to run another function, we do that first
             if divergence_stack.len() > 0 {

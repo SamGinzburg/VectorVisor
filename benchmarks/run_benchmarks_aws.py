@@ -1,6 +1,10 @@
 import boto3
 import time
 
+# Benchmark constants
+
+target_rps = 5000
+
 ec2 = boto3.resource('ec2')
 ec2_client = boto3.client('ec2')
 
@@ -67,6 +71,213 @@ def block_on_command(command_id, instance_id):
         else:
             print ("Command has completed with status: " + str(output['Status']))
             return output
+
+def run_pbkdf2_bench():
+    # Now we can set up the next benchmark (pbkdf2)
+    run_pbkdf2_command_wasmtime = """#!/bin/bash
+    sudo su
+
+    x=$(cloud-init status)
+    until [ "$x" == "status: done" ]; do
+    sleep 10
+    x=$(cloud-init status)
+    done
+
+    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/pbkdf2/target/wasm32-wasi/release/pbkdf2.wasm --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=131072 --partition=true --serverless=true --vmcount=4096 --wasmtime=true &> /tmp/pbkdf2.log &
+    """
+
+    run_command(run_pbkdf2_command_wasmtime, "pbkdf2_cpu", cpu_bench_instance[0].id)
+
+    run_pbkdf2_command = """#!/bin/bash
+    sudo su
+
+    x=$(cloud-init status)
+    until [ "$x" == "status: done" ]; do
+    sleep 10
+    x=$(cloud-init status)
+    done
+
+    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/pbkdf2/target/wasm32-wasi/release/pbkdf2.wasm --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=131072 --partition=true --serverless=true --vmcount=4096 --vmgroups=1 &> /tmp/pbkdf2.log &
+    """
+
+    run_command(run_pbkdf2_command, "pbkdf2_gpu", gpu_instance[0].id)
+
+    # now run the invoker(s) for pbkdf2
+    run_invoker = """#!/bin/bash
+    sudo su
+
+    mkdir -p ~/gocache/
+    mkdir -p ~/xdg/
+    export GOCACHE=~/gocache/
+    export XDG_CACHE_HOME=~/xdg/
+
+    go env
+
+    x=$(cloud-init status)
+    until [ "$x" == "status: done" ]; do
+    sleep 10
+    x=$(cloud-init status)
+    done
+
+    go run /tmp/wasm2opencl/benchmarks/pbkdf2/run_pbkdf2.go {addr} 8000 {target_rps} 1 60
+
+    go run /tmp/wasm2opencl/benchmarks/pbkdf2/run_pbkdf2.go {addr} 8000 {target_rps} 1 60
+    """.format(addr=gpu_instance[0].private_dns_name, target_rps=target_rps)
+
+    command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
+
+    time.sleep(20)
+
+    # Block until benchmark is complete
+    output = block_on_command(command_id, invoker_instance[0].id)
+    print (output)
+
+    # save output
+    with open("gpu_bench_pbkdf2.txt", "w") as text_file:
+        text_file.write(str(output))
+
+    run_invoker_cpu = """#!/bin/bash
+    sudo su
+
+    mkdir -p ~/gocache/
+    mkdir -p ~/xdg/
+    export GOCACHE=~/gocache/
+    export XDG_CACHE_HOME=~/xdg/
+
+    go env
+
+    x=$(cloud-init status)
+    until [ "$x" == "status: done" ]; do
+    sleep 10
+    x=$(cloud-init status)
+    done
+
+    go run /tmp/wasm2opencl/benchmarks/pbkdf2/run_pbkdf2.go {addr} 8000 {target_rps} 1 60
+
+    go run /tmp/wasm2opencl/benchmarks/pbkdf2/run_pbkdf2.go {addr} 8000 {target_rps} 1 60
+    """.format(addr=cpu_bench_instance[0].private_dns_name, target_rps=target_rps)
+
+    command_id = run_command(run_invoker_cpu, "run invoker for cpu", invoker_instance[0].id)
+
+    time.sleep(20)
+
+    # Block until benchmark is complete
+    output = block_on_command(command_id, invoker_instance[0].id)
+    print (output)
+
+    # save output
+    with open("cpu_bench_pbkdf2.txt", "w") as text_file:
+        text_file.write(str(output))
+
+def run_lz4_bench():
+    run_json_lz4_command_wasmtime = """#!/bin/bash
+    sudo su
+
+    x=$(cloud-init status)
+    until [ "$x" == "status: done" ]; do
+    sleep 10
+    x=$(cloud-init status)
+    done
+
+    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/json-compression/target/wasm32-wasi/release/json-compression.wasm --ip=0.0.0.0 --heap=4194304 --stack=262144 --hcallsize=524288 --partition=true --serverless=true --vmcount=3072 --wasmtime=true &> /tmp/json-compression.log &
+    """
+
+    run_command(run_json_lz4_command_wasmtime, "run_json_lz4_command_wasmtime", cpu_bench_instance[0].id)
+
+    run_json_lz4_command = """#!/bin/bash
+    sudo su
+
+    x=$(cloud-init status)
+    until [ "$x" == "status: done" ]; do
+    sleep 10
+    x=$(cloud-init status)
+    done
+
+    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/json-compression/target/wasm32-wasi/release/json-compression.wasm --ip=0.0.0.0 --heap=4194304 --stack=262144 --hcallsize=524288 --partition=true --serverless=true --vmcount=3072 --vmgroups=1 &> /tmp/json-compression.log &
+    """
+
+    run_command(run_json_lz4_command, "run_json_lz4_command", gpu_instance[0].id)
+
+    # Now set up the invoker
+
+    run_invoker = """#!/bin/bash
+    sudo su
+
+    mkdir -p ~/gocache/
+    mkdir -p ~/xdg/
+    export GOCACHE=~/gocache/
+    export XDG_CACHE_HOME=~/xdg/
+
+    go env
+
+    x=$(cloud-init status)
+    until [ "$x" == "status: done" ]; do
+    sleep 10
+    x=$(cloud-init status)
+    done
+
+    go run /tmp/wasm2opencl/benchmarks/json-compression/run_json_lz4.go {addr} 8000 {target_rps} 1 60 {input_size}
+
+    go run /tmp/wasm2opencl/benchmarks/json-compression/run_json_lz4.go {addr} 8000 {target_rps} 1 60 {input_size}
+    """.format(addr=gpu_instance[0].private_dns_name, input_size=200, target_rps=target_rps)
+
+
+    command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
+
+    time.sleep(20)
+
+    # Block until benchmark is complete
+    output = block_on_command(command_id, invoker_instance[0].id)
+    print (output)
+
+    # save output
+    with open("gpu_bench.txt", "w") as text_file:
+        text_file.write(str(output))
+
+    run_invoker_wasmtime = """#!/bin/bash
+    sudo su
+
+    mkdir -p ~/gocache/
+    mkdir -p ~/xdg/
+    export GOCACHE=~/gocache/
+    export XDG_CACHE_HOME=~/xdg/
+
+    go env
+
+    x=$(cloud-init status)
+    until [ "$x" == "status: done" ]; do
+    sleep 10
+    x=$(cloud-init status)
+    done
+
+    go run /tmp/wasm2opencl/benchmarks/json-compression/run_json_lz4.go {addr} 8000 {target_rps} 1 60 {input_size}
+
+    go run /tmp/wasm2opencl/benchmarks/json-compression/run_json_lz4.go {addr} 8000 {target_rps} 1 60 {input_size}
+    """.format(addr=cpu_bench_instance[0].private_dns_name, input_size=200, target_rps=target_rps)
+
+    command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
+
+    time.sleep(20)
+
+    # Block until benchmark is complete
+    output = block_on_command(command_id, invoker_instance[0].id)
+    print (output)
+    # save output
+    with open("cpu_bench.txt", "w") as text_file:
+        text_file.write(str(output))
+
+
+# call between benchmarks
+def cleanup():
+    terminate_gpu = """#!/bin/bash
+    sudo su
+    curl -X GET {addr}/terminate
+    curl -X GET {addr_cpu}/terminate
+    """.format(addr=gpu_instance[0].private_dns_name, addr_cpu=cpu_bench_instance[0].private_dns_name)
+    command_id = run_command(terminate_gpu, "run invoker for gpu", invoker_instance[0].id)
+    time.sleep(2)
+    output = block_on_command(command_id, invoker_instance[0].id)
+    time.sleep(2)
 
 """
 Create VMs for the test
@@ -146,104 +357,10 @@ while True:
 
 ssm_client = boto3.client('ssm')
 
-run_json_lz4_command_wasmtime = """#!/bin/bash
-sudo su
+# run LZ4 bench
+run_pbkdf2_bench()
 
-x=$(cloud-init status)
-until [ "$x" == "status: done" ]; do
-  sleep 10
-  x=$(cloud-init status)
-done
-
-/tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/json-compression/target/wasm32-wasi/release/json-compression.wasm --ip=0.0.0.0 --heap=4194304 --stack=262144 --hcallsize=524288 --partition=true --serverless=true --vmcount=3072 --wasmtime=true &> /tmp/json-compression.log &
-"""
-
-run_command(run_json_lz4_command_wasmtime, "run_json_lz4_command_wasmtime", cpu_bench_instance[0].id)
-
-run_json_lz4_command = """#!/bin/bash
-sudo su
-
-x=$(cloud-init status)
-until [ "$x" == "status: done" ]; do
-  sleep 10
-  x=$(cloud-init status)
-done
-
-/tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/json-compression/target/wasm32-wasi/release/json-compression.wasm --ip=0.0.0.0 --heap=4194304 --stack=262144 --hcallsize=524288 --partition=true --serverless=true --vmcount=3072 --vmgroups=1 &> /tmp/json-compression.log &
-"""
-
-
-run_command(run_json_lz4_command, "run_json_lz4_command", gpu_instance[0].id)
-
-
-
-# Now set up the invoker
-
-run_invoker = """#!/bin/bash
-sudo su
-
-mkdir -p ~/gocache/
-mkdir -p ~/xdg/
-export GOCACHE=~/gocache/
-export XDG_CACHE_HOME=~/xdg/
-
-go env
-
-x=$(cloud-init status)
-until [ "$x" == "status: done" ]; do
-  sleep 10
-  x=$(cloud-init status)
-done
-
-go run /tmp/wasm2opencl/benchmarks/json-compression/run_json_lz4.go {addr} 8000 3072 1 60 {input_size}
-
-go run /tmp/wasm2opencl/benchmarks/json-compression/run_json_lz4.go {addr} 8000 3072 1 60 {input_size}
-""".format(addr=gpu_instance[0].private_dns_name, input_size=200)
-
-
-command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
-
-time.sleep(20)
-
-# Block until benchmark is complete
-output = block_on_command(command_id, invoker_instance[0].id)
-print (output)
-
-# save output
-with open("gpu_bench.txt", "w") as text_file:
-    text_file.write(str(output))
-
-run_invoker_wasmtime = """#!/bin/bash
-sudo su
-
-mkdir -p ~/gocache/
-mkdir -p ~/xdg/
-export GOCACHE=~/gocache/
-export XDG_CACHE_HOME=~/xdg/
-
-go env
-
-x=$(cloud-init status)
-until [ "$x" == "status: done" ]; do
-  sleep 10
-  x=$(cloud-init status)
-done
-
-go run /tmp/wasm2opencl/benchmarks/json-compression/run_json_lz4.go {addr} 8000 3072 1 60 {input_size}
-
-go run /tmp/wasm2opencl/benchmarks/json-compression/run_json_lz4.go {addr} 8000 3072 1 60 {input_size}
-""".format(addr=cpu_bench_instance[0].private_dns_name, input_size=200)
-
-command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
-
-time.sleep(20)
-
-# Block until benchmark is complete
-output = block_on_command(command_id, invoker_instance[0].id)
-print (output)
-# save output
-with open("cpu_bench.txt", "w") as text_file:
-    text_file.write(str(output))
+cleanup()
 
 # clean up all instances at end
 ec2.instances.filter(InstanceIds = instance_id_list).terminate()
