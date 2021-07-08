@@ -119,9 +119,9 @@ def run_pbkdf2_bench():
     x=$(cloud-init status)
     done
 
-    go run /tmp/wasm2opencl/benchmarks/pbkdf2/run_pbkdf2.go {addr} 8000 {target_rps} 1 60
+    go run /tmp/wasm2opencl/benchmarks/pbkdf2/run_pbkdf2.go {addr} 8000 {target_rps} 1 120
 
-    go run /tmp/wasm2opencl/benchmarks/pbkdf2/run_pbkdf2.go {addr} 8000 {target_rps} 1 60
+    go run /tmp/wasm2opencl/benchmarks/pbkdf2/run_pbkdf2.go {addr} 8000 {target_rps} 1 120
     """.format(addr=gpu_instance[0].private_dns_name, target_rps=target_rps)
 
     command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
@@ -152,9 +152,9 @@ def run_pbkdf2_bench():
     x=$(cloud-init status)
     done
 
-    go run /tmp/wasm2opencl/benchmarks/pbkdf2/run_pbkdf2.go {addr} 8000 {target_rps} 1 60
+    go run /tmp/wasm2opencl/benchmarks/pbkdf2/run_pbkdf2.go {addr} 8000 {target_rps} 1 120
 
-    go run /tmp/wasm2opencl/benchmarks/pbkdf2/run_pbkdf2.go {addr} 8000 {target_rps} 1 60
+    go run /tmp/wasm2opencl/benchmarks/pbkdf2/run_pbkdf2.go {addr} 8000 {target_rps} 1 120
     """.format(addr=cpu_bench_instance[0].private_dns_name, target_rps=target_rps)
 
     command_id = run_command(run_invoker_cpu, "run invoker for cpu", invoker_instance[0].id)
@@ -357,7 +357,7 @@ while True:
 
 ssm_client = boto3.client('ssm')
 
-# run LZ4 bench
+# run pbkdf2 bench
 run_pbkdf2_bench()
 
 cleanup()

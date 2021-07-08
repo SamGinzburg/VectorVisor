@@ -106,6 +106,9 @@ pub fn form_partitions(num_funcs_in_partition: u32, instr_count_limit: u32, func
      * 6) Go to 2 and repeat until the global set G is empty
      */
 
+    let mut include_limit: HashMap<String, u32> = HashMap::new();
+    let func_copy_limit = 2;
+
     let mut func_list = Vec::from_iter(func_set.clone());
     while let Some(f_name) = func_list.pop() {
         let mut current_partition = HashSet::<String>::new();
@@ -131,16 +134,18 @@ pub fn form_partitions(num_funcs_in_partition: u32, instr_count_limit: u32, func
              let (instr_count, _, _, _, _, _) = function_stats(func_map.get(&func.clone()).unwrap(), fastcalls, func_map);
              /*
               * If the func is the following:
-              * - Still in the Set G
+              * - Func is below inclusion limit
               * - Doesn't violate the partition count constraint
               * - Doesn't violate the instruction count constraint
               */
+              let func_copies = include_limit.get(&func).cloned().unwrap_or(0);
               if current_partition_count < num_funcs_in_partition &&
                  current_instruction_count + instr_count <= instr_count_limit &&
-                 func_set.contains(&func) {
+                 func_copies < func_copy_limit {
                     // add the func to the set
                     current_partition.insert(String::from(&func));
                     func_set.remove(&func);
+                    include_limit.insert(func, func_copies + 1);
                     current_partition_count += 1;
                     current_instruction_count += instr_count;
                 }
@@ -150,16 +155,18 @@ pub fn form_partitions(num_funcs_in_partition: u32, instr_count_limit: u32, func
             let (instr_count, _, _, _, _, _) = function_stats(func_map.get(&func.clone()).unwrap(), fastcalls, func_map);
             /*
              * If the func is the following:
-             * - Still in the Set G
+             * - Func is below inclusion limit
              * - Doesn't violate the partition count constraint
              * - Doesn't violate the instruction count constraint
              */
+            let func_copies = include_limit.get(&func).cloned().unwrap_or(0);
              if current_partition_count < num_funcs_in_partition &&
                 current_instruction_count + instr_count <= instr_count_limit &&
-                func_set.contains(&func) {
+                func_copies < func_copy_limit {
                    // add the func to the set
                    current_partition.insert(String::from(&func));
                    func_set.remove(&func);
+                   include_limit.insert(func, func_copies + 1);
                    current_partition_count += 1;
                    current_instruction_count += instr_count;
                 }

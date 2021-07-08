@@ -17,13 +17,11 @@ struct FuncResponse {
 
 // Take in a list of numbers and compute the average
 fn average_json(event: FuncInput) -> Value {
-    println!("input: {:?}", event);
     let mut acc = 0.0;
     for item in &event.numbers {
         acc += item;
     }
     let resp = FuncResponse { result: acc / event.numbers.len() as f64 };
-    println!("response: {:?}", &resp);
 
     json!(resp)
 }

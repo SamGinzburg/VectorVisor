@@ -40,7 +40,7 @@ var client = &http.Client{}
 func RandIntSlice(n int) []float64 {
     b := make([]float64, n)
     for i := range b {
-        b[i] = 100.5 //rand.Float64() * 10000
+        b[i] = rand.Float64() * 10000
     }
     return b
 }
@@ -132,7 +132,7 @@ func main() {
 
 	reqs := make([][]byte, NUM_PARAMS)
 	for i := 0; i < NUM_PARAMS; i++ {
-		p := payload{Text: RandIntSlice(100)}
+		p := payload{Text: RandIntSlice(1024 * 32)}
 		request_body, _ := json.Marshal(p)
 		reqs[i] = request_body
 	}
