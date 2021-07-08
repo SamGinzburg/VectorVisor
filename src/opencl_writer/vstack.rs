@@ -1947,10 +1947,12 @@ impl<'a> StackCtx {
             }
 
             for idx in f32_range {
-                ret_str += &format!("\t{} = {};\n", &self.f32_stack.get(idx).unwrap(),
-                                                    &emit_read_u32(&format!("(ulong)(stack_u32+{}+*sp)", intermediate_offset),
-                                                                "(ulong)stack_u32",
-                                                                "warp_idx"));
+                ret_str += &format!("\t{{\n");
+                ret_str += &format!("\t\tuint temp = {};\n", &emit_read_u32(&format!("(ulong)(stack_u32+{}+*sp)", intermediate_offset),
+                                                                                "(ulong)stack_u32",
+                                                                                "warp_idx"));
+                ret_str += &format!("\t\t___private_memcpy_nonmmu(&{}, &temp, sizeof(float));\n", &self.f32_stack.get(idx).unwrap());
+                ret_str += &format!("\t}}\n");
                 intermediate_offset += 1;
             }
 
