@@ -271,8 +271,8 @@ def run_lz4_bench():
 def cleanup():
     terminate_gpu = """#!/bin/bash
     sudo su
-    curl -X GET {addr}/terminate
-    curl -X GET {addr_cpu}/terminate
+    curl -X GET {addr}:8000/terminate
+    curl -X GET {addr_cpu}:8000/terminate
     """.format(addr=gpu_instance[0].private_dns_name, addr_cpu=cpu_bench_instance[0].private_dns_name)
     command_id = run_command(terminate_gpu, "run invoker for gpu", invoker_instance[0].id)
     time.sleep(2)
@@ -359,12 +359,13 @@ while True:
 ssm_client = boto3.client('ssm')
 
 # run pbkdf2 bench
-#run_pbkdf2_bench()
+run_pbkdf2_bench()
+
+cleanup()
 
 # run lz4 bench
 run_lz4_bench()
 
-cleanup()
 
 # clean up all instances at end
 ec2.instances.filter(InstanceIds = instance_id_list).terminate()

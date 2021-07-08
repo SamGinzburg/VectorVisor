@@ -705,7 +705,7 @@ fn main() {
                 let leaked_runner: &'static WasmtimeRunner = Box::leak(Box::new(wasmtime_runner));
 
                 // run the WASM VM...
-                match leaked_runner.run(filedata.clone(), hcall_size) {
+                match leaked_runner.run(filedata.clone(), hcall_size, heap_size/(1024*64)) {
                     Ok(()) => {
                         println!("Wasmtime VM: {:?} finished running!", idx);
                     },
