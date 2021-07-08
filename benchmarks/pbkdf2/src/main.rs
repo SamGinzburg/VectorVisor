@@ -18,7 +18,7 @@ lazy_static! {
     static ref PBKDF2_PARAMS: pbkdf2::Params = Params { rounds: 100100, output_length: 32 }; 
 }
 
-fn compress_json(event: Value) -> Value {
+fn hash_input_password(event: Value) -> Value {
     let response = match event.get("password") {
         Some(Value::String(password)) => {
             let salt = Salt::new(&*SALT.as_ref()).unwrap();
@@ -35,6 +35,6 @@ fn compress_json(event: Value) -> Value {
 }
 
 fn main() {
-    let handler = WasmHandler::new(&compress_json);
+    let handler = WasmHandler::new(&hash_input_password);
     handler.run(1024*1024);
 }

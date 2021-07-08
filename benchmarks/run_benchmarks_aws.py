@@ -231,7 +231,7 @@ def run_lz4_bench():
     print (output)
 
     # save output
-    with open("gpu_bench.txt", "w") as text_file:
+    with open("gpu_bench_lz4.txt", "w") as text_file:
         text_file.write(str(output))
 
     run_invoker_wasmtime = """#!/bin/bash
@@ -263,7 +263,7 @@ def run_lz4_bench():
     output = block_on_command(command_id, invoker_instance[0].id)
     print (output)
     # save output
-    with open("cpu_bench.txt", "w") as text_file:
+    with open("cpu_bench_lz4.txt", "w") as text_file:
         text_file.write(str(output))
 
 
@@ -283,14 +283,15 @@ def cleanup():
 Create VMs for the test
 1 GPU VM, 1 CPU VM, and 1 VM for issuing requests
 
-g4dn.xlarge  => 1 T4, 16GiB memory,  4 vCPU
-g4dn.4xlarge => 1 T4, 16GiB memory, 16 vCPU
-p3.2xlarge   => 1 V100, 16GiB memory, 8 vCPU
+g4dn.xlarge  => 1 T4, 16 GiB memory,  4 vCPU
+g4dn.2xlarge => 1 T4, 32 GiB memory, 8 vCPU
+g4dn.4xlarge => 1 T4, 64 GiB memory, 16 vCPU
+p3.2xlarge   => 1 V100, 16 GiB memory, 8 vCPU
 
 """
 # AMIs specific to us-east-2
 gpu_instance = ec2.create_instances(ImageId='ami-0414f41139d36fb50',
-                                InstanceType="g4dn.xlarge",
+                                InstanceType="g4dn.2xlarge",
                                 MinCount=1,
                                 MaxCount=1,
                                 UserData=userdata,
@@ -358,7 +359,10 @@ while True:
 ssm_client = boto3.client('ssm')
 
 # run pbkdf2 bench
-run_pbkdf2_bench()
+#run_pbkdf2_bench()
+
+# run lz4 bench
+run_lz4_bench()
 
 cleanup()
 
