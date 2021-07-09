@@ -70,7 +70,7 @@ impl BatchSubmitServer {
         // Send the request body to the selected VM
         // We can't await on the send because we have the mutex acquired here
         let sender = tx.lock().await;
-        
+       
         sender.send((body.to_vec(), body.len())).await.unwrap();
 
         // Wait on response from the VM

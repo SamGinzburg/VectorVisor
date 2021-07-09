@@ -254,6 +254,14 @@ fn main() {
             .multiple(false)
             .number_of_values(1)
             .takes_value(true))
+        .arg(Arg::with_name("maxdup")
+            .long("maxdup")
+            .value_name("Maximum number of copies of a function that can exist across all partitioned GPU kernels")
+            .default_value("1")
+            .help("Maximum number of copies of a function that can exist across all partitioned GPU kernels")
+            .multiple(false)
+            .number_of_values(1)
+            .takes_value(true))
         .get_matches();
 
     dbg!(matches.clone());
@@ -282,6 +290,7 @@ fn main() {
     let batch_submit_port = value_t!(matches.value_of("port"), u32).unwrap_or_else(|e| e.exit());
     let max_part = value_t!(matches.value_of("partitions"), u32).unwrap_or_else(|e| e.exit());
     let max_loc = value_t!(matches.value_of("maxloc"), u32).unwrap_or_else(|e| e.exit());
+    let max_dup = value_t!(matches.value_of("maxdup"), u32).unwrap_or_else(|e| e.exit());
 
     dbg!(compile_args.clone());
 
@@ -319,6 +328,7 @@ fn main() {
                                                                     predictor_size,
                                                                     max_part,
                                                                     max_loc,
+                                                                    max_dup,
                                                                     debug_call_print,
                                                                     force_inline,
                                                                     is_gpu,
@@ -380,6 +390,7 @@ fn main() {
                                                                         predictor_size,
                                                                         max_part,
                                                                         max_loc,
+                                                                        max_dup,
                                                                         debug_call_print,
                                                                         force_inline,
                                                                         is_gpu,
@@ -418,6 +429,7 @@ fn main() {
                                                                         predictor_size,
                                                                         max_part,
                                                                         max_loc,
+                                                                        max_dup,
                                                                         debug_call_print,
                                                                         force_inline,
                                                                         is_gpu,
@@ -459,6 +471,7 @@ fn main() {
                                                                         predictor_size,
                                                                         max_part,
                                                                         max_loc,
+                                                                        max_dup,
                                                                         debug_call_print,
                                                                         force_inline,
                                                                         is_gpu,
@@ -497,6 +510,7 @@ fn main() {
                                                                         predictor_size,
                                                                         max_part,
                                                                         max_loc,
+                                                                        max_dup,
                                                                         debug_call_print,
                                                                         force_inline,
                                                                         is_gpu,

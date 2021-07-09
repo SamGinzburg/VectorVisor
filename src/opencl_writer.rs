@@ -2057,6 +2057,7 @@ void {}(global uint   *stack_u32,
                              predictor_size_bytes: u32,
                              max_partitions: u32,
                              max_loc_in_partition: u32,
+                             max_duplicate_funcs: u32,
                              debug_print_function_calls: bool,
                              force_inline: bool,
                              is_gpu: bool,
@@ -2236,7 +2237,7 @@ r#"
 
         // Compute the function groups, we will then enumerate the groups to emit the functions
         // kernel_partition_mapping get the partition ID from a function idx
-        let partitions = form_partitions(max_partitions, max_loc_in_partition, self.func_map.keys().collect(), &_fast_function_set, &func_mapping, &self.imports_map, &mut kernel_compile_stats);
+        let partitions = form_partitions(max_partitions, max_loc_in_partition, max_duplicate_funcs, self.func_map.keys().collect(), &_fast_function_set, &func_mapping, &self.imports_map, &mut kernel_compile_stats);
 
         dbg!(&partitions);
 

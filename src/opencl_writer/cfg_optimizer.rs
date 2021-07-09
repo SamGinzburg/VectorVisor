@@ -91,7 +91,7 @@ fn get_called_funcs(func: &wast::Func, fastcalls: &HashSet<String>, func_map: &H
  * each other into the same OpenCL kernel.
  */
 
-pub fn form_partitions(num_funcs_in_partition: u32, instr_count_limit: u32, func_names: Vec<&String>, fastcalls: &HashSet<String>, func_map: &HashMap<String, &wast::Func>, imports_map: &HashMap<&str, (&str, Option<&str>, wast::ItemSig)>, kernel_compile_stats: &mut HashMap<u32, (u32, u32, u32, u32, u32, u32)>) -> Vec<(u32, HashSet<String>)> {
+pub fn form_partitions(num_funcs_in_partition: u32, instr_count_limit: u32, func_copy_limit: u32, func_names: Vec<&String>, fastcalls: &HashSet<String>, func_map: &HashMap<String, &wast::Func>, imports_map: &HashMap<&str, (&str, Option<&str>, wast::ItemSig)>, kernel_compile_stats: &mut HashMap<u32, (u32, u32, u32, u32, u32, u32)>) -> Vec<(u32, HashSet<String>)> {
 
     let mut func_set = HashSet::<&String>::from_iter(func_names);
     let mut partitions = vec![];
@@ -107,7 +107,6 @@ pub fn form_partitions(num_funcs_in_partition: u32, instr_count_limit: u32, func
      */
 
     let mut include_limit: HashMap<String, u32> = HashMap::new();
-    let func_copy_limit = 2;
 
     let mut func_list = Vec::from_iter(func_set.clone());
     while let Some(f_name) = func_list.pop() {
