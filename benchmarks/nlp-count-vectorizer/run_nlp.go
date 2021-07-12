@@ -63,7 +63,8 @@ func RandString(n int) string {
 func GetTweetVec(n int, compiled_tweets []string) []string {
     tweets := make([]string, n)
     for i := range tweets {
-	tweets[i] = compiled_tweets[rand.Intn(len(compiled_tweets))]
+	tweets[i] = compiled_tweets[0]
+	//tweets[i] = compiled_tweets[rand.Intn(len(compiled_tweets))]
     }
     return tweets
 }
@@ -193,7 +194,7 @@ func main() {
 
 	reqs := make([][]byte, NUM_PARAMS)
 	for i := 0; i < NUM_PARAMS; i++ {
-		p := payload{Text: GetTweetVec(1024, tweets)}
+		p := payload{Text: GetTweetVec(1, tweets)}
 		request_body, _ := json.Marshal(p)
 		reqs[i] = request_body
 	}

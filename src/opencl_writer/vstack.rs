@@ -1798,6 +1798,8 @@ impl<'a> StackCtx {
                     ret_str += &format!("\t}}\n");
                 }
             }
+            // Reset the local cache after saving locals to the stack, to avoid duplicate writes
+            ret_str += &format!("\tlocal_cache[{}] = 0;\n", cache_idx);
         }
 
         let mut intermediate_offset = 0;

@@ -14,6 +14,7 @@ struct FuncResponse {
 
 fn tokenize_inputs(event: FuncInput) -> FuncResponse {
     let mut results = vec![];
+    println!("{:?}", event);
     let tok = VTextTokenizerParams::default().lang("en").build().unwrap();
     for tweet in event.tweets {
         let mut vec = vec![];
