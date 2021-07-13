@@ -1885,14 +1885,6 @@ impl<'a> StackCtx {
     pub fn restore_context(&self, restore_locals_only: bool, restore_intermediates_only: bool) -> String {
         let mut ret_str = String::from("");
 
-        // clean up the stack space for the context
-        // don't do this if we are only restoring locals (stack saving for loops)
-
-        if !restore_locals_only {
-            let stack_frame_size = self.stack_frame_size();
-            ret_str += &format!("\t*sp -= {};\n", stack_frame_size);
-        }
-
         // First, load all locals from memory
         if !restore_intermediates_only {
             for (local, ty) in self.local_types.iter() {
@@ -1941,6 +1933,22 @@ impl<'a> StackCtx {
             let mut intermediate_offset = 0;
 
             let (i32_range, i64_range, f32_range, f64_range) = self.generate_intermediate_ranges();
+
+            // Restore the stack context
+            let mut stack_frame_size = 0;
+            for _ in i32_range.clone() {
+                stack_frame_size += 1;
+            }
+            for _ in i64_range.clone() {
+                stack_frame_size += 2;
+            }
+            for _ in f32_range.clone() {
+                stack_frame_size += 1
+            }
+            for _ in f64_range.clone() {
+                stack_frame_size += 2;
+            }
+            ret_str += &format!("\t*sp -= {};\n", stack_frame_size);
 
             for idx in i32_range {
                 ret_str += &format!("\t{} = {};\n", &self.i32_stack.get(idx).unwrap(),
