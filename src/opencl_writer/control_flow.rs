@@ -77,7 +77,7 @@ pub fn emit_br(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx,
             }
 
             // Get the value to decrement *sp by in the case of this jump
-            ret_str += &format!("\t*sp -= {};\n", stack_ctx.vstack_get_stack_delta(block_count));
+            //ret_str += &format!("\t*sp -= {};\n", stack_ctx.vstack_get_stack_delta(block_count));
             ret_str += &format!("\t{}\n", format!("goto {}_{};", format!("{}{}", "__", fn_name.replace(".", "")), block_name));
         } else {
             ret_str += &format!("\t{}\n", format!("goto {}_{}_fastcall;", format!("{}{}", "__", fn_name.replace(".", "")), block_name));

@@ -68,6 +68,8 @@ pub struct StackCtx {
     f64_idx: usize,
     // Local & Parameter information
     stack_frame_offset: u32,
+    // offsets of intermediates from the stack frame offset
+    intermediate_offsets: HashMap<String, u32>,
     local_offsets: HashMap<String, u32>,
     local_types: HashMap<String, StackType>,
     param_offset: i32,
@@ -1364,6 +1366,26 @@ impl<'a> StackCtx {
             }
         }
 
+        // For each intermediate, map it to an offset
+        let mut intermediate_offsets: HashMap<String, u32> = HashMap::new();
+        let mut curr_offset = 0;
+        for idx in i32_stack.clone() {
+            intermediate_offsets.insert(idx, curr_offset);
+            curr_offset += 1;
+        }
+        for idx in i64_stack.clone() {
+            intermediate_offsets.insert(idx, curr_offset);
+            curr_offset += 2;
+        }
+        for idx in f32_stack.clone() {
+            intermediate_offsets.insert(idx, curr_offset);
+            curr_offset += 1;
+        }
+        for idx in f64_stack.clone() {
+            intermediate_offsets.insert(idx, curr_offset);
+            curr_offset += 2;
+        }
+
         StackCtx {
             i32_stack: i32_stack,
             i32_idx: 0,
@@ -1374,6 +1396,7 @@ impl<'a> StackCtx {
             f64_stack: f64_stack,
             f64_idx: 0,
             stack_frame_offset: max_offset + max_offset_type_size,
+            intermediate_offsets: intermediate_offsets,
             local_offsets: local_offsets.clone(),
             local_types: local_types_converted,
             param_offset: param_offset,
@@ -1822,31 +1845,37 @@ impl<'a> StackCtx {
             /*
              * The ctx saving structure is:
              *         (fn start, sfp pointer)
-             * |  <parameters>  | <locals> | intermediates ....
+             * |  <parameters>  | <locals> | <intermediates> ....
              * 
              */
-
             for idx in i32_range {
-                ret_str += &format!("\t{};\n", &emit_write_u32(&format!("(ulong)(stack_u32+{}+*sp)", intermediate_offset),
+                let i_name = self.i32_stack.get(idx).unwrap();
+                let i_name_offset = self.intermediate_offsets.get(i_name).unwrap();
+                ret_str += &format!("\t{};\n", &emit_write_u32(&format!("(ulong)(stack_u32+{}+{})", self.stack_frame_offset, i_name_offset),
                                                                 "(ulong)stack_u32",
-                                                                &self.i32_stack.get(idx).unwrap(),
+                                                                &i_name,
                                                                 "warp_idx"));
                 intermediate_offset += 1;
             }
     
             for idx in i64_range {
-                ret_str += &format!("\t{};\n", &emit_write_u64(&format!("(ulong)(stack_u32+{}+*sp)", intermediate_offset),
+                let i_name = self.i64_stack.get(idx).unwrap();
+                let i_name_offset = self.intermediate_offsets.get(i_name).unwrap();
+                ret_str += &format!("\t{};\n", &emit_write_u64(&format!("(ulong)(stack_u32+{}+{})", self.stack_frame_offset, i_name_offset),
                                                                 "(ulong)stack_u32",
-                                                                &self.i64_stack.get(idx).unwrap(),
+                                                                &i_name,
                                                                 "warp_idx"));
                 intermediate_offset += 2;
             }
     
             for idx in f32_range {
+                let i_name = self.f32_stack.get(idx).unwrap();
+                let i_name_offset = self.intermediate_offsets.get(i_name).unwrap();
+
                 ret_str += &format!("\t{{\n");
                 ret_str += &format!("\t\tuint temp = 0;\n");
-                ret_str += &format!("\t\t___private_memcpy_nonmmu(&temp, &{}, sizeof(float));\n", &self.f32_stack.get(idx).unwrap());
-                ret_str += &format!("\t\t{};\n", &emit_write_u32(&format!("(ulong)(stack_u32+{}+*sp)", intermediate_offset),
+                ret_str += &format!("\t\t___private_memcpy_nonmmu(&temp, &{}, sizeof(float));\n", &i_name);
+                ret_str += &format!("\t\t{};\n", &emit_write_u32(&format!("(ulong)(stack_u32+{}+{})", self.stack_frame_offset, i_name_offset),
                                                                 "(ulong)stack_u32",
                                                                 "temp",
                                                                 "warp_idx"));
@@ -1855,10 +1884,13 @@ impl<'a> StackCtx {
             }
     
             for idx in f64_range {
+                let i_name = self.f64_stack.get(idx).unwrap();
+                let i_name_offset = self.intermediate_offsets.get(i_name).unwrap();
+
                 ret_str += &format!("\t{{\n");
                 ret_str += &format!("\t\tulong temp = 0;\n");
-                ret_str += &format!("\t\t___private_memcpy_nonmmu(&temp, &{}, sizeof(double));\n", &self.f64_stack.get(idx).unwrap());
-                ret_str += &format!("\t\t{};\n", &emit_write_u64(&format!("(ulong)(stack_u32+{}+*sp)", intermediate_offset),
+                ret_str += &format!("\t\t___private_memcpy_nonmmu(&temp, &{}, sizeof(double));\n", &i_name);
+                ret_str += &format!("\t\t{};\n", &emit_write_u64(&format!("(ulong)(stack_u32+{}+{})", self.stack_frame_offset, i_name_offset),
                                                                 "(ulong)stack_u32",
                                                                 "temp",
                                                                 "warp_idx"));
@@ -1870,11 +1902,12 @@ impl<'a> StackCtx {
         // allocate space for saving the context on *real* stack
         // only do this if we have to save intermediate values at all
 
+        /*
         if !save_locals_only {
             // Get the most recent control stack 
-            //let stack_frame_size = self.control_stack.last().unwrap_or(&0);
             ret_str += &format!("\t*sp += {};\n", intermediate_offset);
         }
+        */
 
         ret_str
     }
@@ -1930,11 +1963,11 @@ impl<'a> StackCtx {
         
         if !restore_locals_only {
             // Now restore the intermediate values
-            let mut intermediate_offset = 0;
 
             let (i32_range, i64_range, f32_range, f64_range) = self.generate_intermediate_ranges();
 
             // Restore the stack context
+            /*
             let mut stack_frame_size = 0;
             for _ in i32_range.clone() {
                 stack_frame_size += 1;
@@ -1949,42 +1982,50 @@ impl<'a> StackCtx {
                 stack_frame_size += 2;
             }
             ret_str += &format!("\t*sp -= {};\n", stack_frame_size);
+            */
 
             for idx in i32_range {
-                ret_str += &format!("\t{} = {};\n", &self.i32_stack.get(idx).unwrap(),
-                                                    &emit_read_u32(&format!("(ulong)(stack_u32+{}+*sp)", intermediate_offset),
+                let i_name = self.i32_stack.get(idx).unwrap();
+                let i_name_offset = self.intermediate_offsets.get(i_name).unwrap();
+
+                ret_str += &format!("\t{} = {};\n", &i_name,
+                                                    &emit_read_u32(&format!("(ulong)(stack_u32+{}+{})", self.stack_frame_offset, i_name_offset),
                                                                 "(ulong)stack_u32",
                                                                 "warp_idx"));
-
-                intermediate_offset += 1;
             }
 
             for idx in i64_range {
-                ret_str += &format!("\t{} = {};\n", &self.i64_stack.get(idx).unwrap(), 
-                                                    &emit_read_u64(&format!("(ulong)(stack_u32+{}+*sp)", intermediate_offset),
+                let i_name = self.i64_stack.get(idx).unwrap();
+                let i_name_offset = self.intermediate_offsets.get(i_name).unwrap();
+
+                ret_str += &format!("\t{} = {};\n", &i_name, 
+                                                    &emit_read_u64(&format!("(ulong)(stack_u32+{}+{})", self.stack_frame_offset, i_name_offset),
                                                                 "(ulong)stack_u32",
                                                                 "warp_idx"));
-                intermediate_offset += 2;
             }
 
             for idx in f32_range {
+                let i_name = self.f32_stack.get(idx).unwrap();
+                let i_name_offset = self.intermediate_offsets.get(i_name).unwrap();
+
                 ret_str += &format!("\t{{\n");
-                ret_str += &format!("\t\tuint temp = {};\n", &emit_read_u32(&format!("(ulong)(stack_u32+{}+*sp)", intermediate_offset),
+                ret_str += &format!("\t\tuint temp = {};\n", &emit_read_u32(&format!("(ulong)(stack_u32+{}+{})", self.stack_frame_offset, i_name_offset),
                                                                                 "(ulong)stack_u32",
                                                                                 "warp_idx"));
-                ret_str += &format!("\t\t___private_memcpy_nonmmu(&{}, &temp, sizeof(float));\n", &self.f32_stack.get(idx).unwrap());
+                ret_str += &format!("\t\t___private_memcpy_nonmmu(&{}, &temp, sizeof(float));\n", &i_name);
                 ret_str += &format!("\t}}\n");
-                intermediate_offset += 1;
             }
 
             for idx in f64_range {
+                let i_name = self.f64_stack.get(idx).unwrap();
+                let i_name_offset = self.intermediate_offsets.get(i_name).unwrap();
+
                 ret_str += &format!("\t{{\n");
-                ret_str += &format!("\t\tulong temp = {};\n", &emit_read_u64(&format!("(ulong)(stack_u32+{}+*sp)", intermediate_offset),
+                ret_str += &format!("\t\tulong temp = {};\n", &emit_read_u64(&format!("(ulong)(stack_u32+{}+{})", self.stack_frame_offset, i_name_offset),
                                                                                 "(ulong)stack_u32",
                                                                                 "warp_idx"));
-                ret_str += &format!("\t\t___private_memcpy_nonmmu(&{}, &temp, sizeof(double));\n", &self.f64_stack.get(idx).unwrap());
+                ret_str += &format!("\t\t___private_memcpy_nonmmu(&{}, &temp, sizeof(double));\n", &i_name);
                 ret_str += &format!("\t}}\n");
-                intermediate_offset += 2;
             }
         }
 

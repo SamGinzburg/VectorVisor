@@ -1463,6 +1463,11 @@ impl<'a> OpenCLCWriter<'_> {
                     }
                 }
 
+                // Allocate space on the stack for saving the intermediate context
+                if !is_fastcall {
+                    final_string += &format!("\t*sp += {};\n", stack_ctx.stack_frame_size());
+                }
+
                 // keep a stack of control-flow labels
                 // for blocks we need to put the label at the "end" statement, while loops always jump back
                 let mut control_stack: Vec<(String, u32, i32)> = vec![];
