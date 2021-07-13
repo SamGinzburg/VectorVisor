@@ -1388,7 +1388,17 @@ impl<'a> StackCtx {
      * When entering a loop block, track how much we increase *sp by
      */
     pub fn vstack_push_stack_info(&mut self, stack_inc: u32) -> () {
-        self.control_stack.push(stack_inc);
+        // Look at the previous control stack entry (if any)
+        match self.control_stack.clone().last() {
+            Some(e) => {
+                // If there is a previous stack frame, compute the delta
+                self.control_stack.push(stack_inc - e);
+            },
+            None => {
+                // Else, push the total stack inc
+                self.control_stack.push(stack_inc);
+            }
+        }
     }
 
     pub fn vstack_pop_stack_info(&mut self) -> () {
@@ -1861,8 +1871,9 @@ impl<'a> StackCtx {
         // only do this if we have to save intermediate values at all
 
         if !save_locals_only {
-            let stack_frame_size = self.stack_frame_size();
-            ret_str += &format!("\t*sp += {};\n", stack_frame_size);
+            // Get the most recent control stack 
+            //let stack_frame_size = self.control_stack.last().unwrap_or(&0);
+            ret_str += &format!("\t*sp += {};\n", intermediate_offset);
         }
 
         ret_str
