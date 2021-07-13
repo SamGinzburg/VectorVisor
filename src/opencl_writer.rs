@@ -1465,7 +1465,7 @@ impl<'a> OpenCLCWriter<'_> {
 
                 // Allocate space on the stack for saving the intermediate context
                 if !is_fastcall {
-                    final_string += &format!("\t*sp += {};\n", stack_ctx.stack_frame_size());
+                    final_string += &format!("\t*sp += {};\n", stack_ctx.max_stack_frame_size());
                 }
 
                 // keep a stack of control-flow labels

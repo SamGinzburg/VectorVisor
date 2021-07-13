@@ -1757,8 +1757,14 @@ impl<'a> StackCtx {
         self.total_stack_types[self.total_stack_types.len()-1-idx].clone()
     }
 
+    // get the size of the current stack frame
     pub fn stack_frame_size(&self) -> usize {
         self.i32_idx + (self.i64_idx*2) + self.f32_idx + (self.f64_idx*2)
+    }
+
+    // get the max possible size of a stack context for the current function
+    pub fn max_stack_frame_size(&self) -> usize {
+        self.i32_stack.len() + (self.i64_stack.len()*2) + self.f32_stack.len() + (self.f64_stack.len()*2)
     }
 
     pub fn generate_intermediate_ranges(&self) -> (Range<usize>, Range<usize>, Range<usize>, Range<usize>) {
