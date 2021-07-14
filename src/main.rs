@@ -262,6 +262,14 @@ fn main() {
             .multiple(false)
             .number_of_values(1)
             .takes_value(true))
+        .arg(Arg::with_name("disablefastcalls")
+            .long("disablefastcalls")
+            .value_name("Disables fastcall optimization for target program")
+            .default_value("false")
+            .help("This flag disables fastcall optimization for target program if set to true")
+            .multiple(false)
+            .number_of_values(1)
+            .takes_value(true))
         .get_matches();
 
     dbg!(matches.clone());
@@ -291,6 +299,7 @@ fn main() {
     let max_part = value_t!(matches.value_of("partitions"), u32).unwrap_or_else(|e| e.exit());
     let max_loc = value_t!(matches.value_of("maxloc"), u32).unwrap_or_else(|e| e.exit());
     let max_dup = value_t!(matches.value_of("maxdup"), u32).unwrap_or_else(|e| e.exit());
+    let disable_fastcalls = value_t!(matches.value_of("disablefastcalls"), bool).unwrap_or_else(|e| e.exit());
 
     dbg!(compile_args.clone());
 
@@ -329,6 +338,7 @@ fn main() {
                                                                     max_part,
                                                                     max_loc,
                                                                     max_dup,
+                                                                    disable_fastcalls,
                                                                     debug_call_print,
                                                                     force_inline,
                                                                     is_gpu,
@@ -391,6 +401,7 @@ fn main() {
                                                                         max_part,
                                                                         max_loc,
                                                                         max_dup,
+                                                                        disable_fastcalls,
                                                                         debug_call_print,
                                                                         force_inline,
                                                                         is_gpu,
@@ -430,6 +441,7 @@ fn main() {
                                                                         max_part,
                                                                         max_loc,
                                                                         max_dup,
+                                                                        disable_fastcalls,
                                                                         debug_call_print,
                                                                         force_inline,
                                                                         is_gpu,
@@ -472,6 +484,7 @@ fn main() {
                                                                         max_part,
                                                                         max_loc,
                                                                         max_dup,
+                                                                        disable_fastcalls,
                                                                         debug_call_print,
                                                                         force_inline,
                                                                         is_gpu,
@@ -511,6 +524,7 @@ fn main() {
                                                                         max_part,
                                                                         max_loc,
                                                                         max_dup,
+                                                                        disable_fastcalls,
                                                                         debug_call_print,
                                                                         force_inline,
                                                                         is_gpu,

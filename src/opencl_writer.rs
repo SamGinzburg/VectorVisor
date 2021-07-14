@@ -2063,6 +2063,7 @@ void {}(global uint   *stack_u32,
                              max_partitions: u32,
                              max_loc_in_partition: u32,
                              max_duplicate_funcs: u32,
+                             disable_fastcalls: bool,
                              debug_print_function_calls: bool,
                              force_inline: bool,
                              is_gpu: bool,
@@ -2169,15 +2170,18 @@ r#"
             indirect_call_set.insert(name);
         }
 
-        let _fast_function_set = compute_fastcall_set(self, Vec::from_iter(funcs.clone()), &mut indirect_call_set);
-        //let _fast_function_set: HashSet<String> = HashSet::new();
-        // TODO: emit fastcalls when available
-        dbg!(&_fast_function_set);
+        let fast_function_set = if !disable_fastcalls {
+            compute_fastcall_set(self, Vec::from_iter(funcs.clone()), &mut indirect_call_set)
+        } else {
+            HashSet::new()
+        };
+
+        dbg!(&fast_function_set);
 
         // Generate the fastcall header
 
         // first generate the function declarations
-        for fastfunc in _fast_function_set.iter() {
+        for fastfunc in fast_function_set.iter() {
             let func = self.func_map.get(&fastfunc.to_string()).unwrap();
             // Get parameters & return type of the function
             let params = get_func_params(self, &func.ty);
@@ -2212,7 +2216,7 @@ r#"
         }
 
         // emit functions
-        for fastfunc in _fast_function_set.iter() {
+        for fastfunc in fast_function_set.iter() {
             let func = self.emit_function(self.func_map.get(&fastfunc.to_string()).unwrap(),
                                             call_ret_map,
                                             &mut call_ret_idx,
@@ -2220,7 +2224,7 @@ r#"
                                             hypercall_id_count,
                                             indirect_call_mapping,
                                             &global_mappings,
-                                            _fast_function_set.clone(),
+                                            fast_function_set.clone(),
                                             force_inline,
                                             debug_print_function_calls,
                                             is_gpu,
@@ -2242,7 +2246,7 @@ r#"
 
         // Compute the function groups, we will then enumerate the groups to emit the functions
         // kernel_partition_mapping get the partition ID from a function idx
-        let partitions = form_partitions(max_partitions, max_loc_in_partition, max_duplicate_funcs, self.func_map.keys().collect(), &_fast_function_set, &func_mapping, &self.imports_map, &mut kernel_compile_stats);
+        let partitions = form_partitions(max_partitions, max_loc_in_partition, max_duplicate_funcs, self.func_map.keys().collect(), &fast_function_set, &func_mapping, &self.imports_map, &mut kernel_compile_stats);
 
         dbg!(&partitions);
 
@@ -2270,7 +2274,7 @@ r#"
                                               hypercall_id_count,
                                               indirect_call_mapping,
                                               &global_mappings,
-                                              _fast_function_set.clone(),
+                                              fast_function_set.clone(),
                                               force_inline,
                                               debug_print_function_calls,
                                               is_gpu,
