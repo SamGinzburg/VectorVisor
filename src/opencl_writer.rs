@@ -2159,6 +2159,12 @@ r#"
         // generate the indirect call mapping T0, refer to openclwriter/functions.rs:emit_call_indirect
         // for notes on why we are doing this statically at compile time
         let indirect_call_mapping: &HashMap<u32, &wast::Index> = &self.process_elements(debug);
+        
+        let mut func_mapping: HashMap<String, &wast::Func> = HashMap::new();
+
+        for (name, func) in &self.func_map {
+            func_mapping.insert(name.to_string(), func);
+        }
 
         // generate the set of indirect calls
         let mut indirect_call_set = HashSet::new();
@@ -2171,7 +2177,7 @@ r#"
         }
 
         let fast_function_set = if !disable_fastcalls {
-            compute_fastcall_set(self, Vec::from_iter(funcs.clone()), &mut indirect_call_set, None)
+            compute_fastcall_set(self, Vec::from_iter(funcs.clone()), &mut indirect_call_set)
         } else {
             let allowed_fastcalls = vec!["__lctrans",
                                          "dlfree",
@@ -2216,7 +2222,26 @@ r#"
             for f in allowed_fastcalls {
                 hset.insert(f.to_string());
             }
-            compute_fastcall_set(self, Vec::from_iter(funcs.clone()), &mut indirect_call_set, Some(hset))
+            let mut fastcall_set = compute_fastcall_set(self, Vec::from_iter(funcs.clone()), &mut indirect_call_set);
+
+            // now filter to only allow the allowed list and functions they call
+            let hset_clone = hset.clone();
+            let intersection = fastcall_set.intersection(&hset_clone);
+            for func in intersection {
+                let (called_loop, called) = get_called_funcs(self.func_map.get(&func.to_string()).unwrap(),
+                                                             &HashSet::new(),
+                                                             &func_mapping,
+                                                             &self.imports_map,
+                                                             &mut HashSet::new());
+                for call in called_loop {
+                    hset.insert(call);
+                }
+                for call in called {
+                    hset.insert(call);
+                }
+            }
+
+            hset
         };
 
         dbg!(&fast_function_set);
@@ -2276,13 +2301,6 @@ r#"
             write!(fastcall_header, "{}", func).unwrap();
         }
 
-        let mut func_mapping: HashMap<String, &wast::Func> = HashMap::new();
-
-        for (name, func) in &self.func_map {
-            func_mapping.insert(name.to_string(), func);
-        }
-
-
         // Compute how many instructions each fastcall contains (necessary for packing functions)
         // This is needed for the function packing
 
@@ -2291,7 +2309,7 @@ r#"
         // kernel_partition_mapping get the partition ID from a function idx
         let partitions = form_partitions(max_partitions, max_loc_in_partition, max_duplicate_funcs, self.func_map.keys().collect(), &fast_function_set, &func_mapping, &self.imports_map, &mut kernel_compile_stats);
 
-        dbg!(&partitions);
+        //dbg!(&partitions);
 
         for (partition_idx, partition) in partitions.clone() {
             let mut function_idx_label_temp: HashMap<&str, u32> = HashMap::new();

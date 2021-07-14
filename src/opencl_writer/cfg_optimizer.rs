@@ -8,7 +8,7 @@ use std::iter::FromIterator;
  * Get the names of:
  * - Called functions inside loops, Called functions
  */
-fn get_called_funcs(func: &wast::Func, fastcalls: &HashSet<String>, func_map: &HashMap<String, &wast::Func>, imports_map: &HashMap<&str, (&str, Option<&str>, wast::ItemSig)>, visited_funcs: &mut HashSet<String>) -> (Vec<String>, Vec<String>) {
+pub fn get_called_funcs(func: &wast::Func, fastcalls: &HashSet<String>, func_map: &HashMap<String, &wast::Func>, imports_map: &HashMap<&str, (&str, Option<&str>, wast::ItemSig)>, visited_funcs: &mut HashSet<String>) -> (Vec<String>, Vec<String>) {
     let mut fn_call_in_loop: Vec<String> = vec![];
     let mut fn_call: Vec<String> = vec![];
 

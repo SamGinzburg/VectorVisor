@@ -114,25 +114,11 @@ pub enum FastcallPassStatus {
     FastcallPassStatus::fastcall_true
  }
 
-fn get_func_name(func: &wast::Func) -> String {
-    match (&func.kind, &func.id, &func.ty) {
-        (wast::FuncKind::Import(_), _, _) => {
-            panic!("InlineImport functions not yet implemented (fastcall pass)");
-        },
-        (wast::FuncKind::Inline{locals, expression}, Some(id), _typeuse) => {
-
-            // Is this function the start function?
-            return id.name().to_string();
-        },
-        (_, _, _) => panic!("Inline function must always have a valid identifier in wasm")
-    }
-}
-
  /*
   * Check all the functions in the program to see which ones we can convert into fastcalls
   * Returns a set of function IDs that can be converted
   */
- pub fn compute_fastcall_set(writer: &opencl_writer::OpenCLCWriter, func_list: Vec<&wast::Func>, indirect_calls: &mut HashSet<String>, allowed_calls: Option<HashSet<String>>) -> HashSet<String> {
+ pub fn compute_fastcall_set(writer: &opencl_writer::OpenCLCWriter, func_list: Vec<&wast::Func>, indirect_calls: &mut HashSet<String>) -> HashSet<String> {
     let mut called_funcs = HashSet::new();
     let mut known_bad_calls = HashSet::new();
 
@@ -143,16 +129,6 @@ fn get_func_name(func: &wast::Func) -> String {
         //println!("Fastcall analysis pass, found: {:?} functions to optimize", fastcall_count);
         ambiguous_fastcalls = vec![];
         for func in &func_list {
-            let fname = get_func_name(func);
-            match allowed_calls {
-                Some(ref set) => {
-                    if !set.contains(&fname.to_string()) {
-                        continue
-                    }
-                },
-                None => (),
-            }
-
             let is_fastcall = is_fastcall(writer, func, &mut called_funcs, indirect_calls);
             match is_fastcall {
                 FastcallPassStatus::fastcall_true => {
