@@ -63,8 +63,8 @@ func RandString(n int) string {
 func GetTweetVec(n int, compiled_tweets []string) []string {
     tweets := make([]string, n)
     for i := range tweets {
-	tweets[i] = compiled_tweets[0]
-	//tweets[i] = compiled_tweets[rand.Intn(len(compiled_tweets))]
+	//tweets[i] = compiled_tweets[0]
+	tweets[i] = compiled_tweets[rand.Intn(len(compiled_tweets))]
     }
     return tweets
 }
@@ -175,6 +175,12 @@ func main() {
 		panic(err)
 	}
 
+	input_size, err := strconv.Atoi(os.Args[7])
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(2)
+	}
+
 	tweets := make([]string, 0)
 	r := bufio.NewReader(tsv)
 	csv_reader := csv.NewReader(r)
@@ -194,7 +200,7 @@ func main() {
 
 	reqs := make([][]byte, NUM_PARAMS)
 	for i := 0; i < NUM_PARAMS; i++ {
-		p := payload{Text: GetTweetVec(1, tweets)}
+		p := payload{Text: GetTweetVec(input_size, tweets)}
 		request_body, _ := json.Marshal(p)
 		reqs[i] = request_body
 	}

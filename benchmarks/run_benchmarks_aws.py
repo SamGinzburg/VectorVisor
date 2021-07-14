@@ -316,10 +316,10 @@ def run_nlp_count_bench():
     x=$(cloud-init status)
     done
 
-    go run /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/run_nlp.go {addr} 8000 {target_rps} 1 60 small_tweets.txt {input_size}
+    go run /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/run_nlp.go {addr} 8000 {target_rps} 1 60 smaller_tweets.txt {input_size}
 
-    go run /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/run_nlp.go {addr} 8000 {target_rps} 1 60 small_tweets.txt {input_size}
-    """.format(addr=gpu_instance[0].private_dns_name, input_size=1200, target_rps=target_rps)
+    go run /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/run_nlp.go {addr} 8000 {target_rps} 1 60 smaller_tweets.txt {input_size}
+    """.format(addr=gpu_instance[0].private_dns_name, input_size=1000, target_rps=target_rps)
 
 
     command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
@@ -350,10 +350,10 @@ def run_nlp_count_bench():
     x=$(cloud-init status)
     done
 
-    go run /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/run_nlp.go {addr} 8000 {target_rps} 1 60 small_tweets.txt {input_size}
+    go run /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/run_nlp.go {addr} 8000 {target_rps} 1 60 smaller_tweets.txt {input_size}
 
-    go run /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/run_nlp.go {addr} 8000 {target_rps} 1 60 small_tweets.txt {input_size}
-    """.format(addr=cpu_bench_instance[0].private_dns_name, input_size=1200, target_rps=target_rps)
+    go run /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/run_nlp.go {addr} 8000 {target_rps} 1 60 smaller_tweets.txt {input_size}
+    """.format(addr=cpu_bench_instance[0].private_dns_name, input_size=1000, target_rps=target_rps)
 
     command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
 
