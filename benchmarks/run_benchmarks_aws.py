@@ -39,6 +39,9 @@ userdata = """#cloud-config
      - cd ..
      - cd pbkdf2/
      - ~/.cargo/bin/cargo build --release
+     - cd ..
+     - cd nlp-count-vectorizer/
+     - ~/.cargo/bin/cargo build --release
 """ % region
 
 
@@ -266,6 +269,102 @@ def run_lz4_bench():
     with open("cpu_bench_lz4.txt", "w") as text_file:
         text_file.write(str(output))
 
+def run_nlp_count_bench():
+    run_nlp_command_wasmtime = """#!/bin/bash
+    sudo su
+
+    x=$(cloud-init status)
+    until [ "$x" == "status: done" ]; do
+    sleep 10
+    x=$(cloud-init status)
+    done
+
+    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/target/wasm32-wasi/release/nlp-count-vectorizer.wasm --ip=0.0.0.0 --heap=4194304 --stack=262144 --hcallsize=524288 --partition=true --serverless=true --vmcount=3072 --wasmtime=true &> /tmp/nlp-count-vectorizer.log &
+    """
+
+    run_command(run_nlp_command_wasmtime, "run_nlp_command_wasmtime", cpu_bench_instance[0].id)
+
+    run_nlp_command = """#!/bin/bash
+    sudo su
+
+    x=$(cloud-init status)
+    until [ "$x" == "status: done" ]; do
+    sleep 10
+    x=$(cloud-init status)
+    done
+
+    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/target/wasm32-wasi/release/nlp-count-vectorizer.wasm --ip=0.0.0.0 --heap=4194304 --stack=262144 --hcallsize=524288 --partition=true --serverless=true --vmcount=3072 --vmgroups=1 --maxdup=2 --disablefastcalls=true &> /tmp/nlp-count-vectorizer.log &
+    """
+
+    run_command(run_nlp_command, "run_nlp_command", gpu_instance[0].id)
+
+    # Now set up the invoker
+
+    run_invoker = """#!/bin/bash
+    sudo su
+
+    mkdir -p ~/gocache/
+    mkdir -p ~/xdg/
+    export GOCACHE=~/gocache/
+    export XDG_CACHE_HOME=~/xdg/
+
+    go env
+
+    x=$(cloud-init status)
+    until [ "$x" == "status: done" ]; do
+    sleep 10
+    x=$(cloud-init status)
+    done
+
+    go run /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/run_nlp.go {addr} 8000 {target_rps} 1 60 small_tweets.txt {input_size}
+
+    go run /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/run_nlp.go {addr} 8000 {target_rps} 1 60 small_tweets.txt {input_size}
+    """.format(addr=gpu_instance[0].private_dns_name, input_size=1200, target_rps=target_rps)
+
+
+    command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
+
+    time.sleep(20)
+
+    # Block until benchmark is complete
+    output = block_on_command(command_id, invoker_instance[0].id)
+    print (output)
+
+    # save output
+    with open("gpu_bench_nlp.txt", "w") as text_file:
+        text_file.write(str(output))
+
+    run_invoker_wasmtime = """#!/bin/bash
+    sudo su
+
+    mkdir -p ~/gocache/
+    mkdir -p ~/xdg/
+    export GOCACHE=~/gocache/
+    export XDG_CACHE_HOME=~/xdg/
+
+    go env
+
+    x=$(cloud-init status)
+    until [ "$x" == "status: done" ]; do
+    sleep 10
+    x=$(cloud-init status)
+    done
+
+    go run /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/run_nlp.go {addr} 8000 {target_rps} 1 60 small_tweets.txt {input_size}
+
+    go run /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/run_nlp.go {addr} 8000 {target_rps} 1 60 small_tweets.txt {input_size}
+    """.format(addr=cpu_bench_instance[0].private_dns_name, input_size=1200, target_rps=target_rps)
+
+    command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
+
+    time.sleep(20)
+
+    # Block until benchmark is complete
+    output = block_on_command(command_id, invoker_instance[0].id)
+    print (output)
+    # save output
+    with open("cpu_bench_nlp.txt", "w") as text_file:
+        text_file.write(str(output))
 
 # call between benchmarks
 def cleanup():
@@ -291,7 +390,7 @@ p3.2xlarge   => 1 V100, 16 GiB memory, 8 vCPU
 """
 # AMIs specific to us-east-2
 gpu_instance = ec2.create_instances(ImageId='ami-0414f41139d36fb50',
-                                InstanceType="g4dn.2xlarge",
+                                InstanceType="g4dn.xlarge",
                                 MinCount=1,
                                 MaxCount=1,
                                 UserData=userdata,
@@ -359,13 +458,14 @@ while True:
 ssm_client = boto3.client('ssm')
 
 # run pbkdf2 bench
-run_pbkdf2_bench()
+#run_pbkdf2_bench()
 
-cleanup()
+#cleanup()
 
 # run lz4 bench
-run_lz4_bench()
+#run_lz4_bench()
 
+run_nlp_count_bench()
 
 # clean up all instances at end
 ec2.instances.filter(InstanceIds = instance_id_list).terminate()
