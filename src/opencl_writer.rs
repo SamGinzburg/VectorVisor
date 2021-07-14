@@ -2171,9 +2171,52 @@ r#"
         }
 
         let fast_function_set = if !disable_fastcalls {
-            compute_fastcall_set(self, Vec::from_iter(funcs.clone()), &mut indirect_call_set)
+            compute_fastcall_set(self, Vec::from_iter(funcs.clone()), &mut indirect_call_set, None)
         } else {
-            HashSet::new()
+            let allowed_fastcalls = vec!["__lctrans",
+                                         "dlfree",
+                                         "__rust_start_panic",
+                                         "__stpcpy",
+                                         "__rdl_dealloc",
+                                         "__rdl_realloc",
+                                         "__rdl_alloc_zeroed",
+                                         "strdup",
+                                         "__rust_alloc_zeroed",
+                                         "__stpcpy",
+                                         "__rdl_dealloc",
+                                         "__rdl_realloc",
+                                         "__rdl_alloc_zeroed",
+                                         "strdup",
+                                         "__rust_alloc_zeroed",
+                                         "__rust_alloc",
+                                         "dummy",
+                                         "strlen",
+                                         "dummy_1",
+                                         "calloc",
+                                         "strncmp",
+                                         "memcpy",
+                                         "strerror_r",
+                                         "__rust_dealloc",
+                                         "free",
+                                         "strerror",
+                                         "realloc",
+                                         "__rust_realloc",
+                                         "getcwd",
+                                         "aligned_alloc",
+                                         "abort",
+                                         "__strchrnul",
+                                         "malloc",
+                                         "__rdl_alloc",
+                                         "memcmp",
+                                         "memset",
+                                         "dispose_chunk",
+                                         "strcpy",
+                                         "__wasm_call_dtors"];
+            let mut hset = HashSet::new();
+            for f in allowed_fastcalls {
+                hset.insert(f.to_string());
+            }
+            compute_fastcall_set(self, Vec::from_iter(funcs.clone()), &mut indirect_call_set, Some(hset))
         };
 
         dbg!(&fast_function_set);
