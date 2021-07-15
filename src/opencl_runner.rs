@@ -1519,10 +1519,10 @@ impl OpenCLRunner {
                 // 1) We are not blocked on a hypercall
                 // 2) The VM is not currently masked off
                 if entry_point_temp[idx] != ((-1) as i32) as u32 && (hypercall_num_temp[idx] == -2 || hypercall_num_temp[idx] == -1) {
-                    divergence_stack.insert(entry_point_temp[idx]);
+                    divergence_stack.insert(*kernel_partition_mappings.get(&entry_point_temp[idx]).unwrap());
                     stored_entry_points[idx] = entry_point_temp[idx];
                 } else if hypercall_num_temp[idx] != -2 && entry_point_temp[idx] != ((-1) as i32) as u32 {
-                    hcall_divergence_stack.insert(entry_point_temp[idx]);
+                    hcall_divergence_stack.insert(*kernel_partition_mappings.get(&entry_point_temp[idx]).unwrap());
                     stored_entry_points[idx] = entry_point_temp[idx];
                     entry_point_temp[idx] = ((-1) as i32) as u32;
                 }
@@ -1537,7 +1537,7 @@ impl OpenCLRunner {
                 let first_item = divergence_stack.clone().into_iter().collect::<Vec<u32>>()[0];
                 let next_func = divergence_stack.take(&first_item).unwrap();
 
-                start_kernel = kernels.get(kernel_partition_mappings.get(&next_func).unwrap()).unwrap();
+                start_kernel = kernels.get(&next_func).unwrap();
                 curr_func_id = next_func;
                 called_funcs.insert(curr_func_id);
 
@@ -1564,7 +1564,7 @@ impl OpenCLRunner {
                 let first_item = hcall_divergence_stack.clone().into_iter().collect::<Vec<u32>>()[0];
                 let next_func = hcall_divergence_stack.take(&first_item).unwrap();
 
-                start_kernel = kernels.get(kernel_partition_mappings.get(&next_func).unwrap()).unwrap();
+                start_kernel = kernels.get(&next_func).unwrap();
                 curr_func_id = next_func;
                 called_funcs.insert(curr_func_id);
 
