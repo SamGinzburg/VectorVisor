@@ -2309,7 +2309,7 @@ r#"
         // kernel_partition_mapping get the partition ID from a function idx
         let partitions = form_partitions(max_partitions, max_loc_in_partition, max_duplicate_funcs, self.func_map.keys().collect(), &fast_function_set, &func_mapping, &self.imports_map, &mut kernel_compile_stats);
 
-        //dbg!(&partitions);
+        dbg!(&partitions);
 
         for (partition_idx, partition) in partitions.clone() {
             let mut function_idx_label_temp: HashMap<&str, u32> = HashMap::new();

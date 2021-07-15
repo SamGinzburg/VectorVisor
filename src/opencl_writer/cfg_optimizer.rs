@@ -3,6 +3,7 @@ use crate::opencl_writer::compile_stats::*;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::iter::FromIterator;
+use std::convert::TryInto;
 
 /*
  * Get the names of:
@@ -94,7 +95,7 @@ pub fn get_called_funcs(func: &wast::Func, fastcalls: &HashSet<String>, func_map
 pub fn form_partitions(num_funcs_in_partition: u32, instr_count_limit: u32, func_copy_limit: u32, func_names: Vec<&String>, fastcalls: &HashSet<String>, func_map: &HashMap<String, &wast::Func>, imports_map: &HashMap<&str, (&str, Option<&str>, wast::ItemSig)>, kernel_compile_stats: &mut HashMap<u32, (u32, u32, u32, u32, u32, u32)>) -> Vec<(u32, HashSet<String>)> {
 
     let mut func_set = HashSet::<&String>::from_iter(func_names);
-    let mut partitions = vec![];
+    let mut partitions: Vec<(u32, HashSet<String>)> = vec![];
     let mut partition_idx = 0;
     /*
      * 1) Create a set of all functions in the program (global BTreeSet G)
@@ -106,7 +107,10 @@ pub fn form_partitions(num_funcs_in_partition: u32, instr_count_limit: u32, func
      * 6) Go to 2 and repeat until the global set G is empty
      */
 
+    // track duplicate code
     let mut include_limit: HashMap<String, u32> = HashMap::new();
+    // track which partitions have a function duplicated in
+    let mut dc_partitions: HashMap<String, HashSet<u32>> = HashMap::new();
 
     let mut func_list = Vec::from_iter(func_set.clone());
     while let Some(f_name) = func_list.pop() {
@@ -136,6 +140,7 @@ pub fn form_partitions(num_funcs_in_partition: u32, instr_count_limit: u32, func
               * - Func is below inclusion limit
               * - Doesn't violate the partition count constraint
               * - Doesn't violate the instruction count constraint
+              * - Doesn't violate the func copies count constraint
               */
               let func_copies = include_limit.get(&func).cloned().unwrap_or(0);
               if current_partition_count < num_funcs_in_partition &&
@@ -144,9 +149,16 @@ pub fn form_partitions(num_funcs_in_partition: u32, instr_count_limit: u32, func
                     // add the func to the set
                     current_partition.insert(String::from(&func));
                     func_set.remove(&func);
-                    include_limit.insert(func, func_copies + 1);
+                    include_limit.insert(func.clone(), func_copies + 1);
                     current_partition_count += 1;
                     current_instruction_count += instr_count;
+
+                    // Track duplicated code across partitions whenever we insert a function
+                    let mut temp = HashSet::new();
+                    temp.insert(partition_idx);
+                    let mut prev_partitions = dc_partitions.get(&func).cloned().unwrap_or(temp);
+                    prev_partitions.insert(partition_idx);
+                    dc_partitions.insert(func, prev_partitions);
                 }
          }
 
@@ -157,18 +169,26 @@ pub fn form_partitions(num_funcs_in_partition: u32, instr_count_limit: u32, func
              * - Func is below inclusion limit
              * - Doesn't violate the partition count constraint
              * - Doesn't violate the instruction count constraint
+             * - Doesn't violate the func copies count constraint
              */
             let func_copies = include_limit.get(&func).cloned().unwrap_or(0);
-             if current_partition_count < num_funcs_in_partition &&
-                current_instruction_count + instr_count <= instr_count_limit &&
-                func_copies < func_copy_limit {
-                   // add the func to the set
-                   current_partition.insert(String::from(&func));
-                   func_set.remove(&func);
-                   include_limit.insert(func, func_copies + 1);
-                   current_partition_count += 1;
-                   current_instruction_count += instr_count;
-                }
+            if current_partition_count < num_funcs_in_partition &&
+               current_instruction_count + instr_count <= instr_count_limit &&
+               func_copies < func_copy_limit {
+                // add the func to the set
+                current_partition.insert(String::from(&func));
+                func_set.remove(&func);
+                include_limit.insert(func.clone(), func_copies + 1);
+                current_partition_count += 1;
+                current_instruction_count += instr_count;
+
+                // Track duplicated code across partitions whenever we insert a function
+                let mut temp = HashSet::new();
+                temp.insert(partition_idx);
+                let mut prev_partitions = dc_partitions.get(&func).cloned().unwrap_or(temp);
+                prev_partitions.insert(partition_idx);
+                dc_partitions.insert(func, prev_partitions);
+            }
         }
 
 
@@ -181,13 +201,76 @@ pub fn form_partitions(num_funcs_in_partition: u32, instr_count_limit: u32, func
         // only remove this if we managed to form a partition with at least 1 other function
         func_set.remove(f_name);
 
-        partitions.push((partition_idx, current_partition.clone()));
+        /*
+         * At this point we have formed the partition, but we may now have duplicate functions
+         * across multiple partitions.
+         *
+         * To mitigate this, we can now check to see if we can merge this partition we just formed
+         * into one of the partitions with the duplicated functions.
+         *
+         * 1) Get the set S of partitions that have duplicate code
+         * 2) for each each partition in set S:
+         *      2.1) check if merging our new partition into that partition violates constraints
+         *      2.2) if not, perform the insertion
+         *      2.3) else, check subsequent partitions to see if we can merge
+         * 3) if after scanning all prior partitions w/o merging, insert new partition
+         *
+         */
+        let prev_current_partition = current_partition.clone();
+        let mut duplicate_funcs = HashSet::new();
+        for func in current_partition.iter() {
+            let func_copies = include_limit.get(func).cloned().unwrap_or(0);
+            if func_copies > 2 {
+                let prev_partitions = dc_partitions.get(func).unwrap();
+                duplicate_funcs.extend(prev_partitions.clone());
+            }
+        }
 
-        // update the kernel compile stats tracking object
-        dbg!(&current_instruction_count);
-        kernel_compile_stats.insert(partition_idx, (current_instruction_count, 0, 0, 0, 0, 0));
+        let mut modified_prior_part = false;
+        for prior_partition in duplicate_funcs.iter() {
+            if *prior_partition != partition_idx {
+                let (prev_partition_idx, prev_partition_set) = &partitions[*prior_partition as usize].clone();
+                // get prev instruction count
+                let (prev_instr_count, _, _, _, _, _) = kernel_compile_stats.get(prev_partition_idx).unwrap();
+                let part_size: u32 = prev_partition_set.len().try_into().unwrap();
+                if current_partition_count + part_size < num_funcs_in_partition &&
+                   current_instruction_count + prev_instr_count <= instr_count_limit  {
+                    // we can merge the partitions!
+                    // Combine the hashsets
+                    current_partition.extend(prev_partition_set.clone());
+                    // update partitions & update kernel compile stats 
+                    partitions[*prior_partition as usize] = (*prev_partition_idx, current_partition.clone());
+                    let stats = (current_instruction_count + prev_instr_count, 0, 0, 0, 0, 0);
+                    kernel_compile_stats.insert(*prev_partition_idx, stats);
+                    modified_prior_part = true;
+                    break;
+                }
+            }
+        }
 
-        partition_idx += 1;
+        if !modified_prior_part {
+            partitions.push((partition_idx, current_partition.clone()));
+            // update the kernel compile stats tracking object
+            kernel_compile_stats.insert(partition_idx, (current_instruction_count, 0, 0, 0, 0, 0));
+            partition_idx += 1;
+        } else {
+            // cleanup include_limit & dc_partitions
+            // For all funcs in the old partition, cleanup dc_part. as old part. no longer exists
+            for func in prev_current_partition.iter() {
+                let mut prev_partitions = dc_partitions.get(&func.clone()).unwrap_or(&HashSet::new()).clone();
+                prev_partitions.remove(&partition_idx);
+                dc_partitions.insert(func.clone(), prev_partitions.clone());
+            }
+            // Now cleanup all funcs in the intersection between the old & new partitions
+            // The include limits should be decremented
+            let part_intersection = prev_current_partition.intersection(&current_partition);
+            for func in part_intersection {
+                let prev_limit = include_limit.get(func).cloned().unwrap_or(0);
+                if prev_limit > 0 {
+                    include_limit.insert(func.clone(), prev_limit - 1);
+                }
+            }
+        }
     }
 
     // The remaining functions are either fastcalls, or functions
@@ -202,6 +285,5 @@ pub fn form_partitions(num_funcs_in_partition: u32, instr_count_limit: u32, func
         partition_idx += 1;
     }
 
-    dbg!(&partitions.len());
     partitions
 }
