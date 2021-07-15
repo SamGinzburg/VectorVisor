@@ -17,10 +17,14 @@ fn tokenize_inputs(event: FuncInput) -> FuncResponse {
     let tok = VTextTokenizerParams::default().lang("en").build().unwrap();
     for tweet in event.tweets {
         let mut vec = vec![];
+        let mut str_vec: Vec<String> = vec![];
         for token in tok.tokenize(&tweet) {
-            vec.push(String::from(token));
+            vec.push(token);
         }
-        results.push(vec);
+        for s in vec {
+            str_vec.push(String::from(s));
+        }
+        results.push(str_vec);
     }
     FuncResponse { tokenized: results }
 }

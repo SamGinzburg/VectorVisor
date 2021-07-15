@@ -1400,16 +1400,16 @@ impl OpenCLRunner {
         let mut min_queue_time: u64 = std::u64::MAX;
         let mut num_queue_submits: u64 = 0;
 
-        let mut backup_entry_point_temp = 0;
-
         let mut called_funcs = HashSet::new();
 
         // We keep track of functions that we have currently blocked off here
         let mut divergence_stack = BTreeSet::new();
         // Also keep track of encountered hypercall entry points
         let mut hcall_divergence_stack = BTreeSet::new();
-
-
+        // track stored entry points of hcalls
+        let mut stored_entry_points = vec![0u32; self.num_vms.try_into().unwrap()];
+        // Flag to write entry point at end of critical path 
+        let mut set_entry_point = false;
 
         let mut is_first: HashMap<u32, bool> = HashMap::new();
         let mut first_invokes: Vec<u64> = vec![];
@@ -1480,6 +1480,7 @@ impl OpenCLRunner {
             }
 
             // if all entry_point == -1, also exit
+            /*
             entry_point_exit_flag = true;
             for e in &entry_point_temp {
                 entry_point_exit_flag = (*e as i32 == (-1)) & entry_point_exit_flag;
@@ -1490,6 +1491,7 @@ impl OpenCLRunner {
                 vmm_overhead += (vmm_pre_overhead_end - vmm_pre_overhead).as_nanos();
                 break;
             }
+            */
 
             /*
              * When we reach this point divergence may have occured!
@@ -1517,10 +1519,11 @@ impl OpenCLRunner {
                 // 1) We are not blocked on a hypercall
                 // 2) The VM is not currently masked off
                 if entry_point_temp[idx] != ((-1) as i32) as u32 && (hypercall_num_temp[idx] == -2 || hypercall_num_temp[idx] == -1) {
-                    divergence_stack.insert(*kernel_partition_mappings.get(&entry_point_temp[idx]).unwrap());
+                    divergence_stack.insert(entry_point_temp[idx]);
+                    stored_entry_points[idx] = entry_point_temp[idx];
                 } else if hypercall_num_temp[idx] != -2 && entry_point_temp[idx] != ((-1) as i32) as u32 {
-                    hcall_divergence_stack.insert(*kernel_partition_mappings.get(&entry_point_temp[idx]).unwrap());
-                    backup_entry_point_temp = entry_point_temp[idx];
+                    hcall_divergence_stack.insert(entry_point_temp[idx]);
+                    stored_entry_points[idx] = entry_point_temp[idx];
                     entry_point_temp[idx] = ((-1) as i32) as u32;
                 }
             }
@@ -1534,9 +1537,15 @@ impl OpenCLRunner {
                 let first_item = divergence_stack.clone().into_iter().collect::<Vec<u32>>()[0];
                 let next_func = divergence_stack.take(&first_item).unwrap();
 
-                start_kernel = kernels.get(&next_func).unwrap();
+                start_kernel = kernels.get(kernel_partition_mappings.get(&next_func).unwrap()).unwrap();
                 curr_func_id = next_func;
                 called_funcs.insert(curr_func_id);
+
+                /*
+                for idx in 0..(self.num_vms as usize) {
+                    entry_point_temp[idx] = next_func;
+                }
+                */
 
                 unsafe {
                     ocl::core::enqueue_write_buffer(&queue, &buffers.entry, false, 0, &mut entry_point_temp, None::<Event>, None::<&mut Event>).unwrap();
@@ -1555,7 +1564,7 @@ impl OpenCLRunner {
                 let first_item = hcall_divergence_stack.clone().into_iter().collect::<Vec<u32>>()[0];
                 let next_func = hcall_divergence_stack.take(&first_item).unwrap();
 
-                start_kernel = kernels.get(&next_func).unwrap();
+                start_kernel = kernels.get(kernel_partition_mappings.get(&next_func).unwrap()).unwrap();
                 curr_func_id = next_func;
                 called_funcs.insert(curr_func_id);
 
@@ -1563,8 +1572,11 @@ impl OpenCLRunner {
                     divergence_stack.insert(hcall_divergence_stack.take(&func_to_return_to).unwrap());
                 }
 
+                // Remember to write the entry points back at the end
+                set_entry_point = true;
+
                 for idx in 0..(self.num_vms as usize) {
-                    entry_point_temp[idx] = next_func;
+                    entry_point_temp[idx] = stored_entry_points[idx];
                 }
 
                 let vmm_pre_overhead_end = std::time::Instant::now();
@@ -1690,7 +1702,6 @@ impl OpenCLRunner {
             ocl::core::finish(&queue).unwrap();
 
             // now set the entry_point of exited procs to -1 if sp == 0
-            let mut set_entry_point = false;
             for (idx, sp) in stack_pointer_temp.iter().enumerate() {
                 if *sp == 0 as u64 {
                     // this cast is hacky, but it does the C equivalent of (uint)(-1)
@@ -1728,6 +1739,7 @@ impl OpenCLRunner {
                 }
                 if set_entry_point {
                     ocl::core::enqueue_write_buffer(&queue, &buffers.entry, false, 0, &mut entry_point_temp, None::<Event>, None::<&mut Event>).unwrap();
+                    set_entry_point = false;
                 }
                 ocl::core::enqueue_write_buffer(&queue, &buffers.hypercall_num, false, 0, &mut hypercall_num_temp, None::<Event>, None::<&mut Event>).unwrap();
                 ocl::core::enqueue_write_buffer(&queue, &hcall_retval_buffer, false, 0, &mut hypercall_retval_temp, None::<Event>, None::<&mut Event>).unwrap();
