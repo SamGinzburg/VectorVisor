@@ -118,7 +118,7 @@ func IssueRequests(ip string, port int, req [][]byte, exec_time chan<-float64, l
 				return;
 		}
 		select {
-			case latency <- float64(read_secs):
+			case latency <- float64(read_secs.Nanoseconds()):
 			default:
 				return;
 		}

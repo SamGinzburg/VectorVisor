@@ -9,3 +9,9 @@ edition = "2018"
 [dependencies]
 serde_json = "1.0.62"
 serde = "1.0.62"
+[target.'cfg(any(target_arch = "x86_64", target_arch = "x86"))'.dependencies]
+warp = "0.3"
+tokio = { version = "1", features = ["full"] }
+num_cpus = "1.13.0"
+bytes = "1"
+chrono = "0.4"

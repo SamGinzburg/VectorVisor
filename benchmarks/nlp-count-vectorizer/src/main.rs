@@ -12,21 +12,21 @@ struct FuncResponse {
     tokenized: Vec<Vec<String>>
 }
 
-fn tokenize_inputs(event: FuncInput) -> FuncResponse {
+fn tokenize(inputs: Vec<String>, tok: &Tokenizer) -> Vec<Vec<String>> {
     let mut results = vec![];
-    let tok = VTextTokenizerParams::default().lang("en").build().unwrap();
-    for tweet in event.tweets {
-        let mut vec = vec![];
+    for tweet in inputs {
         let mut str_vec: Vec<String> = vec![];
         for token in tok.tokenize(&tweet) {
-            vec.push(token);
-        }
-        for s in vec {
-            str_vec.push(String::from(s));
+            str_vec.push(token.to_string());
         }
         results.push(str_vec);
     }
-    FuncResponse { tokenized: results }
+    results
+}
+
+fn tokenize_inputs(event: FuncInput) -> FuncResponse {
+    let tok = VTextTokenizerParams::default().lang("en").build().unwrap();
+    FuncResponse { tokenized: tokenize(event.tweets, &tok) }
 }
 
 fn main() {
