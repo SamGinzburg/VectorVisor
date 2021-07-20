@@ -75,19 +75,33 @@ def block_on_command(command_id, instance_id):
             print ("Command has completed with status: " + str(output['Status']))
             return output
 
-def run_pbkdf2_bench():
+def run_pbkdf2_bench(run_x86):
     # Now we can set up the next benchmark (pbkdf2)
-    run_pbkdf2_command_wasmtime = """#!/bin/bash
-    sudo su
+    if run_x86:
+        run_pbkdf2_command_wasmtime = """#!/bin/bash
+        sudo su
 
-    x=$(cloud-init status)
-    until [ "$x" == "status: done" ]; do
-    sleep 10
-    x=$(cloud-init status)
-    done
+        x=$(cloud-init status)
+        until [ "$x" == "status: done" ]; do
+        sleep 10
+        x=$(cloud-init status)
+        done
 
-    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/pbkdf2/target/wasm32-wasi/release/pbkdf2.wasm --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=131072 --partition=true --serverless=true --vmcount=4096 --wasmtime=true &> /tmp/pbkdf2.log &
-    """
+        cd /tmp/wasm2opencl/benchmarks/pbkdf2/
+        ~/.cargo/bin/cargo run --release --target x86_64-unknown-linux-gnu &> /tmp/pbkdf2.log &
+        """
+    else:
+        run_pbkdf2_command_wasmtime = """#!/bin/bash
+        sudo su
+
+        x=$(cloud-init status)
+        until [ "$x" == "status: done" ]; do
+        sleep 10
+        x=$(cloud-init status)
+        done
+
+        /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/pbkdf2/target/wasm32-wasi/release/pbkdf2.wasm --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=131072 --partition=true --serverless=true --vmcount=4096 --wasmtime=true &> /tmp/pbkdf2.log &
+        """
 
     run_command(run_pbkdf2_command_wasmtime, "pbkdf2_cpu", cpu_bench_instance[0].id)
 
@@ -458,14 +472,14 @@ while True:
 ssm_client = boto3.client('ssm')
 
 # run pbkdf2 bench
-#run_pbkdf2_bench()
+run_pbkdf2_bench(True)
 
 #cleanup()
 
 # run lz4 bench
 #run_lz4_bench()
 
-run_nlp_count_bench()
+#run_nlp_count_bench()
 
 # clean up all instances at end
 ec2.instances.filter(InstanceIds = instance_id_list).terminate()
