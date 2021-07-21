@@ -10,10 +10,9 @@ use std::path::Path;
 use std::fs::File;
 use std::io::Write;
 use std::thread;
-
+use std::panic::panic_any;
 use std::sync::Mutex;
 use tokio::sync::Mutex as AsyncMutex;
-
 use std::sync::Arc;
 use std::convert::TryInto;
 
@@ -373,7 +372,7 @@ fn main() {
             ("wat", false) => {
                 let filedata = match fs::read_to_string(file_path.clone()) {
                     Ok(text) => text,
-                    Err(e) => panic!(e),
+                    Err(e) => panic_any(e),
                 };
                 let pb = ParseBuffer::new(&filedata).unwrap();
                 let pb_debug = ParseBuffer::new(&filedata).unwrap();
@@ -456,7 +455,7 @@ fn main() {
             ("wat", true) => {
                 let filedata = match fs::read_to_string(file_path.clone()) {
                     Ok(text) => text,
-                    Err(e) => panic!(e),
+                    Err(e) => panic_any(e),
                 };
                 let pb = ParseBuffer::new(&filedata).unwrap();
                 let pb_debug = ParseBuffer::new(&filedata).unwrap();
@@ -540,7 +539,7 @@ fn main() {
                 // read the binary file as a Vec<u8>
                 let filedata = match fs::read(file_path.clone()) {
                     Ok(text) => text,
-                    Err(e) => panic!(e),
+                    Err(e) => panic_any(e),
                 };
 
                 let program: SeralizedProgram = bincode::deserialize(&filedata).unwrap();
@@ -551,7 +550,7 @@ fn main() {
                 // read the binary file as a Vec<u8>
                 let filedata = match fs::read(file_path.clone()) {
                     Ok(text) => text,
-                    Err(e) => panic!(e),
+                    Err(e) => panic_any(e),
                 };
     
                 let program: PartitionedSeralizedProgram = bincode::deserialize(&filedata).unwrap();
@@ -565,7 +564,7 @@ fn main() {
                 // read the binary file as a Vec<u8>
                 let filedata = match fs::read(file_path.clone()) {
                     Ok(text) => text,
-                    Err(e) => panic!(e),
+                    Err(e) => panic_any(e),
                 };
                 let entry = value_t!(matches.value_of("entry"), u32).unwrap_or_else(|e| e.exit());
                 let numfuncs = value_t!(matches.value_of("numfuncs"), u32).unwrap_or_else(|e| e.exit());
