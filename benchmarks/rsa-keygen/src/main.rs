@@ -18,18 +18,12 @@ struct FuncResponse {
     encoded_resp: String
 }
 
-lazy_static! {
-    static ref RSA_PKEY: RSAPrivateKey = RSAPrivateKey::new(&mut OsRng, 2048).expect("failed to generate a key");
-}
-
-fn rsa_decrypt(event: FuncInput) -> FuncResponse {
-    let mut decoded_str = decode(event.encoded_str).unwrap();
-    let padding = PaddingScheme::new_pkcs1v15_encrypt();
-    let dec_data = RSA_PKEY.decrypt(padding, &decoded_str).expect("failed to decrypt");
+fn rsa_keygen(event: FuncInput) -> FuncResponse {
+    let private_key = RSAPrivateKey::new(&mut OsRng, 2048).expect("failed to generate a key");
     FuncResponse { encoded_resp: encode(private_key.to_pkcs8().unwrap()) }
 }
 
 fn main() {
-    let handler = WasmHandler::new(&rsa_decrypt);
+    let handler = WasmHandler::new(&rsa_keygen);
     handler.run(1024*1024);
 }
