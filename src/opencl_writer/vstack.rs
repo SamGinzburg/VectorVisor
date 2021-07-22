@@ -218,6 +218,12 @@ impl<'a> StackCtx {
                     current_i32_count -= 1;
                     update_counter(&mut current_i64_count, &mut max_i64_count);
                 },
+                wast::Instruction::I64Load32s(_memarg) => {
+                    stack_sizes.pop();
+                    stack_sizes.push(StackType::i64);
+                    current_i32_count -= 1;
+                    update_counter(&mut current_i64_count, &mut max_i64_count);
+                },
                 wast::Instruction::I64Load(_memarg) => {
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i64);

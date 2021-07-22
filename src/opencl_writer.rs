@@ -366,6 +366,11 @@ impl<'a> OpenCLCWriter<'_> {
                 stack_sizes.push(2);
                 emit_memload_i64_32u(self, stack_ctx, memarg, debug)
             },
+            wast::Instruction::I64Load32s(memarg) => {
+                stack_sizes.pop();
+                stack_sizes.push(2);
+                emit_memload_i64_32s(self, stack_ctx, memarg, debug)
+            },
             wast::Instruction::I64Load(memarg) => {
                 stack_sizes.pop();
                 stack_sizes.push(2);

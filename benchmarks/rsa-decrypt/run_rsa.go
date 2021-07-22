@@ -57,6 +57,17 @@ func RandString(n int) string {
     return b64.StdEncoding.EncodeToString([]byte(string(b)))
 }
 
+
+func RandMessage(n int) string {
+	// no more than 1MB
+	file_data, err := ioutil.ReadFile(fmt.Sprintf("messages/%d.txt", n))
+	_ = file_data
+	if err != nil {
+		panic(err)
+	}
+	return b64.StdEncoding.EncodeToString([]byte(file_data))
+}
+
 func IssueRequests(ip string, port int, req [][]byte, exec_time chan<-float64, latency chan<-float64, queue_time chan<-float64, submit_count chan<-float64, unique_fns chan<-float64, end_chan chan bool) {
 	addr := fmt.Sprintf("http://%s:%d/batch_submit/", ip, port)
 	http_request, _ := http.NewRequest("GET", addr, nil)
@@ -165,7 +176,7 @@ func main() {
 
 	reqs := make([][]byte, NUM_PARAMS)
 	for i := 0; i < NUM_PARAMS; i++ {
-		p := payload{Text: RandString(1024*input_size)}
+		p := payload{Text: RandMessage(rand.Intn(input_size))}
 		request_body, _ := json.Marshal(p)
 		reqs[i] = request_body
 	}
