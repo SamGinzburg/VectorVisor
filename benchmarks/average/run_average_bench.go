@@ -1,15 +1,15 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"os"
-	"net/http"
-	"time"
-	"encoding/json"
-	"bytes"
-	"strconv"
 	"math/rand"
+	"net/http"
+	"os"
+	"strconv"
+	"time"
 )
 
 type payload struct {
@@ -17,8 +17,8 @@ type payload struct {
 }
 
 type Message struct {
-	Req_id int `json:"req_id"`
-	Req string `json:"req"`
+	Req_id int    `json:"req_id"`
+	Req    string `json:"req"`
 }
 
 type MessageBatch struct {
@@ -26,37 +26,37 @@ type MessageBatch struct {
 }
 
 type VmmResponse struct {
-	response string
-	on_device_execution_time_ns float64
+	response                      string
+	on_device_execution_time_ns   float64
 	device_queue_overhead_time_ns float64
-	queue_submit_count float64
-	num_unique_fns_called float64
+	queue_submit_count            float64
+	num_unique_fns_called         float64
 }
 
-var NUM_PARAMS = 256;
+var NUM_PARAMS = 256
 
 var client = &http.Client{}
 
 func RandIntSlice(n int) []float64 {
-    b := make([]float64, n)
-    for i := range b {
-        b[i] = rand.Float64() * 10000
-    }
-    return b
+	b := make([]float64, n)
+	for i := range b {
+		b[i] = rand.Float64() * 10000
+	}
+	return b
 }
 
 // https://stackoverflow.com/questions/22892120/how-to-generate-a-random-string-of-a-fixed-length-in-go
 var letterRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 
 func RandString(n int) string {
-    b := make([]rune, n)
-    for i := range b {
-        b[i] = letterRunes[rand.Intn(len(letterRunes))]
-    }
-    return string(b)
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = letterRunes[rand.Intn(len(letterRunes))]
+	}
+	return string(b)
 }
 
-func IssueRequests(ip string, port int, req [][]byte, data_ch chan<-[]byte, end_chan chan bool) {
+func IssueRequests(ip string, port int, req [][]byte, data_ch chan<- []byte, end_chan chan bool) {
 	addr := fmt.Sprintf("http://%s:%d/batch_submit/", ip, port)
 	http_request, _ := http.NewRequest("GET", addr, nil)
 	http_request.Header.Add("Content-Type", "application/json; charset=utf-8")
@@ -70,7 +70,7 @@ func IssueRequests(ip string, port int, req [][]byte, data_ch chan<-[]byte, end_
 			fmt.Printf("client err: %s\n", err)
 			// check to see if we are done
 			if len(end_chan) > 0 {
-				return;
+				return
 			}
 			continue
 		}
@@ -92,14 +92,14 @@ func IssueRequests(ip string, port int, req [][]byte, data_ch chan<-[]byte, end_
 		}
 
 		select {
-			case data_ch <- body:
-			default:
-				return;
+		case data_ch <- body:
+		default:
+			return
 		}
 
 		// check to see if we are done
 		if len(end_chan) > 0 {
-			return;
+			return
 		}
 	}
 }
@@ -129,7 +129,6 @@ func main() {
 		os.Exit(2)
 	}
 
-
 	reqs := make([][]byte, NUM_PARAMS)
 	for i := 0; i < NUM_PARAMS; i++ {
 		p := payload{Text: RandIntSlice(1024 * 26)}
@@ -142,13 +141,12 @@ func main() {
 	}
 	client = &http.Client{Transport: tr}
 
-
 	ch := make(chan []byte, num_vms*100000) // we prob won't exceed ~6.4M RPS ever
 	termination_chan := make(chan bool, num_vms)
 
 	benchmark_duration := time.Duration(timeout_secs) * time.Second
 	bench_timer := time.NewTimer(benchmark_duration)
-	for vmgroup := 0 ; vmgroup < num_vmgroups; vmgroup++ {
+	for vmgroup := 0; vmgroup < num_vmgroups; vmgroup++ {
 		for i := 0; i < num_vms; i++ {
 			go IssueRequests(os.Args[1], port+vmgroup, reqs, ch, termination_chan)
 		}
@@ -170,7 +168,7 @@ func main() {
 		termination_chan <- true
 	}
 
-	// calculate the total RPS	
+	// calculate the total RPS
 	total_rps := (float64(batches_completed)) / duration
 	fmt.Printf("Total RPS: %f\n", total_rps)
 
@@ -203,5 +201,5 @@ func main() {
 	fmt.Printf("Average queue submit count: %f\n", queue_submit_count)
 	fmt.Printf("Average num of unique fns called: %f\n", num_unique_fns_called)
 
-	fmt.Printf("Parallel fraction of function (only applicable to GPU funcs): %f\n", (((on_device_compute_time+device_queue_overhead)/1000000000)) / duration)
+	fmt.Printf("Parallel fraction of function (only applicable to GPU funcs): %f\n", ((on_device_compute_time+device_queue_overhead)/1000000000)/duration)
 }

@@ -266,7 +266,7 @@ impl<'a> OpenCLCWriter<'_> {
                          // function name
                          fn_name: &str,
                          // stack of control flow operations (blocks, loops)
-                         control_stack: &mut Vec<(String, u32, i32)>,
+                         control_stack: &mut Vec<(String, u32, i32, u32)>,
                          // map of function names to IDs
                          function_id_map: HashMap<&str, u32>,
                          // count of how many hypercalls have been encountered (used for re-entry)
@@ -1144,26 +1144,34 @@ impl<'a> OpenCLCWriter<'_> {
                     Some(id) => id.name().to_string().clone(),
                     _ => format!("b{}", block_name_count),
                 };
-                *block_name_count += 1;
                 // for the control stack, we don't use the third parameter for blocks
-                control_stack.push((label.to_string(), 0, -1));
+                control_stack.push((label.to_string(), 0, -1, *block_name_count));
+                *block_name_count += 1;
                 emit_block(&self, stack_ctx, b, label, *block_name_count-1, fn_name, function_id_map, is_fastcall, debug)
             },
             wast::Instruction::Loop(b) => {
+                // Check the loop index to see if we can optimize the loop
+                let is_tainted = stack_ctx.is_loop_tainted((*loop_name_count).try_into().unwrap());
+
                 let label: String = match b.label {
                     Some(id) => id.name().to_string().clone(),
                     _ => format!("l{}", loop_name_count),
                 };
-                *loop_name_count += 1;
                 // the third parameter in the control stack stores loop header entry points
-                control_stack.push((label.to_string(), 1, (*call_ret_idx).try_into().unwrap()));
-                emit_loop(&self, stack_ctx, b, label, *loop_name_count-1, fn_name, function_id_map, call_ret_idx, is_fastcall, debug)
+                control_stack.push((label.to_string(), 1, (*call_ret_idx).try_into().unwrap(), *loop_name_count));
+                *loop_name_count += 1;
+                emit_loop(&self, stack_ctx, b, label, *loop_name_count-1, fn_name, function_id_map, call_ret_idx, is_fastcall, is_tainted, debug)
             }
             // if control_stack.pop() panics, that means we were parsing an incorrectly defined
             // wasm file, each block/loop must have a matching end!
             wast::Instruction::End(id) => {
-                let (label, t, _) = control_stack.pop().unwrap();
-                emit_end(&self, stack_ctx, id, &label, t, fn_name, function_id_map, is_fastcall, debug)
+                let (label, t, _, loop_idx) = control_stack.pop().unwrap();
+                let treat_as_fastcall = if (t == 1 && !stack_ctx.is_loop_tainted(loop_idx.try_into().unwrap())) || is_fastcall {
+                    true
+                } else {
+                    false
+                };
+                emit_end(&self, stack_ctx, id, &label, t, fn_name, function_id_map, treat_as_fastcall, debug)
             },
             wast::Instruction::Select(_) => {
                 emit_select(self, stack_ctx, stack_sizes, fn_name, debug)
@@ -1283,7 +1291,7 @@ impl<'a> OpenCLCWriter<'_> {
                 // Now that we have the type info for the parameters and locals, we can generate the stack context
 
                 // First, generate the stack context for the function
-                let mut stack_ctx = StackCtx::initialize_context(&self, &expression.instrs, &local_type_info, &local_parameter_stack_offset, &is_param, param_offset);
+                let mut stack_ctx = StackCtx::initialize_context(&self, &expression.instrs, &local_type_info, &local_parameter_stack_offset, &is_param, fastcall_set.clone(), param_offset, indirect_call_mapping.len().try_into().unwrap(), is_gpu);
 
                 // function entry point
                 // strip illegal chars from function name
@@ -1356,59 +1364,17 @@ impl<'a> OpenCLCWriter<'_> {
                  * 
                  * To better understand why this pass is necessary, see opencl_writer/control_flow.rs
                  */
-                let num_function_calls: &mut u32 = &mut 0;
-                let num_hypercalls: &mut u32 = &mut 0;
+                let (num_function_calls, num_hypercalls) = stack_ctx.get_reentry_stub_lengths();
 
-                for instruction in expression.instrs.iter() {
-                    match instruction {
-                        wast::Instruction::Call(idx) => {
-                            let id = match idx {
-                                wast::Index::Id(id) => id.name(),
-                                _ => panic!("Unable to get Id for function call: {:?}", idx),
-                            };
-                            // if the function is a hypercall, incr that count, else incr func call count
-                            if self.imports_map.contains_key(id) {
-                                *num_hypercalls += 1;
-                            } else {
-                                // if this is a fastcall, don't increment
-                                if !fastcall_set.contains(id) {
-                                    *num_function_calls += 1;
-                                }
-                            }
-                        },
-                        wast::Instruction::CallIndirect(_) => {
-                            // we generate a switch-case for each possible function in table $T0
-                            // so we have to generate re-entry points for all of them as well
-                            for (_, _) in indirect_call_mapping {
-                                *num_function_calls += 1;
-                            }
-                        },
-                        wast::Instruction::Unreachable => {
-                            // the POCL compiler seems to want this, NVIDIA compiler doesn't?
-                            if !is_gpu {
-                                *num_hypercalls += 1;
-                            }
-                        },
-                        wast::Instruction::Loop(_) => {
-                            // if we find a loop, we will treat the back-branch of each loop
-                            // as a function call, see opencl_writer/control_flow.rs for more details on why we do this
-                            // fastcalls in CPS-style also don't need normal loops
-                            if !fastcall_set.contains(&id.name().to_string()) {
-                                *num_function_calls += 1;
-                            }
-                        },
-                        _ => (),
-                    }
-                }
 
                 // upon entry, first check to see if we are returning from a hypercall
                 // hypercall_number is set to -1 after completing the hypercall
                 if !is_fastcall {
                     write!(final_string, "\t{}\n", "if (*hypercall_number == -1) {").unwrap();
                     write!(final_string, "\t\t{}\n", "*hypercall_number = -2;").unwrap();
-                    if *num_hypercalls > 0 {
+                    if num_hypercalls > 0 {
                         write!(final_string, "\t\t{}\n", "switch (*hypercall_continuation) {").unwrap();
-                        for count in 0..*num_hypercalls {
+                        for count in 0..num_hypercalls {
                             write!(final_string, "\t\t\tcase {}:\n", count).unwrap();
                             if debug_call_print {
                                 write!(final_string, "\t\t\t\tprintf(\"goto: {}_hypercall_return_stub_{}\\n\");\n", format!("{}{}", "__", id.name().replace(".", "")), count).unwrap();
@@ -1425,10 +1391,10 @@ impl<'a> OpenCLCWriter<'_> {
                     // (returning from another function)
     
                     write!(final_string, "\t{}\n", "if (!*is_calling) {").unwrap();
-                    if *num_function_calls > 0 {
+                    if num_function_calls > 0 {
                         write!(final_string, "\t\t{}\n",
                             format!("switch ({}) {{", emit_read_u64("(ulong)(call_stack+*sfp)", "(ulong)(call_stack)", "warp_idx"))).unwrap();
-                        for count in 0..*num_function_calls {
+                        for count in 0..num_function_calls {
                             write!(final_string, "\t\t\tcase {}:\n", count).unwrap();
                             write!(final_string, "\t\t\t\t*sfp -= 1;\n").unwrap();
                             if debug_call_print {
@@ -1475,7 +1441,7 @@ impl<'a> OpenCLCWriter<'_> {
 
                 // keep a stack of control-flow labels
                 // for blocks we need to put the label at the "end" statement, while loops always jump back
-                let mut control_stack: Vec<(String, u32, i32)> = vec![];
+                let mut control_stack: Vec<(String, u32, i32, u32)> = vec![];
 
                 // keep a stack of the size of previous stack operations
                 // this is needed to implement drop/select

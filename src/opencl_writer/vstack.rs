@@ -20,7 +20,7 @@ use wast::Index::Num;
 use wast::Instruction;
 use wast::ValType;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::cmp::Ord;
 use core::ops::Range;
 
@@ -79,7 +79,10 @@ pub struct StackCtx {
     control_stack: Vec<u32>,
     control_stack_snapshots: Vec<StackSnapshot>,
     // store which locals are parameters (for emitting fastcalls)
-    is_param: HashMap<String, bool>
+    is_param: HashMap<String, bool>,
+    tainted_loops: Vec<bool>,
+    num_fn_calls: u32,
+    num_hypercalls: u32,
 }
 
 impl<'a> StackCtx {
@@ -87,12 +90,26 @@ impl<'a> StackCtx {
      * Parse a function and generate a stack context for it.
      * We can statically determine the maximum required amount of intermediate values
      */
-    pub fn initialize_context(writer_ctx: &OpenCLCWriter, instructions: &Box<[Instruction<'a>]>, local_param_types: &HashMap<String, ValType>, local_offsets: &HashMap<String, u32>, is_param: &HashMap<String, bool>, param_offset: i32) -> StackCtx {
+    pub fn initialize_context(writer_ctx: &OpenCLCWriter, instructions: &Box<[Instruction<'a>]>, local_param_types: &HashMap<String, ValType>, local_offsets: &HashMap<String, u32>, is_param: &HashMap<String, bool>, fastcalls: HashSet<String>, param_offset: i32, indirect_call_len: u32, is_gpu: bool) -> StackCtx {
         let mut stack_sizes: Vec<StackType> = vec![];
         
+        // Track which loops we can optimize for later
+        // (is_loop, tainted), is_loop needed since we are also tracking blocks
+        let mut control_stack: Vec<bool> = vec![];
+        let mut tainted_loops: Vec<bool> = vec![];
+        let mut loop_idx: usize = 0;
+
+        /*
+         * Needed to avoid edge case where we have an empty infinite loop
+         */
+        let mut empty_loop = false;
+
+        // Track # function calls & indirect function calls
+        // We do this so we can avoid another compiler pass to generate call return stubs
+        let mut num_hypercalls = 0;
+        let mut num_fn_calls = 0;
+
         // We treat local & parameter intermediates the same, as they are already named at this point
-
-
         // Track how many of each intermediate we are going to need!
         let mut current_i32_count: u32 = 0;
         let mut max_i32_count: u32 = 0;
@@ -105,6 +122,14 @@ impl<'a> StackCtx {
 
         let mut current_f64_count: u32 = 0;
         let mut max_f64_count: u32 = 0;
+
+        // loop_idx tracks how many actively open loops there are, so we taint just those
+        fn taint_open_loops(tainted_loops: &mut Vec<bool>, loop_idx: usize) -> () {
+            let loop_len = tainted_loops.len().clone();
+            for idx in 0..loop_idx {
+                tainted_loops[loop_len - 1 - idx] = true;
+            }
+        }
 
         fn update_counter(curr_value: &mut u32, max_value: &mut u32) -> () {
             *curr_value += 1;
@@ -785,6 +810,12 @@ impl<'a> StackCtx {
                                 match (wasi_api, WASI_SNAPSHOT_PREVIEW1.get(wasi_fn_name)) {
                                     // ignore WASI API scoping for now
                                     (_, Some(true)) => {
+                                        // Taint loops that perform hypercalls
+                                        taint_open_loops(&mut tainted_loops, loop_idx);
+
+                                        // Track how many hypercalls we perform
+                                        num_hypercalls += 1;
+
                                         match wasi_fn_name {
                                             &"fd_write"               => {
                                                 current_i32_count -= 3;
@@ -822,6 +853,14 @@ impl<'a> StackCtx {
                             _ => panic!("Unsupported hypercall found {:?} (vstack)", writer_ctx.imports_map.get(id))
                         }
                     } else {
+                        // Check the function name to see if it is a valid fastcall
+                        // We only taint non-fastcalls
+                        if !fastcalls.contains(id) {
+                            taint_open_loops(&mut tainted_loops, loop_idx);
+                            // Track how many regular function calls we perform
+                            num_fn_calls += 1;
+                        }
+
                         match writer_ctx.func_map.get(id) {
                             Some(_) => {
                                 let func_type_signature = &writer_ctx.func_map.get(id).unwrap().ty;
@@ -910,6 +949,12 @@ impl<'a> StackCtx {
                     }
                 },
                 wast::Instruction::CallIndirect(call_indirect) => {
+                    // Taint open loops
+                    taint_open_loops(&mut tainted_loops, loop_idx);
+
+                    // Track the number of function call stubs to generate
+                    num_fn_calls += indirect_call_len;
+
                     // Check for types
                     match (call_indirect.ty.index.as_ref(), call_indirect.ty.inline.as_ref()) {
                         (Some(index), _) => {
@@ -1251,13 +1296,22 @@ impl<'a> StackCtx {
                  * Track block & loop starts/ends to minimize intermediate value req
                  */
                 wast::Instruction::Block(_b) => {
-                    // no-op
+                    control_stack.push(false);
                 },
                 wast::Instruction::Loop(_b) => {
-                    // no-op
+                    control_stack.push(true);
+                    tainted_loops.push(false);
+                    loop_idx += 1;
+                    empty_loop = true;
+                    // We need to continue here to avoid resetting the empty_loop counter
+                    continue;
                 }
                 wast::Instruction::End(_id) => {
-                    // no-op
+                    // As we close loops, keep track so we don't taint them
+                    let is_loop = control_stack.pop().unwrap();
+                    if is_loop {
+                        loop_idx -= 1;
+                    }
                 },
                 wast::Instruction::Select(_) => {
                     let _c = stack_sizes.pop().unwrap(); // c
@@ -1297,10 +1351,11 @@ impl<'a> StackCtx {
                     update_counter(&mut current_i32_count, &mut max_i32_count);
                 },
                 wast::Instruction::Return => {
-
                 },
                 wast::Instruction::Br(_idx) => {
-
+                    if empty_loop {
+                        taint_open_loops(&mut tainted_loops, loop_idx);
+                    }
                 },
                 wast::Instruction::BrIf(_idx) => {
                     stack_sizes.pop().unwrap();
@@ -1311,8 +1366,14 @@ impl<'a> StackCtx {
                     current_i32_count -= 1;
                 },
                 wast::Instruction::Unreachable => {
+                    if !is_gpu {
+                        num_hypercalls += 1;
+                    }
                 },
                 _ => panic!("Instruction {:?} not yet implemented (vstack-pass)", instruction)
+            }
+            if empty_loop {
+                empty_loop = false;
             }
         }
 
@@ -1392,6 +1453,9 @@ impl<'a> StackCtx {
             curr_offset += 2;
         }
 
+        // For each loop that we can't optimize, we need to generate a function call stub
+        num_fn_calls += tainted_loops.iter().filter( |x| { **x == true }).collect::<Vec<&bool>>().len() as u32;
+
         StackCtx {
             i32_stack: i32_stack,
             i32_idx: 0,
@@ -1409,8 +1473,25 @@ impl<'a> StackCtx {
             total_stack_types: vec![],
             control_stack: vec![],
             control_stack_snapshots: vec![],
+            tainted_loops: tainted_loops,
+            num_fn_calls: num_fn_calls,
+            num_hypercalls: num_hypercalls,
             is_param: is_param.clone()
         }
+    }
+
+    /*
+     * Check to see if we can optimize the currently selected loop
+     */
+    pub fn is_loop_tainted(&mut self, loop_idx: usize) -> bool {
+        self.tainted_loops[loop_idx]
+    }
+
+    /*
+     * Get the lengths of the reentry stubs from the vstack pass
+     */
+    pub fn get_reentry_stub_lengths(&self) -> (u32, u32) {
+        (self.num_fn_calls, self.num_hypercalls)
     }
 
     /*
