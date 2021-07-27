@@ -474,10 +474,10 @@ ssm_client = boto3.client('ssm')
 # run pbkdf2 bench
 run_pbkdf2_bench(True)
 
-#cleanup()
+cleanup()
 
 # run lz4 bench
-#run_lz4_bench()
+run_lz4_bench()
 
 #run_nlp_count_bench()
 
