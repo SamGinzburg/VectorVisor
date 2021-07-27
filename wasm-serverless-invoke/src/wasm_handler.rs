@@ -1,6 +1,8 @@
 use serde_json::{json, Value, to_string};
 use serde::Deserialize;
+use serde::de::DeserializeOwned;
 use serde::Serialize;
+use serde_cbor::from_slice;
 
 #[cfg(any(target_arch = "x86_64", target_arch = "x86"))]
 pub mod server;
@@ -40,7 +42,7 @@ extern "C" {
     fn serverless_response(output_arr: *mut u8, output_arr_len: u32) -> ();
 }
 
-impl<'a, T1: Deserialize<'a>, T2: Serialize> WasmHandler<T1, T2> {
+impl<'a, T1: DeserializeOwned, T2: Serialize> WasmHandler<T1, T2> {
 
     pub fn new(func: &'static (dyn Fn(T1) -> T2 + Send + Sync)) -> WasmHandler<T1, T2> {
         WasmHandler {
@@ -72,8 +74,13 @@ impl<'a, T1: Deserialize<'a>, T2: Serialize> WasmHandler<T1, T2> {
                 serverless_invoke(buf_ptr, buffer.len() as u32)
             };
 
+            // Deserialize the pre-parsed JSON here...
+            let function_input: Value = from_slice(&buffer[..incoming_req_size as usize]).unwrap();
+
             // now that we have the input in the buffer, parse the json
-            match serde_json::from_slice(&buffer[..incoming_req_size as usize]) {
+            let parsed_func_input = serde_json::from_value(function_input);
+
+            match parsed_func_input {
                 Ok(json) => {
                     // run the function, get the response
                     func_ret_val = (self.function)(json);
@@ -160,7 +167,6 @@ impl<'a, T1: Deserialize<'a>, T2: Serialize> WasmHandler<T1, T2> {
                     let msg_ref = unsafe { WasmHandler::<T1, T2>::get_unsafe_mut_ref(&msg) };
                     let final_msg = unsafe { std::slice::from_raw_parts(msg_ref, msg_len) };
 
-                    // Run Function
                     let response: Vec<u8> = match serde_json::from_slice(&final_msg[..msg_len as usize]) {
                         Ok(json) => {
                             // run the function, get the response
@@ -172,6 +178,7 @@ impl<'a, T1: Deserialize<'a>, T2: Serialize> WasmHandler<T1, T2> {
                             String::from("err").into_bytes()
                         },
                     };
+
                     // Respond
                     let tsc = curr_time_response.clone();
                     let device_execution_time = Utc::now().timestamp_nanos() - *tsc.lock().unwrap();

@@ -27,5 +27,5 @@ fn average_json(event: FuncInput) -> Value {
 
 fn main() {
     let handler = WasmHandler::new(&average_json);
-    handler.run(1024*1024*2);
+    handler.run(1024*1024);
 }

@@ -2,13 +2,11 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::error::Error;
 use std::convert::TryInto;
-
+use serde_json::Value;
 use tokio::sync::mpsc::{Sender, Receiver};
-
 use wasmtime::*;
 use wasi_cap_std_sync::WasiCtxBuilder;
 use wasmtime_wasi::Wasi;
-
 use chrono::prelude::*;
 
 pub struct WasmtimeRunner {
@@ -44,16 +42,21 @@ impl WasmtimeRunner {
             };
 
             let chan = self.vm_recv.get(self.vm_idx).unwrap();
-            let (msg, msg_len) = chan.lock().unwrap().blocking_recv().unwrap();
+            let (msg, _) = chan.lock().unwrap().blocking_recv().unwrap();
 
+            // Parse JSON
+            let incoming_json_obj: Value = serde_json::from_slice(&msg).unwrap();
+            // Serialize parsed json
+            let serialized_json = serde_cbor::ser::to_vec_packed(&incoming_json_obj).unwrap();
+    
             // copy the input to the VM
             match mem {
                 Ok(memory) => {
                     unsafe {
                         let arr = memory.data_unchecked_mut();
                         let start = buf_ptr as usize;
-                        let end = (buf_ptr as usize)+msg_len;
-                        arr[start..end].copy_from_slice(&msg[0..msg_len]);
+                        let end = (buf_ptr as usize)+serialized_json.len();
+                        arr[start..end].copy_from_slice(&serialized_json);
                     }
                 },
                 Err(e) => {
@@ -64,7 +67,8 @@ impl WasmtimeRunner {
             let tsc = curr_time_invoke.clone();
             *tsc.lock().unwrap() = Utc::now().timestamp_nanos();
 
-            msg_len.try_into().unwrap()
+            //msg_len.try_into().unwrap()
+            serialized_json.len().try_into().unwrap()
         });
 
         // serverless_invoke

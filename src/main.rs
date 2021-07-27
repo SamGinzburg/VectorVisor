@@ -15,22 +15,15 @@ use std::sync::Mutex;
 use tokio::sync::Mutex as AsyncMutex;
 use std::sync::Arc;
 use std::convert::TryInto;
-
 use crossbeam::sync::WaitGroup;
-
 use tokio::sync::mpsc;
-
 use wast::parser::{ParseBuffer};
-
 use rayon::prelude::*;
-
 use clap::{Arg, App, value_t};
-
 use opencl_runner::InputProgram;
 use opencl_runner::SeralizedProgram;
 use opencl_runner::PartitionedSeralizedProgram;
 use ocl::core::ContextProperties;
-
 use batch_submit::BatchSubmitServer;
 use wasmtime_runner::WasmtimeRunner;
 
