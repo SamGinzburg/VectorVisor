@@ -11,6 +11,7 @@ wasm-parser.d
 *.c
 wasm-serverless-invoke/target/*
 benchmarks/json-compression/target/*
+benchmarks/json-compression-lz4/target/*
 benchmarks/pbkdf2/target/*
 benchmarks/imageblur/target/*
 benchmarks/*/target/*

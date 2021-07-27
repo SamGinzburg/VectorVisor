@@ -42,7 +42,7 @@ extern "C" {
     fn serverless_response(output_arr: *mut u8, output_arr_len: u32) -> ();
 }
 
-impl<'a, T1: DeserializeOwned, T2: Serialize> WasmHandler<T1, T2> {
+impl<'a, T1: Deserialize<'a>, T2: Serialize> WasmHandler<T1, T2> {
 
     pub fn new(func: &'static (dyn Fn(T1) -> T2 + Send + Sync)) -> WasmHandler<T1, T2> {
         WasmHandler {
@@ -74,11 +74,13 @@ impl<'a, T1: DeserializeOwned, T2: Serialize> WasmHandler<T1, T2> {
                 serverless_invoke(buf_ptr, buffer.len() as u32)
             };
 
-            // Deserialize the pre-parsed JSON here...
-            let function_input: Value = from_slice(&buffer[..incoming_req_size as usize]).unwrap();
+            let parsed_func_input = {
+                // Deserialize the pre-parsed JSON here...
+                let function_input: Value = from_slice(&buffer[..incoming_req_size as usize]).unwrap();
 
-            // now that we have the input in the buffer, parse the json
-            let parsed_func_input = serde_json::from_value(function_input);
+                // now that we have the input in the buffer, parse the json
+                T1::deserialize(function_input)
+            };
 
             match parsed_func_input {
                 Ok(json) => {

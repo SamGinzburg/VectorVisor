@@ -12,8 +12,8 @@ use std::io::BufWriter;
 use std::io::Write;
 
 #[derive(Debug, Deserialize)]
-struct FuncInput {
-    encoded_str: String
+struct FuncInput<'a> {
+    encoded_str: &'a str
 }
 
 #[derive(Debug, Serialize)]
@@ -26,7 +26,8 @@ fn compress_json(event: FuncInput) -> FuncResponse {
     let mut encoder = Encoder::new(BufWriter::new(Vec::new()));
     encoder.write(&decoded_str).unwrap();
     let (compressed_bytes, _) = encoder.finish();
-    FuncResponse { encoded_resp: encode(compressed_bytes.into_inner().unwrap()) }
+    let encoded = encode(compressed_bytes.into_inner().unwrap());
+    FuncResponse { encoded_resp: encoded }
 }
 
 fn main() {

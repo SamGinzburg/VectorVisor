@@ -605,6 +605,12 @@ impl<'a> OpenCLCWriter<'_> {
             wast::Instruction::F32Neg => {
                 emit_f32_neg(self, stack_ctx, debug)
             },
+            wast::Instruction::F32Abs => {
+                emit_f32_abs(self, stack_ctx, debug)
+            },
+            wast::Instruction::F64Abs => {
+                emit_f64_abs(self, stack_ctx, debug)
+            },
             wast::Instruction::F64Ne => {
                 stack_sizes.pop();
                 stack_sizes.pop();
