@@ -4,10 +4,11 @@ use serde_json::Value;
 use serde_json::json;
 use serde::Deserialize;
 use serde::Serialize;
+use std::borrow::Cow;
 
 #[derive(Debug, Deserialize)]
-struct FuncInput {
-    numbers: Vec<f64>
+struct FuncInput<'a> {
+    numbers: Vec<Cow<'a, f64>>
 }
 
 #[derive(Debug, Serialize)]
@@ -19,7 +20,7 @@ struct FuncResponse {
 fn average_json(event: FuncInput) -> Value {
     let mut acc = 0.0;
     for item in &event.numbers {
-        acc += item;
+        acc += **item;
     }
     let resp = FuncResponse { result: acc / event.numbers.len() as f64 };
     json!(resp)

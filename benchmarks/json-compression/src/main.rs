@@ -10,10 +10,11 @@ use base64::{encode, decode};
 use compress::lz4::*;
 use std::io::BufWriter;
 use std::io::Write;
+use std::borrow::Cow;
 
 #[derive(Debug, Deserialize)]
 struct FuncInput<'a> {
-    encoded_str: &'a str
+    encoded_str: Cow<'a, str>
 }
 
 #[derive(Debug, Serialize)]
@@ -22,7 +23,7 @@ struct FuncResponse {
 }
 
 fn compress_json(event: FuncInput) -> FuncResponse {
-    let mut decoded_str = decode(event.encoded_str).unwrap();
+    let mut decoded_str = decode(event.encoded_str.as_bytes()).unwrap();
     let mut encoder = Encoder::new(BufWriter::new(Vec::new()));
     encoder.write(&decoded_str).unwrap();
     let (compressed_bytes, _) = encoder.finish();

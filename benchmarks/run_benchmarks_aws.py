@@ -196,7 +196,7 @@ def run_lz4_bench():
     x=$(cloud-init status)
     done
 
-    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/json-compression/target/wasm32-wasi/release/json-compression.wasm --ip=0.0.0.0 --heap=4194304 --stack=262144 --hcallsize=524288 --partition=true --serverless=true --vmcount=3072 --wasmtime=true &> /tmp/json-compression.log &
+    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/json-compression/target/wasm32-wasi/release/json-compression.wasm --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=141072 --partition=true --serverless=true --vmcount=4096 --wasmtime=true &> /tmp/json-compression.log &
     """
 
     run_command(run_json_lz4_command_wasmtime, "run_json_lz4_command_wasmtime", cpu_bench_instance[0].id)
@@ -210,7 +210,7 @@ def run_lz4_bench():
     x=$(cloud-init status)
     done
 
-    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/json-compression/target/wasm32-wasi/release/json-compression.wasm --ip=0.0.0.0 --heap=4194304 --stack=262144 --hcallsize=524288 --partition=true --serverless=true --vmcount=3072 --vmgroups=1 --maxdup=2 &> /tmp/json-compression.log &
+    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/json-compression/target/wasm32-wasi/release/json-compression.wasm --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=141072 --partition=true --serverless=true --vmcount=4096 --vmgroups=1 --maxdup=2 &> /tmp/json-compression.log &
     """
 
     run_command(run_json_lz4_command, "run_json_lz4_command", gpu_instance[0].id)
@@ -236,7 +236,7 @@ def run_lz4_bench():
     go run /tmp/wasm2opencl/benchmarks/json-compression/run_json_lz4.go {addr} 8000 {target_rps} 1 60 {input_size}
 
     go run /tmp/wasm2opencl/benchmarks/json-compression/run_json_lz4.go {addr} 8000 {target_rps} 1 60 {input_size}
-    """.format(addr=gpu_instance[0].private_dns_name, input_size=350, target_rps=target_rps)
+    """.format(addr=gpu_instance[0].private_dns_name, input_size=100, target_rps=target_rps)
 
 
     command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
@@ -270,7 +270,7 @@ def run_lz4_bench():
     go run /tmp/wasm2opencl/benchmarks/json-compression/run_json_lz4.go {addr} 8000 {target_rps} 1 60 {input_size}
 
     go run /tmp/wasm2opencl/benchmarks/json-compression/run_json_lz4.go {addr} 8000 {target_rps} 1 60 {input_size}
-    """.format(addr=cpu_bench_instance[0].private_dns_name, input_size=350, target_rps=target_rps)
+    """.format(addr=cpu_bench_instance[0].private_dns_name, input_size=100, target_rps=target_rps)
 
     command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
 
@@ -281,6 +281,103 @@ def run_lz4_bench():
     print (output)
     # save output
     with open("cpu_bench_lz4.txt", "w") as text_file:
+        text_file.write(str(output))
+
+def run_average_bench():
+    run_average_command_wasmtime = """#!/bin/bash
+    sudo su
+
+    x=$(cloud-init status)
+    until [ "$x" == "status: done" ]; do
+    sleep 10
+    x=$(cloud-init status)
+    done
+
+    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/average/target/wasm32-wasi/release/average.wasm --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=141072 --partition=true --serverless=true --vmcount=4096 --wasmtime=true &> /tmp/average.log &
+    """
+
+    run_command(run_average_command_wasmtime, "run_average_command_wasmtime", cpu_bench_instance[0].id)
+
+    run_average_command = """#!/bin/bash
+    sudo su
+
+    x=$(cloud-init status)
+    until [ "$x" == "status: done" ]; do
+    sleep 10
+    x=$(cloud-init status)
+    done
+
+    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/average/target/wasm32-wasi/release/average.wasm --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=141072 --partition=true --serverless=true --vmcount=4096 --wasmtime=false --maxdup=3 &> /tmp/average.log &
+    """
+
+    run_command(run_average_command, "run_average_command", gpu_instance[0].id)
+
+    # Now set up the invoker
+
+    run_invoker = """#!/bin/bash
+    sudo su
+
+    mkdir -p ~/gocache/
+    mkdir -p ~/xdg/
+    export GOCACHE=~/gocache/
+    export XDG_CACHE_HOME=~/xdg/
+
+    go env
+
+    x=$(cloud-init status)
+    until [ "$x" == "status: done" ]; do
+    sleep 10
+    x=$(cloud-init status)
+    done
+
+    go run /tmp/wasm2opencl/benchmarks/average/run_average_bench.go {addr} 8000 {target_rps} 1 60 {input_size}
+
+    go run /tmp/wasm2opencl/benchmarks/average/run_average_bench.go {addr} 8000 {target_rps} 1 60 {input_size}
+    """.format(addr=gpu_instance[0].private_dns_name, input_size=15, target_rps=target_rps)
+
+
+    command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
+
+    time.sleep(20)
+
+    # Block until benchmark is complete
+    output = block_on_command(command_id, invoker_instance[0].id)
+    print (output)
+
+    # save output
+    with open("gpu_bench_average.txt", "w") as text_file:
+        text_file.write(str(output))
+
+    run_invoker_wasmtime = """#!/bin/bash
+    sudo su
+
+    mkdir -p ~/gocache/
+    mkdir -p ~/xdg/
+    export GOCACHE=~/gocache/
+    export XDG_CACHE_HOME=~/xdg/
+
+    go env
+
+    x=$(cloud-init status)
+    until [ "$x" == "status: done" ]; do
+    sleep 10
+    x=$(cloud-init status)
+    done
+
+    go run /tmp/wasm2opencl/benchmarks/average/run_average_bench.go {addr} 8000 {target_rps} 1 60 {input_size}
+
+    go run /tmp/wasm2opencl/benchmarks/average/run_average_bench.go {addr} 8000 {target_rps} 1 60 {input_size}
+    """.format(addr=cpu_bench_instance[0].private_dns_name, input_size=15, target_rps=target_rps)
+
+    command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
+
+    time.sleep(20)
+
+    # Block until benchmark is complete
+    output = block_on_command(command_id, invoker_instance[0].id)
+    print (output)
+    # save output
+    with open("cpu_bench_average.txt", "w") as text_file:
         text_file.write(str(output))
 
 def run_nlp_count_bench():
@@ -404,7 +501,7 @@ p3.2xlarge   => 1 V100, 16 GiB memory, 8 vCPU
 """
 # AMIs specific to us-east-2
 gpu_instance = ec2.create_instances(ImageId='ami-0414f41139d36fb50',
-                                InstanceType="g4dn.2xlarge", # $0.53 / hr
+                                InstanceType="g4dn.xlarge", # $0.53 / hr
                                 MinCount=1,
                                 MaxCount=1,
                                 UserData=userdata,
@@ -481,7 +578,11 @@ ssm_client = boto3.client('ssm')
 
 #cleanup()
 
-run_nlp_count_bench()
+#run_nlp_count_bench()
+
+#cleanup()
+
+run_average_bench()
 
 # clean up all instances at end
 ec2.instances.filter(InstanceIds = instance_id_list).terminate()
