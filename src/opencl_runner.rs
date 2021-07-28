@@ -561,8 +561,8 @@ impl OpenCLRunner {
                 let kernel_compile = std::time::Instant::now();
 
                 // Spin up N threads (n = ncpus)
-                // Evenly divide workload between threads
-                let num_threads = num_cpus::get();
+                // Use fewer than N threads to minimize memory consumption during compilation 
+                let num_threads = 2; //num_cpus::get();
                 let _num_vms = self.num_vms.clone();
 
                 let (finished_sender, finished_receiver): (SyncSender<(u32, ocl::core::Program, u64)>, SyncReceiver<(u32, ocl::core::Program, u64)>) = unbounded();

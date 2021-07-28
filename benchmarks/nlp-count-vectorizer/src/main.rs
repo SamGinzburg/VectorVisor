@@ -13,6 +13,7 @@ struct FuncResponse {
 }
 
 fn tokenize(inputs: Vec<String>, tok: &Tokenizer) -> Vec<Vec<String>> {
+    print!("");
     let mut results = vec![];
     for tweet in inputs {
         let mut str_vec: Vec<String> = vec![];

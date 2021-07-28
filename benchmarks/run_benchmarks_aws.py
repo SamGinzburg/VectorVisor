@@ -236,7 +236,7 @@ def run_lz4_bench():
     go run /tmp/wasm2opencl/benchmarks/json-compression/run_json_lz4.go {addr} 8000 {target_rps} 1 60 {input_size}
 
     go run /tmp/wasm2opencl/benchmarks/json-compression/run_json_lz4.go {addr} 8000 {target_rps} 1 60 {input_size}
-    """.format(addr=gpu_instance[0].private_dns_name, input_size=200, target_rps=target_rps)
+    """.format(addr=gpu_instance[0].private_dns_name, input_size=350, target_rps=target_rps)
 
 
     command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
@@ -270,7 +270,7 @@ def run_lz4_bench():
     go run /tmp/wasm2opencl/benchmarks/json-compression/run_json_lz4.go {addr} 8000 {target_rps} 1 60 {input_size}
 
     go run /tmp/wasm2opencl/benchmarks/json-compression/run_json_lz4.go {addr} 8000 {target_rps} 1 60 {input_size}
-    """.format(addr=cpu_bench_instance[0].private_dns_name, input_size=200, target_rps=target_rps)
+    """.format(addr=cpu_bench_instance[0].private_dns_name, input_size=350, target_rps=target_rps)
 
     command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
 
@@ -404,7 +404,7 @@ p3.2xlarge   => 1 V100, 16 GiB memory, 8 vCPU
 """
 # AMIs specific to us-east-2
 gpu_instance = ec2.create_instances(ImageId='ami-0414f41139d36fb50',
-                                InstanceType="g4dn.xlarge",
+                                InstanceType="g4dn.2xlarge", # $0.53 / hr
                                 MinCount=1,
                                 MaxCount=1,
                                 UserData=userdata,
@@ -415,7 +415,7 @@ gpu_instance = ec2.create_instances(ImageId='ami-0414f41139d36fb50',
 
 # cpu wasmtime instance
 cpu_bench_instance = ec2.create_instances(ImageId='ami-0277b52859bac6f4b',
-                                InstanceType="c5.large",
+                                InstanceType="c5.xlarge", # $0.17 / hr
                                 MinCount=1,
                                 MaxCount=1,
                                 UserData=userdata,
@@ -472,14 +472,16 @@ while True:
 ssm_client = boto3.client('ssm')
 
 # run pbkdf2 bench
-run_pbkdf2_bench(True)
+#run_pbkdf2_bench(True)
 
-cleanup()
+#cleanup()
 
 # run lz4 bench
-run_lz4_bench()
+#run_lz4_bench()
 
-#run_nlp_count_bench()
+#cleanup()
+
+run_nlp_count_bench()
 
 # clean up all instances at end
 ec2.instances.filter(InstanceIds = instance_id_list).terminate()

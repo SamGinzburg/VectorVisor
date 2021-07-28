@@ -30,6 +30,7 @@ struct FuncResponse {
 }
 
 fn image_blur(event: FuncInput) -> FuncResponse {
+    println!("decoded image");
     let mut image = decode(event.image).unwrap();
     let mut decoded_image = load_from_memory_with_format(&image, ImageFormat::Jpeg).unwrap();
 
@@ -43,7 +44,7 @@ fn image_blur(event: FuncInput) -> FuncResponse {
         Ok(_) => (),
         Err(err) => println!("Unable to encode image to PNG: {:?}", err),
     }
-
+    println!("blurred image");
     FuncResponse { image: encode(output_buf) }
 }
 
