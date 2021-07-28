@@ -7,11 +7,10 @@ use serde::Serialize;
 use base64::encode;
 use base64::decode;
 use std::io::Cursor;
-
+use std::borrow::Cow;
 use image::io::Reader as ImageReader;
 use image::{GenericImageView, imageops};
 use image::codecs::jpeg::JpegEncoder;
-
 use image::EncodableLayout;
 use image::load_from_memory_with_format;
 use image::ImageFormat;
@@ -19,9 +18,9 @@ use image::ImageOutputFormat;
 use image::ColorType;
 
 #[derive(Debug, Deserialize)]
-struct FuncInput {
+struct FuncInput<'a> {
     // Image comes in base64 encoded
-    image: String
+    image: Cow<'a, str>
 }
 
 #[derive(Debug, Serialize)]
@@ -30,8 +29,7 @@ struct FuncResponse {
 }
 
 fn image_blur(event: FuncInput) -> FuncResponse {
-    println!("decoded image");
-    let mut image = decode(event.image).unwrap();
+    let mut image = decode(event.image.as_bytes()).unwrap();
     let mut decoded_image = load_from_memory_with_format(&image, ImageFormat::Jpeg).unwrap();
 
     let mut blurred = imageops::blur(&mut decoded_image, 4.0);
@@ -44,7 +42,6 @@ fn image_blur(event: FuncInput) -> FuncResponse {
         Ok(_) => (),
         Err(err) => println!("Unable to encode image to PNG: {:?}", err),
     }
-    println!("blurred image");
     FuncResponse { image: encode(output_buf) }
 }
 

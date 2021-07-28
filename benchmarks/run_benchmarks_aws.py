@@ -128,8 +128,6 @@ def run_pbkdf2_bench(run_x86):
     export GOCACHE=~/gocache/
     export XDG_CACHE_HOME=~/xdg/
 
-    go env
-
     x=$(cloud-init status)
     until [ "$x" == "status: done" ]; do
     sleep 10
@@ -160,8 +158,6 @@ def run_pbkdf2_bench(run_x86):
     mkdir -p ~/xdg/
     export GOCACHE=~/gocache/
     export XDG_CACHE_HOME=~/xdg/
-
-    go env
 
     x=$(cloud-init status)
     until [ "$x" == "status: done" ]; do
@@ -210,7 +206,7 @@ def run_lz4_bench():
     x=$(cloud-init status)
     done
 
-    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/json-compression/target/wasm32-wasi/release/json-compression.wasm --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=141072 --partition=true --serverless=true --vmcount=4096 --vmgroups=1 --maxdup=2 &> /tmp/json-compression.log &
+    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/json-compression/target/wasm32-wasi/release/json-compression.wasm --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=141072 --partition=true --serverless=true --vmcount=4096 --vmgroups=1 --maxdup=3 &> /tmp/json-compression.log &
     """
 
     run_command(run_json_lz4_command, "run_json_lz4_command", gpu_instance[0].id)
@@ -224,8 +220,6 @@ def run_lz4_bench():
     mkdir -p ~/xdg/
     export GOCACHE=~/gocache/
     export XDG_CACHE_HOME=~/xdg/
-
-    go env
 
     x=$(cloud-init status)
     until [ "$x" == "status: done" ]; do
@@ -258,8 +252,6 @@ def run_lz4_bench():
     mkdir -p ~/xdg/
     export GOCACHE=~/gocache/
     export XDG_CACHE_HOME=~/xdg/
-
-    go env
 
     x=$(cloud-init status)
     until [ "$x" == "status: done" ]; do
@@ -307,7 +299,7 @@ def run_average_bench():
     x=$(cloud-init status)
     done
 
-    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/average/target/wasm32-wasi/release/average.wasm --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=141072 --partition=true --serverless=true --vmcount=4096 --wasmtime=false --maxdup=3 &> /tmp/average.log &
+    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/average/target/wasm32-wasi/release/average.wasm --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=141072 --partition=true --serverless=true --vmcount=4096 --wasmtime=false --maxdup=2 &> /tmp/average.log &
     """
 
     run_command(run_average_command, "run_average_command", gpu_instance[0].id)
@@ -321,8 +313,6 @@ def run_average_bench():
     mkdir -p ~/xdg/
     export GOCACHE=~/gocache/
     export XDG_CACHE_HOME=~/xdg/
-
-    go env
 
     x=$(cloud-init status)
     until [ "$x" == "status: done" ]; do
@@ -355,8 +345,6 @@ def run_average_bench():
     mkdir -p ~/xdg/
     export GOCACHE=~/gocache/
     export XDG_CACHE_HOME=~/xdg/
-
-    go env
 
     x=$(cloud-init status)
     until [ "$x" == "status: done" ]; do
@@ -419,8 +407,6 @@ def run_nlp_count_bench():
     export GOCACHE=~/gocache/
     export XDG_CACHE_HOME=~/xdg/
 
-    go env
-
     x=$(cloud-init status)
     until [ "$x" == "status: done" ]; do
     sleep 10
@@ -452,8 +438,6 @@ def run_nlp_count_bench():
     mkdir -p ~/xdg/
     export GOCACHE=~/gocache/
     export XDG_CACHE_HOME=~/xdg/
-
-    go env
 
     x=$(cloud-init status)
     until [ "$x" == "status: done" ]; do
@@ -574,9 +558,9 @@ ssm_client = boto3.client('ssm')
 #cleanup()
 
 # run lz4 bench
-#run_lz4_bench()
+run_lz4_bench()
 
-#cleanup()
+cleanup()
 
 #run_nlp_count_bench()
 

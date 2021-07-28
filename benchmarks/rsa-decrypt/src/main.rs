@@ -8,10 +8,11 @@ use base64::{encode, decode};
 use lazy_static::lazy_static;
 use rsa::PrivateKeyEncoding;
 use std::convert::TryFrom;
+use std::borrow::Cow;
 
 #[derive(Debug, Deserialize)]
-struct FuncInput {
-    encoded_str: String
+struct FuncInput<'a> {
+    encoded_str: Cow<'a, str>
 }
 
 #[derive(Debug, Serialize)]
@@ -55,7 +56,7 @@ lazy_static! {
 }
 
 fn rsa_decrypt(event: FuncInput) -> FuncResponse {
-    let mut decoded_str = decode(event.encoded_str).unwrap();
+    let mut decoded_str = decode(event.encoded_str.as_bytes()).unwrap();
     let padding = PaddingScheme::new_pkcs1v15_encrypt();
     let dec_data = RSA_PKEY.decrypt(padding, &decoded_str).expect("failed to decrypt");
     FuncResponse { encoded_resp: encode(dec_data) }
