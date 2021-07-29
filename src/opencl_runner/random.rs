@@ -20,8 +20,9 @@ pub struct Random {}
 
 impl Random {
     pub fn hypercall_random_get(ctx: &WasiCtx, vm_ctx: &VectorizedVM, hypercall: &mut HyperCall, sender: &Sender<HyperCallResult>) -> () {
-        let hcall_buf: &mut [u8] = unsafe { *hypercall.hypercall_buffer.buf.get() };
-        
+        let mut hcall_buf: &mut [u8] = unsafe { *hypercall.hypercall_buffer.buf.get() };
+        let hcall_buf_size: u32 = vm_ctx.hcall_buf_size;
+
         let memory = &vm_ctx.memory;
         let wasm_mem = &vm_ctx.wasm_memory;
         let raw_mem: &mut [u8] = unsafe { memory.data_unchecked_mut() };
@@ -41,6 +42,7 @@ impl Random {
                 Interleave::write_u8(hcall_buf, offset.try_into().unwrap(), hypercall.num_total_vms, raw_mem[offset], hypercall.vm_id);
             }
         } else {
+            hcall_buf = &mut hcall_buf[(hypercall.vm_id * hcall_buf_size) as usize..((hypercall.vm_id+1) * hcall_buf_size) as usize];
             hcall_buf[0..(random_len as usize)].clone_from_slice(&raw_mem[0..(random_len as usize)]);
         }
 
