@@ -87,7 +87,7 @@ pub enum WasmHypercallId {
 
 pub struct OpenCLCWriter<'a> {
     types: HashMap<String, wast::TypeDef<'a>>,
-    imports_map: HashMap<&'a str, (&'a str, Option<&'a str>, wast::ItemSig<'a>)>,
+    imports_map: HashMap<String, (&'a str, Option<&'a str>, wast::ItemSig<'a>)>,
     // map of item.id -> (module, field)
     func_map: HashMap<String, wast::Func<'a>>,
     tables: Vec<wast::Table<'a>>,
@@ -120,6 +120,7 @@ impl<'a> OpenCLCWriter<'_> {
     pub fn parse_file(&mut self) -> Result<bool, String> {
         let module = parser::parse::<Wat>(self.parse_buffer).unwrap();
         let mut type_count = 0;
+        let mut func_name_count = 0;
         match module.module.kind {
             Text(t) => {
                 for item in t {
@@ -134,15 +135,23 @@ impl<'a> OpenCLCWriter<'_> {
                         },
                         wast::ModuleField::Import(i) => {
                             match i.clone().item.id {
-                                Some(id) => self.imports_map.insert(id.name(), (i.module, i.field, i.item)),
-                                None => continue,
+                                Some(id) => {
+                                    self.imports_map.insert(id.name().to_string(), (i.module, i.field, i.item));
+                                },
+                                None => {
+                                    self.imports_map.insert(format!("func_{}", func_name_count), (i.module, i.field, i.item));
+                                    func_name_count += 1;
+                                }
                             };
                         },
                         wast::ModuleField::Func(f) => {
                             match f.id {
-                                Some(f_id) => self.func_map.insert(f_id.name().to_string(), f),
+                                Some(f_id) => {
+                                    self.func_map.insert(f_id.name().to_string(), f);
+                                },
                                 None => {
-                                    continue
+                                    self.func_map.insert(format!("func_{}", func_name_count), f);
+                                    func_name_count += 1;
                                 },
                             };
                         },
@@ -2113,16 +2122,10 @@ r#"
         // for each function, assign an ID -> index mapping
         let mut function_idx_label: HashMap<&str, u32> = HashMap::new();
         let mut count = 0;
-        let funcs = self.func_map.values();
-        for function in funcs.clone() {
-            match function.id {
-                Some(id) => {
-                    function_idx_label.insert(id.name(), count);
-                }
-                None => {
-                    println!("import function without ID -- cannot add label");
-                },
-            }
+        let funcs_keys = self.func_map.keys().clone();
+        let funcs = self.func_map.values().clone();
+        for f_name in funcs_keys {
+            function_idx_label.insert(f_name, count);
             count += 1;
         }
 
@@ -2148,7 +2151,7 @@ r#"
         for (_, indirect_call_name) in indirect_call_mapping.iter() {
             let name = match indirect_call_name {
                 wast::Index::Id(id)  => id.name().to_string(),
-                _ => panic!("Num function names not supported"),
+                wast::Index::Num(val, _) => format!("func_{}", val),
             };
             indirect_call_set.insert(name);
         }

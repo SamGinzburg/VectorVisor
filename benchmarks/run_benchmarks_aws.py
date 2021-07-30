@@ -16,6 +16,7 @@ userdata = """#cloud-config
      - curl https://amazon-ssm-%s.s3.amazonaws.com/latest/linux_amd64/amazon-ssm-agent.rpm -o amazon-ssm-agent.rpm
      - yum install -y amazon-ssm-agent.rpm
      - yum install -y git
+     - yum install -y htop
      - yum install -y gcc
      - yum install -y golang
      - yum install -y curl
@@ -299,7 +300,7 @@ def run_average_bench():
     x=$(cloud-init status)
     done
 
-    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/average/target/wasm32-wasi/release/average.wasm --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=141072 --partition=true --serverless=true --vmcount=4096 --wasmtime=false --maxdup=2 &> /tmp/average.log &
+    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/average/target/wasm32-wasi/release/average.wasm --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=141072 --partition=true --serverless=true --vmcount=4096 --wasmtime=false --maxdup=3 &> /tmp/average.log &
     """
 
     run_command(run_average_command, "run_average_command", gpu_instance[0].id)
@@ -477,15 +478,15 @@ def cleanup():
 Create VMs for the test
 1 GPU VM, 1 CPU VM, and 1 VM for issuing requests
 
-g4dn.xlarge  => 1 T4, 16 GiB memory,  4 vCPU
-g4dn.2xlarge => 1 T4, 32 GiB memory, 8 vCPU
-g4dn.4xlarge => 1 T4, 64 GiB memory, 16 vCPU
-p3.2xlarge   => 1 V100, 16 GiB memory, 8 vCPU
+g4dn.xlarge  => 1 T4, 16 GiB memory,  4 vCPU, $0.526 / hr
+g4dn.2xlarge => 1 T4, 32 GiB memory, 8 vCPU, $0.752 / hr
+g4dn.4xlarge => 1 T4, 64 GiB memory, 16 vCPU, $1.204 / hr
+p3.2xlarge   => 1 V100, 16 GiB memory, 8 vCPU, $3.06 / hr
 
 """
 # AMIs specific to us-east-2
 gpu_instance = ec2.create_instances(ImageId='ami-0414f41139d36fb50',
-                                InstanceType="g4dn.xlarge", # $0.53 / hr
+                                InstanceType="g4dn.xlarge",
                                 MinCount=1,
                                 MaxCount=1,
                                 UserData=userdata,
@@ -558,9 +559,9 @@ ssm_client = boto3.client('ssm')
 #cleanup()
 
 # run lz4 bench
-run_lz4_bench()
+#run_lz4_bench()
 
-cleanup()
+#cleanup()
 
 #run_nlp_count_bench()
 
