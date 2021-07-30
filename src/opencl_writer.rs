@@ -274,6 +274,8 @@ impl<'a> OpenCLCWriter<'_> {
                          call_ret_idx: &mut u32,
                          // function name
                          fn_name: &str,
+                         // track "_start" entry point
+                         start_function_name: String,
                          // stack of control flow operations (blocks, loops)
                          control_stack: &mut Vec<(String, u32, i32, u32)>,
                          // map of function names to IDs
@@ -1200,7 +1202,7 @@ impl<'a> OpenCLCWriter<'_> {
                 stack_sizes.push(1);
                 emit_mem_size(self, stack_ctx, arg, debug)
             },
-            wast::Instruction::Return => emit_return(self, stack_ctx, fn_name, hypercall_id_count, is_fastcall, debug),
+            wast::Instruction::Return => emit_return(self, stack_ctx, fn_name, start_function_name, hypercall_id_count, is_fastcall, debug),
             wast::Instruction::Br(idx) => emit_br(self, stack_ctx, *idx, fn_name, control_stack, function_id_map, is_fastcall, debug),
             wast::Instruction::BrIf(idx) => emit_br_if(self, stack_ctx, *idx, fn_name, stack_sizes, control_stack, function_id_map, is_fastcall, debug),
             wast::Instruction::BrTable(table_idxs) => emit_br_table(self, stack_ctx, table_idxs, fn_name, stack_sizes, control_stack, function_id_map, is_fastcall, debug),
@@ -1223,6 +1225,7 @@ impl<'a> OpenCLCWriter<'_> {
 
     fn emit_function(&self,
                      func: &wast::Func,
+                     fn_name: String,
                      call_ret_map: &mut HashMap<&str, u32>,
                      call_ret_idx: &mut u32,
                      function_id_map: HashMap<&str, u32>,
@@ -1232,6 +1235,7 @@ impl<'a> OpenCLCWriter<'_> {
                      fastcall_set: HashSet<String>,
                      force_inline: bool,
                      debug_call_print: bool,
+                     start_function: String,
                      is_gpu: bool,
                      is_fastcall: bool,
                      debug: bool) -> String {
@@ -1251,7 +1255,7 @@ impl<'a> OpenCLCWriter<'_> {
                 // (func (type 3) (import "foo" "bar"))
                 panic!("InlineImport functions not yet implemented");
             },
-            (wast::FuncKind::Inline{locals, expression}, Some(id), typeuse) => {
+            (wast::FuncKind::Inline{locals, expression}, _, typeuse) => {
                 let mut offset = 0;
                 let mut param_idx: u32 = 0;
                 // get offsets for parameters, we record offsets from the start of the stack frame
@@ -1318,7 +1322,7 @@ impl<'a> OpenCLCWriter<'_> {
 
                 if !is_fastcall {
                     final_string += &format!("{}{} {{\n", inline,
-                    self.generate_function_prelude(&format!("{}{}", "__", id.name().replace(".", "")),
+                    self.generate_function_prelude(&format!("{}{}", "__", fn_name.replace(".", "")),
                                                     0,
                                                     0,
                                                     0,
@@ -1351,7 +1355,7 @@ impl<'a> OpenCLCWriter<'_> {
                         _ => String::from("void"),
                     };
 
-                    let func_name_demangle = format!("{}{}", "__", id.name().to_string().replace(".", ""));
+                    let func_name_demangle = format!("{}{}", "__", fn_name.replace(".", ""));
                     final_string += &format!("{} {}_fastcall{}", ret_signature, func_name_demangle, stack_ctx.emit_fastcall_header());
                 }
 
@@ -1392,9 +1396,9 @@ impl<'a> OpenCLCWriter<'_> {
                         for count in 0..num_hypercalls {
                             write!(final_string, "\t\t\tcase {}:\n", count).unwrap();
                             if debug_call_print {
-                                write!(final_string, "\t\t\t\tprintf(\"goto: {}_hypercall_return_stub_{}\\n\");\n", format!("{}{}", "__", id.name().replace(".", "")), count).unwrap();
+                                write!(final_string, "\t\t\t\tprintf(\"goto: {}_hypercall_return_stub_{}\\n\");\n", format!("{}{}", "__", fn_name.replace(".", "")), count).unwrap();
                             }
-                            write!(final_string, "\t\t\t\tgoto {}_hypercall_return_stub_{};\n", format!("{}{}", "__", id.name().replace(".", "")), count).unwrap();
+                            write!(final_string, "\t\t\t\tgoto {}_hypercall_return_stub_{};\n", format!("{}{}", "__", fn_name.replace(".", "")), count).unwrap();
                             write!(final_string, "\t\t\t\tbreak;\n").unwrap();
                         }
                         write!(final_string, "\t\t}}\n").unwrap();
@@ -1413,9 +1417,9 @@ impl<'a> OpenCLCWriter<'_> {
                             write!(final_string, "\t\t\tcase {}:\n", count).unwrap();
                             write!(final_string, "\t\t\t\t*sfp -= 1;\n").unwrap();
                             if debug_call_print {
-                                write!(final_string, "\t\t\t\tprintf(\"goto: {}_call_return_stub_{}\\n\");\n", format!("{}{}", "__", id.name().replace(".", "")), count).unwrap();
+                                write!(final_string, "\t\t\t\tprintf(\"goto: {}_call_return_stub_{}\\n\");\n", format!("{}{}", "__", fn_name.replace(".", "")), count).unwrap();
                             }
-                            write!(final_string, "\t\t\t\tgoto {}_call_return_stub_{};\n", format!("{}{}", "__", id.name().replace(".", "")), count).unwrap();
+                            write!(final_string, "\t\t\t\tgoto {}_call_return_stub_{};\n", format!("{}{}", "__", fn_name.replace(".", "")), count).unwrap();
                             //write!(final_string, "\t\t\t\tbreak;\n");
                         }
                         write!(final_string, "\t\t}}\n").unwrap();
@@ -1479,7 +1483,8 @@ impl<'a> OpenCLCWriter<'_> {
                                                             &is_param,
                                                             call_ret_map,
                                                             call_ret_idx,
-                                                            id.name(),
+                                                            &fn_name,
+                                                            start_function.clone(),
                                                             &mut control_stack,
                                                             function_id_map.clone(),
                                                             hypercall_id_count,
@@ -1497,14 +1502,14 @@ impl<'a> OpenCLCWriter<'_> {
                 }
 
                 // If we are emitting the start function, just emit a proc_exit here
-                if id.name().to_string() == "_start" {
+                if fn_name == start_function {
                     // emit modified func unwind for _start
-                    final_string += &function_unwind(&self, &mut stack_ctx, id.name(), &typeuse.inline, true, is_fastcall, debug);
-                    final_string += &self.emit_hypercall(WasmHypercallId::proc_exit, &mut stack_ctx, hypercall_id_count, id.name().to_string(), true, debug);
+                    final_string += &function_unwind(&self, &mut stack_ctx, &fn_name, &typeuse.inline, true, is_fastcall, debug);
+                    final_string += &self.emit_hypercall(WasmHypercallId::proc_exit, &mut stack_ctx, hypercall_id_count, fn_name, true, debug);
                 } else {
                     // to unwind from the function we unwind the call stack by moving the stack pointer
                     // and returning the last value on the stack 
-                    final_string += &function_unwind(&self, &mut stack_ctx, id.name(), &typeuse.inline, false, is_fastcall, debug);
+                    final_string += &function_unwind(&self, &mut stack_ctx, &fn_name, &typeuse.inline, false, is_fastcall, debug);
                 }
             },
             (_, _, _) => panic!("Inline function must always have a valid identifier in wasm")
@@ -2060,6 +2065,20 @@ void {}(global uint   *stack_u32,
         let mut kernel_compile_stats: HashMap<u32, (u32, u32, u32, u32, u32, u32)> = HashMap::new();
         let mut kernel_partition_mappings: HashMap<u32, u32> = HashMap::new();
 
+        // Find the "_start" function
+        let mut start_fn_name_tmp = None;
+        for export in &self.exports {
+            if export.name == "_start" {
+                start_fn_name_tmp = Some(&export.kind);
+            }
+        }
+        let start_func = match start_fn_name_tmp {
+            Some(wast::ExportKind::Func(wast::Index::Id(id))) => id.name().to_string(),
+            Some(wast::ExportKind::Func(wast::Index::Num(val, _))) => format!("func_{:?}", val),
+            Some(_) => panic!("Unable to find \"_start\" function"),
+            None => panic!("Unable to find \"_start\" function"),
+        };
+
         // enable the usage of FP64 operations (double precision floats)
         // if we are unable to enable, floating point calculations may be incorrect
         write!(output, "{}",
@@ -2157,7 +2176,7 @@ r#"
         }
 
         let fast_function_set = if !disable_fastcalls {
-            compute_fastcall_set(self, Vec::from_iter(funcs.clone()), &mut indirect_call_set)
+            compute_fastcall_set(self, &self.func_map, &mut indirect_call_set, start_func.clone())
         } else {
             let allowed_fastcalls = vec!["__lctrans",
                                          "dlfree",
@@ -2202,7 +2221,7 @@ r#"
             for f in allowed_fastcalls {
                 hset.insert(f.to_string());
             }
-            let mut fastcall_set = compute_fastcall_set(self, Vec::from_iter(funcs.clone()), &mut indirect_call_set);
+            let mut fastcall_set = compute_fastcall_set(self, &self.func_map, &mut indirect_call_set, start_func.clone());
 
             // now filter to only allow the allowed list and functions they call
             let hset_clone = hset.clone();
@@ -2224,7 +2243,7 @@ r#"
             hset
         };
 
-        dbg!(&fast_function_set);
+        //dbg!(&fast_function_set);
 
         // Generate the fastcall header
 
@@ -2266,6 +2285,7 @@ r#"
         // emit functions
         for fastfunc in fast_function_set.iter() {
             let func = self.emit_function(self.func_map.get(&fastfunc.to_string()).unwrap(),
+                                            fastfunc.to_string(),
                                             call_ret_map,
                                             &mut call_ret_idx,
                                             function_idx_label.clone(),
@@ -2275,6 +2295,7 @@ r#"
                                             fast_function_set.clone(),
                                             force_inline,
                                             debug_print_function_calls,
+                                            start_func.clone(),
                                             is_gpu,
                                             true,
                                             debug);
@@ -2289,7 +2310,7 @@ r#"
         // kernel_partition_mapping get the partition ID from a function idx
         let partitions = form_partitions(max_partitions, max_loc_in_partition, max_duplicate_funcs, self.func_map.keys().collect(), &fast_function_set, &func_mapping, &self.imports_map, &mut kernel_compile_stats);
 
-        dbg!(&partitions);
+        //dbg!(&partitions);
 
         for (partition_idx, partition) in partitions.clone() {
             let mut function_idx_label_temp: HashMap<&str, u32> = HashMap::new();
@@ -2309,6 +2330,7 @@ r#"
                 };
     
                 let func = self.emit_function(func_to_emit,
+                                              function,
                                               call_ret_map,
                                               &mut call_ret_idx,
                                               function_idx_label.clone(),
@@ -2318,6 +2340,7 @@ r#"
                                               fast_function_set.clone(),
                                               force_inline,
                                               debug_print_function_calls,
+                                              start_func.clone(),
                                               is_gpu,
                                               false,
                                               debug);
@@ -2379,7 +2402,7 @@ r#"
         for function in funcs.clone() {
             match function.id {
                 Some(name) => {
-                    if name.name() == "_start" {
+                    if name.name() == start_func {
                         // move stack_u32 by the total size of all parameters
                         /*
                         let mut offset = 0;
@@ -2466,7 +2489,7 @@ r#"
 
         write!(output, "}}\n").unwrap();
 
-        (output, fastcall_header, *function_idx_label.get("_start").unwrap(), globals_buffer_size, funcs.len().try_into().unwrap(), kernel_hashmap, kernel_compile_stats, kernel_partition_mappings)
+        (output, fastcall_header, *function_idx_label.get(&start_func as &str).unwrap(), globals_buffer_size, funcs.len().try_into().unwrap(), kernel_hashmap, kernel_compile_stats, kernel_partition_mappings)
     }
 }
 

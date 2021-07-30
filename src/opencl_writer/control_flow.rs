@@ -10,12 +10,12 @@ use std::collections::HashMap;
 use std::convert::TryInto;
 
 // TODO: double check the semantics of this? 
-pub fn emit_return(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, fn_name: &str, hypercall_id_count: &mut u32, is_fastcall: bool, debug: bool) -> String {
+pub fn emit_return(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, fn_name: &str, start_fn_name: String, hypercall_id_count: &mut u32, is_fastcall: bool, debug: bool) -> String {
     let mut ret_str = String::from("");
 
     let fn_type = &writer.func_map.get(&fn_name.to_string()).unwrap().ty.inline;
 
-    if fn_name.to_string() == "_start" {
+    if fn_name.to_string() == start_fn_name {
         // emit modified func unwind for _start
         ret_str += &function_unwind(&writer, stack_ctx, fn_name, &fn_type, true, is_fastcall, debug);
         ret_str += &writer.emit_hypercall(WasmHypercallId::proc_exit, stack_ctx, hypercall_id_count, fn_name.to_string(), true, debug);

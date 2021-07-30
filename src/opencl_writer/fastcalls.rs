@@ -1,7 +1,7 @@
 use crate::opencl_writer;
 use crate::opencl_writer::WASI_SNAPSHOT_PREVIEW1;
 
-use std::collections::HashSet;
+use std::collections::{HashSet, HashMap};
 
 /*
  * Our CPS-style transform is too expensive for most function calls, so we perform some basic static analysis
@@ -43,20 +43,20 @@ pub enum FastcallPassStatus {
 }
 
 
- fn is_fastcall(writer: &opencl_writer::OpenCLCWriter, func: &wast::Func, fastcall_set: &mut HashSet<String>, indirect_calls: &mut HashSet<String>) -> FastcallPassStatus {
+ fn is_fastcall(writer: &opencl_writer::OpenCLCWriter, func_name: String, func: &wast::Func, fastcall_set: &mut HashSet<String>, indirect_calls: &mut HashSet<String>, start_func: String) -> FastcallPassStatus {
     match (&func.kind, &func.id, &func.ty) {
         (wast::FuncKind::Import(_), _, _) => {
             panic!("InlineImport functions not yet implemented (fastcall pass)");
         },
-        (wast::FuncKind::Inline{locals, expression}, Some(id), _typeuse) => {
+        (wast::FuncKind::Inline{locals, expression}, _, _typeuse) => {
 
             // Is this function the start function?
-            if id.name() == "_start" {
+            if func_name == start_func {
                 return FastcallPassStatus::fastcall_false(String::from("is start fn"))
             }
 
             // Is this function the target of an indirect call?
-            if indirect_calls.contains(id.name()) {
+            if indirect_calls.contains(&func_name) {
                 // return FastcallPassStatus::fastcall_false(String::from("indirect call target"))
             }
 
@@ -66,17 +66,18 @@ pub enum FastcallPassStatus {
                 match instruction {
                     wast::Instruction::Call(idx) => {
                         let id = match idx {
-                            wast::Index::Id(id) => id.name(),
+                            wast::Index::Id(id) => id.name().to_string(),
+                            wast::Index::Num(val, _) => format!("func_{}", val),
                             _ => panic!("Unable to get Id for function call: {:?}", idx),
                         };
 
                         // Fastcalls may not perform recursion
-                        if id.to_string() == func.id.unwrap().name().to_string() {
+                        if id.to_string() == func_name {
                             return FastcallPassStatus::fastcall_false(String::from("performs recursion"))
                         }
 
                         // Is this a hypercall?
-                        match writer.imports_map.get(id) {
+                        match writer.imports_map.get(&id) {
                             Some((wasi_api, Some(wasi_fn_name), _)) => {    
                                 match (wasi_api, WASI_SNAPSHOT_PREVIEW1.get(wasi_fn_name)) {
                                     (_, Some(true)) => {
@@ -118,7 +119,7 @@ pub enum FastcallPassStatus {
   * Check all the functions in the program to see which ones we can convert into fastcalls
   * Returns a set of function IDs that can be converted
   */
- pub fn compute_fastcall_set(writer: &opencl_writer::OpenCLCWriter, func_list: Vec<&wast::Func>, indirect_calls: &mut HashSet<String>) -> HashSet<String> {
+ pub fn compute_fastcall_set(writer: &opencl_writer::OpenCLCWriter, func_map: &HashMap<String, wast::Func>, indirect_calls: &mut HashSet<String>, start_func: String) -> HashSet<String> {
     let mut called_funcs = HashSet::new();
     let mut known_bad_calls = HashSet::new();
 
@@ -128,17 +129,17 @@ pub enum FastcallPassStatus {
     loop {
         //println!("Fastcall analysis pass, found: {:?} functions to optimize", fastcall_count);
         ambiguous_fastcalls = vec![];
-        for func in &func_list {
-            let is_fastcall = is_fastcall(writer, func, &mut called_funcs, indirect_calls);
+        for (f_name, func) in func_map.iter() {
+            let is_fastcall = is_fastcall(writer, f_name.to_string(), func, &mut called_funcs, indirect_calls, start_func.clone());
             match is_fastcall {
                 FastcallPassStatus::fastcall_true => {
-                    called_funcs.insert(func.id.unwrap().name().to_string());
+                    called_funcs.insert(f_name.to_string());
                 },
                 FastcallPassStatus::fastcall_ambiguous(fastcall_ambiguous) => {
-                    ambiguous_fastcalls.push((func.id.unwrap().name().to_string(), fastcall_ambiguous));
+                    ambiguous_fastcalls.push((f_name.to_string(), fastcall_ambiguous));
                 },
                 FastcallPassStatus::fastcall_false(_) => {
-                    known_bad_calls.insert(func.id.unwrap().name().to_string());
+                    known_bad_calls.insert(f_name.to_string());
                 }
             }
         }
