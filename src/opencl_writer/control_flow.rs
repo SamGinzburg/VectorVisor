@@ -5,6 +5,7 @@ use crate::opencl_writer::StackCtx;
 use crate::opencl_writer::StackType;
 use crate::opencl_writer::function_unwind;
 use crate::opencl_writer::WasmHypercallId;
+use crate::opencl_writer::get_func_result;
 
 use std::collections::HashMap;
 use std::convert::TryInto;
@@ -154,7 +155,8 @@ pub fn emit_end<'a>(_writer: &opencl_writer::OpenCLCWriter<'a>, stack_ctx: &mut 
     // If there is a result value to push back, do it here
     // The top of the stack is the register containing the value 
     // The next value in the stack is the register we are storing the result into
-    if block_type == 0 {
+    // Do this for blocks / If statements
+    if block_type == 0 || block_type == 2 {
         result += &match result_type {
             Some(StackType::i32) => {
                 let ret_val = stack_ctx.vstack_pop(StackType::i32);
@@ -183,15 +185,19 @@ pub fn emit_end<'a>(_writer: &opencl_writer::OpenCLCWriter<'a>, stack_ctx: &mut 
     // if the end statement corresponds to a block -> we want to put the label *here* and not at the top
     // of the block, otherwise for loops we jump back to the start of the loop!
     // 0 -> block (label goes here, at the end statement)
-    // 1-> loop (label was already inserted at the top, this is a no-op here)
+    // 1 -> loop (label was already inserted at the top, this is a no-op here)
+    // 2 -> if
     if block_type == 0 {
         if !is_fastcall {
             result += &format!("\n{}_{}:\n", format!("{}{}", "__", fn_name.replace(".", "")), label);
         } else {
             result += &format!("\n{}_{}_fastcall:\n", format!("{}{}", "__", fn_name.replace(".", "")), label);
         }
-    } else {
+    } else if block_type == 1 {
         result += &format!("\t/* END (loop: {}_{}) */\n", format!("{}{}", "__", fn_name.replace(".", "")), label);
+    } else if block_type == 2 {
+        // just close the brackets
+        result += &format!("\t}}\n");
     }
 
     result
@@ -251,6 +257,64 @@ pub fn emit_block(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackC
     result
 }
 
+pub fn emit_if(writer: &opencl_writer::OpenCLCWriter, label: String, block: &wast::BlockType, control_stack: &mut Vec<ControlStackEntryType>, if_name_count: &mut u32, stack_ctx: &mut StackCtx) -> String {
+    let mut result: String = String::from("");
+
+    // Pop the top value on the stack as the conditional
+    result += &format!("\tif ({}) {{\n", stack_ctx.vstack_pop(StackType::i32));
+
+    // Get the type of the block
+    let block_type = get_func_result(writer, &block.ty);
+    // Allocate a register to store the result in after the block exits, if we have one
+    // We pop this value back during the corresponding `end` instruction, since WASM does not allow hanging values
+    let result_register = match block_type {
+        Some(StackType::i32) => {
+            Some(stack_ctx.vstack_alloc(StackType::i32))
+        },
+        Some(StackType::i64) => {
+            Some(stack_ctx.vstack_alloc(StackType::i64))
+        },
+        Some(StackType::f32) => {
+            Some(stack_ctx.vstack_alloc(StackType::f32))
+        },
+        Some(StackType::f64) => {
+            Some(stack_ctx.vstack_alloc(StackType::f64))
+        },
+        None => None,
+    };
+
+    // for the control stack, we don't use the third parameter for blocks
+    control_stack.push((label, 2, -1, *if_name_count, block_type, result_register));
+    *if_name_count += 1;
+    
+
+    result
+}
+
+pub fn emit_else(_writer: &opencl_writer::OpenCLCWriter, control_stack: &mut Vec<ControlStackEntryType>, stack_ctx: &mut StackCtx) -> String {
+    let mut result: String = String::from("");
+
+    // If the most recent if statement has a result type, we need to set the value before continuing to the next branch
+    let mut control_stack_copy = control_stack.clone();
+    control_stack_copy.reverse();
+    for (_, block_type, _, _, block_result_type, result_register) in control_stack_copy {
+        // We found the matching if entry
+        if block_type == 2 {
+            match (block_result_type, result_register) {
+                (Some(t), Some(result_register)) => {
+                    let val = stack_ctx.vstack_pop(t);
+                    result +=&format!("\t{} = {};\n", result_register, val);
+                    break;
+                },
+                _ => (),
+            }
+        }
+    }
+    
+    result +=&format!("\t}} else {{\n");
+
+    result
+}
 
 pub fn emit_br_table(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, table_indicies: &wast::BrTableIndices, fn_name: &str, stack_sizes: &mut Vec<u32>, control_stack: &mut Vec<ControlStackEntryType>, function_id_map: HashMap<&str, u32>, is_fastcall: bool, debug: bool) -> String {
     let mut ret_str = String::from("");

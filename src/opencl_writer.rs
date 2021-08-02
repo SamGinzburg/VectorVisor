@@ -291,6 +291,7 @@ impl<'a> OpenCLCWriter<'_> {
                          // if we are parsing WASM code with blocks without names, we have to make up names
                          // When doing so we simply name the block "$block{block_name_count}"
                          block_name_count: &mut u32,
+                         if_name_count: &mut u32,
                          loop_name_count: &mut u32,
                          fastcall_set: &HashSet<String>,
                          // emit an optimized function that does not require a CPS-style transformation
@@ -1155,6 +1156,17 @@ impl<'a> OpenCLCWriter<'_> {
                 emit_i64_ctz(self, stack_ctx, debug)
             },
             // control flow instructions
+            wast::Instruction::If(b) => {
+                let label: String = match b.label {
+                    Some(id) => id.name().to_string().clone(),
+                    _ => format!("if{}", if_name_count),
+                };
+    
+                emit_if(&self, label, b, control_stack, if_name_count, stack_ctx)
+            },
+            wast::Instruction::Else(_) => {
+                emit_else(&self, control_stack, stack_ctx)
+            },
             wast::Instruction::Block(b) => {
                 // if a block doesn't have a label, we have to make one up
                 let label: String = match b.label {
@@ -1511,6 +1523,7 @@ impl<'a> OpenCLCWriter<'_> {
 
                 // used for generating names for anonymous blocks
                 let block_name_count: &mut u32  = &mut 0;
+                let if_name_count: &mut u32  = &mut 0;
                 let loop_name_count: &mut u32  = &mut 0;
 
                 // get the list of instructions first, to solve a lifetime mismatch error
@@ -1535,6 +1548,7 @@ impl<'a> OpenCLCWriter<'_> {
                                                             global_mappings,
                                                             func,
                                                             block_name_count,
+                                                            if_name_count,
                                                             loop_name_count,
                                                             &fastcall_set,
                                                             is_fastcall,

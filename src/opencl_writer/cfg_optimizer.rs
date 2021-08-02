@@ -62,6 +62,9 @@ pub fn get_called_funcs(func: &wast::Func, fastcalls: &HashSet<String>, func_map
                         nested_loop_count += 1;
                         control_stack.push(true);
                     },
+                    wast::Instruction::If(_) => {
+                        control_stack.push(false);
+                    },
                     wast::Instruction::End(_) => {
                         if control_stack.pop().unwrap() {
                             nested_loop_count -= 1;

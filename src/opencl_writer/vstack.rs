@@ -1299,6 +1299,24 @@ impl<'a> StackCtx {
                     stack_sizes.push(StackType::i64);
                     // no-op
                 },
+                wast::Instruction::If(b) => {
+                    let block_type = get_func_result(&writer_ctx, &b.ty);
+                    match block_type.clone() {
+                        Some(stack_size) => {
+                            stack_sizes.push(stack_size.clone());
+                            update_by_valtype(&StackCtx::convert_stacktypes_valtype(&stack_size.clone()),
+                                              &mut current_i32_count, &mut max_i32_count,
+                                              &mut current_i64_count, &mut max_i64_count,
+                                              &mut current_f32_count, &mut max_f32_count,
+                                              &mut current_f64_count, &mut max_f64_count);
+                        },
+                        None => (),
+                    };
+                    control_stack.push((false, block_type));
+                },
+                wast::Instruction::Else(_) => {
+                    // No-op
+                },
                 /*
                  * Track block & loop starts/ends to minimize intermediate value req
                  */
