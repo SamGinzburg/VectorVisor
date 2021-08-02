@@ -14,6 +14,7 @@ use crate::opencl_writer::emit_read_u32;
 use crate::opencl_writer::emit_read_u64;
 use crate::opencl_writer::emit_write_u32;
 use crate::opencl_writer::emit_write_u64;
+use crate::opencl_writer::get_func_result;
 
 use wast::Index::Id;
 use wast::Index::Num;
@@ -95,7 +96,7 @@ impl<'a> StackCtx {
         
         // Track which loops we can optimize for later
         // (is_loop, tainted), is_loop needed since we are also tracking blocks
-        let mut control_stack: Vec<bool> = vec![];
+        let mut control_stack: Vec<(bool, Option<StackType>)> = vec![];
         let mut tainted_loops: Vec<bool> = vec![];
         let mut loop_idx: usize = 0;
 
@@ -1301,22 +1302,68 @@ impl<'a> StackCtx {
                 /*
                  * Track block & loop starts/ends to minimize intermediate value req
                  */
-                wast::Instruction::Block(_b) => {
-                    control_stack.push(false);
+                wast::Instruction::Block(b) => {
+                    // Get the type of the block
+                    let block_type = get_func_result(&writer_ctx, &b.ty);
+                    match block_type.clone() {
+                        Some(stack_size) => {
+                            stack_sizes.push(stack_size.clone());
+                            update_by_valtype(&StackCtx::convert_stacktypes_valtype(&stack_size.clone()),
+                                              &mut current_i32_count, &mut max_i32_count,
+                                              &mut current_i64_count, &mut max_i64_count,
+                                              &mut current_f32_count, &mut max_f32_count,
+                                              &mut current_f64_count, &mut max_f64_count);
+                        },
+                        None => (),
+                    };
+                    control_stack.push((false, block_type));
                 },
-                wast::Instruction::Loop(_b) => {
-                    control_stack.push(true);
+                wast::Instruction::Loop(b) => {
                     tainted_loops.push(false);
                     loop_idx += 1;
                     empty_loop = true;
+                    let block_type = get_func_result(&writer_ctx, &b.ty);
+                    match block_type.clone() {
+                        Some(stack_size) => {
+                            stack_sizes.push(stack_size.clone());
+                            update_by_valtype(&StackCtx::convert_stacktypes_valtype(&stack_size.clone()),
+                                              &mut current_i32_count, &mut max_i32_count,
+                                              &mut current_i64_count, &mut max_i64_count,
+                                              &mut current_f32_count, &mut max_f32_count,
+                                              &mut current_f64_count, &mut max_f64_count);
+                        },
+                        None => (),
+                    };
+                    control_stack.push((true, block_type));
                     // We need to continue here to avoid resetting the empty_loop counter
                     continue;
                 }
                 wast::Instruction::End(_id) => {
                     // As we close loops, keep track so we don't taint them
-                    let is_loop = control_stack.pop().unwrap();
+                    let (is_loop, t) = control_stack.pop().unwrap();
                     if is_loop {
                         loop_idx -= 1;
+                    }
+                    // We have to pop the result value of the block (if we have one)
+                    match t {
+                        Some(stack_type) => {
+                            match stack_type {
+                                StackType::i32 => {
+                                    current_i32_count -= 1;
+                                },
+                                StackType::i64 => {
+                                    current_i64_count -= 1;
+                                },
+                                StackType::f32 => {
+                                    current_f32_count -= 1;
+                                },
+                                StackType::f64 => {
+                                    current_f64_count -= 1;
+                                },
+                            }
+                            stack_sizes.pop();
+                        },
+                        None => (),
                     }
                 },
                 wast::Instruction::Select(_) => {
@@ -1557,6 +1604,16 @@ impl<'a> StackCtx {
             wast::ValType::I64 => StackType::i64,
             wast::ValType::F64 => StackType::f64,
             _ => panic!("Unknown stack type (vstack)"),
+        }
+    }
+
+    pub fn convert_stacktypes_valtype(ty: &StackType) -> wast::ValType {
+        match ty {
+            StackType::i32 => wast::ValType::I32,
+            StackType::i64 => wast::ValType::I64,
+            StackType::f32 => wast::ValType::F32,
+            StackType::f64 => wast::ValType::F64,
+            _ => panic!("Unknown stack type (convert_stacktypes_valtype)"),
         }
     }
 

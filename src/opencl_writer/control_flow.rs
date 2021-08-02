@@ -9,6 +9,12 @@ use crate::opencl_writer::WasmHypercallId;
 use std::collections::HashMap;
 use std::convert::TryInto;
 
+/*
+ * Every time we encounter a Loop, Block, or If statement, we store the entry on the control stack
+ * We store the label, 
+ */
+pub type ControlStackEntryType = (String, u32, i32, u32, Option<StackType>, Option<String>);
+
 // TODO: double check the semantics of this? 
 pub fn emit_return(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, fn_name: &str, start_fn_name: String, hypercall_id_count: &mut u32, is_fastcall: bool, debug: bool) -> String {
     let mut ret_str = String::from("");
@@ -29,16 +35,16 @@ pub fn emit_return(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackC
 }
 
 // this function is semantically equivalent to function_unwind
-pub fn emit_br(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, idx: wast::Index, fn_name: &str, control_stack: &mut Vec<(String, u32, i32, u32)>, function_id_map: HashMap<&str, u32>, is_fastcall: bool, _debug: bool) -> String {
+pub fn emit_br(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, idx: wast::Index, fn_name: &str, control_stack: &mut Vec<ControlStackEntryType>, function_id_map: HashMap<&str, u32>, is_fastcall: bool, _debug: bool) -> String {
     let mut ret_str = String::from("");
 
     // we need to do linear scans for blocks that are pre-named
-    let mut temp_map: HashMap<String, (String, u32, i32, u32)> = HashMap::new();
-    for (label, block_type, reentry, loop_or_block_idx) in control_stack.clone() {
-        temp_map.insert(label.to_string(), (label.to_string(), block_type, reentry, loop_or_block_idx));
+    let mut temp_map: HashMap<String, ControlStackEntryType> = HashMap::new();
+    for (label, block_type, reentry, loop_or_block_idx, block_result_type, result_register) in control_stack.clone() {
+        temp_map.insert(label.to_string(), (label.to_string(), block_type, reentry, loop_or_block_idx, block_result_type, result_register));
     }
 
-    let (block_name, block_type, loop_header_reentry, block_or_loop_idx) = match idx {
+    let (block_name, block_type, loop_header_reentry, block_or_loop_idx, block_result_type, result_register) = match idx {
         wast::Index::Id(id) => {
             temp_map.get(id.name()).unwrap()
         },
@@ -54,30 +60,17 @@ pub fn emit_br(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx,
     // First, determine if the branch is a forward branch or a backwards branch (targeting a loop header)
     // block = 0, loop = 1
     if *block_type == 0 {
-        // If we are targeting a forward branch, just emit the goto
+        // Check for return values, if this branch targets a block with a return value, we need to set that return value 
+        // We pop the most recent value on the stack and set the result register to be equal to that
+        match (block_result_type, result_register) {
+            (Some(stack_size), Some(result)) => {
+                let val = stack_ctx.vstack_pop(stack_size.clone());
+                ret_str += &format!("\t{} = {};\n", result, val);
+            },
+            _ => (),
+        }
 
         if !is_fastcall {
-            /*
-            * If our branch is used to break out of a loop by targeting a label after the loop end,
-            * then we have to cleanup the stack pointer ourselves.
-            * 
-            * We loop over the control stack to count how many loops we are currently inside
-            * In the stack context we track the space allocated for each loop (we also pop from this stack on 'end' statements)
-            * 
-            * We then subtract the stack pointer appropriately
-            */
-            let mut control_stack_copy = control_stack.clone();
-            control_stack_copy.reverse();
-            let mut block_count: u32 = 0;
-            for (label, _is_loop, _, _) in control_stack_copy.iter() {
-                if label == block_name {
-                    break;
-                }
-                block_count += 1;
-            }
-
-            // Get the value to decrement *sp by in the case of this jump
-            //ret_str += &format!("\t*sp -= {};\n", stack_ctx.vstack_get_stack_delta(block_count));
             ret_str += &format!("\t{}\n", format!("goto {}_{};", format!("{}{}", "__", fn_name.replace(".", "")), block_name));
         } else {
             ret_str += &format!("\t{}\n", format!("goto {}_{}_fastcall;", format!("{}{}", "__", fn_name.replace(".", "")), block_name));
@@ -119,7 +112,7 @@ pub fn emit_br(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx,
     ret_str
 }
 
-pub fn emit_br_if(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, idx: wast::Index, fn_name: &str, stack_sizes: &mut Vec<u32>, control_stack: &mut Vec<(String, u32, i32, u32)>, function_id_map: HashMap<&str, u32>, is_fastcall: bool, debug: bool) -> String {
+pub fn emit_br_if(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, idx: wast::Index, fn_name: &str, stack_sizes: &mut Vec<u32>, control_stack: &mut Vec<ControlStackEntryType>, function_id_map: HashMap<&str, u32>, is_fastcall: bool, debug: bool) -> String {
     let mut ret_str = String::from("");
     
     stack_sizes.pop().unwrap();
@@ -135,14 +128,8 @@ pub fn emit_br_if(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCt
 
 // semantically, the end statement pops from the control stack,
 // in our compiler, this is a no-op
-pub fn emit_end<'a>(_writer: &opencl_writer::OpenCLCWriter<'a>, stack_ctx: &mut StackCtx, _id: &Option<wast::Id<'a>>, label: &str, block_type: u32, fn_name: &str, _function_id_map: HashMap<&str, u32>, is_fastcall: bool, _debug: bool) -> String {
-
-    if !is_fastcall {
-        // unwind the stack frame
-        stack_ctx.vstack_pop_stack_frame();
-        // pop the *sp tracking data
-        stack_ctx.vstack_pop_stack_info();
-    }
+pub fn emit_end<'a>(_writer: &opencl_writer::OpenCLCWriter<'a>, stack_ctx: &mut StackCtx, _id: &Option<wast::Id<'a>>, label: &str, block_type: u32, fn_name: &str, result_type: Option<StackType>, is_fastcall: bool, _debug: bool) -> String {
+    let mut result = String::from("");
 
     // after a block ends, we need to unwind the stack!
     let re = Regex::new(r"\d+").unwrap();
@@ -153,33 +140,59 @@ pub fn emit_end<'a>(_writer: &opencl_writer::OpenCLCWriter<'a>, stack_ctx: &mut 
     if branch_idx_u32 > 1024 {
         panic!("Only up to 1024 branches per function are supported");
     }
+    
+    // First restore the context
+    if !is_fastcall && block_type == 1 {
+        // unwind the stack frame
+        stack_ctx.vstack_pop_stack_frame();
+        // pop the *sp tracking data
+        stack_ctx.vstack_pop_stack_info();
+        // restore the intermediate values only after ending a block
+        result += &stack_ctx.restore_context(false, true);
+    }
+
+    // If there is a result value to push back, do it here
+    // The top of the stack is the register containing the value 
+    // The next value in the stack is the register we are storing the result into
+    result += &match result_type {
+        Some(StackType::i32) => {
+            let ret_val = stack_ctx.vstack_pop(StackType::i32);
+            let result_register = stack_ctx.vstack_peak(StackType::i32, 0);
+            format!("\t{} = {};\n", result_register, ret_val)
+        },
+        Some(StackType::i64) => {
+            let ret_val = stack_ctx.vstack_pop(StackType::i64);
+            let result_register = stack_ctx.vstack_peak(StackType::i64, 0);
+            format!("\t{} = {};\n", result_register, ret_val)
+        },
+        Some(StackType::f32) => {
+            let ret_val = stack_ctx.vstack_pop(StackType::f32);
+            let result_register = stack_ctx.vstack_peak(StackType::f32, 0);
+            format!("\t{} = {};\n", result_register, ret_val)
+        },
+        Some(StackType::f64) => {
+            let ret_val = stack_ctx.vstack_pop(StackType::f64);
+            let result_register = stack_ctx.vstack_peak(StackType::f64, 0);
+            format!("\t{} = {};\n", result_register, ret_val)
+        },
+        None => String::from(""),
+    };
 
     // if the end statement corresponds to a block -> we want to put the label *here* and not at the top
     // of the block, otherwise for loops we jump back to the start of the loop!
     // 0 -> block (label goes here, at the end statement)
     // 1-> loop (label was already inserted at the top, this is a no-op here)
     if block_type == 0 {
-        let mut result = String::from("");
-
         if !is_fastcall {
             result += &format!("\n{}_{}:\n", format!("{}{}", "__", fn_name.replace(".", "")), label);
-            result += &stack_ctx.restore_context(false, true);
         } else {
             result += &format!("\n{}_{}_fastcall:\n", format!("{}{}", "__", fn_name.replace(".", "")), label);
         }
-
-        result
     } else {
-        let mut result = String::from("");
         result += &format!("\t/* END (loop: {}_{}) */\n", format!("{}{}", "__", fn_name.replace(".", "")), label);
-
-        if !is_fastcall {
-            // restore the intermediate values after ending the loop
-            result += &stack_ctx.restore_context(false, true);
-        }
-
-        result
     }
+
+    result
 }
 
 // basically the same as emit_block, except we have to reset the stack pointer
@@ -223,12 +236,13 @@ pub fn emit_loop(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCt
 pub fn emit_block(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _block: &wast::BlockType, _label: String, _branch_idx_u32: u32, _fn_name: &str, _function_id_map: HashMap<&str, u32>, is_fastcall: bool, _debug: bool) -> String {
     let mut result: String = String::from("");
 
-
+    /*
     if !is_fastcall {
         result += &stack_ctx.save_context(false);
         stack_ctx.vstack_push_stack_frame();
         stack_ctx.vstack_push_stack_info(stack_ctx.stack_frame_size().try_into().unwrap());
     }
+    */
 
     // we don't emit a label for block statements here, any br's goto the END of the block
     // we don't need to modify the sp here, we will do all stack unwinding in the br instr
@@ -236,7 +250,7 @@ pub fn emit_block(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackC
 }
 
 
-pub fn emit_br_table(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, table_indicies: &wast::BrTableIndices, fn_name: &str, stack_sizes: &mut Vec<u32>, control_stack: &mut Vec<(String, u32, i32, u32)>, function_id_map: HashMap<&str, u32>, is_fastcall: bool, debug: bool) -> String {
+pub fn emit_br_table(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, table_indicies: &wast::BrTableIndices, fn_name: &str, stack_sizes: &mut Vec<u32>, control_stack: &mut Vec<ControlStackEntryType>, function_id_map: HashMap<&str, u32>, is_fastcall: bool, debug: bool) -> String {
     let mut ret_str = String::from("");
 
     let indicies = &table_indicies.labels;

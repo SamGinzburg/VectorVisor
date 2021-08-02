@@ -84,7 +84,8 @@ pub fn get_func_params(writer: &opencl_writer::OpenCLCWriter, ty: &wast::TypeUse
                 return_params.push(StackCtx::convert_wast_types(&param_type));
             }
         },
-        _ => panic!("Neither inline or index type found for func in get_func_params!"),
+        //_ => panic!("Neither inline or index type found for func in get_func_params!"),
+        _ => { () },
     }
 
     return_params
@@ -114,7 +115,8 @@ pub fn get_func_result(writer: &opencl_writer::OpenCLCWriter, ty: &wast::TypeUse
                 ret_val = Some(StackCtx::convert_wast_types(&inline.results[0]));
             }
         },
-        _ => panic!("Neither inline or index type found for func in get_func_result!"),
+        //_ => panic!("Neither inline or index type found for func in get_func_result!"),
+        _ => { () },
     }
 
     ret_val

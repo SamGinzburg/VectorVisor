@@ -277,7 +277,7 @@ impl<'a> OpenCLCWriter<'_> {
                          // track "_start" entry point
                          start_function_name: String,
                          // stack of control flow operations (blocks, loops)
-                         control_stack: &mut Vec<(String, u32, i32, u32)>,
+                         control_stack: &mut Vec<ControlStackEntryType>,
                          // map of function names to IDs
                          function_id_map: HashMap<&str, u32>,
                          // count of how many hypercalls have been encountered (used for re-entry)
@@ -1161,8 +1161,29 @@ impl<'a> OpenCLCWriter<'_> {
                     Some(id) => id.name().to_string().clone(),
                     _ => format!("b{}", block_name_count),
                 };
+
+                // Get the type of the block
+                let block_type = get_func_result(&self, &b.ty);
+                // Allocate a register to store the result in after the block exits, if we have one
+                // We pop this value back during the corresponding `end` instruction, since WASM does not allow hanging values
+                let result_register = match block_type {
+                    Some(StackType::i32) => {
+                        Some(stack_ctx.vstack_alloc(StackType::i32))
+                    },
+                    Some(StackType::i64) => {
+                        Some(stack_ctx.vstack_alloc(StackType::i64))
+                    },
+                    Some(StackType::f32) => {
+                        Some(stack_ctx.vstack_alloc(StackType::f32))
+                    },
+                    Some(StackType::f64) => {
+                        Some(stack_ctx.vstack_alloc(StackType::f64))
+                    },
+                    None => None,
+                };
+
                 // for the control stack, we don't use the third parameter for blocks
-                control_stack.push((label.to_string(), 0, -1, *block_name_count));
+                control_stack.push((label.to_string(), 0, -1, *block_name_count, block_type, result_register));
                 *block_name_count += 1;
                 emit_block(&self, stack_ctx, b, label, *block_name_count-1, fn_name, function_id_map, is_fastcall, debug)
             },
@@ -1174,21 +1195,41 @@ impl<'a> OpenCLCWriter<'_> {
                     Some(id) => id.name().to_string().clone(),
                     _ => format!("l{}", loop_name_count),
                 };
+
+                // Get the type of the block
+                let block_type = get_func_result(&self, &b.ty);
+                let result_register = match block_type {
+                    Some(StackType::i32) => {
+                        Some(stack_ctx.vstack_alloc(StackType::i32))
+                    },
+                    Some(StackType::i64) => {
+                        Some(stack_ctx.vstack_alloc(StackType::i64))
+                    },
+                    Some(StackType::f32) => {
+                        Some(stack_ctx.vstack_alloc(StackType::f32))
+                    },
+                    Some(StackType::f64) => {
+                        Some(stack_ctx.vstack_alloc(StackType::f64))
+                    },
+                    None => None,
+                };
+
                 // the third parameter in the control stack stores loop header entry points
-                control_stack.push((label.to_string(), 1, (*call_ret_idx).try_into().unwrap(), *loop_name_count));
+                control_stack.push((label.to_string(), 1, (*call_ret_idx).try_into().unwrap(), *loop_name_count, block_type, result_register));
                 *loop_name_count += 1;
                 emit_loop(&self, stack_ctx, b, label, *loop_name_count-1, fn_name, function_id_map, call_ret_idx, is_fastcall, is_tainted, debug)
             }
             // if control_stack.pop() panics, that means we were parsing an incorrectly defined
             // wasm file, each block/loop must have a matching end!
             wast::Instruction::End(id) => {
-                let (label, t, _, loop_idx) = control_stack.pop().unwrap();
+                let (label, t, _, loop_idx, result_type, _) = control_stack.pop().unwrap();
+                
                 let treat_as_fastcall = if (t == 1 && !stack_ctx.is_loop_tainted(loop_idx.try_into().unwrap())) || is_fastcall {
                     true
                 } else {
                     false
                 };
-                emit_end(&self, stack_ctx, id, &label, t, fn_name, function_id_map, treat_as_fastcall, debug)
+                emit_end(&self, stack_ctx, id, &label, t, fn_name, result_type, treat_as_fastcall, debug)
             },
             wast::Instruction::Select(_) => {
                 emit_select(self, stack_ctx, stack_sizes, fn_name, debug)
@@ -1460,7 +1501,7 @@ impl<'a> OpenCLCWriter<'_> {
 
                 // keep a stack of control-flow labels
                 // for blocks we need to put the label at the "end" statement, while loops always jump back
-                let mut control_stack: Vec<(String, u32, i32, u32)> = vec![];
+                let mut control_stack: Vec<ControlStackEntryType> = vec![];
 
                 // keep a stack of the size of previous stack operations
                 // this is needed to implement drop/select
