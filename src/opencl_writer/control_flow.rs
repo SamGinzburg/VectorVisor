@@ -154,29 +154,31 @@ pub fn emit_end<'a>(_writer: &opencl_writer::OpenCLCWriter<'a>, stack_ctx: &mut 
     // If there is a result value to push back, do it here
     // The top of the stack is the register containing the value 
     // The next value in the stack is the register we are storing the result into
-    result += &match result_type {
-        Some(StackType::i32) => {
-            let ret_val = stack_ctx.vstack_pop(StackType::i32);
-            let result_register = stack_ctx.vstack_peak(StackType::i32, 0);
-            format!("\t{} = {};\n", result_register, ret_val)
-        },
-        Some(StackType::i64) => {
-            let ret_val = stack_ctx.vstack_pop(StackType::i64);
-            let result_register = stack_ctx.vstack_peak(StackType::i64, 0);
-            format!("\t{} = {};\n", result_register, ret_val)
-        },
-        Some(StackType::f32) => {
-            let ret_val = stack_ctx.vstack_pop(StackType::f32);
-            let result_register = stack_ctx.vstack_peak(StackType::f32, 0);
-            format!("\t{} = {};\n", result_register, ret_val)
-        },
-        Some(StackType::f64) => {
-            let ret_val = stack_ctx.vstack_pop(StackType::f64);
-            let result_register = stack_ctx.vstack_peak(StackType::f64, 0);
-            format!("\t{} = {};\n", result_register, ret_val)
-        },
-        None => String::from(""),
-    };
+    if block_type == 0 {
+        result += &match result_type {
+            Some(StackType::i32) => {
+                let ret_val = stack_ctx.vstack_pop(StackType::i32);
+                let result_register = stack_ctx.vstack_peak(StackType::i32, 0);
+                format!("\t{} = {};\n", result_register, ret_val)
+            },
+            Some(StackType::i64) => {
+                let ret_val = stack_ctx.vstack_pop(StackType::i64);
+                let result_register = stack_ctx.vstack_peak(StackType::i64, 0);
+                format!("\t{} = {};\n", result_register, ret_val)
+            },
+            Some(StackType::f32) => {
+                let ret_val = stack_ctx.vstack_pop(StackType::f32);
+                let result_register = stack_ctx.vstack_peak(StackType::f32, 0);
+                format!("\t{} = {};\n", result_register, ret_val)
+            },
+            Some(StackType::f64) => {
+                let ret_val = stack_ctx.vstack_pop(StackType::f64);
+                let result_register = stack_ctx.vstack_peak(StackType::f64, 0);
+                format!("\t{} = {};\n", result_register, ret_val)
+            },
+            None => String::from(""),
+        };
+    }
 
     // if the end statement corresponds to a block -> we want to put the label *here* and not at the top
     // of the block, otherwise for loops we jump back to the start of the loop!

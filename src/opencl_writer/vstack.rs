@@ -1322,6 +1322,7 @@ impl<'a> StackCtx {
                     tainted_loops.push(false);
                     loop_idx += 1;
                     empty_loop = true;
+                    /*
                     let block_type = get_func_result(&writer_ctx, &b.ty);
                     match block_type.clone() {
                         Some(stack_size) => {
@@ -1334,7 +1335,8 @@ impl<'a> StackCtx {
                         },
                         None => (),
                     };
-                    control_stack.push((true, block_type));
+                    */
+                    control_stack.push((true, None));
                     // We need to continue here to avoid resetting the empty_loop counter
                     continue;
                 }
