@@ -1231,7 +1231,7 @@ impl<'a> OpenCLCWriter<'_> {
                 };
 
                 // the third parameter in the control stack stores loop header entry points
-                control_stack.push((label.to_string(), 1, (*call_ret_idx).try_into().unwrap(), *loop_name_count, None, None));
+                control_stack.push((label.to_string(), 1, (*call_ret_idx).try_into().unwrap(), *loop_name_count, block_type, result_register));
                 *loop_name_count += 1;
                 emit_loop(&self, stack_ctx, b, label, *loop_name_count-1, fn_name, function_id_map, call_ret_idx, is_fastcall, is_tainted, debug)
             }
