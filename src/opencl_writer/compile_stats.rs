@@ -28,14 +28,14 @@ pub fn function_stats(func: &wast::Func, fastcalls: &HashSet<String>, func_map: 
             // (func (type 3) (import "foo" "bar"))
             panic!("InlineImport functions not yet implemented");
         },
-        (wast::FuncKind::Inline{locals, expression}, Some(_id), _typeuse) => {
+        (wast::FuncKind::Inline{locals, expression}, _, _) => {
             total_instr_count = expression.instrs.len().try_into().unwrap();
             for instr in expression.instrs.iter() {
                 match instr {
                     wast::Instruction::Call(idx) => {
-                        let id = match idx {
-                            wast::Index::Id(id) => id.name(),
-                            _ => panic!("Unable to get Id for function call: {:?}", idx),
+                        let id: &str = &match idx {
+                            wast::Index::Id(id) => id.name().to_string(),
+                            wast::Index::Num(val, _) => format!("func_{}", val),
                         };
 
                         if fastcalls.contains(id) {

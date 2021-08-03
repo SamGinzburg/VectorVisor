@@ -559,7 +559,7 @@ ssm_client = boto3.client('ssm')
 #cleanup()
 
 # run lz4 bench
-#run_lz4_bench()
+run_lz4_bench()
 
 #cleanup()
 
@@ -567,7 +567,7 @@ ssm_client = boto3.client('ssm')
 
 #cleanup()
 
-run_average_bench()
+#run_average_bench()
 
 # clean up all instances at end
 ec2.instances.filter(InstanceIds = instance_id_list).terminate()

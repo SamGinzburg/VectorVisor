@@ -299,6 +299,10 @@ impl<'a> OpenCLCWriter<'_> {
                          // emit OpenCL C (False) or standard C for debugging on the CPU (True)
                          debug: bool) -> String {
         match instr {
+            wast::Instruction::Nop => {
+                // No-op
+                String::from("")
+            },
             wast::Instruction::Drop => {
                 // based on the previous stack size, decrement sp
                 // we don't need to handle all cases, only the common case provided by LLVM output
@@ -864,9 +868,9 @@ impl<'a> OpenCLCWriter<'_> {
                 emit_i64_extend_i32_u(self, stack_ctx, debug)
             },
             wast::Instruction::Call(idx) => {
-                let id = match idx {
-                    wast::Index::Id(id) => id.name(),
-                    _ => panic!("Unable to get Id for function call: {:?}", idx),
+                let id = &match idx {
+                    wast::Index::Id(id) => id.name().to_string(),
+                    wast::Index::Num(val, _) => format!("func_{}", val),
                 };
 
                 // check function to see if it is imported
@@ -1209,7 +1213,6 @@ impl<'a> OpenCLCWriter<'_> {
                 };
 
                 // Get the type of the block
-                /*
                 let block_type = get_func_result(&self, &b.ty);
                 let result_register = match block_type {
                     Some(StackType::i32) => {
@@ -1226,7 +1229,6 @@ impl<'a> OpenCLCWriter<'_> {
                     },
                     None => None,
                 };
-                */
 
                 // the third parameter in the control stack stores loop header entry points
                 control_stack.push((label.to_string(), 1, (*call_ret_idx).try_into().unwrap(), *loop_name_count, None, None));
@@ -2021,7 +2023,7 @@ void {}(global uint   *stack_u32,
                             predictor_size_bytes: u32,
                             debug_print_function_calls: bool,
                             globals_buffer_size: u32,
-                            function_idx_label: HashMap<&str, u32>,
+                            function_idx_label: HashMap<String, u32>,
                             debug: bool) -> String {
         let mut ret_str = String::from("");
         write!(ret_str, "{}",
@@ -2274,6 +2276,7 @@ r#"
                                          "dispose_chunk",
                                          "strcpy",
                                          "__wasm_call_dtors"];
+            let mut final_hset = HashSet::new();
             let mut hset = HashSet::new();
             for f in allowed_fastcalls {
                 hset.insert(f.to_string());
@@ -2283,6 +2286,7 @@ r#"
             // now filter to only allow the allowed list and functions they call
             let hset_clone = hset.clone();
             let intersection = fastcall_set.intersection(&hset_clone);
+            dbg!(&intersection);
             for func in intersection {
                 let (called_loop, called) = get_called_funcs(self.func_map.get(&func.to_string()).unwrap(),
                                                              &HashSet::new(),
@@ -2290,17 +2294,17 @@ r#"
                                                              &self.imports_map,
                                                              &mut HashSet::new());
                 for call in called_loop {
-                    hset.insert(call);
+                    final_hset.insert(call);
                 }
                 for call in called {
-                    hset.insert(call);
+                    final_hset.insert(call);
                 }
             }
 
-            hset
+            final_hset
         };
 
-        //dbg!(&fast_function_set);
+        dbg!(&fast_function_set);
 
         // Generate the fastcall header
 
@@ -2370,21 +2374,13 @@ r#"
         //dbg!(&partitions);
 
         for (partition_idx, partition) in partitions.clone() {
-            let mut function_idx_label_temp: HashMap<&str, u32> = HashMap::new();
+            let mut function_idx_label_temp: HashMap<String, u32> = HashMap::new();
             let mut partition_func_str = String::from("");
 
             // for each function in a partition, perform codegen
             for function in partition {
+                let fname = function.clone();
                 let func_to_emit = self.func_map.get(&function).unwrap();
-                let fname = match (&func_to_emit.kind, &func_to_emit.id, &func_to_emit.ty) {
-                    (wast::FuncKind::Import(_), _, _) => {
-                        panic!("InlineImport functions not yet implemented");
-                    },
-                    (wast::FuncKind::Inline{locals, expression}, Some(id), _typeuse) => {
-                        id.name()
-                    },
-                    (_, _, _) => panic!("Inline function must always have a valid identifier in wasm")
-                };
     
                 let func = self.emit_function(func_to_emit,
                                               function,
@@ -2403,7 +2399,7 @@ r#"
                                               debug);
                 write!(output, "{}", func).unwrap();
                 write!(partition_func_str, "{}\n", func).unwrap();
-                let fname_idx = function_idx_label.get(fname).unwrap();
+                let fname_idx = function_idx_label.get(&fname as &str).unwrap();
                 function_idx_label_temp.insert(fname, *fname_idx);
                 kernel_partition_mappings.insert(*fname_idx, partition_idx);
             }

@@ -164,9 +164,12 @@ impl<'a> StackCtx {
         // for each instr, 
         for instruction in instructions.iter() {
             match instruction {
+                wast::Instruction::Nop => {
+                    // No-op
+                },
                 wast::Instruction::Drop => {
                     stack_sizes.pop().unwrap();
-                }
+                },
                 wast::Instruction::I32Store(_memarg) => {
                     stack_sizes.pop();
                     stack_sizes.pop();
@@ -801,12 +804,12 @@ impl<'a> StackCtx {
                 },
                 wast::Instruction::Call(idx) => {
                     let id = match idx {
-                        wast::Index::Id(id) => id.name(),
-                        _ => panic!("Unable to get Id for function call: {:?}", idx),
+                        wast::Index::Id(id) => id.name().to_string(),
+                        wast::Index::Num(val, _) => format!("func_{}", val),
                     };
 
-                    if writer_ctx.imports_map.contains_key(id) {
-                        match writer_ctx.imports_map.get(id) {
+                    if writer_ctx.imports_map.contains_key(&id) {
+                        match writer_ctx.imports_map.get(&id) {
                             Some((wasi_api, Some(wasi_fn_name), _)) => {
                                 match (wasi_api, WASI_SNAPSHOT_PREVIEW1.get(wasi_fn_name)) {
                                     // ignore WASI API scoping for now
@@ -851,20 +854,20 @@ impl<'a> StackCtx {
                                     _ => panic!("WASI import not found, this probably means the hypercall is not yet implemented: {:?} (vstack)", wasi_fn_name)
                                 }
                             },
-                            _ => panic!("Unsupported hypercall found {:?} (vstack)", writer_ctx.imports_map.get(id))
+                            _ => panic!("Unsupported hypercall found {:?} (vstack)", writer_ctx.imports_map.get(&id))
                         }
                     } else {
                         // Check the function name to see if it is a valid fastcall
                         // We only taint non-fastcalls
-                        if !fastcalls.contains(id) {
+                        if !fastcalls.contains(&id) {
                             taint_open_loops(&mut tainted_loops, loop_idx);
                             // Track how many regular function calls we perform
                             num_fn_calls += 1;
                         }
 
-                        match writer_ctx.func_map.get(id) {
+                        match writer_ctx.func_map.get(&id) {
                             Some(_) => {
-                                let func_type_signature = &writer_ctx.func_map.get(id).unwrap().ty;
+                                let func_type_signature = &writer_ctx.func_map.get(&id).unwrap().ty;
 
                                 match &func_type_signature.inline {
                                     // if we can find the type signature
@@ -1340,7 +1343,6 @@ impl<'a> StackCtx {
                     tainted_loops.push(false);
                     loop_idx += 1;
                     empty_loop = true;
-                    /*
                     let block_type = get_func_result(&writer_ctx, &b.ty);
                     match block_type.clone() {
                         Some(stack_size) => {
@@ -1353,8 +1355,7 @@ impl<'a> StackCtx {
                         },
                         None => (),
                     };
-                    */
-                    control_stack.push((true, None));
+                    control_stack.push((true, block_type));
                     // We need to continue here to avoid resetting the empty_loop counter
                     continue;
                 }

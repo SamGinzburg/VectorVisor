@@ -125,9 +125,9 @@ pub fn get_func_result(writer: &opencl_writer::OpenCLCWriter, ty: &wast::TypeUse
 
 pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, fn_name: String, idx: wast::Index, call_ret_map: &mut HashMap<&str, u32>, call_ret_idx: &mut u32, function_id_map: &HashMap<&str, u32>, stack_sizes: &mut Vec<u32>, is_indirect: bool, is_fastcall: bool, _debug: bool) -> String {
     let mut ret_str = String::from("");
-    let id = match idx {
-        wast::Index::Id(id) => id.name(),
-        _ => panic!("Unable to get Id for function call!"),
+    let id = &match idx {
+        wast::Index::Id(id) => id.name().to_string(),
+        wast::Index::Num(val, _) => format!("func_{}", val),
     };
 
     // if the func has calling parameters, set those up
@@ -273,7 +273,7 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stack
                                       "(uint)*entry_point",
                                       "warp_idx")),
         // set the entry point for the control function
-        format!("*entry_point = {};", function_id_map.get(id).unwrap()),
+        format!("*entry_point = {};", function_id_map.get(id as &str).unwrap()),
         // set the is_calling parameter to true, to indicate that we are calling a function
         format!("{}", "*is_calling = 1;"),
         // return to the control function
@@ -298,7 +298,7 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stack
                                               "(uint)*entry_point",
                                               "warp_idx")),
                 // set the entry point of the function we want to call...
-                format!("*entry_point = {};", function_id_map.get(id).unwrap()),
+                format!("*entry_point = {};", function_id_map.get(id as &str).unwrap()),
                 // set the is_calling parameter to true, to indicate that we are calling a function
                 format!("{}", "*is_calling = 1;"),
                 // return to the control function
