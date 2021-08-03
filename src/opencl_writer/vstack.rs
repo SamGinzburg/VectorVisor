@@ -1601,6 +1601,51 @@ impl<'a> StackCtx {
         self.f64_idx = stack_frame_unwind.f64_idx;
     }
 
+    /*
+     * This function is used to check for edge cases in the 'end' instruction w/Loops.
+     * Ex:
+     * loop (result i32)
+     *  br 0
+     * end
+     * 
+     * There is no hanging value for end here, so we have to check for this
+     */
+    pub fn vstack_check_for_hanging_value(&mut self, t: StackType) -> bool {
+        // Examine the most recently pushed stack frame
+        let stack_frame = self.control_stack_snapshots.last().unwrap();
+        match t {
+            StackType::i32 => {
+                // if self.i32_idx > stack_frame.i32_idx, then we have at least 1 hanging value
+                if stack_frame.i32_idx < self.i32_idx {
+                    true
+                } else {
+                    false
+                }
+            },
+            StackType::i64 => {
+                if stack_frame.i64_idx < self.i64_idx {
+                    true
+                } else {
+                    false
+                }
+            },
+            StackType::f32 => {
+                if stack_frame.f32_idx < self.f32_idx {
+                    true
+                } else {
+                    false
+                }
+            },
+            StackType::f64 => {
+                if stack_frame.f64_idx < self.f64_idx {
+                    true
+                } else {
+                    false
+                }
+            },
+        }
+    }
+
     pub fn convert_wast_types(ty: &wast::ValType) -> StackType {
         match ty {
             wast::ValType::I32 => StackType::i32,

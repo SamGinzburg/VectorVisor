@@ -142,6 +142,12 @@ pub fn emit_end<'a>(_writer: &opencl_writer::OpenCLCWriter<'a>, stack_ctx: &mut 
     if branch_idx_u32 > 1024 {
         panic!("Only up to 1024 branches per function are supported");
     }
+
+    // This check has to happen before we pop the stack frame
+    let has_hanging_value = match result_type.clone() {
+        Some(val) => stack_ctx.vstack_check_for_hanging_value(val),
+        None => false,
+    };
     
     // First restore the context
     if !is_fastcall && block_type == 1 {
@@ -170,7 +176,7 @@ pub fn emit_end<'a>(_writer: &opencl_writer::OpenCLCWriter<'a>, stack_ctx: &mut 
      */
     result += &match result_type {
         Some(stack_type) => {
-            if block_type == 1 && stack_ctx.vstack_is_empty(stack_type.clone()) {
+            if block_type == 1 && !has_hanging_value {
                 String::from("")
             } else {
                 let ret_val = stack_ctx.vstack_pop(stack_type.clone());
