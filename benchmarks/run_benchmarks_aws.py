@@ -53,11 +53,11 @@ def run_command(command, command_name, instance_id):
             response = ssm_client.send_command(
                     InstanceIds=[instance_id],
                     DocumentName="AWS-RunShellScript",
-                    Parameters={'commands': [command, ]},
-                    TimeoutSeconds=60*TIMEOUT_MINUTES)
+                    Parameters={'commands': [command, ], 'executionTimeout': [str(60*TIMEOUT_MINUTES)]})
+            print ("Command response: {resp}".format(resp=response))
             break
-        except:
-            print ("Failed to send [run_json_lz4_command] command, retrying...")
+        except Exception as err:
+            print ("Failed to send {command_name} command, with error: {e}".format(command_name=command_name, e=err))
             time.sleep(10)
 
     command_id = response['Command']['CommandId']
