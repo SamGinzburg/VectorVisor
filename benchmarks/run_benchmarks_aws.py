@@ -4,6 +4,7 @@ import time
 # Benchmark constants
 
 target_rps = 5000
+TIMEOUT_MINUTES = 120
 
 ec2 = boto3.resource('ec2')
 ec2_client = boto3.client('ec2')
@@ -52,7 +53,8 @@ def run_command(command, command_name, instance_id):
             response = ssm_client.send_command(
                     InstanceIds=[instance_id],
                     DocumentName="AWS-RunShellScript",
-                    Parameters={'commands': [command, ]}, )
+                    Parameters={'commands': [command, ]},
+                    TimeoutSeconds=60*TIMEOUT_MINUTES)
             break
         except:
             print ("Failed to send [run_json_lz4_command] command, retrying...")

@@ -2286,7 +2286,6 @@ r#"
             // now filter to only allow the allowed list and functions they call
             let hset_clone = hset.clone();
             let intersection = fastcall_set.intersection(&hset_clone);
-            dbg!(&intersection);
             for func in intersection {
                 let (called_loop, called) = get_called_funcs(self.func_map.get(&func.to_string()).unwrap(),
                                                              &HashSet::new(),
@@ -2303,8 +2302,6 @@ r#"
 
             final_hset
         };
-
-        dbg!(&fast_function_set);
 
         // Generate the fastcall header
 
