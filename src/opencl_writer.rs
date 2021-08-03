@@ -1238,14 +1238,14 @@ impl<'a> OpenCLCWriter<'_> {
             // if control_stack.pop() panics, that means we were parsing an incorrectly defined
             // wasm file, each block/loop must have a matching end!
             wast::Instruction::End(id) => {
-                let (label, t, _, loop_idx, result_type, _) = control_stack.pop().unwrap();
+                let (label, t, _, loop_idx, result_type, result_register) = control_stack.pop().unwrap();
                 
                 let treat_as_fastcall = if (t == 1 && !stack_ctx.is_loop_tainted(loop_idx.try_into().unwrap())) || is_fastcall {
                     true
                 } else {
                     false
                 };
-                emit_end(&self, stack_ctx, id, &label, t, fn_name, result_type, treat_as_fastcall, debug)
+                emit_end(&self, stack_ctx, id, &label, t, fn_name, result_type, result_register, treat_as_fastcall, debug)
             },
             wast::Instruction::Select(_) => {
                 emit_select(self, stack_ctx, stack_sizes, fn_name, debug)

@@ -38,16 +38,19 @@ pub struct StackSnapshot {
     i32_idx: usize,
     i64_idx: usize,
     f32_idx: usize,
-    f64_idx: usize
+    f64_idx: usize,
+    // Virtual stack snapshots are used for tracking the stacks of blocks that don't save/restore ctx
+    is_virtual: bool
 }
 
 impl StackSnapshot {
-    pub fn from_current_ctx(ctx: &StackCtx) -> StackSnapshot {
+    pub fn from_current_ctx(ctx: &StackCtx, is_virtual: bool) -> StackSnapshot {
         StackSnapshot {
             i32_idx: ctx.i32_idx,
             i64_idx: ctx.i64_idx,
             f32_idx: ctx.f32_idx,
             f64_idx: ctx.f64_idx,
+            is_virtual: is_virtual,
         }
     }
 }
@@ -1589,8 +1592,8 @@ impl<'a> StackCtx {
         self.control_stack.pop();
     }
 
-    pub fn vstack_push_stack_frame(&mut self) -> () {
-        self.control_stack_snapshots.push(StackSnapshot::from_current_ctx(self));
+    pub fn vstack_push_stack_frame(&mut self, is_virtual: bool) -> () {
+        self.control_stack_snapshots.push(StackSnapshot::from_current_ctx(self, is_virtual));
     }
 
     pub fn vstack_pop_stack_frame(&mut self) -> () {
@@ -1612,7 +1615,19 @@ impl<'a> StackCtx {
      */
     pub fn vstack_check_for_hanging_value(&mut self, t: StackType) -> bool {
         // Examine the most recently pushed stack frame
-        let stack_frame = self.control_stack_snapshots.last().unwrap();
+        let stack_frame = match self.control_stack_snapshots.last() {
+            Some(sf) => sf,
+            None => {
+                // For non-tainted loops or those instead fastcalls,
+                // We just check to see if there is at least val of the requested type on the stack
+                if self.i32_idx > 0 {
+                    return true
+                } else {
+                    return false
+                }
+            }
+        };
+
         match t {
             StackType::i32 => {
                 // if self.i32_idx > stack_frame.i32_idx, then we have at least 1 hanging value
@@ -1967,19 +1982,29 @@ impl<'a> StackCtx {
     }
 
     pub fn generate_intermediate_ranges(&self) -> (Range<usize>, Range<usize>, Range<usize>, Range<usize>) {
-        match self.control_stack_snapshots.last() {
-            Some(snap) => {
-
-                let i32_range = snap.i32_idx..self.i32_idx;
-                let i64_range = snap.i64_idx..self.i64_idx;
-                let f32_range = snap.f32_idx..self.f32_idx;
-                let f64_range = snap.f64_idx..self.f64_idx;
-
-                (i32_range, i64_range, f32_range, f64_range)
-            },
-            // If no stack frames pushed, then we have the easy case
-            None => (0..self.i32_idx, 0..self.i64_idx, 0..self.f32_idx, 0..self.f64_idx),
+        // We want to find the most recent control stack snapshot that isn't virtual and generate that range
+        // This is because we aren't saving the contexts of virtual snapshots
+        let mut ctrl_stack_copy = self.control_stack_snapshots.clone();
+        ctrl_stack_copy.reverse();
+        for ctrl_stack in ctrl_stack_copy {
+            if ctrl_stack.is_virtual {
+                return match self.control_stack_snapshots.last() {
+                    Some(snap) => {
+        
+                        let i32_range = snap.i32_idx..self.i32_idx;
+                        let i64_range = snap.i64_idx..self.i64_idx;
+                        let f32_range = snap.f32_idx..self.f32_idx;
+                        let f64_range = snap.f64_idx..self.f64_idx;
+        
+                        (i32_range, i64_range, f32_range, f64_range)
+                    },
+                    // If no stack frames pushed, then we have the easy case
+                    None => (0..self.i32_idx, 0..self.i64_idx, 0..self.f32_idx, 0..self.f64_idx),
+                };
+            }
         }
+        
+        (0..self.i32_idx, 0..self.i64_idx, 0..self.f32_idx, 0..self.f64_idx)
     }
 
 

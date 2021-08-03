@@ -130,7 +130,7 @@ pub fn emit_br_if(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCt
 
 // semantically, the end statement pops from the control stack,
 // in our compiler, this is a no-op
-pub fn emit_end<'a>(_writer: &opencl_writer::OpenCLCWriter<'a>, stack_ctx: &mut StackCtx, _id: &Option<wast::Id<'a>>, label: &str, block_type: u32, fn_name: &str, result_type: Option<StackType>, is_fastcall: bool, _debug: bool) -> String {
+pub fn emit_end<'a>(_writer: &opencl_writer::OpenCLCWriter<'a>, stack_ctx: &mut StackCtx, _id: &Option<wast::Id<'a>>, label: &str, block_type: u32, fn_name: &str, result_type: Option<StackType>, result_register: Option<String>, is_fastcall: bool, _debug: bool) -> String {
     let mut result = String::from("");
 
     // after a block ends, we need to unwind the stack!
@@ -144,17 +144,33 @@ pub fn emit_end<'a>(_writer: &opencl_writer::OpenCLCWriter<'a>, stack_ctx: &mut 
     }
 
     // This check has to happen before we pop the stack frame
-    let has_hanging_value = match result_type.clone() {
-        Some(val) => stack_ctx.vstack_check_for_hanging_value(val),
-        None => false,
+    // We also have to pop the return value here, before the pop the whole stack frame!
+    let (has_hanging_value, ret_val) = match (result_type.clone(), block_type) {
+        // only run this check for loops
+        (Some(ty), 1) => {
+            let hanging_val = stack_ctx.vstack_check_for_hanging_value(ty.clone());
+            let r_val = if hanging_val {
+                Some(stack_ctx.vstack_pop(ty))
+            } else {
+                None
+            };
+            (hanging_val, r_val)
+        },
+        // For blocks and loops, just return the values we need
+        (Some(ty), _) => {
+            // hanging value doesn't matter, we don't need to check it
+            (true, Some(stack_ctx.vstack_pop(ty)))
+        },
+        (_, _) => (false, None),
     };
+
+    // unwind the stack frame
+    stack_ctx.vstack_pop_stack_frame();
+    // pop the *sp tracking data
+    stack_ctx.vstack_pop_stack_info();
     
-    // First restore the context
-    if !is_fastcall && block_type == 1 {
-        // unwind the stack frame
-        stack_ctx.vstack_pop_stack_frame();
-        // pop the *sp tracking data
-        stack_ctx.vstack_pop_stack_info();
+    // First restore the context (only for loops/blocks)
+    if !is_fastcall && block_type != 2 {
         // restore the intermediate values only after ending a block
         result += &stack_ctx.restore_context(false, true);
     }
@@ -174,17 +190,15 @@ pub fn emit_end<'a>(_writer: &opencl_writer::OpenCLCWriter<'a>, stack_ctx: &mut 
      * Where we have an infinite loop that returns an i32.
      * We check to see if anything is on the stack first, then we return a value if we can.
      */
-    result += &match result_type {
-        Some(stack_type) => {
+    result += &match (result_type, ret_val, result_register) {
+        (Some(ty), Some(return_value), Some(result_register)) => {
             if block_type == 1 && !has_hanging_value {
                 String::from("")
             } else {
-                let ret_val = stack_ctx.vstack_pop(stack_type.clone());
-                let result_register = stack_ctx.vstack_peak(stack_type.clone(), 0);
-                format!("\t{} = {};\n", result_register, ret_val)    
+                format!("\t{} = {};\n", result_register, return_value)
             }
         },
-        None => String::from(""),
+        (_, _, _) => String::from(""),
     };    
 
     // if the end statement corresponds to a block -> we want to put the label *here* and not at the top
@@ -216,7 +230,7 @@ pub fn emit_loop(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCt
     if !is_fastcall && is_loop_tainted {
         // We need to save before we push the new stack frame
         result += &stack_ctx.save_context(false);
-        stack_ctx.vstack_push_stack_frame();
+        stack_ctx.vstack_push_stack_frame(false);
 
         // We have to save the context, since this is the entry point for a function call
         // TODO: optimize this by checking if we actually call a function inside the loop
@@ -234,6 +248,11 @@ pub fn emit_loop(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCt
 
         *call_ret_idx += 1;
     } else {
+
+        // save a stack frame but don't save the context here
+        stack_ctx.vstack_push_stack_frame(true);
+        stack_ctx.vstack_push_stack_info(stack_ctx.stack_frame_size().try_into().unwrap());
+
         // emit just the loop header for GOTOs during fastcalls or for non-tainted loops
         if is_fastcall {
             result += &format!("{}\n", format!("{}_{}_fastcall:", format!("{}{}", "__", fn_name.replace(".", "")), label));
@@ -249,13 +268,12 @@ pub fn emit_loop(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCt
 pub fn emit_block(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _block: &wast::BlockType, _label: String, _branch_idx_u32: u32, _fn_name: &str, _function_id_map: HashMap<&str, u32>, is_fastcall: bool, _debug: bool) -> String {
     let mut result: String = String::from("");
 
-    /*
     if !is_fastcall {
         result += &stack_ctx.save_context(false);
-        stack_ctx.vstack_push_stack_frame();
-        stack_ctx.vstack_push_stack_info(stack_ctx.stack_frame_size().try_into().unwrap());
     }
-    */
+
+    stack_ctx.vstack_push_stack_frame(true);
+    stack_ctx.vstack_push_stack_info(stack_ctx.stack_frame_size().try_into().unwrap());
 
     // we don't emit a label for block statements here, any br's goto the END of the block
     // we don't need to modify the sp here, we will do all stack unwinding in the br instr
@@ -267,6 +285,9 @@ pub fn emit_if(writer: &opencl_writer::OpenCLCWriter, label: String, block: &was
 
     // Pop the top value on the stack as the conditional
     result += &format!("\tif ({}) {{\n", stack_ctx.vstack_pop(StackType::i32));
+
+    stack_ctx.vstack_push_stack_frame(true);
+    stack_ctx.vstack_push_stack_info(stack_ctx.stack_frame_size().try_into().unwrap());
 
     // Get the type of the block
     let block_type = get_func_result(writer, &block.ty);
