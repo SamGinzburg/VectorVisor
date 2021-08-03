@@ -157,35 +157,35 @@ pub fn emit_end<'a>(_writer: &opencl_writer::OpenCLCWriter<'a>, stack_ctx: &mut 
     // The top of the stack is the register containing the value 
     // The next value in the stack is the register we are storing the result into
     // Do this for blocks / If statements
+
+
+    /* 
+     * For loops we have the following edge case:
+     * loop (result i32)
+     *  br 0
+     * end
+     * 
+     * Where we have an infinite loop that returns an i32.
+     * We check to see if anything is on the stack first, then we return a value if we can.
+     */
     result += &match result_type {
-        Some(StackType::i32) => {
-            let ret_val = stack_ctx.vstack_pop(StackType::i32);
-            let result_register = stack_ctx.vstack_peak(StackType::i32, 0);
-            format!("\t{} = {};\n", result_register, ret_val)
-        },
-        Some(StackType::i64) => {
-            let ret_val = stack_ctx.vstack_pop(StackType::i64);
-            let result_register = stack_ctx.vstack_peak(StackType::i64, 0);
-            format!("\t{} = {};\n", result_register, ret_val)
-        },
-        Some(StackType::f32) => {
-            let ret_val = stack_ctx.vstack_pop(StackType::f32);
-            let result_register = stack_ctx.vstack_peak(StackType::f32, 0);
-            format!("\t{} = {};\n", result_register, ret_val)
-        },
-        Some(StackType::f64) => {
-            let ret_val = stack_ctx.vstack_pop(StackType::f64);
-            let result_register = stack_ctx.vstack_peak(StackType::f64, 0);
-            format!("\t{} = {};\n", result_register, ret_val)
+        Some(stack_type) => {
+            if block_type == 1 && stack_ctx.vstack_is_empty(stack_type.clone()) {
+                String::from("")
+            } else {
+                let ret_val = stack_ctx.vstack_pop(stack_type.clone());
+                let result_register = stack_ctx.vstack_peak(stack_type.clone(), 0);
+                format!("\t{} = {};\n", result_register, ret_val)    
+            }
         },
         None => String::from(""),
-    };
+    };    
 
     // if the end statement corresponds to a block -> we want to put the label *here* and not at the top
     // of the block, otherwise for loops we jump back to the start of the loop!
     // 0 -> block (label goes here, at the end statement)
     // 1 -> loop (label was already inserted at the top, this is a no-op here)
-    // 2 -> if
+    // 2 -> if statement (insert closing bracket)
     if block_type == 0 {
         if !is_fastcall {
             result += &format!("\n{}_{}:\n", format!("{}{}", "__", fn_name.replace(".", "")), label);

@@ -1601,23 +1601,6 @@ impl<'a> StackCtx {
         self.f64_idx = stack_frame_unwind.f64_idx;
     }
 
-    /*
-     * When executing a br instruction that exits a loop
-     */
-    pub fn vstack_get_stack_delta(&mut self, nested_stack_count: u32) -> u32 {
-        let mut ret_val: u32 = 0;
-        let mut control_stack_copy = self.control_stack.clone();
-        control_stack_copy.reverse();
-        for (val, idx) in control_stack_copy.iter().zip(0..control_stack_copy.len() as u32) {
-            if idx == nested_stack_count {
-                break;
-            }
-            ret_val += val;
-        }
-
-        ret_val
-    }
-
     pub fn convert_wast_types(ty: &wast::ValType) -> StackType {
         match ty {
             wast::ValType::I32 => StackType::i32,
