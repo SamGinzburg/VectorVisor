@@ -593,8 +593,21 @@ impl OpenCLRunner {
                                 },
                             };
                             let start = Utc::now().timestamp_nanos();
-                            let options = &CString::new(format!("{} -DNUM_THREADS={} -DVMM_STACK_SIZE_BYTES={} -DVMM_HEAP_SIZE_BYTES={}", compile_flags_clone, num_vms_clone, stack_size, heap_size)).unwrap();
-                            let _build_result = ocl::core::compile_program(&program_to_build, Some(&[device_id]), options, &[&fastcall_header], &[CString::new("fastcalls.cl").unwrap()], None, None, None);
+                            let options = &CString::new(format!("{} -w -DNUM_THREADS={} -DVMM_STACK_SIZE_BYTES={} -DVMM_HEAP_SIZE_BYTES={}", compile_flags_clone, num_vms_clone, stack_size, heap_size)).unwrap();
+                            let build_result = ocl::core::compile_program(&program_to_build, Some(&[device_id]), options, &[&fastcall_header], &[CString::new("fastcalls.cl").unwrap()], None, None, None);
+                            match build_result {
+                                Ok(_) => (),
+                                Err(e) => {
+                                    println!("Error during building: {:?}", e);
+                                    let buildinfo = ocl::core::get_program_build_info(&program_to_build, &device_id, ocl::core::ProgramBuildInfo::BuildLog).unwrap();
+                                    let mut file = File::create(format!("{}.buildlog", key)).unwrap();
+                                    file.write_all(&buildinfo.to_string().into_bytes()).unwrap();
+                                    let mut file = File::create(format!("{}.cl", key)).unwrap();
+                                    file.write_all(&program_as_string.into_bytes()).unwrap();
+                                    panic!("Error: {} has occured, dumping build log to file: {:?}.buildlog, kernel written to file {:?}.cl\n", e, key, key);
+                                }
+                            }
+                            
                             let final_program = match ocl::core::link_program(context, Some(&[device_id]), &CString::new(format!("{}", link_flags_clone)).unwrap(), &[&program_to_build], None, None, None) {
                                 Ok(p) => p,
                                 Err(e) => {
