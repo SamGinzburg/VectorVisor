@@ -1166,10 +1166,10 @@ impl<'a> OpenCLCWriter<'_> {
                     _ => format!("if{}", if_name_count),
                 };
     
-                emit_if(&self, label, b, control_stack, if_name_count, stack_ctx)
+                emit_if(&self, label, fn_name.to_string(), b, control_stack, if_name_count, stack_ctx)
             },
             wast::Instruction::Else(_) => {
-                emit_else(&self, control_stack, stack_ctx)
+                emit_else(&self, fn_name.to_string(), control_stack, stack_ctx)
             },
             wast::Instruction::Block(b) => {
                 // if a block doesn't have a label, we have to make one up

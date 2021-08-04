@@ -215,8 +215,7 @@ pub fn emit_end<'a>(_writer: &opencl_writer::OpenCLCWriter<'a>, stack_ctx: &mut 
     } else if block_type == 1 {
         result += &format!("\t/* END (loop: {}_{}) */\n", format!("{}{}", "__", fn_name.replace(".", "")), label);
     } else if block_type == 2 {
-        // just close the brackets
-        result += &format!("\t}}\n");
+        result += &format!("\t{}_{}_end:\n", fn_name, label);
     }
 
     result
@@ -280,11 +279,14 @@ pub fn emit_block(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackC
     result
 }
 
-pub fn emit_if(writer: &opencl_writer::OpenCLCWriter, label: String, block: &wast::BlockType, control_stack: &mut Vec<ControlStackEntryType>, if_name_count: &mut u32, stack_ctx: &mut StackCtx) -> String {
+pub fn emit_if(writer: &opencl_writer::OpenCLCWriter, label: String, fn_name: String, block: &wast::BlockType, control_stack: &mut Vec<ControlStackEntryType>, if_name_count: &mut u32, stack_ctx: &mut StackCtx) -> String {
     let mut result: String = String::from("");
 
     // Pop the top value on the stack as the conditional
-    result += &format!("\tif ({}) {{\n", stack_ctx.vstack_pop(StackType::i32));
+    result += &format!("\tif (!{}) {{\n", stack_ctx.vstack_pop(StackType::i32));
+    // If jump to the else block
+    result += &format!("\t\tgoto {}_{}_else;\n", fn_name, label);
+    result += &format!("\t}}\n");
 
     // Get the type of the block
     let block_type = get_func_result(writer, &block.ty);
@@ -318,15 +320,17 @@ pub fn emit_if(writer: &opencl_writer::OpenCLCWriter, label: String, block: &was
     result
 }
 
-pub fn emit_else(_writer: &opencl_writer::OpenCLCWriter, control_stack: &mut Vec<ControlStackEntryType>, stack_ctx: &mut StackCtx) -> String {
+pub fn emit_else(_writer: &opencl_writer::OpenCLCWriter, fn_name: String, control_stack: &mut Vec<ControlStackEntryType>, stack_ctx: &mut StackCtx) -> String {
     let mut result: String = String::from("");
+    let mut else_label = None;
 
     // If the most recent if statement has a result type, we need to set the value before continuing to the next branch
     let mut control_stack_copy = control_stack.clone();
     control_stack_copy.reverse();
-    for (_, block_type, _, _, block_result_type, result_register) in control_stack_copy {
+    for (if_label, block_type, _, _, block_result_type, result_register) in control_stack_copy {
         // We found the matching if entry
         if block_type == 2 {
+            else_label = Some(if_label);
             match (block_result_type, result_register) {
                 (Some(t), Some(result_register)) => {
                     let val = stack_ctx.vstack_pop(t);
@@ -338,7 +342,15 @@ pub fn emit_else(_writer: &opencl_writer::OpenCLCWriter, control_stack: &mut Vec
         }
     }
     
-    result +=&format!("\t}} else {{\n");
+    match else_label {
+        Some(label) => {
+            // If we just ran the first code block of the If block, then jump to the end
+            result +=&format!("\tgoto {}_{}_end;\n", fn_name, label);
+            // Else, put a label here for the header of the If block to jump to the second code block
+            result +=&format!("\t{}_{}_else:\n", fn_name, label);
+        },
+        None => (),
+    }
 
     result
 }
