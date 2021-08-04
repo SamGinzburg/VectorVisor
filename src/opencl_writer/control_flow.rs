@@ -336,14 +336,18 @@ pub fn emit_else(_writer: &opencl_writer::OpenCLCWriter, fn_name: String, contro
     for (if_label, block_type, _, _, block_result_type, result_register) in control_stack_copy {
         // We found the matching if entry
         if block_type == 2 {
-            else_label = Some(if_label);
             match (block_result_type, result_register) {
                 (Some(t), Some(result_register)) => {
+                    else_label = Some(if_label);
                     let val = stack_ctx.vstack_pop(t);
                     result +=&format!("\t{} = {};\n", result_register, val);
                     break;
                 },
-                _ => (),
+                _ => {
+                    // If the if statement doesn't return a value, we still have to emit the else
+                    else_label = Some(if_label);
+                    break;
+                },
             }
         }
     }
