@@ -284,8 +284,14 @@ pub fn emit_if(writer: &opencl_writer::OpenCLCWriter, label: String, fn_name: St
 
     // Pop the top value on the stack as the conditional
     result += &format!("\tif (!{}) {{\n", stack_ctx.vstack_pop(StackType::i32));
-    // If jump to the else block
-    result += &format!("\t\tgoto {}_{}_else;\n", fn_name, label);
+    // If jump to the else block (if we have one)
+    if stack_ctx.if_has_else((*if_name_count).try_into().unwrap()) {
+        result += &format!("\t\tgoto {}_{}_else;\n", fn_name, label);
+    } else {
+        // if we don't have an else block, jump to end
+        result += &format!("\t\tgoto {}_{}_end;\n", fn_name, label);
+    }
+
     result += &format!("\t}}\n");
 
     // Get the type of the block

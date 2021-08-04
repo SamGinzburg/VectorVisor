@@ -33,6 +33,13 @@ pub enum StackType {
     f64
 }
 
+#[derive(Debug, PartialEq, Clone)]
+enum ControlStackVStackTypes {
+    Block,
+    If,
+    Loop
+}
+
 #[derive(Debug, Clone)]
 pub struct StackSnapshot {
     i32_idx: usize,
@@ -85,6 +92,7 @@ pub struct StackCtx {
     // store which locals are parameters (for emitting fastcalls)
     is_param: HashMap<String, bool>,
     tainted_loops: Vec<bool>,
+    if_else_branches: Vec<bool>,
     num_fn_calls: u32,
     num_hypercalls: u32,
 }
@@ -99,9 +107,14 @@ impl<'a> StackCtx {
         
         // Track which loops we can optimize for later
         // (is_loop, tainted), is_loop needed since we are also tracking blocks
-        let mut control_stack: Vec<(bool, Option<StackType>)> = vec![];
+        let mut control_stack: Vec<(Option<StackType>, ControlStackVStackTypes)> = vec![];
         let mut tainted_loops: Vec<bool> = vec![];
         let mut loop_idx: usize = 0;
+
+        // Track which if blocks have "else" blocks
+        // control_stack tracks the operators
+        let mut if_else_branches: Vec<bool> = vec![];
+        let mut if_idx: usize = 0;
 
         /*
          * Needed to avoid edge case where we have an empty infinite loop
@@ -1306,6 +1319,8 @@ impl<'a> StackCtx {
                     // no-op
                 },
                 wast::Instruction::If(b) => {
+                    if_else_branches.push(false);
+                    if_idx += 1;
                     let block_type = get_func_result(&writer_ctx, &b.ty);
                     match block_type.clone() {
                         Some(stack_size) => {
@@ -1318,10 +1333,15 @@ impl<'a> StackCtx {
                         },
                         None => (),
                     };
-                    control_stack.push((false, block_type));
+                    control_stack.push((block_type, ControlStackVStackTypes::If));
                 },
                 wast::Instruction::Else(_) => {
-                    // No-op
+                    /*
+                     * If we encounter an else:
+                     * if_idx points at the currently opened if block
+                     */
+                    let if_len = if_else_branches.len().clone();
+                    if_else_branches[if_len - 1 - if_idx] = true;
                 },
                 /*
                  * Track block & loop starts/ends to minimize intermediate value req
@@ -1340,7 +1360,7 @@ impl<'a> StackCtx {
                         },
                         None => (),
                     };
-                    control_stack.push((false, block_type));
+                    control_stack.push((block_type, ControlStackVStackTypes::Block));
                 },
                 wast::Instruction::Loop(b) => {
                     tainted_loops.push(false);
@@ -1358,16 +1378,20 @@ impl<'a> StackCtx {
                         },
                         None => (),
                     };
-                    control_stack.push((true, block_type));
+                    control_stack.push((block_type, ControlStackVStackTypes::Loop));
                     // We need to continue here to avoid resetting the empty_loop counter
                     continue;
                 }
                 wast::Instruction::End(_id) => {
                     // As we close loops, keep track so we don't taint them
-                    let (is_loop, t) = control_stack.pop().unwrap();
-                    if is_loop {
-                        loop_idx -= 1;
+                    let (t, control_stack_op) = control_stack.pop().unwrap();
+
+                    match control_stack_op {
+                        ControlStackVStackTypes::Loop => loop_idx -= 1,
+                        ControlStackVStackTypes::If   => if_idx -= 1,
+                        _ => (),
                     }
+
                     // We have to pop the result value of the block (if we have one)
                     match t {
                         Some(stack_type) => {
@@ -1551,6 +1575,7 @@ impl<'a> StackCtx {
             control_stack: vec![],
             control_stack_snapshots: vec![],
             tainted_loops: tainted_loops,
+            if_else_branches: if_else_branches,
             num_fn_calls: num_fn_calls,
             num_hypercalls: num_hypercalls,
             is_param: is_param.clone()
@@ -1562,6 +1587,13 @@ impl<'a> StackCtx {
      */
     pub fn is_loop_tainted(&mut self, loop_idx: usize) -> bool {
         self.tainted_loops[loop_idx]
+    }
+
+    /*
+     * Check if an If block has a matching else
+     */
+    pub fn if_has_else(&mut self, if_idx: usize) -> bool {
+        self.if_else_branches[if_idx]
     }
 
     /*
