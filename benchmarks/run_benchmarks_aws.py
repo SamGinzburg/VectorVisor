@@ -47,6 +47,46 @@ userdata = """#cloud-config
 """ % region
 
 
+userdata_ubuntu = """#cloud-config
+    runcmd:
+     - cd /tmp
+     - sudo apt install -y git
+     - sudo apt install -y htop
+     - sudo apt install -y gcc
+     - sudo apt install -y golang
+     - sudo apt install -y curl
+     - sudo apt install -y ocl*
+     - curl https://sh.rustup.rs -sSf | sh -s -- -y
+     - ~/.cargo/bin/rustup target add wasm32-wasi
+     - git clone https://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:x-oauth-basic@github.com/SamGinzburg/wasm2opencl.git
+     - git clone https://github.com/WebAssembly/binaryen
+     - cd binaryen/
+     - cmake . && sudo make install
+     - cd /tmp/wasm2opencl/
+     - ~/.cargo/bin/cargo build --release
+     - cd benchmarks/
+     - cd json-compression-lz4/
+     - ~/.cargo/bin/cargo build --release
+     - wasm-opt target/wasm32-wasi/release/json-compression.wasm -O4 -c -o target/wasm32-wasi/release/json-compression-opt.wasm
+     - cd ..
+     - cd json-compression/
+     - ~/.cargo/bin/cargo build --release
+     - wasm-opt target/wasm32-wasi/release/json-compression.wasm -O4 -c -o target/wasm32-wasi/release/json-compression-opt.wasm
+     - cd ..
+     - cd average/
+     - ~/.cargo/bin/cargo build --release
+     - wasm-opt target/wasm32-wasi/release/average.wasm -O4 -c -o target/wasm32-wasi/release/average-opt.wasm
+     - cd ..
+     - cd pbkdf2/
+     - ~/.cargo/bin/cargo build --release
+     - wasm-opt target/wasm32-wasi/release/pbkdf2.wasm -O4 -c -o target/wasm32-wasi/release/pbkdf2-opt.wasm
+     - cd ..
+     - cd nlp-count-vectorizer/
+     - ~/.cargo/bin/cargo build --release
+     - wasm-opt target/wasm32-wasi/release/nlp-count-vectorizer.wasm -O4 -c -o target/wasm32-wasi/release/nlp-count-vectorizer-opt.wasm
+""" % region
+
+
 def run_command(command, command_name, instance_id):
     while True:
         try:
@@ -103,7 +143,7 @@ def run_pbkdf2_bench(run_x86):
         x=$(cloud-init status)
         done
 
-        /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/pbkdf2/target/wasm32-wasi/release/pbkdf2.wasm --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=131072 --partition=true --serverless=true --vmcount=4096 --wasmtime=true &> /tmp/pbkdf2.log &
+        /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/pbkdf2/target/wasm32-wasi/release/pbkdf2-opt.wasm --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=131072 --partition=true --serverless=true --vmcount=4096 --wasmtime=true &> /tmp/pbkdf2.log &
         """
 
     run_command(run_pbkdf2_command_wasmtime, "pbkdf2_cpu", cpu_bench_instance[0].id)
@@ -117,7 +157,7 @@ def run_pbkdf2_bench(run_x86):
     x=$(cloud-init status)
     done
 
-    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/pbkdf2/target/wasm32-wasi/release/pbkdf2.wasm --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=131072 --partition=true --serverless=true --vmcount=4096 --vmgroups=1 --maxdup=2 &> /tmp/pbkdf2.log &
+    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/pbkdf2/target/wasm32-wasi/release/pbkdf2-opt.wasm --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=131072 --partition=true --serverless=true --vmcount=4096 --vmgroups=1 --maxdup=2 &> /tmp/pbkdf2.log &
     """
 
     run_command(run_pbkdf2_command, "pbkdf2_gpu", gpu_instance[0].id)
@@ -195,7 +235,7 @@ def run_lz4_bench():
     x=$(cloud-init status)
     done
 
-    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/json-compression/target/wasm32-wasi/release/json-compression.wasm --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=141072 --partition=true --serverless=true --vmcount=4096 --wasmtime=true &> /tmp/json-compression.log &
+    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/json-compression/target/wasm32-wasi/release/json-compression-opt.wasm --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=141072 --partition=true --serverless=true --vmcount=4096 --wasmtime=true &> /tmp/json-compression.log &
     """
 
     run_command(run_json_lz4_command_wasmtime, "run_json_lz4_command_wasmtime", cpu_bench_instance[0].id)
@@ -209,7 +249,7 @@ def run_lz4_bench():
     x=$(cloud-init status)
     done
 
-    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/json-compression/target/wasm32-wasi/release/json-compression.wasm --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=141072 --partition=true --serverless=true --vmcount=4096 --vmgroups=1 --maxdup=3 &> /tmp/json-compression.log &
+    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/json-compression/target/wasm32-wasi/release/json-compression-opt.wasm --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=141072 --partition=true --serverless=true --vmcount=4096 --vmgroups=1 --maxdup=3 &> /tmp/json-compression.log &
     """
 
     run_command(run_json_lz4_command, "run_json_lz4_command", gpu_instance[0].id)
@@ -288,7 +328,7 @@ def run_average_bench():
     x=$(cloud-init status)
     done
 
-    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/average/target/wasm32-wasi/release/average.wasm --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=141072 --partition=true --serverless=true --vmcount=4096 --wasmtime=true &> /tmp/average.log &
+    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/average/target/wasm32-wasi/release/average-opt.wasm --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=141072 --partition=true --serverless=true --vmcount=4096 --wasmtime=true &> /tmp/average.log &
     """
 
     run_command(run_average_command_wasmtime, "run_average_command_wasmtime", cpu_bench_instance[0].id)
@@ -302,7 +342,7 @@ def run_average_bench():
     x=$(cloud-init status)
     done
 
-    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/average/target/wasm32-wasi/release/average.wasm --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=141072 --partition=true --serverless=true --vmcount=4096 --wasmtime=false --maxdup=3 &> /tmp/average.log &
+    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/average/target/wasm32-wasi/release/average-opt.wasm --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=141072 --partition=true --serverless=true --vmcount=4096 --wasmtime=false --maxdup=3 &> /tmp/average.log &
     """
 
     run_command(run_average_command, "run_average_command", gpu_instance[0].id)
@@ -381,7 +421,7 @@ def run_nlp_count_bench():
     x=$(cloud-init status)
     done
 
-    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/target/wasm32-wasi/release/nlp-count-vectorizer.wasm --ip=0.0.0.0 --heap=4194304 --stack=262144 --hcallsize=524288 --partition=true --serverless=true --vmcount=3072 --wasmtime=true &> /tmp/nlp-count-vectorizer.log &
+    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/target/wasm32-wasi/release/nlp-count-vectorizer-opt.wasm --ip=0.0.0.0 --heap=4194304 --stack=262144 --hcallsize=524288 --partition=true --serverless=true --vmcount=3072 --wasmtime=true &> /tmp/nlp-count-vectorizer.log &
     """
 
     run_command(run_nlp_command_wasmtime, "run_nlp_command_wasmtime", cpu_bench_instance[0].id)
@@ -395,7 +435,7 @@ def run_nlp_count_bench():
     x=$(cloud-init status)
     done
 
-    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/target/wasm32-wasi/release/nlp-count-vectorizer.wasm --ip=0.0.0.0 --heap=4194304 --stack=262144 --hcallsize=524288 --partition=true --serverless=true --vmcount=3072 --vmgroups=1 --maxdup=2 --disablefastcalls=true &> /tmp/nlp-count-vectorizer.log &
+    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/target/wasm32-wasi/release/nlp-count-vectorizer-opt.wasm --ip=0.0.0.0 --heap=4194304 --stack=262144 --hcallsize=524288 --partition=true --serverless=true --vmcount=3072 --vmgroups=1 --maxdup=2 --disablefastcalls=true &> /tmp/nlp-count-vectorizer.log &
     """
 
     run_command(run_nlp_command, "run_nlp_command", gpu_instance[0].id)
@@ -487,7 +527,7 @@ p3.2xlarge   => 1 V100, 16 GiB memory, 8 vCPU, $3.06 / hr
 
 """
 # AMIs specific to us-east-2
-gpu_instance = ec2.create_instances(ImageId='ami-0414f41139d36fb50',
+gpu_instance = ec2.create_instances(ImageId='ami-028dbc12531690cf4',
                                 InstanceType="g4dn.xlarge",
                                 MinCount=1,
                                 MaxCount=1,
@@ -498,7 +538,7 @@ gpu_instance = ec2.create_instances(ImageId='ami-0414f41139d36fb50',
                                 })
 
 # cpu wasmtime instance
-cpu_bench_instance = ec2.create_instances(ImageId='ami-0277b52859bac6f4b',
+cpu_bench_instance = ec2.create_instances(ImageId='ami-028dbc12531690cf4',
                                 InstanceType="c5.xlarge", # $0.17 / hr
                                 MinCount=1,
                                 MaxCount=1,
@@ -508,7 +548,7 @@ cpu_bench_instance = ec2.create_instances(ImageId='ami-0277b52859bac6f4b',
                                     #'Name': "ec2-ssm"
                                 })
 
-invoker_instance = ec2.create_instances(ImageId='ami-0277b52859bac6f4b',
+invoker_instance = ec2.create_instances(ImageId='ami-028dbc12531690cf4',
                                 InstanceType="t2.2xlarge",
                                 MinCount=1,
                                 MaxCount=1,
