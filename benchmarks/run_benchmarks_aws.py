@@ -49,42 +49,49 @@ userdata = """#cloud-config
 
 userdata_ubuntu = """#cloud-config
     runcmd:
+     - whoami
+     - sudo su
+     - sudo whoami
+     - export HOME=/root
      - cd /tmp
+     - sudo apt update
      - sudo apt install -y git
      - sudo apt install -y htop
      - sudo apt install -y gcc
-     - sudo apt install -y golang
+     - sudo apt install -y golang-go
      - sudo apt install -y curl
      - sudo apt install -y ocl*
-     - curl https://sh.rustup.rs -sSf | sh -s -- -y
-     - ~/.cargo/bin/rustup target add wasm32-wasi
+     - sudo curl https://sh.rustup.rs -sSf | sh -s -- -y
+     - . $HOME/.cargo/env
+     - sudo ~/.cargo/bin/rustup target add wasm32-wasi
      - git clone https://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:x-oauth-basic@github.com/SamGinzburg/wasm2opencl.git
      - git clone https://github.com/WebAssembly/binaryen
      - cd binaryen/
-     - cmake . && sudo make install
+     - sudo cmake .
+     - sudo make install
      - cd /tmp/wasm2opencl/
-     - ~/.cargo/bin/cargo build --release
+     - sudo ~/.cargo/bin/cargo build --release
      - cd benchmarks/
      - cd json-compression-lz4/
-     - ~/.cargo/bin/cargo build --release
+     - sudo ~/.cargo/bin/cargo build --release
      - wasm-opt target/wasm32-wasi/release/json-compression.wasm -O4 -c -o target/wasm32-wasi/release/json-compression-opt.wasm
      - cd ..
      - cd json-compression/
-     - ~/.cargo/bin/cargo build --release
+     - sudo ~/.cargo/bin/cargo build --release
      - wasm-opt target/wasm32-wasi/release/json-compression.wasm -O4 -c -o target/wasm32-wasi/release/json-compression-opt.wasm
      - cd ..
      - cd average/
-     - ~/.cargo/bin/cargo build --release
+     - sudo ~/.cargo/bin/cargo build --release
      - wasm-opt target/wasm32-wasi/release/average.wasm -O4 -c -o target/wasm32-wasi/release/average-opt.wasm
      - cd ..
      - cd pbkdf2/
-     - ~/.cargo/bin/cargo build --release
+     - sudo ~/.cargo/bin/cargo build --release
      - wasm-opt target/wasm32-wasi/release/pbkdf2.wasm -O4 -c -o target/wasm32-wasi/release/pbkdf2-opt.wasm
      - cd ..
      - cd nlp-count-vectorizer/
-     - ~/.cargo/bin/cargo build --release
+     - sudo ~/.cargo/bin/cargo build --release
      - wasm-opt target/wasm32-wasi/release/nlp-count-vectorizer.wasm -O4 -c -o target/wasm32-wasi/release/nlp-count-vectorizer-opt.wasm
-""" % region
+"""
 
 
 def run_command(command, command_name, instance_id):
@@ -531,7 +538,7 @@ gpu_instance = ec2.create_instances(ImageId='ami-028dbc12531690cf4',
                                 InstanceType="g4dn.xlarge",
                                 MinCount=1,
                                 MaxCount=1,
-                                UserData=userdata,
+                                UserData=userdata_ubuntu,
                                 IamInstanceProfile={
                                     'Arn': 'arn:aws:iam::573062721377:instance-profile/ec2-ssm',
                                     #'Name': "ec2-ssm"
@@ -542,7 +549,7 @@ cpu_bench_instance = ec2.create_instances(ImageId='ami-028dbc12531690cf4',
                                 InstanceType="c5.xlarge", # $0.17 / hr
                                 MinCount=1,
                                 MaxCount=1,
-                                UserData=userdata,
+                                UserData=userdata_ubuntu,
                                 IamInstanceProfile={
                                     'Arn': 'arn:aws:iam::573062721377:instance-profile/ec2-ssm',
                                     #'Name': "ec2-ssm"
@@ -552,7 +559,7 @@ invoker_instance = ec2.create_instances(ImageId='ami-028dbc12531690cf4',
                                 InstanceType="t2.2xlarge",
                                 MinCount=1,
                                 MaxCount=1,
-                                UserData=userdata,
+                                UserData=userdata_ubuntu,
                                 IamInstanceProfile={
                                     'Arn': 'arn:aws:iam::573062721377:instance-profile/ec2-ssm',
                                     #'Name': "ec2-ssm"
