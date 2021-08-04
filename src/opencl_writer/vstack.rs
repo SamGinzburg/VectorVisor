@@ -114,8 +114,8 @@ impl<'a> StackCtx {
         // Track which if blocks have "else" blocks
         // control_stack tracks the operators
         let mut if_else_branches: Vec<bool> = vec![];
+        let mut if_else_idx_stack: Vec<usize> = vec![];
         let mut if_idx: usize = 0;
-
         /*
          * Needed to avoid edge case where we have an empty infinite loop
          */
@@ -1321,6 +1321,7 @@ impl<'a> StackCtx {
                 wast::Instruction::If(b) => {
                     if_else_branches.push(false);
                     if_idx += 1;
+                    if_else_idx_stack.push(if_idx);
                     let block_type = get_func_result(&writer_ctx, &b.ty);
                     match block_type.clone() {
                         Some(stack_size) => {
@@ -1338,10 +1339,9 @@ impl<'a> StackCtx {
                 wast::Instruction::Else(_) => {
                     /*
                      * If we encounter an else:
-                     * if_idx points at the currently opened if block
+                     * if_else_idx_stack always points at the most recent if block
                      */
-                    let if_len = if_else_branches.len().clone();
-                    if_else_branches[if_len - 1 - if_idx] = true;
+                    if_else_branches[if_else_idx_stack.last().unwrap() - 1] = true;
                 },
                 /*
                  * Track block & loop starts/ends to minimize intermediate value req
@@ -1388,7 +1388,9 @@ impl<'a> StackCtx {
 
                     match control_stack_op {
                         ControlStackVStackTypes::Loop => loop_idx -= 1,
-                        ControlStackVStackTypes::If   => if_idx -= 1,
+                        ControlStackVStackTypes::If => {
+                            if_else_idx_stack.pop().unwrap();
+                        },
                         _ => (),
                     }
 

@@ -15,4 +15,3 @@ compress = { version = "0.2.1", features = ["lz4"] }
 
 [profile.release]
 lto = true
-opt-level = 'z'
