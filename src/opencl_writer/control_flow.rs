@@ -286,9 +286,6 @@ pub fn emit_if(writer: &opencl_writer::OpenCLCWriter, label: String, block: &was
     // Pop the top value on the stack as the conditional
     result += &format!("\tif ({}) {{\n", stack_ctx.vstack_pop(StackType::i32));
 
-    stack_ctx.vstack_push_stack_frame(true);
-    stack_ctx.vstack_push_stack_info(stack_ctx.stack_frame_size().try_into().unwrap());
-
     // Get the type of the block
     let block_type = get_func_result(writer, &block.ty);
     // Allocate a register to store the result in after the block exits, if we have one
@@ -308,6 +305,10 @@ pub fn emit_if(writer: &opencl_writer::OpenCLCWriter, label: String, block: &was
         },
         None => None,
     };
+
+    // Now save the stack frame
+    stack_ctx.vstack_push_stack_frame(true);
+    stack_ctx.vstack_push_stack_info(stack_ctx.stack_frame_size().try_into().unwrap());
 
     // for the control stack, we don't use the third parameter for blocks
     control_stack.push((label, 2, -1, *if_name_count, block_type, result_register));

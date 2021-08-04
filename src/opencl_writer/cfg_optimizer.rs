@@ -22,13 +22,13 @@ pub fn get_called_funcs(func: &wast::Func, fastcalls: &HashSet<String>, func_map
             // (func (type 3) (import "foo" "bar"))
             panic!("InlineImport functions not yet implemented");
         },
-        (wast::FuncKind::Inline{locals, expression}, Some(_id), _typeuse) => {
+        (wast::FuncKind::Inline{locals, expression}, _, _typeuse) => {
             for instr in expression.instrs.iter() {
                 match instr {
                     wast::Instruction::Call(idx) => {
-                        let id = match idx {
-                            wast::Index::Id(id) => id.name(),
-                            _ => panic!("Unable to get Id for function call: {:?}", idx),
+                        let id: &str = &match idx {
+                            wast::Index::Id(id) => id.name().to_string(),
+                            wast::Index::Num(val, _) => format!("func_{}", val),
                         };
 
                         // Only count non-fastcalls and non-syscalls
@@ -127,7 +127,7 @@ pub fn form_partitions(num_funcs_in_partition: u32, instr_count_limit: u32, func
         current_partition.insert(String::from(f_name));
 
         let (loop_called_fns, called_fns) = get_called_funcs(func_map.get(&f_name.clone()).unwrap(), fastcalls, func_map, imports_map, &mut HashSet::new());
-        
+
         let mut current_partition_count = 0;
         let mut current_instruction_count = 0;
 
