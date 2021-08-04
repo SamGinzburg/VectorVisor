@@ -109,6 +109,7 @@ impl<'a> StackCtx {
         // (is_loop, tainted), is_loop needed since we are also tracking blocks
         let mut control_stack: Vec<(Option<StackType>, ControlStackVStackTypes)> = vec![];
         let mut tainted_loops: Vec<bool> = vec![];
+        let mut open_loop_stack: Vec<usize> = vec![];
         let mut loop_idx: usize = 0;
 
         // Track which if blocks have "else" blocks
@@ -141,10 +142,9 @@ impl<'a> StackCtx {
         let mut max_f64_count: u32 = 0;
 
         // loop_idx tracks how many actively open loops there are, so we taint just those
-        fn taint_open_loops(tainted_loops: &mut Vec<bool>, loop_idx: usize) -> () {
-            let loop_len = tainted_loops.len().clone();
-            for idx in 0..loop_idx {
-                tainted_loops[loop_len - 1 - idx] = true;
+        fn taint_open_loops(tainted_loops: &mut Vec<bool>, open_loop_stack: Vec<usize>) -> () {
+            for loop_idx in open_loop_stack {
+                tainted_loops[loop_idx] = true;
             }
         }
 
@@ -831,7 +831,7 @@ impl<'a> StackCtx {
                                     // ignore WASI API scoping for now
                                     (_, Some(true)) => {
                                         // Taint loops that perform hypercalls
-                                        taint_open_loops(&mut tainted_loops, loop_idx);
+                                        taint_open_loops(&mut tainted_loops, open_loop_stack.clone());
 
                                         // Track how many hypercalls we perform
                                         num_hypercalls += 1;
@@ -876,7 +876,7 @@ impl<'a> StackCtx {
                         // Check the function name to see if it is a valid fastcall
                         // We only taint non-fastcalls
                         if !fastcalls.contains(&id) {
-                            taint_open_loops(&mut tainted_loops, loop_idx);
+                            taint_open_loops(&mut tainted_loops, open_loop_stack.clone());
                             // Track how many regular function calls we perform
                             num_fn_calls += 1;
                         }
@@ -970,7 +970,7 @@ impl<'a> StackCtx {
                 },
                 wast::Instruction::CallIndirect(call_indirect) => {
                     // Taint open loops
-                    taint_open_loops(&mut tainted_loops, loop_idx);
+                    taint_open_loops(&mut tainted_loops, open_loop_stack.clone());
 
                     // Track the number of function call stubs to generate
                     num_fn_calls += indirect_call_len;
@@ -1364,6 +1364,7 @@ impl<'a> StackCtx {
                 },
                 wast::Instruction::Loop(b) => {
                     tainted_loops.push(false);
+                    open_loop_stack.push(loop_idx);
                     loop_idx += 1;
                     empty_loop = true;
                     let block_type = get_func_result(&writer_ctx, &b.ty);
@@ -1387,7 +1388,9 @@ impl<'a> StackCtx {
                     let (t, control_stack_op) = control_stack.pop().unwrap();
 
                     match control_stack_op {
-                        ControlStackVStackTypes::Loop => loop_idx -= 1,
+                        ControlStackVStackTypes::Loop => {
+                            open_loop_stack.pop().unwrap();
+                        },
                         ControlStackVStackTypes::If => {
                             if_else_idx_stack.pop().unwrap();
                         },
@@ -1457,7 +1460,7 @@ impl<'a> StackCtx {
                 },
                 wast::Instruction::Br(_idx) => {
                     if empty_loop {
-                        taint_open_loops(&mut tainted_loops, loop_idx);
+                        taint_open_loops(&mut tainted_loops, open_loop_stack.clone());
                     }
                 },
                 wast::Instruction::BrIf(_idx) => {
