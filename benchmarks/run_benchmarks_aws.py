@@ -60,7 +60,7 @@ userdata_ubuntu = """#cloud-config
      - sudo apt install -y gcc
      - sudo apt install -y golang-go
      - sudo apt install -y curl
-     - sudo apt install -y ocl*
+     - sudo apt install -y clinfo
      - sudo curl https://sh.rustup.rs -sSf | sh -s -- -y
      - . $HOME/.cargo/env
      - sudo ~/.cargo/bin/rustup target add wasm32-wasi
@@ -130,7 +130,7 @@ def run_pbkdf2_bench(run_x86):
     if run_x86:
         run_pbkdf2_command_wasmtime = """#!/bin/bash
         sudo su
-
+        ulimit -n 65536
         x=$(cloud-init status)
         until [ "$x" == "status: done" ]; do
         sleep 10
@@ -143,7 +143,7 @@ def run_pbkdf2_bench(run_x86):
     else:
         run_pbkdf2_command_wasmtime = """#!/bin/bash
         sudo su
-
+        ulimit -n 65536
         x=$(cloud-init status)
         until [ "$x" == "status: done" ]; do
         sleep 10
@@ -157,7 +157,7 @@ def run_pbkdf2_bench(run_x86):
 
     run_pbkdf2_command = """#!/bin/bash
     sudo su
-
+    ulimit -n 65536
     x=$(cloud-init status)
     until [ "$x" == "status: done" ]; do
     sleep 10
@@ -172,7 +172,7 @@ def run_pbkdf2_bench(run_x86):
     # now run the invoker(s) for pbkdf2
     run_invoker = """#!/bin/bash
     sudo su
-
+    ulimit -n 65536
     mkdir -p ~/gocache/
     mkdir -p ~/xdg/
     export GOCACHE=~/gocache/
@@ -203,7 +203,7 @@ def run_pbkdf2_bench(run_x86):
 
     run_invoker_cpu = """#!/bin/bash
     sudo su
-
+    ulimit -n 65536
     mkdir -p ~/gocache/
     mkdir -p ~/xdg/
     export GOCACHE=~/gocache/
@@ -235,7 +235,7 @@ def run_pbkdf2_bench(run_x86):
 def run_lz4_bench():
     run_json_lz4_command_wasmtime = """#!/bin/bash
     sudo su
-
+    ulimit -n 65536
     x=$(cloud-init status)
     until [ "$x" == "status: done" ]; do
     sleep 10
@@ -249,7 +249,7 @@ def run_lz4_bench():
 
     run_json_lz4_command = """#!/bin/bash
     sudo su
-
+    ulimit -n 65536
     x=$(cloud-init status)
     until [ "$x" == "status: done" ]; do
     sleep 10
@@ -265,7 +265,7 @@ def run_lz4_bench():
 
     run_invoker = """#!/bin/bash
     sudo su
-
+    ulimit -n 65536
     mkdir -p ~/gocache/
     mkdir -p ~/xdg/
     export GOCACHE=~/gocache/
@@ -297,7 +297,7 @@ def run_lz4_bench():
 
     run_invoker_wasmtime = """#!/bin/bash
     sudo su
-
+    ulimit -n 65536
     mkdir -p ~/gocache/
     mkdir -p ~/xdg/
     export GOCACHE=~/gocache/
@@ -328,7 +328,7 @@ def run_lz4_bench():
 def run_average_bench():
     run_average_command_wasmtime = """#!/bin/bash
     sudo su
-
+    ulimit -n 65536
     x=$(cloud-init status)
     until [ "$x" == "status: done" ]; do
     sleep 10
@@ -342,7 +342,7 @@ def run_average_bench():
 
     run_average_command = """#!/bin/bash
     sudo su
-
+    ulimit -n 65536
     x=$(cloud-init status)
     until [ "$x" == "status: done" ]; do
     sleep 10
@@ -358,7 +358,7 @@ def run_average_bench():
 
     run_invoker = """#!/bin/bash
     sudo su
-
+    ulimit -n 65536
     mkdir -p ~/gocache/
     mkdir -p ~/xdg/
     export GOCACHE=~/gocache/
@@ -390,7 +390,7 @@ def run_average_bench():
 
     run_invoker_wasmtime = """#!/bin/bash
     sudo su
-
+    ulimit -n 65536
     mkdir -p ~/gocache/
     mkdir -p ~/xdg/
     export GOCACHE=~/gocache/
@@ -421,7 +421,7 @@ def run_average_bench():
 def run_nlp_count_bench():
     run_nlp_command_wasmtime = """#!/bin/bash
     sudo su
-
+    ulimit -n 65536
     x=$(cloud-init status)
     until [ "$x" == "status: done" ]; do
     sleep 10
@@ -435,7 +435,7 @@ def run_nlp_count_bench():
 
     run_nlp_command = """#!/bin/bash
     sudo su
-
+    ulimit -n 65536
     x=$(cloud-init status)
     until [ "$x" == "status: done" ]; do
     sleep 10
@@ -451,7 +451,7 @@ def run_nlp_count_bench():
 
     run_invoker = """#!/bin/bash
     sudo su
-
+    ulimit -n 65536
     mkdir -p ~/gocache/
     mkdir -p ~/xdg/
     export GOCACHE=~/gocache/
@@ -483,7 +483,7 @@ def run_nlp_count_bench():
 
     run_invoker_wasmtime = """#!/bin/bash
     sudo su
-
+    ulimit -n 65536
     mkdir -p ~/gocache/
     mkdir -p ~/xdg/
     export GOCACHE=~/gocache/
@@ -535,7 +535,7 @@ p3.2xlarge   => 1 V100, 16 GiB memory, 8 vCPU, $3.06 / hr
 """
 # AMIs specific to us-east-2
 gpu_instance = ec2.create_instances(ImageId='ami-028dbc12531690cf4',
-                                InstanceType="g4dn.xlarge",
+                                InstanceType="g4dn.2xlarge",
                                 MinCount=1,
                                 MaxCount=1,
                                 UserData=userdata_ubuntu,
@@ -603,9 +603,9 @@ while True:
 ssm_client = boto3.client('ssm')
 
 # run pbkdf2 bench
-#run_pbkdf2_bench(True)
+run_pbkdf2_bench(True)
 
-#cleanup()
+cleanup()
 
 # run lz4 bench
 run_lz4_bench()
