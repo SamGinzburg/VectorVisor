@@ -146,8 +146,7 @@ pub fn emit_end<'a>(_writer: &opencl_writer::OpenCLCWriter<'a>, stack_ctx: &mut 
     // This check has to happen before we pop the stack frame
     // We also have to pop the return value here, before the pop the whole stack frame!
     let (has_hanging_value, ret_val) = match (result_type.clone(), block_type) {
-        // only run this check for loops
-        (Some(ty), 1) => {
+        (Some(ty), _) => {
             let hanging_val = stack_ctx.vstack_check_for_hanging_value(ty.clone());
             let r_val = if hanging_val {
                 Some(stack_ctx.vstack_pop(ty))
@@ -155,11 +154,6 @@ pub fn emit_end<'a>(_writer: &opencl_writer::OpenCLCWriter<'a>, stack_ctx: &mut 
                 None
             };
             (hanging_val, r_val)
-        },
-        // For blocks and loops, just return the values we need
-        (Some(ty), _) => {
-            // hanging value doesn't matter, we don't need to check it
-            (true, Some(stack_ctx.vstack_pop(ty)))
         },
         (_, _) => (false, None),
     };
@@ -190,15 +184,15 @@ pub fn emit_end<'a>(_writer: &opencl_writer::OpenCLCWriter<'a>, stack_ctx: &mut 
      * Where we have an infinite loop that returns an i32.
      * We check to see if anything is on the stack first, then we return a value if we can.
      */
-    result += &match (result_type, ret_val, result_register) {
-        (Some(ty), Some(return_value), Some(result_register)) => {
+    result += &match (ret_val, result_register) {
+        (Some(return_value), Some(result_register)) => {
             if block_type == 1 && !has_hanging_value {
                 String::from("")
             } else {
                 format!("\t{} = {};\n", result_register, return_value)
             }
         },
-        (_, _, _) => String::from(""),
+        (_, _) => String::from(""),
     };    
 
     // if the end statement corresponds to a block -> we want to put the label *here* and not at the top
