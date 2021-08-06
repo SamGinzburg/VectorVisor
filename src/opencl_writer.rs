@@ -1365,7 +1365,6 @@ impl<'a> OpenCLCWriter<'_> {
                 }
 
                 // Now that we have the type info for the parameters and locals, we can generate the stack context
-
                 // First, generate the stack context for the function
                 let mut stack_ctx = StackCtx::initialize_context(&self, &expression.instrs, &local_type_info, &local_parameter_stack_offset, &is_param, fastcall_set.clone(), param_offset, indirect_call_mapping.len().try_into().unwrap(), is_gpu);
 

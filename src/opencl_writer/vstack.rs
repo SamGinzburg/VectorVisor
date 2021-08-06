@@ -47,7 +47,9 @@ pub struct StackSnapshot {
     f32_idx: usize,
     f64_idx: usize,
     // Virtual stack snapshots are used for tracking the stacks of blocks that don't save/restore ctx
-    is_virtual: bool
+    is_virtual: bool,
+    // Track stack types as well
+    stack_types: Vec<StackType>,
 }
 
 impl StackSnapshot {
@@ -58,6 +60,7 @@ impl StackSnapshot {
             f32_idx: ctx.f32_idx,
             f64_idx: ctx.f64_idx,
             is_virtual: is_virtual,
+            stack_types: ctx.total_stack_types.clone(),
         }
     }
 }
@@ -107,7 +110,7 @@ impl<'a> StackCtx {
         
         // Track which loops we can optimize for later
         // (is_loop, tainted), is_loop needed since we are also tracking blocks
-        let mut control_stack: Vec<(Option<StackType>, ControlStackVStackTypes)> = vec![];
+        let mut control_stack: Vec<(Option<StackType>, ControlStackVStackTypes, Vec<StackType>)> = vec![];
         let mut tainted_loops: Vec<bool> = vec![];
         let mut open_loop_stack: Vec<usize> = vec![];
         let mut loop_idx: usize = 0;
@@ -1325,7 +1328,6 @@ impl<'a> StackCtx {
                     let block_type = get_func_result(&writer_ctx, &b.ty);
                     match block_type.clone() {
                         Some(stack_size) => {
-                            stack_sizes.push(stack_size.clone());
                             update_by_valtype(&StackCtx::convert_stacktypes_valtype(&stack_size.clone()),
                                               &mut current_i32_count, &mut max_i32_count,
                                               &mut current_i64_count, &mut max_i64_count,
@@ -1334,7 +1336,7 @@ impl<'a> StackCtx {
                         },
                         None => (),
                     };
-                    control_stack.push((block_type, ControlStackVStackTypes::If));
+                    control_stack.push((block_type, ControlStackVStackTypes::If, stack_sizes.clone()));
                 },
                 wast::Instruction::Else(_) => {
                     /*
@@ -1351,7 +1353,6 @@ impl<'a> StackCtx {
                     let block_type = get_func_result(&writer_ctx, &b.ty);
                     match block_type.clone() {
                         Some(stack_size) => {
-                            stack_sizes.push(stack_size.clone());
                             update_by_valtype(&StackCtx::convert_stacktypes_valtype(&stack_size.clone()),
                                               &mut current_i32_count, &mut max_i32_count,
                                               &mut current_i64_count, &mut max_i64_count,
@@ -1360,7 +1361,7 @@ impl<'a> StackCtx {
                         },
                         None => (),
                     };
-                    control_stack.push((block_type, ControlStackVStackTypes::Block));
+                    control_stack.push((block_type, ControlStackVStackTypes::Block, stack_sizes.clone()));
                 },
                 wast::Instruction::Loop(b) => {
                     tainted_loops.push(false);
@@ -1370,7 +1371,6 @@ impl<'a> StackCtx {
                     let block_type = get_func_result(&writer_ctx, &b.ty);
                     match block_type.clone() {
                         Some(stack_size) => {
-                            stack_sizes.push(stack_size.clone());
                             update_by_valtype(&StackCtx::convert_stacktypes_valtype(&stack_size.clone()),
                                               &mut current_i32_count, &mut max_i32_count,
                                               &mut current_i64_count, &mut max_i64_count,
@@ -1379,13 +1379,13 @@ impl<'a> StackCtx {
                         },
                         None => (),
                     };
-                    control_stack.push((block_type, ControlStackVStackTypes::Loop));
+                    control_stack.push((block_type, ControlStackVStackTypes::Loop, stack_sizes.clone()));
                     // We need to continue here to avoid resetting the empty_loop counter
                     continue;
                 }
                 wast::Instruction::End(_id) => {
                     // As we close loops, keep track so we don't taint them
-                    let (t, control_stack_op) = control_stack.pop().unwrap();
+                    let (t, control_stack_op, stack_restore) = control_stack.pop().unwrap();
 
                     match control_stack_op {
                         ControlStackVStackTypes::Loop => {
@@ -1397,7 +1397,10 @@ impl<'a> StackCtx {
                         _ => (),
                     }
 
-                    // We have to pop the result value of the block (if we have one)
+                    // restore the previous stack frame
+                    stack_sizes = stack_restore;
+
+                    // We have to push the result value of the block (if we have one)
                     match t {
                         Some(stack_type) => {
                             match stack_type {
@@ -1414,7 +1417,7 @@ impl<'a> StackCtx {
                                     current_f64_count -= 1;
                                 },
                             }
-                            stack_sizes.pop();
+                            stack_sizes.push(stack_type.clone());
                         },
                         None => (),
                     }
@@ -1424,7 +1427,7 @@ impl<'a> StackCtx {
                     let arg1 = stack_sizes.pop().unwrap();
                     let arg2 = stack_sizes.pop().unwrap();
                     if arg1 != arg2 {
-                        panic!("Select must operate on two args of the same type (vstack)");
+                        panic!("Select must operate on two args of the same type (vstack): {:?}, {:?}", arg1, arg2);
                     }
                     current_i32_count -= 1;
                     // depending on the arg1, arg2 vals we pop different types
@@ -1639,6 +1642,7 @@ impl<'a> StackCtx {
         self.i64_idx = stack_frame_unwind.i64_idx;
         self.f32_idx = stack_frame_unwind.f32_idx;
         self.f64_idx = stack_frame_unwind.f64_idx;
+        self.total_stack_types = stack_frame_unwind.stack_types;
     }
 
     /*

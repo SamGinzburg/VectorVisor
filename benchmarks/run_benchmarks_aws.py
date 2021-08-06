@@ -442,7 +442,7 @@ def run_nlp_count_bench():
     x=$(cloud-init status)
     done
 
-    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/target/wasm32-wasi/release/nlp-count-vectorizer-opt.wasm --ip=0.0.0.0 --heap=4194304 --stack=262144 --hcallsize=524288 --partition=true --serverless=true --vmcount=3072 --vmgroups=1 --maxdup=2 --disablefastcalls=true &> /tmp/nlp-count-vectorizer.log &
+    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/target/wasm32-wasi/release/nlp-count-vectorizer-opt.wasm --ip=0.0.0.0 --heap=4194304 --stack=262144 --hcallsize=524288 --partition=true --serverless=true --vmcount=3072 --vmgroups=1 --maxdup=3 --disablefastcalls=false &> /tmp/nlp-count-vectorizer.log &
     """
 
     run_command(run_nlp_command, "run_nlp_command", gpu_instance[0].id)
@@ -603,19 +603,21 @@ while True:
 ssm_client = boto3.client('ssm')
 
 # run pbkdf2 bench
-run_pbkdf2_bench(True)
+#run_pbkdf2_bench(True)
 
-cleanup()
+#cleanup()
 
 # run lz4 bench
-run_lz4_bench()
+#run_lz4_bench()
 
 #cleanup()
 
-#run_nlp_count_bench()
+# run NLP bench
+run_nlp_count_bench()
 
 #cleanup()
 
+# run average bench
 #run_average_bench()
 
 # clean up all instances at end
