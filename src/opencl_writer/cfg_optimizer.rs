@@ -1,5 +1,5 @@
 use crate::opencl_writer::compile_stats::*;
-
+use crate::opencl_writer::OpenCLCWriter;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::iter::FromIterator;
@@ -95,7 +95,7 @@ pub fn get_called_funcs(func: &wast::Func, fastcalls: &HashSet<String>, func_map
  * each other into the same OpenCL kernel.
  */
 
-pub fn form_partitions(num_funcs_in_partition: u32, instr_count_limit: u32, func_copy_limit: u32, func_names: Vec<&String>, fastcalls: &HashSet<String>, func_map: &HashMap<String, &wast::Func>, imports_map: &HashMap<String, (&str, Option<&str>, wast::ItemSig)>, kernel_compile_stats: &mut HashMap<u32, (u32, u32, u32, u32, u32, u32)>) -> Vec<(u32, HashSet<String>)> {
+pub fn form_partitions(writer_ctx: &OpenCLCWriter, num_funcs_in_partition: u32, instr_count_limit: u32, func_copy_limit: u32, func_names: Vec<&String>, fastcalls: &HashSet<String>, func_map: &HashMap<String, &wast::Func>, imports_map: &HashMap<String, (&str, Option<&str>, wast::ItemSig)>, kernel_compile_stats: &mut HashMap<u32, (u32, u32, u32, u32, u32, u32)>, indirect_call_mapping: &HashMap<u32, &wast::Index>) -> Vec<(u32, HashSet<String>)> {
 
     let mut func_set = HashSet::<&String>::from_iter(func_names);
     let mut partitions: Vec<(u32, HashSet<String>)> = vec![];
@@ -131,13 +131,13 @@ pub fn form_partitions(num_funcs_in_partition: u32, instr_count_limit: u32, func
         let mut current_partition_count = 0;
         let mut current_instruction_count = 0;
 
-        let (instr_count, _, _, _, _, _) = function_stats(func_map.get(&f_name.clone()).unwrap(), fastcalls, func_map);
+        let (instr_count, _, _, _, _, _) = function_stats(writer_ctx, f_name.clone(), func_map.get(&f_name.clone()).unwrap(), fastcalls, func_map, indirect_call_mapping);
         current_instruction_count += instr_count;
 
         // Now we can form the partition itself
 
          for func in loop_called_fns {
-             let (instr_count, _, _, _, _, _) = function_stats(func_map.get(&func.clone()).unwrap(), fastcalls, func_map);
+             let (instr_count, _, _, _, _, _) = function_stats(writer_ctx, func.clone(), func_map.get(&func.clone()).unwrap(), fastcalls, func_map, indirect_call_mapping);
              /*
               * If the func is the following:
               * - Func is below inclusion limit
@@ -166,7 +166,7 @@ pub fn form_partitions(num_funcs_in_partition: u32, instr_count_limit: u32, func
          }
 
          for func in called_fns {
-            let (instr_count, _, _, _, _, _) = function_stats(func_map.get(&func.clone()).unwrap(), fastcalls, func_map);
+            let (instr_count, _, _, _, _, _) = function_stats(writer_ctx, func.clone(), func_map.get(&func.clone()).unwrap(), fastcalls, func_map, indirect_call_mapping);
             /*
              * If the func is the following:
              * - Func is below inclusion limit
@@ -282,7 +282,7 @@ pub fn form_partitions(num_funcs_in_partition: u32, instr_count_limit: u32, func
         set.insert(func.clone());
         partitions.push((partition_idx, set));
 
-        let (instr_count, _, _, _, _, _) = function_stats(func_map.get(&func.clone()).unwrap(), fastcalls, func_map);
+        let (instr_count, _, _, _, _, _) = function_stats(writer_ctx, func.clone(), func_map.get(&func.clone()).unwrap(), fastcalls, func_map, indirect_call_mapping);
 
         kernel_compile_stats.insert(partition_idx, (instr_count, 0, 0, 0, 0, 0));
         partition_idx += 1;

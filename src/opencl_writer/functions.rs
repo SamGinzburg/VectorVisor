@@ -1,14 +1,16 @@
 use crate::opencl_writer;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use crate::opencl_writer::mem_interleave::emit_read_u32;
 use crate::opencl_writer::mem_interleave::emit_write_u32;
 use crate::opencl_writer::mem_interleave::emit_read_u64;
 use crate::opencl_writer::mem_interleave::emit_write_u64;
 use crate::opencl_writer::StackCtx;
 use crate::opencl_writer::StackType;
+use crate::opencl_writer::trap::{emit_trap, TrapCode};
 
 use wast::Index::*;
 use wast::TypeDef::*;
+
 
 /*
  * Notes on Irreducible Control Flow (ICF):
@@ -123,7 +125,7 @@ pub fn get_func_result(writer: &opencl_writer::OpenCLCWriter, ty: &wast::TypeUse
 }
 
 
-pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, fn_name: String, idx: wast::Index, call_ret_map: &mut HashMap<&str, u32>, call_ret_idx: &mut u32, function_id_map: &HashMap<&str, u32>, stack_sizes: &mut Vec<u32>, is_indirect: bool, is_fastcall: bool, _debug: bool) -> String {
+pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, fn_name: String, idx: wast::Index, call_ret_map: &mut HashMap<&str, u32>, call_ret_idx: &mut u32, function_id_map: &HashMap<&str, u32>, stack_sizes: &mut Vec<u32>, is_indirect: bool, is_fastcall: bool, indirect_fastcall_param: String, _debug: bool) -> String {
     let mut ret_str = String::from("");
     let id = &match idx {
         wast::Index::Id(id) => id.name().to_string(),
@@ -363,7 +365,7 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stack
     }
 
     // Insert the code for fastcalls here
-    if  is_fastcall {
+    if is_fastcall {
         let calling_func_name = format!("{}{}", "__", id.replace(".", ""));
         let mut parameter_list = String::from("");
 
@@ -371,11 +373,13 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stack
             parameter_list += &format!("{}, ", param);
         }
 
-        if return_size > 0 {
+        if return_size > 0 && !is_indirect {
             let result_register = stack_ctx.vstack_alloc(StackCtx::convert_wast_types(&return_type.unwrap()));
-            ret_str += &format!("\t{} = {}_fastcall({}heap_u32, current_mem_size, max_mem_size, globals_buffer, warp_idx); //calling\n", result_register, calling_func_name, parameter_list);
+            ret_str += &format!("\t{} = {}_fastcall({}heap_u32, current_mem_size, max_mem_size, globals_buffer, warp_idx);\n", result_register, calling_func_name, parameter_list);
+        } else if return_size > 0 {
+            ret_str += &format!("\t{} = {}_fastcall({}heap_u32, current_mem_size, max_mem_size, globals_buffer, warp_idx);\n", indirect_fastcall_param, calling_func_name, parameter_list);
         } else {
-            ret_str += &format!("\t{}_fastcall({}heap_u32, current_mem_size, max_mem_size, globals_buffer, warp_idx); //calling\n", calling_func_name, parameter_list);
+            ret_str += &format!("\t{}_fastcall({}heap_u32, current_mem_size, max_mem_size, globals_buffer, warp_idx);\n", calling_func_name, parameter_list);
         }
     }
 
@@ -601,7 +605,7 @@ pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut St
  *  each other, so we must process them sequentially.
  * 
  */
-pub fn emit_call_indirect(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, call_indirect: &wast::CallIndirect, fn_name: String, _parameter_offset: i32, table: &HashMap<u32, &wast::Index>, call_ret_map: &mut HashMap<&str, u32>, call_ret_idx: &mut u32, function_id_map: HashMap<&str, u32>, stack_sizes: &mut Vec<u32>, debug: bool) -> String {
+pub fn emit_call_indirect(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, call_indirect: &wast::CallIndirect, curr_fn_name: String, fastcalls: &HashSet<String>, table: &HashMap<u32, &wast::Index>, call_ret_map: &mut HashMap<&str, u32>, call_ret_idx: &mut u32, call_indirect_count: &mut u32, function_id_map: HashMap<&str, u32>, stack_sizes: &mut Vec<u32>, call_indirect_type_index: String, debug: bool) -> String {
     let mut result = String::from("");
     // set up a switch case statement, we read the last value on the stack and determine what function we are going to call
     // this adds code bloat, but it reduces the complexity of the compiler.
@@ -651,10 +655,66 @@ pub fn emit_call_indirect(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut
         _ => (),
     };
 
-    // Save the context before entering the switch case
-    result += &stack_ctx.save_context(false);
-
+    let save_ctx = stack_ctx.save_context(false);
     let restore_ctx = stack_ctx.restore_context(false, false);
+
+    // First, generate the code for fastcall optimized cases for the indirect call
+    // Allocate a register for return values
+    let result_register = if result_types.len() > 0 {
+        stack_ctx.vstack_alloc(StackCtx::convert_wast_types(&result_types[0]))
+    } else {
+        String::from("")
+    };
+
+    // generate a temp var to store the result of attempting to perform an optmized indirect call
+    
+    result += &format!("\tuchar indirect{} = 1;\n", call_indirect_count);
+
+    result += &format!("\t{}\n",
+                       &format!("switch({}) {{", index_register));
+    /* Only emit cases here that:
+     * 1) match the type signature
+     * 2) are fastcall optimized
+     * 3) are not recursive
+     */ 
+    for (key, value) in table {
+        let f_name = match **value {
+            wast::Index::Id(id) => id.name().to_string(),
+            wast::Index::Num(val, _) => format!("func_{}", val),
+        };
+        let func_type_signature = &writer.func_map.get(&f_name).unwrap().ty;
+        let func_type_index = match func_type_signature.index {
+            Some(wast::Index::Id(id)) => id.name().to_string(),
+            Some(wast::Index::Num(val, _)) => format!("t{}", val),
+            None => panic!("Only type indicies supported for call_indirect in call_indirect (functions.rs)"),
+        };
+
+        if fastcalls.contains(&f_name) &&
+           curr_fn_name != f_name &&
+           func_type_index == call_indirect_type_index {
+            result += &format!("\t\t{}\n", format!("case {}:", key));
+            result += &format!("{}", emit_fn_call(writer, stack_ctx, curr_fn_name.clone(), **value, call_ret_map, call_ret_idx, &function_id_map, stack_sizes, true, true, result_register.clone(), debug));
+            result += &format!("\t\t\t{}\n", format!("break;"));
+        }
+    }
+
+    // emit a default case, to handle lookups to invalid indicies!
+    result += &format!("\t\t{}\n", "default:");
+    // Set a flag indicating we didn't perform the fastcall
+    result += &format!("\t\t\tindirect{} = 0;\n", call_indirect_count);
+    result += &format!("\t\t\t{}\n", "break;");
+    result += &format!("\t}}\n");
+
+
+    // If we successfully performed a hypercall the temp var is now set to true, so we can check that to see if we can skip
+    result += &format!("\tif (indirect{}) {{\n", call_indirect_count);
+    result += &format!("\t\tgoto call_indirect_fastpath_{};\n", call_indirect_count);
+    result += &format!("\t}}\n");
+
+
+    // After trying to perform fastcalls, we check the remaining cases
+    // Save the context before entering the switch case
+    result += &save_ctx;
 
     // Push the parameters to the stack
     for (param, ty) in stack_params.iter().zip(stack_params_types.iter()) {
@@ -686,28 +746,37 @@ pub fn emit_call_indirect(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut
         }
     }
 
-    // Allocate a register for return values
-    let result_register = if result_types.len() > 0 {
-        stack_ctx.vstack_alloc(StackCtx::convert_wast_types(&result_types[0]))
-    } else {
-        String::from("")
-    };
-
     result += &format!("\t{}\n",
                        &format!("switch({}) {{", index_register));
     // generate all of the cases in the table, all uninitialized values will trap to the default case
     for (key, value) in table {
-        result += &format!("\t\t{}\n", format!("case {}:", key));
+        let f_name = match **value {
+            wast::Index::Id(id) => id.name().to_string(),
+            wast::Index::Num(val, _) => format!("func_{}", val),
+        };
+        let func_type_signature = &writer.func_map.get(&f_name).unwrap().ty;
+        let func_type_index = match func_type_signature.index {
+            Some(wast::Index::Id(id)) => id.name().to_string(),
+            Some(wast::Index::Num(val, _)) => format!("t{}", val),
+            None => panic!("Only type indicies supported for call_indirect in call_indirect (functions.rs)"),
+        };
+
         // emit the function call here!
-        // we never emit fastcall code for indirect calls
-        result += &format!("{}", emit_fn_call(writer, stack_ctx, fn_name.clone(), **value, call_ret_map, call_ret_idx, &function_id_map, stack_sizes, true, false, debug));
-        result += &format!("\t\t\t{}\n", format!("break;"));
+        if func_type_index == call_indirect_type_index {
+            result += &format!("\t\t{}\n", format!("case {}:", key));
+            result += &format!("{}", emit_fn_call(writer, stack_ctx, curr_fn_name.clone(), **value, call_ret_map, call_ret_idx, &function_id_map, stack_sizes, true, false, String::from(""), debug));
+            result += &format!("\t\t\t{}\n", format!("break;"));
+        }
     }
 
     // emit a default case, to handle lookups to invalid indicies!
     result += &format!("\t\t{}\n", "default:");
+    result += &format!("\t\t\t{}\n", emit_trap(TrapCode::TrapCallIndirectNotFound, true));
     result += &format!("\t\t\t{}\n", "return;");
     result += &format!("\t}}\n");
+
+    // Restore the context
+    result += &restore_ctx;
 
     // Read the result value into a register
     if result_types.len() > 0 {
@@ -739,8 +808,9 @@ pub fn emit_call_indirect(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut
         }
     }
 
-    // Restore the context
-    result += &restore_ctx;
+    result += &format!("\tcall_indirect_fastpath_{}:\n", call_indirect_count);
+
+    *call_indirect_count += 1;
 
     result
 }

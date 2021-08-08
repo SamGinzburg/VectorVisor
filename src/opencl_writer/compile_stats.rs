@@ -11,11 +11,12 @@
 use std::convert::TryInto;
 use std::collections::HashSet;
 use std::collections::HashMap;
+use crate::opencl_writer::OpenCLCWriter;
 
 
-pub fn function_stats(func: &wast::Func, fastcalls: &HashSet<String>, func_map: &HashMap<String, &wast::Func>) -> (u32, u32, u32, u32, u32, u32) {
+pub fn function_stats(writer_ctx: &OpenCLCWriter, curr_fn_name: String, func: &wast::Func, fastcalls: &HashSet<String>, func_map: &HashMap<String, &wast::Func>, indirect_call_mapping: &HashMap<u32, &wast::Index>) -> (u32, u32, u32, u32, u32, u32) {
 
-    let mut total_instr_count: u32 = 0;
+    let mut total_instr_count: u32;
     let mut total_func_count: u32 = 0;
     let mut total_fastcall_count: u32 = 0;
     let mut total_indirect_count: u32 = 0;
@@ -43,7 +44,7 @@ pub fn function_stats(func: &wast::Func, fastcalls: &HashSet<String>, func_map: 
                             // get the func
                             let func = func_map.get(id).unwrap();
                             // Look up the compile stats for the fastcall and add it to our own
-                            let (nested_total_instr_count, nested_total_func_count, nested_total_fastcall_count, nested_total_indirect_count, nested_total_block_count, nested_total_loop_count) = function_stats(func, fastcalls, func_map);
+                            let (nested_total_instr_count, nested_total_func_count, nested_total_fastcall_count, nested_total_indirect_count, nested_total_block_count, nested_total_loop_count) = function_stats(writer_ctx, curr_fn_name.clone(), func, fastcalls, func_map, indirect_call_mapping);
                             total_instr_count += nested_total_instr_count;
                             total_func_count += nested_total_func_count;
                             total_indirect_count += nested_total_indirect_count;
@@ -54,7 +55,59 @@ pub fn function_stats(func: &wast::Func, fastcalls: &HashSet<String>, func_map: 
                             total_func_count += 1;
                         }
                     },
-                    wast::Instruction::CallIndirect(_) => total_indirect_count += 1,
+                    wast::Instruction::CallIndirect(call_indirect) => {
+                        // Check how many fastcalls we are emitting here
+
+                        match (call_indirect.ty.index.as_ref(), call_indirect.ty.inline.as_ref()) {
+                            (Some(index), _) => {
+                                // if we have an index, we need to look it up in the global structure
+                                let type_index = match index {
+                                    wast::Index::Num(n, _) => format!("t{}", n),
+                                    wast::Index::Id(i) => i.name().to_string(),
+                                };
+                    
+                                let indirect_func_type = match writer_ctx.types.get(&type_index).unwrap() {
+                                    wast::TypeDef::Func(ft) => ft,
+                                    _ => panic!("Indirect call cannot have a type of something other than a func"),
+                                };
+    
+                                // We only need to call functions with matching type signatures, the rest would trap
+                                for func_id in indirect_call_mapping.values() {
+                                    let f_name = match func_id {
+                                        wast::Index::Id(id) => id.name().to_string(),
+                                        wast::Index::Num(val, _) => format!("func_{}", val),
+                                    };
+                                    let func_type_signature = &writer_ctx.func_map.get(&f_name).unwrap().ty;
+    
+                                    let func_type_index = match func_type_signature.index {
+                                        Some(wast::Index::Id(id)) => id.name().to_string(),
+                                        Some(wast::Index::Num(val, _)) => format!("t{}", val),
+                                        None => panic!("Only type indicies supported for call_indirect in vstack pass"),
+                                    };
+    
+                                    if func_type_index == type_index &&
+                                       fastcalls.contains(&f_name) &&
+                                       f_name != curr_fn_name {
+                                        total_fastcall_count += 1;
+                                        // get the func
+                                        let func = func_map.get(&f_name).unwrap();
+                                        // Look up the compile stats for the fastcall and add it to our own
+                                        let (nested_total_instr_count, nested_total_func_count, nested_total_fastcall_count, nested_total_indirect_count, nested_total_block_count, nested_total_loop_count) = function_stats(writer_ctx, f_name, func, fastcalls, func_map, indirect_call_mapping);
+                                        total_instr_count += nested_total_instr_count;
+                                        total_func_count += nested_total_func_count;
+                                        total_indirect_count += nested_total_indirect_count;
+                                        total_loop_count += nested_total_loop_count;
+                                        total_block_count += nested_total_block_count;
+                                        total_fastcall_count += nested_total_fastcall_count;            
+                                    }
+                                }
+                            },
+                            (_, Some(_inline)) => panic!("Inline types for call_indirect not implemented yet (vstack)"),
+                            _ => (),
+                        };
+    
+                        total_indirect_count += 1;
+                    },
                     wast::Instruction::Block(_) => total_block_count += 1,
                     wast::Instruction::Loop(_) => total_loop_count += 1,
                     _ => (),
@@ -63,8 +116,6 @@ pub fn function_stats(func: &wast::Func, fastcalls: &HashSet<String>, func_map: 
         },
         _ => panic!("Unknown function type in function_stats"),
     };
-
-    
 
     (total_instr_count, total_func_count, total_fastcall_count, total_indirect_count, total_block_count, total_loop_count)
 }

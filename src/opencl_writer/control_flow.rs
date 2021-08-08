@@ -261,9 +261,12 @@ pub fn emit_loop(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCt
 pub fn emit_block(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _block: &wast::BlockType, _label: String, _branch_idx_u32: u32, _fn_name: &str, _function_id_map: HashMap<&str, u32>, is_fastcall: bool, _debug: bool) -> String {
     let mut result: String = String::from("");
 
+    /*
+    // We don't need to save the context for blocks
     if !is_fastcall {
         result += &stack_ctx.save_context(false);
     }
+    */
 
     stack_ctx.vstack_push_stack_frame(true);
     stack_ctx.vstack_push_stack_info(stack_ctx.stack_frame_size().try_into().unwrap());

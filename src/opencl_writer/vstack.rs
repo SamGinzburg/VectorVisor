@@ -105,7 +105,7 @@ impl<'a> StackCtx {
      * Parse a function and generate a stack context for it.
      * We can statically determine the maximum required amount of intermediate values
      */
-    pub fn initialize_context(writer_ctx: &OpenCLCWriter, instructions: &Box<[Instruction<'a>]>, local_param_types: &HashMap<String, ValType>, local_offsets: &HashMap<String, u32>, is_param: &HashMap<String, bool>, fastcalls: HashSet<String>, param_offset: i32, indirect_call_len: u32, is_gpu: bool) -> StackCtx {
+    pub fn initialize_context(writer_ctx: &OpenCLCWriter, instructions: &Box<[Instruction<'a>]>, local_param_types: &HashMap<String, ValType>, local_offsets: &HashMap<String, u32>, is_param: &HashMap<String, bool>, fastcalls: HashSet<String>, param_offset: i32, indirect_call_len: u32, indirect_call_mapping: &HashMap<u32, &wast::Index>, curr_fn_name: String, is_gpu: bool) -> StackCtx {
         let mut stack_sizes: Vec<StackType> = vec![];
         
         // Track which loops we can optimize for later
@@ -975,9 +975,6 @@ impl<'a> StackCtx {
                     // Taint open loops
                     taint_open_loops(&mut tainted_loops, open_loop_stack.clone());
 
-                    // Track the number of function call stubs to generate
-                    num_fn_calls += indirect_call_len;
-
                     // Check for types
                     match (call_indirect.ty.index.as_ref(), call_indirect.ty.inline.as_ref()) {
                         (Some(index), _) => {
@@ -987,13 +984,44 @@ impl<'a> StackCtx {
                                 Id(i) => i.name().to_string(),
                             };
                 
-                            let func_type = match writer_ctx.types.get(&type_index).unwrap() {
+                            let indirect_func_type = match writer_ctx.types.get(&type_index).unwrap() {
                                 wast::TypeDef::Func(ft) => ft,
                                 _ => panic!("Indirect call cannot have a type of something other than a func"),
                             };
 
+                            // Track how many targetable indirect function calls match the given type
+                            let mut matching_types = 0;
+                            let mut fastcall_opt = 0;
+
+                            // We only need to call functions with matching type signatures, the rest would trap
+                            for func_id in indirect_call_mapping.values() {
+                                let f_name = match func_id {
+                                    wast::Index::Id(id) => id.name().to_string(),
+                                    wast::Index::Num(val, _) => format!("func_{}", val),
+                                };
+                                let func_type_signature = &writer_ctx.func_map.get(&f_name).unwrap().ty;
+
+                                let func_type_index = match func_type_signature.index {
+                                    Some(wast::Index::Id(id)) => id.name().to_string(),
+                                    Some(wast::Index::Num(val, _)) => format!("t{}", val),
+                                    None => panic!("Only type indicies supported for call_indirect in vstack pass"),
+                                };
+
+                                if func_type_index == type_index {
+                                    matching_types += 1;
+                                    if fastcalls.contains(&f_name) && f_name != curr_fn_name {
+                                        fastcall_opt += 1;
+                                    }
+                                }
+
+                            }
+
+                            // Track the number of function call stubs to generate
+                            // We only generate stubs for non-fastcalls
+                            num_fn_calls += matching_types - fastcall_opt;
+
                             // First, pop off the parameters
-                            for (_, _, param_type) in func_type.params.iter() {
+                            for (_, _, param_type) in indirect_func_type.params.iter() {
                                 match param_type {
                                     ValType::I32 => {
                                         current_i32_count -= 1;
@@ -1012,7 +1040,7 @@ impl<'a> StackCtx {
                             }
                 
                             // Next, push the result(s) back
-                            for return_type in func_type.results.iter() {
+                            for return_type in indirect_func_type.results.iter() {
                                 update_by_valtype(return_type,
                                     &mut current_i32_count, &mut max_i32_count,
                                     &mut current_i64_count, &mut max_i64_count,
@@ -1022,7 +1050,7 @@ impl<'a> StackCtx {
                         },
                         (_, Some(_inline)) => panic!("Inline types for call_indirect not implemented yet (vstack)"),
                         _ => (),
-                    };                
+                    };
                 },
                 wast::Instruction::I32Eq => {
                     stack_sizes.pop();
@@ -2232,24 +2260,6 @@ impl<'a> StackCtx {
 
             let (i32_range, i64_range, f32_range, f64_range) = self.generate_intermediate_ranges();
             let sfp_val = emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx");
-
-            // Restore the stack context
-            /*
-            let mut stack_frame_size = 0;
-            for _ in i32_range.clone() {
-                stack_frame_size += 1;
-            }
-            for _ in i64_range.clone() {
-                stack_frame_size += 2;
-            }
-            for _ in f32_range.clone() {
-                stack_frame_size += 1
-            }
-            for _ in f64_range.clone() {
-                stack_frame_size += 2;
-            }
-            ret_str += &format!("\t*sp -= {};\n", stack_frame_size);
-            */
 
             for idx in i32_range {
                 let i_name = self.i32_stack.get(idx).unwrap();

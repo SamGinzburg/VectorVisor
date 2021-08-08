@@ -293,6 +293,7 @@ impl<'a> OpenCLCWriter<'_> {
                          block_name_count: &mut u32,
                          if_name_count: &mut u32,
                          loop_name_count: &mut u32,
+                         call_indirect_count: &mut u32,
                          fastcall_set: &HashSet<String>,
                          // emit an optimized function that does not require a CPS-style transformation
                          is_fastcall: bool,
@@ -913,7 +914,7 @@ impl<'a> OpenCLCWriter<'_> {
 
                             // We emit fastcalls either if the function itself is a fastcall, or if we are a CPS-style function making a fastcall
                             let make_fastcall = is_fastcall || fastcall_set.contains(id);
-                            emit_fn_call(&self, stack_ctx, fn_name.to_string(), *idx, call_ret_map, call_ret_idx, &function_id_map, stack_sizes, false, make_fastcall, debug)
+                            emit_fn_call(&self, stack_ctx, fn_name.to_string(), *idx, call_ret_map, call_ret_idx, &function_id_map, stack_sizes, false, make_fastcall, String::from(""), debug)
                         },
                         // we have an import that isn't a system call...
                         None => String::from("")
@@ -921,14 +922,21 @@ impl<'a> OpenCLCWriter<'_> {
                 }
             },
             wast::Instruction::CallIndirect(call_indirect) => {
-                // we don't need to do table lookups because we are assuming that there can be at most 1 table
-                /*
-                let table: &str = match call_indirect.table {
-                    wast::Index::Id(id) => id.name(),
-                    wast::Index::Num(_, _) => panic!(""),
+                // Check for types
+                let call_indirect_type_index = match (call_indirect.ty.index.as_ref(), call_indirect.ty.inline.as_ref()) {
+                    (Some(index), _) => {
+                        // if we have an index, we need to look it up in the global structure
+                        let type_index = match index {
+                            wast::Index::Num(n, _) => format!("t{}", n),
+                            wast::Index::Id(i) => i.name().to_string(),
+                        };
+
+                        type_index
+                    },
+                    (_, Some(_inline)) => panic!("Inline types for call_indirect not implemented yet (main pass opencl_writer.rs)"),
+                    _ => panic!("Unable to find types for call_indirect (main pass opencl_writer.rs)"),
                 };
-                */
-                emit_call_indirect(&self, stack_ctx, call_indirect, fn_name.to_string(), parameter_offset, indirect_call_mapping, call_ret_map, call_ret_idx, function_id_map, stack_sizes, debug)
+                emit_call_indirect(&self, stack_ctx, call_indirect, fn_name.to_string(), fastcall_set, indirect_call_mapping, call_ret_map, call_ret_idx, call_indirect_count, function_id_map, stack_sizes, call_indirect_type_index, debug)
             },
             wast::Instruction::I32Eq => {
                 stack_sizes.pop();
@@ -1366,7 +1374,7 @@ impl<'a> OpenCLCWriter<'_> {
 
                 // Now that we have the type info for the parameters and locals, we can generate the stack context
                 // First, generate the stack context for the function
-                let mut stack_ctx = StackCtx::initialize_context(&self, &expression.instrs, &local_type_info, &local_parameter_stack_offset, &is_param, fastcall_set.clone(), param_offset, indirect_call_mapping.len().try_into().unwrap(), is_gpu);
+                let mut stack_ctx = StackCtx::initialize_context(&self, &expression.instrs, &local_type_info, &local_parameter_stack_offset, &is_param, fastcall_set.clone(), param_offset, indirect_call_mapping.len().try_into().unwrap(), indirect_call_mapping, fn_name.clone(), is_gpu);
 
                 // function entry point
                 // strip illegal chars from function name
@@ -1527,6 +1535,11 @@ impl<'a> OpenCLCWriter<'_> {
                 let if_name_count: &mut u32  = &mut 0;
                 let loop_name_count: &mut u32  = &mut 0;
 
+                // used for tracking fastcall optimizations for call_indirect
+                let call_indirect_count: &mut u32  = &mut 0;
+
+
+
                 // get the list of instructions first, to solve a lifetime mismatch error
                 // (we can't just iterate because the control stack would have a different lifetime)
 
@@ -1551,6 +1564,7 @@ impl<'a> OpenCLCWriter<'_> {
                                                             block_name_count,
                                                             if_name_count,
                                                             loop_name_count,
+                                                            call_indirect_count,
                                                             &fastcall_set,
                                                             is_fastcall,
                                                             // if we are compiling a CPU kernel
@@ -2365,7 +2379,7 @@ r#"
 
         // Compute the function groups, we will then enumerate the groups to emit the functions
         // kernel_partition_mapping get the partition ID from a function idx
-        let partitions = form_partitions(max_partitions, max_loc_in_partition, max_duplicate_funcs, self.func_map.keys().collect(), &fast_function_set, &func_mapping, &self.imports_map, &mut kernel_compile_stats);
+        let partitions = form_partitions(&self, max_partitions, max_loc_in_partition, max_duplicate_funcs, self.func_map.keys().collect(), &fast_function_set, &func_mapping, &self.imports_map, &mut kernel_compile_stats, indirect_call_mapping);
 
         for (partition_idx, partition) in partitions.clone() {
             let mut function_idx_label_temp: HashMap<String, u32> = HashMap::new();
