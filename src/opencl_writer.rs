@@ -914,7 +914,7 @@ impl<'a> OpenCLCWriter<'_> {
 
                             // We emit fastcalls either if the function itself is a fastcall, or if we are a CPS-style function making a fastcall
                             let make_fastcall = is_fastcall || fastcall_set.contains(id);
-                            emit_fn_call(&self, stack_ctx, fn_name.to_string(), *idx, call_ret_map, call_ret_idx, &function_id_map, stack_sizes, false, make_fastcall, String::from(""), debug)
+                            emit_fn_call(&self, stack_ctx, fn_name.to_string(), *idx, call_ret_map, call_ret_idx, &function_id_map, stack_sizes, false, make_fastcall, String::from(""), vec![], debug)
                         },
                         // we have an import that isn't a system call...
                         None => String::from("")
