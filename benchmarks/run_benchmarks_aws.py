@@ -44,6 +44,9 @@ userdata = """#cloud-config
      - cd ..
      - cd nlp-count-vectorizer/
      - ~/.cargo/bin/cargo build --release
+     - cd ..
+     - cd imageblur/
+     - ~/.cargo/bin/cargo build --release
 """ % region
 
 
@@ -91,6 +94,10 @@ userdata_ubuntu = """#cloud-config
      - cd nlp-count-vectorizer/
      - sudo ~/.cargo/bin/cargo build --release
      - wasm-opt target/wasm32-wasi/release/nlp-count-vectorizer.wasm -O4 -c -o target/wasm32-wasi/release/nlp-count-vectorizer-opt.wasm
+     - cd ..
+     - cd imageblur/
+     - sudo ~/.cargo/bin/cargo build --release
+     - wasm-opt target/wasm32-wasi/release/imageblur.wasm -O4 -c -o target/wasm32-wasi/release/imageblur-opt.wasm
 """
 
 
@@ -418,6 +425,101 @@ def run_average_bench():
     with open("cpu_bench_average.txt", "w") as text_file:
         text_file.write(str(output))
 
+
+def run_image_bench():
+    run_image_command_wasmtime = """#!/bin/bash
+    sudo su
+    ulimit -n 65536
+    x=$(cloud-init status)
+    until [ "$x" == "status: done" ]; do
+    sleep 10
+    x=$(cloud-init status)
+    done
+
+    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/imageblur/target/wasm32-wasi/release/imageblur-opt.wasm --ip=0.0.0.0 --heap=4194304 --stack=262144 --hcallsize=524288 --partition=true --serverless=true --vmcount=3072 --wasmtime=true &> /tmp/imageblur.log &
+    """
+
+    run_command(run_image_command_wasmtime, "run_imageblur_command_wasmtime", cpu_bench_instance[0].id)
+
+    run_image_command = """#!/bin/bash
+    sudo su
+    ulimit -n 65536
+    x=$(cloud-init status)
+    until [ "$x" == "status: done" ]; do
+    sleep 10
+    x=$(cloud-init status)
+    done
+
+    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/imageblur/target/wasm32-wasi/release/imageblur-opt.wasm --ip=0.0.0.0 --heap=4194304 --stack=262144 --hcallsize=524288 --partition=true --serverless=true --vmcount=3072 --vmgroups=1 --maxdup=3 --disablefastcalls=false &> /tmp/imageblur.log &
+    """
+
+    run_command(run_image_command, "run_imageblur_gpu_command", gpu_instance[0].id)
+
+    # Now set up the invoker
+
+    run_invoker = """#!/bin/bash
+    sudo su
+    ulimit -n 65536
+    mkdir -p ~/gocache/
+    mkdir -p ~/xdg/
+    export GOCACHE=~/gocache/
+    export XDG_CACHE_HOME=~/xdg/
+
+    x=$(cloud-init status)
+    until [ "$x" == "status: done" ]; do
+    sleep 10
+    x=$(cloud-init status)
+    done
+
+    go run /tmp/wasm2opencl/benchmarks/imageblur/run_image_blur.go {addr} 8000 {target_rps} 1 60
+
+    go run /tmp/wasm2opencl/benchmarks/imageblur/run_image_blur.go {addr} 8000 {target_rps} 1 60
+    """.format(addr=gpu_instance[0].private_dns_name, input_size=1000, target_rps=target_rps)
+
+
+    command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
+
+    time.sleep(20)
+
+    # Block until benchmark is complete
+    output = block_on_command(command_id, invoker_instance[0].id)
+    print (output)
+
+    # save output
+    with open("gpu_bench_imageblur.txt", "w") as text_file:
+        text_file.write(str(output))
+
+    run_invoker_wasmtime = """#!/bin/bash
+    sudo su
+    ulimit -n 65536
+    mkdir -p ~/gocache/
+    mkdir -p ~/xdg/
+    export GOCACHE=~/gocache/
+    export XDG_CACHE_HOME=~/xdg/
+
+    x=$(cloud-init status)
+    until [ "$x" == "status: done" ]; do
+    sleep 10
+    x=$(cloud-init status)
+    done
+
+    go run /tmp/wasm2opencl/benchmarks/imageblur/run_image_blur.go {addr} 8000 {target_rps} 1 60
+
+    go run /tmp/wasm2opencl/benchmarks/imageblur/run_image_blur.go {addr} 8000 {target_rps} 1 60
+    """.format(addr=cpu_bench_instance[0].private_dns_name, input_size=1000, target_rps=target_rps)
+
+    command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
+
+    time.sleep(20)
+
+    # Block until benchmark is complete
+    output = block_on_command(command_id, invoker_instance[0].id)
+    print (output)
+    # save output
+    with open("cpu_bench_imageblur.txt", "w") as text_file:
+        text_file.write(str(output))
+
+
 def run_nlp_count_bench():
     run_nlp_command_wasmtime = """#!/bin/bash
     sudo su
@@ -613,12 +715,15 @@ ssm_client = boto3.client('ssm')
 #cleanup()
 
 # run NLP bench
-run_nlp_count_bench()
+#run_nlp_count_bench()
 
 #cleanup()
 
 # run average bench
 #run_average_bench()
+
+# run image bench
+run_image_bench()
 
 # clean up all instances at end
 ec2.instances.filter(InstanceIds = instance_id_list).terminate()

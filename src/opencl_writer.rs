@@ -2300,7 +2300,9 @@ r#"
             let hset_clone = hset.clone();
             let intersection = fastcall_set.intersection(&hset_clone);
             for func in intersection {
-                let (called_loop, called) = get_called_funcs(self.func_map.get(&func.to_string()).unwrap(),
+                let (called_loop, called) = get_called_funcs(self,
+                                                             indirect_call_mapping,
+                                                             self.func_map.get(&func.to_string()).unwrap(),
                                                              &HashSet::new(),
                                                              &func_mapping,
                                                              &self.imports_map,

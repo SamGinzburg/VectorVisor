@@ -9,7 +9,7 @@ use std::convert::TryInto;
  * Get the names of:
  * - Called functions inside loops, Called functions
  */
-pub fn get_called_funcs(func: &wast::Func, fastcalls: &HashSet<String>, func_map: &HashMap<String, &wast::Func>, imports_map: &HashMap<String, (&str, Option<&str>, wast::ItemSig)>, visited_funcs: &mut HashSet<String>) -> (Vec<String>, Vec<String>) {
+pub fn get_called_funcs(writer_ctx: &OpenCLCWriter, indirect_call_mapping: &HashMap<u32, &wast::Index>, func: &wast::Func, fastcalls: &HashSet<String>, func_map: &HashMap<String, &wast::Func>, imports_map: &HashMap<String, (&str, Option<&str>, wast::ItemSig)>, visited_funcs: &mut HashSet<String>) -> (Vec<String>, Vec<String>) {
     let mut fn_call_in_loop: Vec<String> = vec![];
     let mut fn_call: Vec<String> = vec![];
 
@@ -38,7 +38,7 @@ pub fn get_called_funcs(func: &wast::Func, fastcalls: &HashSet<String>, func_map
                                 // Also track nested function calls
                                 if !visited_funcs.contains(id) {
                                     visited_funcs.insert(id.to_string());
-                                    let (nested_fn_call_in_loop, nested_fn_calls) = get_called_funcs(func_map.get(id).unwrap(), fastcalls, func_map, imports_map, visited_funcs);
+                                    let (nested_fn_call_in_loop, nested_fn_calls) = get_called_funcs(writer_ctx, indirect_call_mapping, func_map.get(id).unwrap(), fastcalls, func_map, imports_map, visited_funcs);
                                     fn_call_in_loop.extend(nested_fn_call_in_loop);
                                     fn_call.extend(nested_fn_calls);    
                                 }
@@ -46,7 +46,7 @@ pub fn get_called_funcs(func: &wast::Func, fastcalls: &HashSet<String>, func_map
                                 fn_call.push(id.to_string());
                                 if !visited_funcs.contains(id) {
                                     visited_funcs.insert(id.to_string());
-                                    let (nested_fn_call_in_loop, nested_fn_calls) = get_called_funcs(func_map.get(id).unwrap(), fastcalls, func_map, imports_map, visited_funcs);
+                                    let (nested_fn_call_in_loop, nested_fn_calls) = get_called_funcs(writer_ctx, indirect_call_mapping, func_map.get(id).unwrap(), fastcalls, func_map, imports_map, visited_funcs);
                                     fn_call_in_loop.extend(nested_fn_call_in_loop);
                                     fn_call.extend(nested_fn_calls);    
                                 }
@@ -68,6 +68,79 @@ pub fn get_called_funcs(func: &wast::Func, fastcalls: &HashSet<String>, func_map
                     wast::Instruction::End(_) => {
                         if control_stack.pop().unwrap() {
                             nested_loop_count -= 1;
+                        }
+                    },
+                    wast::Instruction::CallIndirect(call_indirect) => {
+                        // Add possible indirect targets to the partition that match type
+                        // signatures
+                        match (call_indirect.ty.index.as_ref(), call_indirect.ty.inline.as_ref()) {
+                            (Some(index), _) => {
+                                let type_index = match index {
+                                    wast::Index::Num(n, _) => format!("t{}", n),
+                                    wast::Index::Id(i) => i.name().to_string(),
+                                };
+
+                                let indirect_func_type = match writer_ctx.types.get(&type_index).unwrap() {
+                                    wast::TypeDef::Func(ft) => ft,
+                                    _ => panic!("Indirect call cannot have a type of something other than a func"),
+                                };
+
+                                for func_id in indirect_call_mapping.values() {
+                                    let f_name = match func_id {
+                                        wast::Index::Id(id) => id.name().to_string(),
+                                        wast::Index::Num(val, _) => format!("func_{}", val),
+                                    };
+                                    let func_type_signature = &writer_ctx.func_map.get(&f_name).unwrap().ty;
+
+                                    let func_type_index = match func_type_signature.index {
+                                        Some(wast::Index::Id(id)) => id.name().to_string(),
+                                        Some(wast::Index::Num(val, _)) => format!("t{}", val),
+                                        None => panic!("Only type indicies supported for call_indirect in get_called_funcs"),
+                                    };
+
+                                    // We add the speculated call target if:
+                                    // 1) The type matches
+                                    // 2) The call is non recursive
+                                    // We explicitly allow non-fastcalls to be targeted here
+                                    // We also only capture the first 16 calls to avoid partition
+                                    // size explosion.
+                                    if func_type_index == type_index {
+                                        if !imports_map.contains_key(&f_name) {
+                                            if nested_loop_count > 0 {
+                                                fn_call_in_loop.push(f_name.to_string());
+                                                // Also track nested function calls
+                                                if !visited_funcs.contains(&f_name) {
+                                                    visited_funcs.insert(f_name.to_string());
+                                                    let (nested_fn_call_in_loop, nested_fn_calls) = get_called_funcs(writer_ctx,
+                                                                                                                     indirect_call_mapping,
+                                                                                                                     func_map.get(&f_name).unwrap(),
+                                                                                                                     fastcalls,
+                                                                                                                     func_map,
+                                                                                                                     imports_map,
+                                                                                                                     visited_funcs);
+                                                    fn_call_in_loop.extend(nested_fn_call_in_loop);
+                                                    fn_call.extend(nested_fn_calls);    
+                                                }
+                                            } else {
+                                                fn_call.push(f_name.to_string());
+                                                if !visited_funcs.contains(&f_name) {
+                                                    visited_funcs.insert(f_name.to_string());
+                                                    let (nested_fn_call_in_loop, nested_fn_calls) = get_called_funcs(writer_ctx,
+                                                                                                                     indirect_call_mapping,
+                                                                                                                     func_map.get(&f_name).unwrap(),
+                                                                                                                     fastcalls,
+                                                                                                                     func_map,
+                                                                                                                     imports_map,
+                                                                                                                     visited_funcs);
+                                                    fn_call_in_loop.extend(nested_fn_call_in_loop);
+                                                    fn_call.extend(nested_fn_calls);    
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            _ => (),
                         }
                     },
                     _ => (),
@@ -126,7 +199,7 @@ pub fn form_partitions(writer_ctx: &OpenCLCWriter, num_funcs_in_partition: u32, 
 
         current_partition.insert(String::from(f_name));
 
-        let (loop_called_fns, called_fns) = get_called_funcs(func_map.get(&f_name.clone()).unwrap(), fastcalls, func_map, imports_map, &mut HashSet::new());
+        let (loop_called_fns, called_fns) = get_called_funcs(writer_ctx, indirect_call_mapping, func_map.get(&f_name.clone()).unwrap(), fastcalls, func_map, imports_map, &mut HashSet::new());
 
         let mut current_partition_count = 0;
         let mut current_instruction_count = 0;
