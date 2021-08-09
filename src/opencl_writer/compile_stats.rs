@@ -79,12 +79,14 @@ pub fn function_stats(writer_ctx: &OpenCLCWriter, curr_fn_name: String, func: &w
                                     };
                                     let func_type_signature = &writer_ctx.func_map.get(&f_name).unwrap().ty;
     
-                                    let func_type_index = match func_type_signature.index {
+                                    let _func_type_index = match func_type_signature.index {
                                         Some(wast::Index::Id(id)) => id.name().to_string(),
                                         Some(wast::Index::Num(val, _)) => format!("t{}", val),
                                         None => panic!("Only type indicies supported for call_indirect in vstack pass"),
                                     };
     
+                                    /*
+                                    // TODO: figure out a way to renable fastcalls within call_indirect
                                     if func_type_index == type_index &&
                                        fastcalls.contains(&f_name) &&
                                        f_name != curr_fn_name {
@@ -98,8 +100,9 @@ pub fn function_stats(writer_ctx: &OpenCLCWriter, curr_fn_name: String, func: &w
                                         total_indirect_count += nested_total_indirect_count;
                                         total_loop_count += nested_total_loop_count;
                                         total_block_count += nested_total_block_count;
-                                        total_fastcall_count += nested_total_fastcall_count;            
+                                        total_fastcall_count += nested_total_fastcall_count;
                                     }
+                                    */
                                 }
                             },
                             (_, Some(_inline)) => panic!("Inline types for call_indirect not implemented yet (vstack)"),

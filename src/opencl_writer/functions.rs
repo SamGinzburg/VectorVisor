@@ -683,18 +683,21 @@ pub fn emit_call_indirect(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut
      * 2) are fastcall optimized
      * 3) are not recursive
      */ 
-    for (key, value) in table {
+    for (_key, value) in table {
         let f_name = match **value {
             wast::Index::Id(id) => id.name().to_string(),
             wast::Index::Num(val, _) => format!("func_{}", val),
         };
         let func_type_signature = &writer.func_map.get(&f_name).unwrap().ty;
-        let func_type_index = match func_type_signature.index {
+        let _func_type_index = match func_type_signature.index {
             Some(wast::Index::Id(id)) => id.name().to_string(),
             Some(wast::Index::Num(val, _)) => format!("t{}", val),
             None => panic!("Only type indicies supported for call_indirect in call_indirect (functions.rs)"),
         };
 
+        /*
+        // fastcalls as indirect calls appear to overflow the stack, related to hardware stack limits
+        // TODO: figure out a way to re-enable this
         if fastcalls.contains(&f_name) &&
            curr_fn_name != f_name &&
            func_type_index == call_indirect_type_index {
@@ -702,6 +705,7 @@ pub fn emit_call_indirect(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut
             result += &format!("{}", emit_fn_call(writer, stack_ctx, curr_fn_name.clone(), **value, call_ret_map, call_ret_idx, &function_id_map, stack_sizes, true, true, result_register.clone(), stack_params.clone(), debug));
             result += &format!("\t\t\t{}\n", format!("break;"));
         }
+        */
     }
 
     // emit a default case, to handle lookups to invalid indicies!

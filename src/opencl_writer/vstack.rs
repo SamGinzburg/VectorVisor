@@ -105,7 +105,7 @@ impl<'a> StackCtx {
      * Parse a function and generate a stack context for it.
      * We can statically determine the maximum required amount of intermediate values
      */
-    pub fn initialize_context(writer_ctx: &OpenCLCWriter, instructions: &Box<[Instruction<'a>]>, local_param_types: &HashMap<String, ValType>, local_offsets: &HashMap<String, u32>, is_param: &HashMap<String, bool>, fastcalls: HashSet<String>, param_offset: i32, indirect_call_len: u32, indirect_call_mapping: &HashMap<u32, &wast::Index>, curr_fn_name: String, is_gpu: bool) -> StackCtx {
+    pub fn initialize_context(writer_ctx: &OpenCLCWriter, instructions: &Box<[Instruction<'a>]>, local_param_types: &HashMap<String, ValType>, local_offsets: &HashMap<String, u32>, is_param: &HashMap<String, bool>, fastcalls: HashSet<String>, param_offset: i32, indirect_call_mapping: &HashMap<u32, &wast::Index>, curr_fn_name: String, is_gpu: bool) -> StackCtx {
         let mut stack_sizes: Vec<StackType> = vec![];
         
         // Track which loops we can optimize for later
@@ -1018,7 +1018,8 @@ impl<'a> StackCtx {
 
                             // Track the number of function call stubs to generate
                             // We only generate stubs for non-fastcalls
-                            num_fn_calls += matching_types - fastcall_opt;
+                            //num_fn_calls += matching_types - fastcall_opt;
+                            num_fn_calls += matching_types;
 
                             // First, pop off the parameters
                             for (_, _, param_type) in indirect_func_type.params.iter() {
