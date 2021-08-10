@@ -110,7 +110,8 @@ impl<'a> StackCtx {
         
         // Track which loops we can optimize for later
         // (is_loop, tainted), is_loop needed since we are also tracking blocks
-        let mut control_stack: Vec<(Option<StackType>, ControlStackVStackTypes, Vec<StackType>)> = vec![];
+        // We also track the current i32, i64, f32, f64 values and reset them at the end of blocks
+        let mut control_stack: Vec<(Option<StackType>, ControlStackVStackTypes, Vec<StackType>, u32, u32, u32, u32)> = vec![];
         let mut tainted_loops: Vec<bool> = vec![];
         let mut open_loop_stack: Vec<usize> = vec![];
         let mut loop_idx: usize = 0;
@@ -1365,7 +1366,11 @@ impl<'a> StackCtx {
                         },
                         None => (),
                     };
-                    control_stack.push((block_type, ControlStackVStackTypes::If, stack_sizes.clone()));
+                    control_stack.push((block_type, ControlStackVStackTypes::If, stack_sizes.clone(),
+                                        current_i32_count,
+                                        current_i64_count,
+                                        current_f32_count,
+                                        current_f64_count));
                 },
                 wast::Instruction::Else(_) => {
                     /*
@@ -1390,7 +1395,11 @@ impl<'a> StackCtx {
                         },
                         None => (),
                     };
-                    control_stack.push((block_type, ControlStackVStackTypes::Block, stack_sizes.clone()));
+                    control_stack.push((block_type, ControlStackVStackTypes::Block, stack_sizes.clone(),
+                                        current_i32_count,
+                                        current_i64_count,
+                                        current_f32_count,
+                                        current_f64_count));
                 },
                 wast::Instruction::Loop(b) => {
                     tainted_loops.push(false);
@@ -1408,13 +1417,17 @@ impl<'a> StackCtx {
                         },
                         None => (),
                     };
-                    control_stack.push((block_type, ControlStackVStackTypes::Loop, stack_sizes.clone()));
+                    control_stack.push((block_type, ControlStackVStackTypes::Loop, stack_sizes.clone(),
+                                        current_i32_count,
+                                        current_i64_count,
+                                        current_f32_count,
+                                        current_f64_count));
                     // We need to continue here to avoid resetting the empty_loop counter
                     continue;
                 }
                 wast::Instruction::End(_id) => {
                     // As we close loops, keep track so we don't taint them
-                    let (t, control_stack_op, stack_restore) = control_stack.pop().unwrap();
+                    let (t, control_stack_op, stack_restore, old_i32, old_i64, old_f32, old_f64) = control_stack.pop().unwrap();
 
                     match control_stack_op {
                         ControlStackVStackTypes::Loop => {
@@ -1428,6 +1441,10 @@ impl<'a> StackCtx {
 
                     // restore the previous stack frame
                     stack_sizes = stack_restore;
+                    current_i32_count = old_i32;
+                    current_i64_count = old_i64;
+                    current_f32_count = old_f32;
+                    current_f64_count = old_f64;
 
                     // We have to push the result value of the block (if we have one)
                     match t {
