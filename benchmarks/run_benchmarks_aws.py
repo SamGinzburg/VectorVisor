@@ -705,12 +705,12 @@ while True:
 ssm_client = boto3.client('ssm')
 
 # run pbkdf2 bench
-#run_pbkdf2_bench(True)
+run_pbkdf2_bench(True)
 
-#cleanup()
+cleanup()
 
 # run lz4 bench
-#run_lz4_bench()
+run_lz4_bench()
 
 #cleanup()
 
@@ -723,7 +723,7 @@ ssm_client = boto3.client('ssm')
 #run_average_bench()
 
 # run image bench
-run_image_bench()
+#run_image_bench()
 
 # clean up all instances at end
 ec2.instances.filter(InstanceIds = instance_id_list).terminate()
