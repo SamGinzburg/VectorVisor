@@ -1346,10 +1346,10 @@ impl<'a> StackCtx {
                         None => (),
                     };
                     control_stack.push((block_type, ControlStackVStackTypes::If, stack_sizes.clone(),
-                                        current_i32_count,
-                                        current_i64_count,
-                                        current_f32_count,
-                                        current_f64_count));
+                                        current_i32_count.clone(),
+                                        current_i64_count.clone(),
+                                        current_f32_count.clone(),
+                                        current_f64_count.clone()));
                 },
                 wast::Instruction::Else(_) => {
                     /*
@@ -1375,10 +1375,10 @@ impl<'a> StackCtx {
                         None => (),
                     };
                     control_stack.push((block_type, ControlStackVStackTypes::Block, stack_sizes.clone(),
-                                        current_i32_count,
-                                        current_i64_count,
-                                        current_f32_count,
-                                        current_f64_count));
+                                        current_i32_count.clone(),
+                                        current_i64_count.clone(),
+                                        current_f32_count.clone(),
+                                        current_f64_count.clone()));
                 },
                 wast::Instruction::Loop(b) => {
                     tainted_loops.push(false);
@@ -1397,10 +1397,10 @@ impl<'a> StackCtx {
                         None => (),
                     };
                     control_stack.push((block_type, ControlStackVStackTypes::Loop, stack_sizes.clone(),
-                                        current_i32_count,
-                                        current_i64_count,
-                                        current_f32_count,
-                                        current_f64_count));
+                                        current_i32_count.clone(),
+                                        current_i64_count.clone(),
+                                        current_f32_count.clone(),
+                                        current_f64_count.clone()));
                     // We need to continue here to avoid resetting the empty_loop counter
                     continue;
                 }
@@ -1428,20 +1428,6 @@ impl<'a> StackCtx {
                     // We have to push the result value of the block (if we have one)
                     match t {
                         Some(stack_type) => {
-                            match stack_type {
-                                StackType::i32 => {
-                                    current_i32_count -= 1;
-                                },
-                                StackType::i64 => {
-                                    current_i64_count -= 1;
-                                },
-                                StackType::f32 => {
-                                    current_f32_count -= 1;
-                                },
-                                StackType::f64 => {
-                                    current_f64_count -= 1;
-                                },
-                            }
                             stack_sizes.push(stack_type.clone());
                         },
                         None => (),
