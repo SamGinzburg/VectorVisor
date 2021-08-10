@@ -458,7 +458,9 @@ impl OpenCLRunner {
         println!("Max constant buffer size: {:?}", max_constant_buffer_size);
         println!("Linker available: {:?}", linker_available);
         println!("OpenCL Extensions: {:?}", extensions);
-
+        println!("Compile Flags: {:?}", compile_flags);
+        println!("Link Flags: {:?}", link_flags);
+        
         // compile the GPU kernel(s)
         let program_to_run = match &self.input_program {
             InputProgram::Text(program, fastcall_header) => {
@@ -565,6 +567,9 @@ impl OpenCLRunner {
                 let num_threads = 2; //num_cpus::get();
                 let _num_vms = self.num_vms.clone();
 
+                // create the build log
+                File::create(format!("recent.buildlog")).unwrap();
+
                 let (finished_sender, finished_receiver): (SyncSender<(u32, ocl::core::Program, u64)>, SyncReceiver<(u32, ocl::core::Program, u64)>) = unbounded();
 
                 let mut submit_compile_job = vec![];
@@ -593,10 +598,14 @@ impl OpenCLRunner {
                                 },
                             };
                             let start = Utc::now().timestamp_nanos();
-                            let options = &CString::new(format!("{} -w -DNUM_THREADS={} -DVMM_STACK_SIZE_BYTES={} -DVMM_HEAP_SIZE_BYTES={}", compile_flags_clone, num_vms_clone, stack_size, heap_size)).unwrap();
+                            let options = &CString::new(format!("{} -DNUM_THREADS={} -DVMM_STACK_SIZE_BYTES={} -DVMM_HEAP_SIZE_BYTES={}", compile_flags_clone, num_vms_clone, stack_size, heap_size)).unwrap();
                             let build_result = ocl::core::compile_program(&program_to_build, Some(&[device_id]), options, &[&fastcall_header], &[CString::new("fastcalls.cl").unwrap()], None, None, None);
                             match build_result {
-                                Ok(_) => (),
+                                Ok(_) => {
+                                    let buildinfo = ocl::core::get_program_build_info(&program_to_build, &device_id, ocl::core::ProgramBuildInfo::BuildLog).unwrap();
+                                    let mut build_log = OpenOptions::new().append(true).open("recent.buildlog").unwrap();
+                                    build_log.write_all(&buildinfo.to_string().into_bytes()).unwrap();
+                                },
                                 Err(e) => {
                                     println!("Error during building: {:?}", e);
                                     let buildinfo = ocl::core::get_program_build_info(&program_to_build, &device_id, ocl::core::ProgramBuildInfo::BuildLog).unwrap();
@@ -609,7 +618,13 @@ impl OpenCLRunner {
                             }
                             
                             let final_program = match ocl::core::link_program(context, Some(&[device_id]), &CString::new(format!("{}", link_flags_clone)).unwrap(), &[&program_to_build], None, None, None) {
-                                Ok(p) => p,
+                                Ok(p) => {
+                                    let buildinfo = ocl::core::get_program_build_info(&program_to_build, &device_id, ocl::core::ProgramBuildInfo::BuildLog).unwrap();
+                                    let mut build_log = OpenOptions::new().append(true).open("recent.buildlog").unwrap();
+
+                                    build_log.write_all(&buildinfo.to_string().into_bytes()).unwrap();
+                                    p
+                                },
                                 Err(e) => {
                                     let buildinfo = ocl::core::get_program_build_info(&program_to_build, &device_id, ocl::core::ProgramBuildInfo::BuildLog).unwrap();
                                     // Dump the build log too
@@ -620,6 +635,7 @@ impl OpenCLRunner {
                                     panic!("Error: {} has occured, dumping build log to file: {:?}.buildlog, kernel written to file {:?}.cl\n", e, key, key);
                                 }
                             };
+
                             let end = Utc::now().timestamp_nanos();
 
                             sender.send((key, final_program, (end-start).try_into().unwrap())).unwrap();
@@ -639,6 +655,8 @@ impl OpenCLRunner {
                     counter += 1;
                 }
                 let pb = ProgressBar::new(map.len().try_into().unwrap());
+                pb.enable_steady_tick(1000);
+
                 pb.set_style(ProgressStyle::default_bar()
                     .template("{spinner:.green} [{elapsed_precise}] [{wide_bar.cyan/blue}] (Compiled functions: {pos}) / (Total functions in program {len}) ({eta})")
                     .progress_chars("#>-"));
@@ -705,6 +723,7 @@ impl OpenCLRunner {
                 let binary_start = std::time::Instant::now();
 
                 let pb = ProgressBar::new(map.len().try_into().unwrap());
+                pb.enable_steady_tick(1000);
                 pb.set_style(ProgressStyle::default_bar()
                     .template("{spinner:.green} [{elapsed_precise}] [{wide_bar.cyan/blue}] (Loaded functions: {pos}) / (Total functions in program {len}) ({eta})")
                     .progress_chars("#>-"));

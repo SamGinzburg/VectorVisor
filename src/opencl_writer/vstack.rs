@@ -2056,21 +2056,20 @@ impl<'a> StackCtx {
         // This is because we aren't saving the contexts of virtual snapshots
         let mut ctrl_stack_copy = self.control_stack_snapshots.clone();
         ctrl_stack_copy.reverse();
+
+        /*
+         * We either want the most recent non-virtual (Loop) snapshot delta or we want to save the
+         * entire context.
+         */
+
         for ctrl_stack in ctrl_stack_copy {
-            if ctrl_stack.is_virtual {
-                return match self.control_stack_snapshots.last() {
-                    Some(snap) => {
-        
-                        let i32_range = snap.i32_idx..self.i32_idx;
-                        let i64_range = snap.i64_idx..self.i64_idx;
-                        let f32_range = snap.f32_idx..self.f32_idx;
-                        let f64_range = snap.f64_idx..self.f64_idx;
-        
-                        (i32_range, i64_range, f32_range, f64_range)
-                    },
-                    // If no stack frames pushed, then we have the easy case
-                    None => (0..self.i32_idx, 0..self.i64_idx, 0..self.f32_idx, 0..self.f64_idx),
-                };
+            if !ctrl_stack.is_virtual {
+                let i32_range = ctrl_stack.i32_idx..self.i32_idx;
+                let i64_range = ctrl_stack.i64_idx..self.i64_idx;
+                let f32_range = ctrl_stack.f32_idx..self.f32_idx;
+                let f64_range = ctrl_stack.f64_idx..self.f64_idx;
+
+                return (i32_range, i64_range, f32_range, f64_range)
             }
         }
         
