@@ -413,29 +413,8 @@ impl<'a> StackCtx {
                     }
                 },
                 wast::Instruction::LocalTee(idx) => {
-                    match idx {
-                        wast::Index::Id(id) => {
-                            update_by_valtype(local_param_types.get(&id.name().to_string()).unwrap(),
-                                                &mut current_i32_count, &mut max_i32_count,
-                                                &mut current_i64_count, &mut max_i64_count,
-                                                &mut current_f32_count, &mut max_f32_count,
-                                                &mut current_f64_count, &mut max_f64_count);
-                        },
-                        wast::Index::Num(value, _) => {
-                            let id = match is_param.get(&format!("l{}", value)) {
-                                Some(false) => {
-                                    format!("l{}", value)
-                                },
-                                Some(true) => format!("p{}", value),
-                                _ => format!("p{}", value),
-                            };
-                            update_by_valtype(local_param_types.get(&id).unwrap(),
-                                                &mut current_i32_count, &mut max_i32_count,
-                                                &mut current_i64_count, &mut max_i64_count,
-                                                &mut current_f32_count, &mut max_f32_count,
-                                                &mut current_f64_count, &mut max_f64_count);
-                        },
-                    }
+                   // LocalTee just peaks the last item on the stack and sets a local value
+                   // No stack allocs occur
                 },
                 wast::Instruction::I32Add => {
                     stack_sizes.pop();

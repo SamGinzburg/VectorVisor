@@ -209,7 +209,7 @@ pub fn emit_end<'a>(_writer: &opencl_writer::OpenCLCWriter<'a>, stack_ctx: &mut 
     } else if block_type == 1 {
         result += &format!("\t/* END (loop: {}_{}) */\n", format!("{}{}", "__", fn_name.replace(".", "")), label);
     } else if block_type == 2 {
-        result += &format!("\t{}_{}_end:\n", fn_name, label);
+        result += &format!("\t{}_{}_end:\n", fn_name.replace(".", ""), label);
     }
 
     result
@@ -283,10 +283,10 @@ pub fn emit_if(writer: &opencl_writer::OpenCLCWriter, label: String, fn_name: St
     result += &format!("\tif (!{}) {{\n", stack_ctx.vstack_pop(StackType::i32));
     // If jump to the else block (if we have one)
     if stack_ctx.if_has_else((*if_name_count).try_into().unwrap()) {
-        result += &format!("\t\tgoto {}_{}_else;\n", fn_name, label);
+        result += &format!("\t\tgoto {}_{}_else;\n", fn_name.replace(".", ""), label);
     } else {
         // if we don't have an else block, jump to end
-        result += &format!("\t\tgoto {}_{}_end;\n", fn_name, label);
+        result += &format!("\t\tgoto {}_{}_end;\n", fn_name.replace(".", ""), label);
     }
 
     result += &format!("\t}}\n");
@@ -352,9 +352,9 @@ pub fn emit_else(_writer: &opencl_writer::OpenCLCWriter, fn_name: String, contro
     match else_label {
         Some(label) => {
             // If we just ran the first code block of the If block, then jump to the end
-            result +=&format!("\tgoto {}_{}_end;\n", fn_name, label);
+            result +=&format!("\tgoto {}_{}_end;\n", fn_name.replace(".", ""), label);
             // Else, put a label here for the header of the If block to jump to the second code block
-            result +=&format!("\t{}_{}_else:\n", fn_name, label);
+            result +=&format!("\t{}_{}_else:\n", fn_name.replace(".", ""), label);
         },
         None => (),
     }

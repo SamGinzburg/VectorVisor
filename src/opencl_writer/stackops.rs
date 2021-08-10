@@ -48,7 +48,7 @@ pub fn emit_local_set(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut St
     let t = type_info.get(id).unwrap();
     let cache = if !is_fastcall {
         format!("\tlocal_cache[{}] = 1;\n", cache_offset)
-    }else {
+    } else {
         String::from("")
     };
 
@@ -76,39 +76,31 @@ pub fn emit_local_set(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut St
 }
 
 pub fn emit_local_tee(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, parameter_offset: i32, id: &str, offsets: &HashMap<String, u32>, type_info: &HashMap<String, ValType>, stack_sizes: &mut Vec<u32>, is_fastcall: bool, debug: bool) -> String {
-    /*
-     * peak the top of the stack, push the most recent value again
-     * call local.set [x]
-     */
     let t = type_info.get(id).unwrap();
+    let cache_offset: u32 = *offsets.get(id).unwrap();
+    let cache = if !is_fastcall {
+        format!("\tlocal_cache[{}] = 1;\n", cache_offset)
+    } else {
+        String::from("")
+    };
 
-    match t {
+    let register = match t {
         wast::ValType::I32 => {
-            stack_sizes.push(1);
-            let reg1 = stack_ctx.vstack_peak(StackType::i32, 0);
-            let reg2 = stack_ctx.vstack_alloc(StackType::i32);
-            format!("\t{} = {};\n{}", reg2, reg1, emit_local_set(writer, stack_ctx, parameter_offset, id, offsets, type_info, stack_sizes, is_fastcall, debug))
+            stack_ctx.vstack_peak(StackType::i32, 0)
         },
         wast::ValType::I64 => {
-            stack_sizes.push(2);
-            let reg1 = stack_ctx.vstack_peak(StackType::i64, 0);
-            let reg2 = stack_ctx.vstack_alloc(StackType::i64);
-            format!("\t{} = {};\n{}", reg2, reg1, emit_local_set(writer, stack_ctx, parameter_offset, id, offsets, type_info, stack_sizes, is_fastcall, debug))
+            stack_ctx.vstack_peak(StackType::i64, 0)
         },
         wast::ValType::F32 => {
-            stack_sizes.push(1);
-            let reg1 = stack_ctx.vstack_peak(StackType::f32, 0);
-            let reg2 = stack_ctx.vstack_alloc(StackType::f32);
-            format!("\t{} = {};\n{}", reg2, reg1, emit_local_set(writer, stack_ctx, parameter_offset, id, offsets, type_info, stack_sizes, is_fastcall, debug))
+            stack_ctx.vstack_peak(StackType::f32, 0)
         },
         wast::ValType::F64 => {
-            stack_sizes.push(2);
-            let reg1 = stack_ctx.vstack_peak(StackType::f64, 0);
-            let reg2 = stack_ctx.vstack_alloc(StackType::f64);
-            format!("\t{} = {};\n{}", reg2, reg1, emit_local_set(writer, stack_ctx, parameter_offset, id, offsets, type_info, stack_sizes, is_fastcall, debug))
+            stack_ctx.vstack_peak(StackType::f64, 0)
         },
         _ => panic!("emit_local_tee type not handled")
-    }
+    };
+
+    format!("\t{} = {};\n{}", id, register, cache)
 }
 
 pub fn emit_local(_writer: &opencl_writer::OpenCLCWriter, local: &wast::Local, _debug: bool) -> String {
