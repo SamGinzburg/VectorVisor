@@ -3,6 +3,7 @@ use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use serde_cbor::from_slice;
+use std::convert::TryInto;
 
 #[cfg(any(target_arch = "x86_64", target_arch = "x86"))]
 pub mod server;
@@ -19,7 +20,9 @@ use std::thread;
 #[cfg(any(target_arch = "x86_64", target_arch = "x86"))]
 use chrono::prelude::*;
 
-use std::convert::TryInto;
+#[cfg(any(target_arch = "wasm32"))]
+#[global_allocator]
+static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
 type Error = Box<dyn std::error::Error + Send + Sync + 'static>;
 
