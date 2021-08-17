@@ -1695,7 +1695,7 @@ impl<'a> StackCtx {
                     }
                 },
                 wast::Instruction::Unreachable => {
-                    if !is_gpu || !fastcalls.contains(&curr_fn_name) {
+                    if !is_gpu {
                         // This happens because unreachable is emitted as a hypercall in this case
                         save_context(&mut save_ctx, &mut restore_ctx, &mut write_locals, &mut restore_stack, &mut restore_idx, false);
                         restore_context(&mut restore_ctx, &mut read_locals, &mut restore_stack);
