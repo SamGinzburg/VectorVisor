@@ -95,7 +95,7 @@ pub fn get_called_funcs(writer_ctx: &OpenCLCWriter, indirect_call_mapping: &Hash
                                     let func_type_index = match func_type_signature.index {
                                         Some(wast::Index::Id(id)) => id.name().to_string(),
                                         Some(wast::Index::Num(val, _)) => format!("t{}", val),
-                                        None => panic!("Only type indicies supported for call_indirect in get_called_funcs"),
+                                        None => panic!("Only type indicies supported for call_indirect in get_called_funcs: {:?}", func_type_signature),
                                     };
 
                                     // We add the speculated call target if the type signature

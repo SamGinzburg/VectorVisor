@@ -71,6 +71,11 @@ impl StackSnapshot {
  */
 #[derive(Debug)]
 pub struct StackCtx {
+    // Track the number of saved/restored contexts (for liveness analysis)
+    save_context_tracker: usize,
+    restore_context_tracker: usize,
+    save_contexts: Vec<HashSet<String>>,
+    restore_contexts: Vec<HashSet<String>>,
     // Track each intermediate type separately
     i32_stack: Vec<String>,
     i32_idx: usize,
@@ -100,6 +105,8 @@ pub struct StackCtx {
     num_hypercalls: u32,
 }
 
+type ControlStackType = Vec<(String, Option<StackType>, ControlStackVStackTypes, Vec<StackType>, u32, u32, u32, u32)>;
+
 impl<'a> StackCtx {
     /*
      * Parse a function and generate a stack context for it.
@@ -111,7 +118,7 @@ impl<'a> StackCtx {
         // Track which loops we can optimize for later
         // (is_loop, tainted), is_loop needed since we are also tracking blocks
         // We also track the current i32, i64, f32, f64 values and reset them at the end of blocks
-        let mut control_stack: Vec<(Option<StackType>, ControlStackVStackTypes, Vec<StackType>, u32, u32, u32, u32)> = vec![];
+        let mut control_stack: ControlStackType = vec![];
         let mut tainted_loops: Vec<bool> = vec![];
         let mut open_loop_stack: Vec<usize> = vec![];
         let mut loop_idx: usize = 0;
@@ -125,6 +132,126 @@ impl<'a> StackCtx {
          * Needed to avoid edge case where we have an empty infinite loop
          */
         let mut empty_loop = false;
+
+        /*
+         * Liveness analysis for locals:
+         * 
+         * We track reads/writes to locals for minimizing the size of context save/restore operations.
+         * 
+         * We count the following as save points for writes:
+         * 1) Func calls pre-call (indirect, hyper, regular - non fastcall)
+         * 2) Loop start (pre-label)
+         * 3) branches targeting loop starts
+         *  3.1) Note: We don't actually have to handle this case - 
+         *       the locals we save here = the locals we reload at loop start post label.
+         *       All other locals are saved before the loop starts
+         * 
+         * We count the following as restore points for reads:
+         * 1) Func calls pre-call (indirect, hyper, regular - non fastcall)
+         * 2) Loop start (post-label)
+         * 3) Loop end
+         * 4) Fn start (this isn't a real case, it just simplifies our liveness analysis code)
+         * 
+         * 
+         * As we encounter Loops/Calls we push the locals for each save/restore point we encounter
+         */
+        let mut read_locals: HashSet<String> = HashSet::new();
+        let mut write_locals: HashSet<String> = HashSet::new();
+        // Each save/restore point belongs to either a Loop or a Func Call
+        // Funcs have the same start/restore points since they happen next to each other
+        let mut save_ctx: Vec<HashSet<String>> = vec![];
+        let mut restore_ctx: Vec<HashSet<String>> = vec![];
+
+        // We need to track which restore points match which save points
+        // This is because we could have nested loops (save, save, restore, restore)
+        let mut restore_stack: Vec<usize> = vec![];
+        let mut restore_idx: usize = 1;
+
+        // We push a fake "restore point" at the start of the function
+        // This simplifies case handling for liveness analysis
+        restore_ctx.push(HashSet::new());
+        restore_stack.push(0);
+
+        // Define simple helper functions for mimicing save/restore ops
+
+
+        /*
+         * save_ctx is called for:
+         *  1) Loop start (pre-label) (matching restore point)
+         *  2) pre all func calls (matching restore point)
+         *  3) br's targeting loops
+         */
+        fn save_context(save_ctx: &mut Vec<HashSet<String>>,
+                        restore_ctx: &mut Vec<HashSet<String>>,
+                        write_locals: &mut HashSet<String>,
+                        restore_stack: &mut Vec<usize>,
+                        restore_idx: &mut usize,
+                        is_br_save_point: bool) -> () {
+            save_ctx.push(write_locals.clone());
+            // clear the set of locals we need to write back
+            // br's targeting loops are conditional so we can't clear write_locals
+            if !is_br_save_point {
+                write_locals.clear();
+
+                // push a matching restore_ctx (filled in later after the stack frame ends)
+                // We only do this for func calls and loop start
+                restore_ctx.push(HashSet::new());
+                restore_stack.push(*restore_idx);
+                *restore_idx += 1;
+            }
+        }
+
+        /*
+         * restore_ctx is called for:
+         *  1) post all func calls
+         *  2) Loop start (post-label)
+         *  3) post loop end <-- we manually push an empty restore context here outside the helper funcs
+         * 
+         *  This function is called in the vstack pass immediately before subsequent save_context operations
+         */
+        fn restore_context(restore_ctx: &mut Vec<HashSet<String>>,
+                           read_locals: &mut HashSet<String>,
+                           restore_stack: &mut Vec<usize>) -> () {
+            // Store the locals that we read from in the previous stack frame
+            let restore_idx: usize = restore_stack.pop().unwrap();
+            restore_ctx[restore_idx] = read_locals.clone();
+            read_locals.clear();
+        }
+
+
+        // save_context for br's
+        fn save_context_br(idx: wast::Index,
+                           control_stack: &mut ControlStackType,
+                           mut save_ctx: &mut Vec<HashSet<String>>,
+                           mut restore_ctx: &mut Vec<HashSet<String>>,
+                           mut write_locals: &mut HashSet<String>,
+                           mut restore_stack: &mut Vec<usize>,
+                           mut restore_idx: &mut usize) -> () {
+            // Does the branch target a loop?
+            let control_stack_entry = match idx {
+                wast::Index::Id(id) => {
+                    let mut found = None;
+                    for (label, t, control_stack_op, stack_restore, old_i32, old_i64, old_f32, old_f64) in control_stack.clone() {
+                        if label == id.name().to_string() {
+                            found = Some((label, t, control_stack_op, stack_restore, old_i32, old_i64, old_f32, old_f64));
+                            break;
+                        }
+                    }
+                    found
+                },
+                wast::Index::Num(value, _) => {
+                    Some(control_stack.get(control_stack.len() - 1 - value as usize).unwrap().clone())
+                },
+            };
+
+            match control_stack_entry {
+                // If we target a loop, we must save any values we wrote to
+                Some((_, _, ControlStackVStackTypes::Loop, _, _, _, _, _)) => {
+                    save_context(&mut save_ctx, &mut restore_ctx, &mut write_locals, &mut restore_stack, &mut restore_idx, true);
+                },
+                _ => (),
+            }
+        }
 
         // Track # function calls & indirect function calls
         // We do this so we can avoid another compiler pass to generate call return stubs
@@ -179,7 +306,7 @@ impl<'a> StackCtx {
                 },
                 _ => panic!("vstack update by valtype error"),
             }
-        };
+        }
 
         // for each instr, 
         for instruction in instructions.iter() {
@@ -341,7 +468,7 @@ impl<'a> StackCtx {
                     match idx {
                         wast::Index::Id(id) => {
                             stack_sizes.push(StackCtx::convert_wast_types(local_param_types.get(&id.name().to_string()).unwrap()));
-
+                            read_locals.insert(id.name().to_string());
                             update_by_valtype(local_param_types.get(&id.name().to_string()).unwrap(),
                                                 &mut current_i32_count, &mut max_i32_count,
                                                 &mut current_i64_count, &mut max_i64_count,
@@ -357,7 +484,7 @@ impl<'a> StackCtx {
                                 _ => format!("p{}", value),
                             };
                             stack_sizes.push(StackCtx::convert_wast_types(local_param_types.get(&id).unwrap()));
-
+                            read_locals.insert(id.to_string());
                             update_by_valtype(local_param_types.get(&id).unwrap(),
                                                 &mut current_i32_count, &mut max_i32_count,
                                                 &mut current_i64_count, &mut max_i64_count,
@@ -370,6 +497,7 @@ impl<'a> StackCtx {
                     stack_sizes.pop().unwrap();
                     match idx {
                         wast::Index::Id(id) => {
+                            write_locals.insert(id.name().to_string());
                             match local_param_types.get(&id.name().to_string()).unwrap() {
                                 ValType::I32 => {
                                     current_i32_count -= 1;
@@ -394,6 +522,7 @@ impl<'a> StackCtx {
                                 Some(true) => format!("p{}", value),
                                 _ => format!("p{}", value),
                             };
+                            write_locals.insert(id.to_string());
                             match local_param_types.get(&id).unwrap() {
                                 ValType::I32 => {
                                     current_i32_count -= 1;
@@ -413,8 +542,24 @@ impl<'a> StackCtx {
                     }
                 },
                 wast::Instruction::LocalTee(idx) => {
-                   // LocalTee just peaks the last item on the stack and sets a local value
-                   // No stack allocs occur
+                    // LocalTee just peaks the last item on the stack and sets a local value
+                    // No stack allocs occur
+                    let id: String = match idx {
+                        wast::Index::Id(id) => {
+                            id.name().to_string()
+                        },
+                        wast::Index::Num(val, _) => {
+                            match is_param.get(&format!("l{}", val)) {
+                                Some(false) => {
+                                    format!("l{}", val)
+                                },
+                                Some(true) => format!("p{}", val),
+                                _ => format!("p{}", val),
+                            }
+                        },
+                    };
+                    write_locals.insert(id.clone());
+                    read_locals.insert(id);
                 },
                 wast::Instruction::I32Add => {
                     stack_sizes.pop();
@@ -807,6 +952,15 @@ impl<'a> StackCtx {
                         wast::Index::Num(val, _) => format!("func_{}", val),
                     };
 
+                    // Context saving only happens for non-fastcalls
+                    if !fastcalls.contains(&id) {
+                        // Liveness analysis
+                        // save the locals that we just wrote to
+                        save_context(&mut save_ctx, &mut restore_ctx, &mut write_locals, &mut restore_stack, &mut restore_idx, false);
+                        // restore the locals that we have to read for the *previous* context
+                        restore_context(&mut restore_ctx, &mut read_locals, &mut restore_stack);
+                    }
+
                     if writer_ctx.imports_map.contains_key(&id) {
                         match writer_ctx.imports_map.get(&id) {
                             Some((wasi_api, Some(wasi_fn_name), _)) => {
@@ -952,6 +1106,13 @@ impl<'a> StackCtx {
                     }
                 },
                 wast::Instruction::CallIndirect(call_indirect) => {
+
+                    // Liveness analysis
+                    // save the locals that we just wrote to
+                    save_context(&mut save_ctx, &mut restore_ctx, &mut write_locals, &mut restore_stack, &mut restore_idx, false);
+                    // restore the locals that we have to read for the *previous* context
+                    restore_context(&mut restore_ctx, &mut read_locals, &mut restore_stack);
+
                     // Taint open loops
                     taint_open_loops(&mut tainted_loops, open_loop_stack.clone());
 
@@ -1345,7 +1506,14 @@ impl<'a> StackCtx {
                         },
                         None => (),
                     };
-                    control_stack.push((block_type, ControlStackVStackTypes::If, stack_sizes.clone(),
+
+                    let label: String = match b.label {
+                        Some(id) => id.name().to_string().clone(),
+                        // we never use If names anyways, no need to track the value
+                        _ => format!("if{}", if_idx),
+                    };
+
+                    control_stack.push((label, block_type, ControlStackVStackTypes::If, stack_sizes.clone(),
                                         current_i32_count.clone(),
                                         current_i64_count.clone(),
                                         current_f32_count.clone(),
@@ -1374,7 +1542,14 @@ impl<'a> StackCtx {
                         },
                         None => (),
                     };
-                    control_stack.push((block_type, ControlStackVStackTypes::Block, stack_sizes.clone(),
+
+                    let label: String = match b.label {
+                        Some(id) => id.name().to_string().clone(),
+                        // we never use block names anyways, no need to track the value
+                        _ => format!("b{}", 0),
+                    };
+
+                    control_stack.push((label, block_type, ControlStackVStackTypes::Block, stack_sizes.clone(),
                                         current_i32_count.clone(),
                                         current_i64_count.clone(),
                                         current_f32_count.clone(),
@@ -1396,20 +1571,41 @@ impl<'a> StackCtx {
                         },
                         None => (),
                     };
-                    control_stack.push((block_type, ControlStackVStackTypes::Loop, stack_sizes.clone(),
+
+                    let label: String = match b.label {
+                        Some(id) => id.name().to_string().clone(),
+                        _ => format!("l{}", loop_idx),
+                    };
+
+                    control_stack.push((label, block_type, ControlStackVStackTypes::Loop, stack_sizes.clone(),
                                         current_i32_count.clone(),
                                         current_i64_count.clone(),
                                         current_f32_count.clone(),
                                         current_f64_count.clone()));
+
+
+                    // Liveness analysis
+                    // save the locals that we just wrote to
+                    save_context(&mut save_ctx, &mut restore_ctx, &mut write_locals, &mut restore_stack, &mut restore_idx, false);
+                    // restore the locals that we have to read for the *previous* context
+                    restore_context(&mut restore_ctx, &mut read_locals, &mut restore_stack);
+
                     // We need to continue here to avoid resetting the empty_loop counter
                     continue;
                 }
                 wast::Instruction::End(_id) => {
                     // As we close loops, keep track so we don't taint them
-                    let (t, control_stack_op, stack_restore, old_i32, old_i64, old_f32, old_f64) = control_stack.pop().unwrap();
+                    let (_label, t, control_stack_op, stack_restore, old_i32, old_i64, old_f32, old_f64) = control_stack.pop().unwrap();
 
                     match control_stack_op {
                         ControlStackVStackTypes::Loop => {
+                            // Liveness analysis
+                            // restore the locals that we have to read for the *previous* context
+                            restore_context(&mut restore_ctx, &mut read_locals, &mut restore_stack);
+                            // push a context restore point manually for this case
+                            restore_ctx.push(HashSet::new());
+                            restore_stack.push(restore_idx);
+                            restore_idx += 1;
                             open_loop_stack.pop().unwrap();
                         },
                         ControlStackVStackTypes::If => {
@@ -1472,21 +1668,37 @@ impl<'a> StackCtx {
                 },
                 wast::Instruction::Return => {
                 },
-                wast::Instruction::Br(_idx) => {
+                wast::Instruction::Br(idx) => {
                     if empty_loop {
                         taint_open_loops(&mut tainted_loops, open_loop_stack.clone());
                     }
+
+                    // Does the branch target a loop?
+                    save_context_br(*idx, &mut control_stack, &mut save_ctx, &mut restore_ctx, &mut write_locals, &mut restore_stack, &mut restore_idx);
+
                 },
-                wast::Instruction::BrIf(_idx) => {
+                wast::Instruction::BrIf(idx) => {
                     stack_sizes.pop().unwrap();
                     current_i32_count -= 1;
+
+                    // Does the branch target a loop?
+                    save_context_br(*idx, &mut control_stack, &mut save_ctx, &mut restore_ctx, &mut write_locals, &mut restore_stack, &mut restore_idx);
                 },
-                wast::Instruction::BrTable(_table_idxs) => {
+                wast::Instruction::BrTable(table_idxs) => {
                     stack_sizes.pop().unwrap();
                     current_i32_count -= 1;
+
+                    // Does the branch target a loop?
+                    let indicies = &table_idxs.labels;
+                    for index in 0..indicies.len() {
+                        save_context_br(indicies[index], &mut control_stack, &mut save_ctx, &mut restore_ctx, &mut write_locals, &mut restore_stack, &mut restore_idx);
+                    }
                 },
                 wast::Instruction::Unreachable => {
-                    if !is_gpu {
+                    if !is_gpu || !fastcalls.contains(&curr_fn_name) {
+                        // This happens because unreachable is emitted as a hypercall in this case
+                        save_context(&mut save_ctx, &mut restore_ctx, &mut write_locals, &mut restore_stack, &mut restore_idx, false);
+                        restore_context(&mut restore_ctx, &mut read_locals, &mut restore_stack);
                         num_hypercalls += 1;
                     }
                 },
@@ -1577,6 +1789,10 @@ impl<'a> StackCtx {
         num_fn_calls += tainted_loops.iter().filter( |x| { **x == true }).collect::<Vec<&bool>>().len() as u32;
 
         StackCtx {
+            save_context_tracker: 0,
+            restore_context_tracker: 0,
+            save_contexts: save_ctx,
+            restore_contexts: restore_ctx,
             i32_stack: i32_stack,
             i32_idx: 0,
             i64_stack: i64_stack,
@@ -2063,11 +2279,20 @@ impl<'a> StackCtx {
      * Generate the code to save the context of the current function
      * We can statically determine the minimum
      */
-    pub fn save_context(&self, save_locals_only: bool) -> String {
+    pub fn save_context(&mut self, save_locals_only: bool) -> String {
         let mut ret_str = String::from("");
 
-        // First, save the locals to the stack frame
+        // get the save context
+        let locals_to_save = &self.save_contexts[self.save_context_tracker];
+        // inc the save tracker
+        self.save_context_tracker += 1;
+
+        // save the locals to the stack frame
         for (local, ty) in self.local_types.iter() {
+            // if we aren't supposed to save this local, skip it
+            if !locals_to_save.contains(local) {
+                continue;
+            }
             let cache_idx: u32 = *self.local_offsets.get(local).unwrap();
             let offset: i32 = *self.local_offsets.get(local).unwrap() as i32 + self.param_offset;
             match ty {
@@ -2191,12 +2416,21 @@ impl<'a> StackCtx {
     /*
      * Generate the code to restore the context of the current function
      */
-    pub fn restore_context(&self, restore_locals_only: bool, restore_intermediates_only: bool) -> String {
+    pub fn restore_context(&mut self, restore_locals_only: bool, restore_intermediates_only: bool) -> String {
         let mut ret_str = String::from("");
 
         // First, load all locals from memory
         if !restore_intermediates_only {
+            // get the save context
+            let locals_to_restore = &self.restore_contexts[self.restore_context_tracker];
+            // inc the save tracker
+            self.restore_context_tracker += 1;
+
             for (local, ty) in self.local_types.iter() {
+                if !locals_to_restore.contains(local) {
+                    continue;
+                }
+
                 let offset: i32 = *self.local_offsets.get(local).unwrap() as i32 + self.param_offset;
                 match ty {
                     StackType::i32 => {
