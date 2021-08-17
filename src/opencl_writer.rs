@@ -1281,7 +1281,7 @@ impl<'a> OpenCLCWriter<'_> {
                     } else {
                         true
                     };
-                    self.emit_hypercall(WasmHypercallId::proc_exit, stack_ctx, hypercall_id_count, fn_name.to_string(), skip_label, debug)    
+                    self.emit_hypercall(WasmHypercallId::proc_exit, stack_ctx, hypercall_id_count, fn_name.to_string(), skip_label, debug)
                 }
             },
             _ => panic!("Instruction {:?} not yet implemented, in func: {:?}", instr, func.id)
