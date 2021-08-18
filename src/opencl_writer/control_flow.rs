@@ -159,7 +159,7 @@ pub fn emit_end<'a>(_writer: &opencl_writer::OpenCLCWriter<'a>, stack_ctx: &mut 
     };
 
     // unwind the stack frame
-    stack_ctx.vstack_pop_stack_frame();
+    stack_ctx.vstack_pop_stack_frame(block_type == 1);
     // pop the *sp tracking data
     stack_ctx.vstack_pop_stack_info();
     
@@ -223,7 +223,7 @@ pub fn emit_loop(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCt
     if !is_fastcall && is_loop_tainted {
         // We need to save before we push the new stack frame
         result += &stack_ctx.save_context(false);
-        stack_ctx.vstack_push_stack_frame(false);
+        stack_ctx.vstack_push_stack_frame(false, true);
 
         // We have to save the context, since this is the entry point for a function call
         // TODO: optimize this by checking if we actually call a function inside the loop
@@ -243,7 +243,7 @@ pub fn emit_loop(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCt
     } else {
 
         // save a stack frame but don't save the context here
-        stack_ctx.vstack_push_stack_frame(true);
+        stack_ctx.vstack_push_stack_frame(true, true);
         stack_ctx.vstack_push_stack_info(stack_ctx.stack_frame_size().try_into().unwrap());
 
         // emit just the loop header for GOTOs during fastcalls or for non-tainted loops
@@ -268,7 +268,7 @@ pub fn emit_block(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackC
     }
     */
 
-    stack_ctx.vstack_push_stack_frame(true);
+    stack_ctx.vstack_push_stack_frame(true, false);
     stack_ctx.vstack_push_stack_info(stack_ctx.stack_frame_size().try_into().unwrap());
 
     // we don't emit a label for block statements here, any br's goto the END of the block
@@ -312,7 +312,7 @@ pub fn emit_if(writer: &opencl_writer::OpenCLCWriter, label: String, fn_name: St
     };
 
     // Now save the stack frame
-    stack_ctx.vstack_push_stack_frame(true);
+    stack_ctx.vstack_push_stack_frame(true, false);
     stack_ctx.vstack_push_stack_info(stack_ctx.stack_frame_size().try_into().unwrap());
 
     // for the control stack, we don't use the third parameter for blocks
