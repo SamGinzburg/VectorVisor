@@ -194,7 +194,7 @@ impl<'a> StackCtx {
         /*
          * save the current context for S.F. entry or br_if targeting loop
          */
-        fn save_context(curr_ctx: &mut Vec<u32>, write_map: &mut HashMap<u32, Vec<HashSet<String>>>, write_locals: &mut HashSet<String>) -> () {
+        fn save_context(curr_ctx: &mut Vec<u32>, write_map: &mut HashMap<u32, Vec<HashSet<String>>>, write_locals: &mut HashSet<String>, is_br: bool) -> () {
             let current_stack_frame = curr_ctx.last().unwrap();
             match write_map.get(current_stack_frame) {
                 Some(val) => {
@@ -208,7 +208,9 @@ impl<'a> StackCtx {
                     write_map.insert(*current_stack_frame, tmp);
                 },
             }
-            write_locals.clear();
+            if !is_br {
+                write_locals.clear();
+            }
         }
 
 
@@ -237,7 +239,7 @@ impl<'a> StackCtx {
             match control_stack_entry {
                 // If we target a loop, we must save any values we wrote to
                 Some((_, _, ControlStackVStackTypes::Loop, _, _, _, _, _)) => {
-                    save_context(&mut curr_ctx, &mut write_map, &mut write_locals);
+                    save_context(&mut curr_ctx, &mut write_map, &mut write_locals, true);
                 },
                 _ => (),
             }
@@ -976,7 +978,7 @@ impl<'a> StackCtx {
                             restore_context(&mut curr_ctx, &mut restore_context_map, &mut read_locals);
                         }
 
-                        save_context(&mut curr_ctx, &mut save_context_map, &mut write_locals);
+                        save_context(&mut curr_ctx, &mut save_context_map, &mut write_locals, false);
                         // mark the function call as "open" so we can know which values to restore
                         track_fn_call_restore_point = true;
                     }
@@ -1132,7 +1134,7 @@ impl<'a> StackCtx {
                         restore_context(&mut curr_ctx, &mut restore_context_map, &mut read_locals);
                     }
 
-                    save_context(&mut curr_ctx, &mut save_context_map, &mut write_locals);
+                    save_context(&mut curr_ctx, &mut save_context_map, &mut write_locals, false);
                     // mark the function call as "open" so we can know which values to restore
                     track_fn_call_restore_point = true;
 
@@ -1606,7 +1608,7 @@ impl<'a> StackCtx {
                                         current_f32_count.clone(),
                                         current_f64_count.clone()));
 
-                    save_context(&mut curr_ctx, &mut save_context_map, &mut write_locals);
+                    save_context(&mut curr_ctx, &mut save_context_map, &mut write_locals, false);
                     track_fn_call_restore_point = true;
 
                     curr_ctx.push(curr_ctx_idx);
@@ -1741,7 +1743,7 @@ impl<'a> StackCtx {
                             restore_context(&mut curr_ctx, &mut restore_context_map, &mut read_locals);
                         }
 
-                        save_context(&mut curr_ctx, &mut save_context_map, &mut write_locals);
+                        save_context(&mut curr_ctx, &mut save_context_map, &mut write_locals, false);
                         // mark the function call as "open" so we can know which values to restore
                         track_fn_call_restore_point = true;   
                     }
@@ -1857,6 +1859,21 @@ impl<'a> StackCtx {
                     restore_context_map.insert(next_elem, n1_level);
                 }
             }
+        }
+
+        // be conservative with estimates for liveness
+        for stack_frame in restore_context_map.clone().keys() {
+            let mut frame = restore_context_map.get(&stack_frame).unwrap().clone();
+
+            let mut first = frame[0].clone(); 
+            for idx in 1..frame.len() {
+                let restore_point = frame[idx].clone();
+                for item in restore_point {
+                    first.insert(item);
+                }
+            }
+            frame[0] = first.clone();
+            restore_context_map.insert(*stack_frame, frame);
         }
 
         let loop_tracker = vec![0];
@@ -2517,7 +2534,7 @@ impl<'a> StackCtx {
         if !restore_intermediates_only {
 
             let map_idx = self.loop_tracker.last().unwrap();
-            let locals_set = self.restore_context_map.get(map_idx).unwrap()[self.restore_context_idx as usize].clone();
+            let locals_set = self.restore_context_map.get(map_idx).unwrap()[0].clone();
             self.restore_context_idx += 1;
 
             for (local, ty) in self.local_types.iter() {
