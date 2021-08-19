@@ -23,7 +23,6 @@ pub struct Environment {}
 impl Environment {
     pub fn hypercall_environ_sizes_get(ctx: &WasiCtx, hypercall: &mut HyperCall, sender: &Sender<HyperCallResult>) -> () {
         let mut hcall_buf: &mut [u8] = unsafe { *hypercall.hypercall_buffer.buf.get() };
-        let hcall_buf_size: u32 = hcall_buf.len().try_into().unwrap();
         let result = match ctx.environ_sizes_get() {
             Ok(tuple) => {
                 // now that we have retreived the sizes
@@ -32,6 +31,7 @@ impl Environment {
                     Interleave::write_u32(hcall_buf, 0, hypercall.num_total_vms, tuple.0, hypercall.vm_id);
                     Interleave::write_u32(hcall_buf, 4, hypercall.num_total_vms, tuple.1, hypercall.vm_id);
                 } else {
+                    let hcall_buf_size: u32 = (hcall_buf.len() / hypercall.num_total_vms as usize).try_into().unwrap();
                     hcall_buf = &mut hcall_buf[(hypercall.vm_id * hcall_buf_size) as usize..((hypercall.vm_id+1) * hcall_buf_size) as usize];
                     LittleEndian::write_u32(&mut hcall_buf[0..4], tuple.0);
                     LittleEndian::write_u32(&mut hcall_buf[4..8], tuple.1);
@@ -50,7 +50,7 @@ impl Environment {
 
     pub fn hypercall_environ_get(ctx: &WasiCtx, vm_ctx: &VectorizedVM, hypercall: &mut HyperCall, sender: &Sender<HyperCallResult>) -> () {
         let mut hcall_buf: &mut [u8] = unsafe { *hypercall.hypercall_buffer.buf.get() };
-        let hcall_buf_size: u32 = hcall_buf.len().try_into().unwrap();
+        let hcall_buf_size: u32 = vm_ctx.hcall_buf_size;
 
         let memory = &vm_ctx.memory;
         let wasm_mem = &vm_ctx.wasm_memory;
