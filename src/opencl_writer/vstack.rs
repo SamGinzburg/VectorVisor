@@ -2400,7 +2400,7 @@ impl<'a> StackCtx {
         for (local, ty) in self.local_types.iter() {
 
             if !locals_set.contains(local) {
-                continue;
+                //continue;
             }
 
             let cache_idx: u32 = *self.local_offsets.get(local).unwrap();
@@ -2539,7 +2539,7 @@ impl<'a> StackCtx {
 
             for (local, ty) in self.local_types.iter() {
                 if !locals_set.contains(local) {
-                    continue;
+                    //continue;
                 }
 
                 let offset: i32 = *self.local_offsets.get(local).unwrap() as i32 + self.param_offset;

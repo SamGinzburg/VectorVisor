@@ -1828,7 +1828,7 @@ impl<'a> OpenCLCWriter<'_> {
                 format!("global uint  *heap_u32     = (global uint *)((global char*)heap_u32_global+(get_global_id(0) * {}));", heap_size_bytes),
                 "global ulong *heap_u64     = (global ulong *)heap_u32;",
                 "global uint  *hcall_size = (global uint*)hcall_size_global+get_global_id(0);",
-                format!("global uint  *hypercall_buffer = (global uint *)((global char*)hypercall_buffer_global+(get_global_id(0) * hcall_size));"),
+                format!("global uint  *hypercall_buffer = (global uint*)((global char*)hypercall_buffer_global+(get_global_id(0) * (uint)hcall_size));"),
                 format!("global uint  *globals_buffer = (global uint*)((global char*)globals_buffer_global+(get_global_id(0) * {}));", globals_buffer_size * 4),
                 format!("global uint  *stack_frames = (global uint*)((global char*)stack_frames_global+(get_global_id(0) * {}));", stack_frames_size_bytes),
                 // only an array of N elements, where N=warp size
