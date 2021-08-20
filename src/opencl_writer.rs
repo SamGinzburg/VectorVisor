@@ -1772,8 +1772,13 @@ impl<'a> OpenCLCWriter<'_> {
                     uint   hcall_ret_val)", fn_name)).unwrap();
             }
         } else if is_control_fn {
+            let work_group = if local_work_group == 999999 {
+                String::from("")
+            } else {
+                format!("__attribute__((reqd_work_group_size({}, 1, 1)))", local_work_group)
+            };
             let header = format!("__kernel {} void {}(__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}) {{\n",
-                                    format!("__attribute__((reqd_work_group_size({}, 1, 1)))", local_work_group),
+                                    work_group,
                                     fn_name,
                                     "uint   *stack_u32_global,",
                                     "ulong  *stack_u64_global,",

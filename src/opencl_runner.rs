@@ -931,7 +931,11 @@ impl OpenCLRunner {
 
 
         let global_dims = &[self.num_vms as usize, 1, 1];
-        let local_dims = Some([local_work_group, 1, 1]);
+        let local_dims = if local_work_group == 999999 {
+            None
+        } else {
+            Some([local_work_group, 1, 1])
+        };
 
         // start counting only when all VM init is finished
         let e2e_time_start = std::time::Instant::now();
@@ -1377,7 +1381,11 @@ impl OpenCLRunner {
         }
 
         let global_dims = &[self.num_vms as usize, 1, 1];
-        let local_dims = Some([local_work_group, 1, 1]);
+        let local_dims = if local_work_group == 999999 {
+            None
+        } else {
+            Some([local_work_group, 1, 1])
+        };
 
         // run the data kernel to init the memory
         let data_kernel = kernels.get(&99999).unwrap();

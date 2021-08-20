@@ -1614,10 +1614,7 @@ impl<'a> StackCtx {
                     curr_ctx.push(curr_ctx_idx);
                     curr_ctx_idx += 1;
 
-                    let mut nesting_filtered = curr_ctx.clone();
-                    // 0 represents the function level stack frame, so we don't want to track this
-                    nesting_filtered.retain(|&x| x != 0);
-                    nested_loops.push(nesting_filtered);
+                    nested_loops.push(curr_ctx.clone());
 
                     // We need to continue here to avoid resetting the empty_loop counter
                     continue;
@@ -1635,17 +1632,9 @@ impl<'a> StackCtx {
 
                             // pop the stack frame
                             curr_ctx.pop();
-                            write_locals = write_locals_conservative.clone();
 
                             // we want to save the next set of reads before the next save point
                             track_fn_call_restore_point = true;
-
-                            // If we are now back at the top level stack frame, reset read_locals
-                            if *curr_ctx.last().unwrap() == 0 {
-                                read_locals.clear();
-                                write_locals.clear();
-                                write_locals_conservative.clear();
-                            }
 
                             open_loop_stack.pop().unwrap();
                         },
@@ -1875,6 +1864,9 @@ impl<'a> StackCtx {
             frame[0] = first.clone();
             restore_context_map.insert(*stack_frame, frame);
         }
+
+
+        dbg!(&restore_context_map);
 
         let loop_tracker = vec![0];
         StackCtx {
@@ -2539,7 +2531,7 @@ impl<'a> StackCtx {
 
             for (local, ty) in self.local_types.iter() {
                 if !locals_set.contains(local) {
-                    //continue;
+                    continue;
                 }
 
                 let offset: i32 = *self.local_offsets.get(local).unwrap() as i32 + self.param_offset;

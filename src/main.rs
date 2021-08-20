@@ -265,7 +265,7 @@ fn main() {
         .arg(Arg::with_name("localworkgroup")
             .long("lgroup")
             .value_name("Specifies the number of threads to be grouped together into a local workgroup")
-            .default_value("32") // 32 is the default for most hardware
+            .default_value("999999") // 999999 is a fake default val, we just let OpenCL auto-determine in this case
             .help("This flag sets the max size of the local work group. This affects occupancy & register usage.")
             .multiple(false)
             .number_of_values(1)
