@@ -58,11 +58,7 @@ pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interle
     result += &format!("\n{}\n",
                         "inline void write_u16(ulong addr, ulong mem_start, ushort value, uint warp_id) {");
     match interleave {
-        0 => {
-            result += &format!("\t{}",
-                                "*((ushort*)addr) = value;");
-        },
-        1 => {
+        0 | 1 => {
             // write the lower byte first
             result += &format!("\t{}\n",
                                 "write_u8(addr, mem_start, value & 0xFF, warp_id);");
@@ -78,11 +74,7 @@ pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interle
     result += &format!("\n{}\n",
                         "inline void write_u32(ulong addr, ulong mem_start, uint value, uint warp_id) {");
     match interleave {
-        0 => {
-            result += &format!("\t{}",
-                                "*((uint*)addr) = value;");
-        },
-        1 => {
+        0 | 1 => {
             // write the lower byte first
             result += &format!("\t{}\n",
                                 "write_u16(addr, mem_start, value & 0xFFFF, warp_id);");
@@ -98,11 +90,7 @@ pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interle
     result += &format!("\n{}\n",
                         "inline void write_u64(ulong addr, ulong mem_start, ulong value, uint warp_id) {");
     match interleave {
-        0 => {
-            result += &format!("\t{}",
-                                "*((ulong*)addr) = value;");
-        },
-        1 => {
+        0 | 1 => {
             // write the lower byte first
             result += &format!("\t{}\n",
                                 "write_u32(addr, mem_start, value & 0xFFFFFFFF, warp_id);");
@@ -138,11 +126,7 @@ pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interle
     result += &format!("\n{}\n",
                         "inline ushort read_u16(ulong addr, ulong mem_start, uint warp_id) {");
     match interleave {
-        0 => {
-            result += &format!("\t{}",
-                                "return *((ushort*)addr);");
-        },
-        1 => {
+        0 | 1 => {
             // use a local variable to store the result as we perform the reads
             // we have to read in the reverse order!!! (high bits then low bits)
             result += &format!("\t{}\n",
@@ -165,11 +149,7 @@ pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interle
     result += &format!("\n{}\n",
                         "inline uint read_u32(ulong addr, ulong mem_start, uint warp_id) {");
     match interleave {
-        0 => {
-            result += &format!("\t{}",
-                                "return *((uint*)addr);");
-        },
-        1 => {
+        0 | 1 => {
             // use a local variable to store the result as we perform the reads
             result += &format!("\t{}\n",
                                 "uint temp = 0;");
@@ -191,11 +171,7 @@ pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interle
     result += &format!("\n{}\n",
                         "inline ulong read_u64(ulong addr, ulong mem_start, uint warp_id) {");
     match interleave {
-        0 => {
-            result += &format!("\t{}",
-                                "return *((ulong*)addr);");
-        },
-        1 => {
+        0 | 1 => {
             // use a local variable to store the result as we perform the reads
             result += &format!("\t{}\n",
                                 "ulong temp = 0;");
