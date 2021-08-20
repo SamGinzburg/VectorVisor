@@ -201,6 +201,7 @@ impl OpenCLRunner {
                // needed for the size of the loop/branch data structures
                num_compiled_funcs: u32,
                globals_buffer_size: u32,
+               local_work_group: usize,
                vm_sender: Arc<Vec<Mutex<Sender<(Vec<u8>, usize, u64, u64, u64, u64)>>>>,
                vm_recv: Arc<Vec<Mutex<Receiver<(Vec<u8>, usize)>>>>,
                _compile_flags: String,
@@ -236,10 +237,10 @@ impl OpenCLRunner {
             // decide which vector runner to use based off the compiled program enum...
             let status = match program {
                 ProgramType::Standard(program) => {
-                    final_runner.run_vector_vms(stack_frames_size, program, &leaked_command_queue, hypercall_buffer_read_buffer, hcall_size.try_into().unwrap(), context, print_return, vm_sender, vm_recv)
+                    final_runner.run_vector_vms(stack_frames_size, local_work_group, program, &leaked_command_queue, hypercall_buffer_read_buffer, hcall_size.try_into().unwrap(), context, print_return, vm_sender, vm_recv)
                 },
                 ProgramType::Partitioned(program_map, kernel_partition_mapping) => {
-                    final_runner.run_partitioned_vector_vms(stack_frames_size, program_map, kernel_partition_mapping, &leaked_command_queue, hypercall_buffer_read_buffer, hcall_size.try_into().unwrap(), &context, print_return, vm_sender, vm_recv)
+                    final_runner.run_partitioned_vector_vms(stack_frames_size, local_work_group, program_map, kernel_partition_mapping, &leaked_command_queue, hypercall_buffer_read_buffer, hcall_size.try_into().unwrap(), &context, print_return, vm_sender, vm_recv)
                 }
             };
 
@@ -759,6 +760,7 @@ impl OpenCLRunner {
      */
     pub fn run_vector_vms(self: &'static OpenCLRunner,
                          per_vm_stack_frames_size: u32,
+                         local_work_group: usize,
                          program: ocl::core::Program,
                          queue: &'static CommandQueue,
                          hypercall_buffer_read_buffer: &'static mut [u8],
@@ -927,6 +929,10 @@ impl OpenCLRunner {
             }
         }
 
+
+        let global_dims = &[self.num_vms as usize, 1, 1];
+        let local_dims = Some([local_work_group, 1, 1]);
+
         // start counting only when all VM init is finished
         let e2e_time_start = std::time::Instant::now();
 
@@ -941,7 +947,7 @@ impl OpenCLRunner {
 
         let mut profiling_event = ocl::Event::empty();
         unsafe {
-            ocl::core::enqueue_kernel(&queue, &data_kernel, 1, None, &[self.num_vms as usize, 1, 1], None, None::<Event>, Some(&mut profiling_event)).unwrap();
+            ocl::core::enqueue_kernel(&queue, &data_kernel, 1, None, global_dims, local_dims, None::<Event>, Some(&mut profiling_event)).unwrap();
         }
 
         ocl::core::wait_for_event(&profiling_event).unwrap();
@@ -984,7 +990,7 @@ impl OpenCLRunner {
             // Unfortunately the OpenCL API doesn't give us a good way to identify what happened - the OS logs (dmesg) do have a record of this though
             profiling_event = ocl::Event::empty();
             unsafe {
-                ocl::core::enqueue_kernel(&queue, &start_kernel, 1, None, &[self.num_vms as usize, 1, 1], None, None::<Event>, Some(&mut profiling_event)).unwrap();
+                ocl::core::enqueue_kernel(&queue, &start_kernel, 1, None, global_dims, local_dims, None::<Event>, Some(&mut profiling_event)).unwrap();
             }
 
             ocl::core::wait_for_event(&profiling_event).unwrap();
@@ -1160,6 +1166,7 @@ impl OpenCLRunner {
      */
     pub fn run_partitioned_vector_vms(self: &'static OpenCLRunner,
                                     per_vm_stack_frames_size: u32,
+                                    local_work_group: usize,
                                     program_map: HashMap<u32, ocl::core::Program>,
                                     kernel_partition_mappings: HashMap<u32, u32>,
                                     queue: &'static CommandQueue,
@@ -1369,6 +1376,8 @@ impl OpenCLRunner {
             }
         }
 
+        let global_dims = &[self.num_vms as usize, 1, 1];
+        let local_dims = Some([local_work_group, 1, 1]);
 
         // run the data kernel to init the memory
         let data_kernel = kernels.get(&99999).unwrap();
@@ -1387,7 +1396,7 @@ impl OpenCLRunner {
         let mut map_event = ocl::Event::empty();
 
         unsafe {
-            ocl::core::enqueue_kernel(&queue, &data_kernel, 1, None, &[self.num_vms as usize, 1, 1], None, None::<Event>, Some(&mut profiling_event)).unwrap();
+            ocl::core::enqueue_kernel(&queue, &data_kernel, 1, None, global_dims, local_dims, None::<Event>, Some(&mut profiling_event)).unwrap();
         }
 
         ocl::core::wait_for_event(&profiling_event).unwrap();
@@ -1468,7 +1477,7 @@ impl OpenCLRunner {
             unsafe {
                 num_queue_submits += 1;
                 ocl::core::finish(&queue).unwrap();
-                ocl::core::enqueue_kernel(&queue, &start_kernel, 1, None, &[self.num_vms as usize, 1, 1], None, None::<Event>, Some(&mut profiling_event)).unwrap();
+                ocl::core::enqueue_kernel(&queue, &start_kernel, 1, None, global_dims, local_dims, None::<Event>, Some(&mut profiling_event)).unwrap();
             }
             ocl::core::wait_for_event(&profiling_event).unwrap();
             let kernel_end = std::time::Instant::now();

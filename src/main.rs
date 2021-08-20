@@ -262,6 +262,14 @@ fn main() {
             .multiple(false)
             .number_of_values(1)
             .takes_value(true))
+        .arg(Arg::with_name("localworkgroup")
+            .long("lgroup")
+            .value_name("Specifies the number of threads to be grouped together into a local workgroup")
+            .default_value("32") // 32 is the default for most hardware
+            .help("This flag sets the max size of the local work group. This affects occupancy & register usage.")
+            .multiple(false)
+            .number_of_values(1)
+            .takes_value(true))
         .get_matches();
 
     dbg!(matches.clone());
@@ -292,6 +300,7 @@ fn main() {
     let max_loc = value_t!(matches.value_of("maxloc"), u32).unwrap_or_else(|e| e.exit());
     let max_dup = value_t!(matches.value_of("maxdup"), u32).unwrap_or_else(|e| e.exit());
     let disable_fastcalls = value_t!(matches.value_of("disablefastcalls"), bool).unwrap_or_else(|e| e.exit());
+    let local_work_group = value_t!(matches.value_of("localworkgroup"), usize).unwrap_or_else(|e| e.exit());
 
     dbg!(compile_args.clone());
 
@@ -330,6 +339,7 @@ fn main() {
                                                                     max_part,
                                                                     max_loc,
                                                                     max_dup,
+                                                                    local_work_group,
                                                                     disable_fastcalls,
                                                                     debug_call_print,
                                                                     force_inline,
@@ -393,6 +403,7 @@ fn main() {
                                                                         max_part,
                                                                         max_loc,
                                                                         max_dup,
+                                                                        local_work_group,
                                                                         disable_fastcalls,
                                                                         debug_call_print,
                                                                         force_inline,
@@ -433,6 +444,7 @@ fn main() {
                                                                         max_part,
                                                                         max_loc,
                                                                         max_dup,
+                                                                        local_work_group,
                                                                         disable_fastcalls,
                                                                         debug_call_print,
                                                                         force_inline,
@@ -476,6 +488,7 @@ fn main() {
                                                                         max_part,
                                                                         max_loc,
                                                                         max_dup,
+                                                                        local_work_group,
                                                                         disable_fastcalls,
                                                                         debug_call_print,
                                                                         force_inline,
@@ -516,6 +529,7 @@ fn main() {
                                                                         max_part,
                                                                         max_loc,
                                                                         max_dup,
+                                                                        local_work_group,
                                                                         disable_fastcalls,
                                                                         debug_call_print,
                                                                         force_inline,
@@ -650,6 +664,7 @@ fn main() {
                        sfp_size, 
                        num_compiled_funcs,
                        globals_buffer_size,
+                       local_work_group,
                        vm_sender_vec_arc.clone(),
                        vm_recv_vec_arc.clone(),
                        compile_args.clone(),

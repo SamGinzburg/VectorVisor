@@ -1295,6 +1295,7 @@ impl<'a> OpenCLCWriter<'_> {
                      call_ret_idx: &mut u32,
                      function_id_map: HashMap<&str, u32>,
                      hypercall_id_count: &mut u32,
+                     local_work_group: usize,
                      indirect_call_mapping: &HashMap<u32, &wast::Index>, 
                      global_mappings: &HashMap<String, (u32, u32)>,
                      fastcall_set: HashSet<String>,
@@ -1396,6 +1397,7 @@ impl<'a> OpenCLCWriter<'_> {
                                                     0,
                                                     0,
                                                     0,
+                                                    local_work_group,
                                                     false,
                                                     debug));
                 } else {
@@ -1717,6 +1719,7 @@ impl<'a> OpenCLCWriter<'_> {
                                  _predictor_size_bytes: u32,
                                  globals_buffer_size: u32,
                                  stack_frame_ptr_size_bytes: u32,
+                                 local_work_group: usize,
                                  is_control_fn: bool,
                                  debug: bool) -> String {
         let mut output = String::new();
@@ -1769,7 +1772,8 @@ impl<'a> OpenCLCWriter<'_> {
                     uint   hcall_ret_val)", fn_name)).unwrap();
             }
         } else if is_control_fn {
-            let header = format!("__kernel void {}(__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}) {{\n",
+            let header = format!("__kernel {} void {}(__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}) {{\n",
+                                    format!("__attribute__((reqd_work_group_size({}, 1, 1)))", local_work_group),
                                     fn_name,
                                     "uint   *stack_u32_global,",
                                     "ulong  *stack_u64_global,",
@@ -2034,6 +2038,7 @@ void {}(global uint   *stack_u32,
                             stack_frames_size_bytes: u32,
                             stack_frame_ptr_size_bytes: u32, 
                             predictor_size_bytes: u32,
+                            local_work_group: usize,
                             debug_print_function_calls: bool,
                             globals_buffer_size: u32,
                             function_idx_label: HashMap<String, u32>,
@@ -2050,6 +2055,7 @@ void {}(global uint   *stack_u32,
                                                predictor_size_bytes,
                                                globals_buffer_size,
                                                stack_frame_ptr_size_bytes,
+                                               local_work_group,
                                                true,
                                                debug)).unwrap();
         write!(ret_str, "\tstack_u32 += {};\n", 128).unwrap();
@@ -2126,6 +2132,7 @@ void {}(global uint   *stack_u32,
                              max_partitions: u32,
                              max_loc_in_partition: u32,
                              max_duplicate_funcs: u32,
+                             local_work_group: usize,
                              disable_fastcalls: bool,
                              debug_print_function_calls: bool,
                              force_inline: bool,
@@ -2363,6 +2370,7 @@ r#"
                                             &mut call_ret_idx,
                                             function_idx_label.clone(),
                                             hypercall_id_count,
+                                            local_work_group,
                                             indirect_call_mapping,
                                             &global_mappings,
                                             fast_function_set.clone(),
@@ -2398,6 +2406,7 @@ r#"
                                               &mut call_ret_idx,
                                               function_idx_label.clone(),
                                               hypercall_id_count,
+                                              local_work_group,
                                               indirect_call_mapping,
                                               &global_mappings,
                                               fast_function_set.clone(),
@@ -2422,6 +2431,7 @@ r#"
                                                             stack_frames_size_bytes,
                                                             stack_frame_ptr_size_bytes, 
                                                             predictor_size_bytes,
+                                                            local_work_group,
                                                             debug_print_function_calls,
                                                             globals_buffer_size,
                                                             function_idx_label_temp,
@@ -2445,6 +2455,7 @@ r#"
                                                predictor_size_bytes,
                                                globals_buffer_size,
                                                stack_frame_ptr_size_bytes,
+                                               local_work_group,
                                                true,
                                                debug)).unwrap();
 
