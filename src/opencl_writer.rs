@@ -1426,7 +1426,8 @@ impl<'a> OpenCLCWriter<'_> {
                 }
 
                 // emit the local/parameter cacheing array, this is used to elide writes during ctx saves/restores
-                final_string += &stack_ctx.emit_cache_array(is_fastcall);
+                let (cache_arr, local_cache_size) = stack_ctx.emit_cache_array(is_fastcall);
+                final_string += &cache_arr;
 
                 // emit the necessary intermediate values
                 final_string += &stack_ctx.emit_intermediates(is_fastcall);
@@ -1519,9 +1520,11 @@ impl<'a> OpenCLCWriter<'_> {
                     }
                 }
 
-                // Allocate space on the stack for saving the intermediate context
                 if !is_fastcall {
+                    // Allocate space on the stack for saving the intermediate context
                     final_string += &format!("\t*sp += {};\n", stack_ctx.max_stack_frame_size());
+                    // Allocate space on the stack for storing the local_cache
+                    final_string += &format!("\t*sp += {};\n", local_cache_size);
                 }
 
                 // keep a stack of control-flow labels
@@ -2189,6 +2192,15 @@ r#"
   : ((x) == 0 && (y) == 0) ? (signbit(x) ? y : x) \
   : (x > y) ? x : y)
 
+
+#define SET_BIT(cache_idx) \
+        local_cache[cache_idx / 8] |= (0x1 << (cache_idx % 8))
+
+#define CLEAR_BIT(cache_idx) \
+        local_cache[cache_idx / 8] &= ~(0x1 << (cache_idx % 8))
+
+#define GET_BIT(cache_idx) \
+        (local_cache[cache_idx / 8] >> (cache_idx % 8)) & 0x1
 "#).unwrap();
 
         // generate the read/write functions

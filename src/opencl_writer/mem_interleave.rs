@@ -257,6 +257,30 @@ pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interle
                         "return dest;");
     result += &format!("}}\n");
 
+
+    // Emit helper functions for saving/restoring local_cache
+    result += &format!("\n{}\n",
+        "inline void * save_local_cache(uchar *local_cache, size_t len, ulong addr, ulong mem_start, uint warp_id) {");
+    result += &format!("\t{}\n",
+                        "for (uint idx = 0; idx < len; idx++) {");
+                         result += &format!("\t\t{};\n",
+                                            emit_write_u8("addr+idx", "mem_start", "local_cache[idx]", "warp_id"));
+
+    result += &format!("\t}}\n");
+    result += &format!("}}\n");
+
+    result += &format!("\n{}\n",
+        "inline void * restore_local_cache(uchar *local_cache, size_t len, ulong addr, ulong mem_start, uint warp_id) {");
+    result += &format!("\t{}\n",
+                    "for (uint idx = 0; idx < len; idx++) {");
+                    result += &format!("\t\t*local_cache = {};\n",
+                                        emit_read_u8("addr+idx", "mem_start", "warp_id"));
+                    result += &format!("\t\t{}\n",
+                                       "local_cache++;");
+
+result += &format!("\t}}\n");               
+result += &format!("}}\n");
+
     result
 }
 
