@@ -282,17 +282,17 @@ pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interle
     result += &format!("}}\n");
 
     result += &format!("\n{}\n",
-        "__attribute__ ((noinline)) void set_bit(uchar *local_cache, uint cache_idx) {");
+        "inline void set_bit(uchar *local_cache, uint cache_idx) {");
     result += &format!("\tlocal_cache[cache_idx / 8] |= (0x1 << (cache_idx % 8));\n");
     result += &format!("}}\n");
 
     result += &format!("\n{}\n",
-        "__attribute__ ((noinline)) void clear_bit(uchar *local_cache, uint cache_idx) {");
+        "inline void clear_bit(uchar *local_cache, uint cache_idx) {");
     result += &format!("\tlocal_cache[cache_idx / 8] &= ~(0x1 << (cache_idx % 8));\n");
     result += &format!("}}\n");
 
     result += &format!("\n{}\n",
-        "__attribute__ ((noinline)) char get_bit(uchar *local_cache, uint cache_idx) {");
+        "inline char get_bit(uchar *local_cache, uint cache_idx) {");
     result += &format!("\treturn (local_cache[cache_idx / 8] >> (cache_idx % 8)) & 0x1;\n");
     result += &format!("}}\n");
 
