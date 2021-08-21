@@ -47,7 +47,7 @@ pub fn emit_local_set(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut St
     let cache_offset: u32 = *offsets.get(id).unwrap();
     let t = type_info.get(id).unwrap();
     let cache = if !is_fastcall {
-        format!("\tSET_BIT({});\n", cache_offset)
+        format!("\tset_bit(&local_cache, {});\n", cache_offset)
     } else {
         String::from("")
     };
@@ -79,7 +79,7 @@ pub fn emit_local_tee(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Sta
     let t = type_info.get(id).unwrap();
     let cache_offset: u32 = *offsets.get(id).unwrap();
     let cache = if !is_fastcall {
-        format!("\tSET_BIT({});\n", cache_offset)
+        format!("\tset_bit(&local_cache, {});\n", cache_offset)
     } else {
         String::from("")
     };

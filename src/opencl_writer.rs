@@ -2191,16 +2191,6 @@ r#"
   : ((y) != (y)) ? NAN                            \
   : ((x) == 0 && (y) == 0) ? (signbit(x) ? y : x) \
   : (x > y) ? x : y)
-
-
-#define SET_BIT(cache_idx) \
-        local_cache[cache_idx / 8] |= (0x1 << (cache_idx % 8))
-
-#define CLEAR_BIT(cache_idx) \
-        local_cache[cache_idx / 8] &= ~(0x1 << (cache_idx % 8))
-
-#define GET_BIT(cache_idx) \
-        (local_cache[cache_idx / 8] >> (cache_idx % 8)) & 0x1
 "#).unwrap();
 
         // generate the read/write functions
