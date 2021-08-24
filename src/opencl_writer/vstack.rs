@@ -78,6 +78,8 @@ pub struct StackCtx {
     stack_frame_stack: Vec<u32>,
     // The context map of restore points
     restore_context_map: HashMap<u32, HashSet<String>>,
+    // The context map of save points
+    save_context_map: HashMap<u32, HashSet<String>>,
     // Track each intermediate type separately
     i32_stack: Vec<String>,
     i32_idx: usize,
@@ -159,6 +161,7 @@ impl<'a> StackCtx {
          * As we encounter Loops/Calls we push the locals for each save/restore point we encounter
          */
         let mut read_locals: HashSet<String> = HashSet::new();
+        let mut write_locals: HashSet<String> = HashSet::new();
 
         /*
          * We track the locals by stack frame, starting with the top level of the function
@@ -170,6 +173,8 @@ impl<'a> StackCtx {
          * Other save points include function calls & branches targeting 
          */
         let mut restore_context_map: HashMap<u32, HashSet<String>> = HashMap::new();
+        let mut save_context_map: HashMap<u32, HashSet<String>> = HashMap::new();
+
         // Track the active stack frames
         let mut curr_ctx = vec![];
         let mut curr_ctx_idx = 1;
@@ -179,6 +184,7 @@ impl<'a> StackCtx {
 
         // Track the locals that have been read from in a stack frame
         let mut read_locals_stack: Vec<HashSet<String>> = vec![];
+        let mut write_locals_stack: Vec<HashSet<String>> = vec![];
 
 
         // Track all possible loop nestings
@@ -429,6 +435,7 @@ impl<'a> StackCtx {
                     stack_sizes.pop().unwrap();
                     match idx {
                         wast::Index::Id(id) => {
+                            write_locals.insert(id.name().to_string());
                             match local_param_types.get(&id.name().to_string()).unwrap() {
                                 ValType::I32 => {
                                     current_i32_count -= 1;
@@ -453,6 +460,7 @@ impl<'a> StackCtx {
                                 Some(true) => format!("p{}", value),
                                 _ => format!("p{}", value),
                             };
+                            write_locals.insert(id.clone());
                             match local_param_types.get(&id).unwrap() {
                                 ValType::I32 => {
                                     current_i32_count -= 1;
@@ -488,7 +496,8 @@ impl<'a> StackCtx {
                             }
                         },
                     };
-                    read_locals.insert(id);
+                    read_locals.insert(id.clone());
+                    write_locals.insert(id.clone());
                 },
                 wast::Instruction::I32Add => {
                     stack_sizes.pop();
@@ -1472,7 +1481,9 @@ impl<'a> StackCtx {
 
                     // push the stack frame
                     read_locals_stack.push(read_locals.clone());
+                    write_locals_stack.push(write_locals.clone());
                     read_locals.clear();
+                    write_locals.clear();
 
                     curr_ctx.push(curr_ctx_idx);
                     curr_ctx_idx += 1;
@@ -1506,7 +1517,9 @@ impl<'a> StackCtx {
                                         current_f64_count.clone()));
 
                     read_locals_stack.push(read_locals.clone());
+                    write_locals_stack.push(write_locals.clone());
                     read_locals.clear();
+                    write_locals.clear();
 
                     curr_ctx.push(curr_ctx_idx);
                     curr_ctx_idx += 1;
@@ -1526,14 +1539,19 @@ impl<'a> StackCtx {
                             let idx = curr_ctx.pop().unwrap();
                             // save the read locals for this stack frame
                             restore_context_map.insert(idx, read_locals.clone());
+                            save_context_map.insert(idx, write_locals.clone());
                             read_locals = read_locals_stack.pop().unwrap();
+                            write_locals = write_locals_stack.pop().unwrap();
+
                         },
                         ControlStackVStackTypes::Loop => {
                             // pop the stack frame
                             let idx = curr_ctx.pop().unwrap();
                             // save the read locals for this stack frame
                             restore_context_map.insert(idx, read_locals.clone());
+                            save_context_map.insert(idx, write_locals.clone());
                             read_locals = read_locals_stack.pop().unwrap();
+                            write_locals = write_locals_stack.pop().unwrap();
 
                             open_loop_stack.pop().unwrap();
                         },
@@ -1710,11 +1728,13 @@ impl<'a> StackCtx {
         let idx = curr_ctx.pop().unwrap();
         // save the read locals for this stack frame
         restore_context_map.insert(idx, read_locals.clone());
+        save_context_map.insert(idx, write_locals.clone());
     
         StackCtx {
             stack_frame_idx: 1,
             stack_frame_stack: vec![0],
             restore_context_map: restore_context_map,
+            save_context_map: save_context_map,
             i32_stack: i32_stack,
             i32_idx: 0,
             i64_stack: i64_stack,
@@ -2236,9 +2256,16 @@ impl<'a> StackCtx {
         ret_str += &format!("\tsave_local_cache((uchar*)local_cache, {}, {}, (ulong)stack_u32, warp_idx);\n", self.local_cache_size, local_cache_start_offset);
         */
 
+        let map_idx = self.stack_frame_stack.last().unwrap();
+        let locals_set = self.save_context_map.get(map_idx).unwrap().clone();
+
         // save the locals to the stack frame
         if !save_intermediate_only {
             for (local, ty) in self.local_types.iter() {
+                if !locals_set.contains(local) {
+                    continue;
+                }
+
                 let cache_idx: u32 = *self.local_offsets.get(local).unwrap();
                 let offset: i32 = *self.local_offsets.get(local).unwrap() as i32 + self.param_offset;
                 match ty {

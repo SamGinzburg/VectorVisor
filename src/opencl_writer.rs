@@ -1232,7 +1232,7 @@ impl<'a> OpenCLCWriter<'_> {
                 } else {
                     false
                 };
-                emit_end(&self, stack_ctx, id, &label, t, fn_name, result_type, result_register, treat_as_fastcall, debug)
+                emit_end(&self, stack_ctx, id, &label, t, fn_name, result_type, result_register, treat_as_fastcall, loop_idx, debug)
             },
             wast::Instruction::Select(_) => {
                 emit_select(self, stack_ctx, stack_sizes, fn_name, debug)

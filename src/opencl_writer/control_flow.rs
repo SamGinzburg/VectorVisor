@@ -130,7 +130,7 @@ pub fn emit_br_if(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCt
 
 // semantically, the end statement pops from the control stack,
 // in our compiler, this is a no-op
-pub fn emit_end<'a>(_writer: &opencl_writer::OpenCLCWriter<'a>, stack_ctx: &mut StackCtx, _id: &Option<wast::Id<'a>>, label: &str, block_type: u32, fn_name: &str, result_type: Option<StackType>, result_register: Option<String>, is_fastcall: bool, _debug: bool) -> String {
+pub fn emit_end<'a>(_writer: &opencl_writer::OpenCLCWriter<'a>, stack_ctx: &mut StackCtx, _id: &Option<wast::Id<'a>>, label: &str, block_type: u32, fn_name: &str, result_type: Option<StackType>, result_register: Option<String>, is_fastcall: bool, loop_idx: u32, _debug: bool) -> String {
     let mut result = String::from("");
 
     // after a block ends, we need to unwind the stack!
@@ -200,8 +200,12 @@ pub fn emit_end<'a>(_writer: &opencl_writer::OpenCLCWriter<'a>, stack_ctx: &mut 
     }
 
     if !is_fastcall && block_type == 1 {
-        // restore the intermediate values only after ending a block
-        result += &stack_ctx.restore_context_with_result_val(false, false, result_type);
+        let is_tainted = stack_ctx.is_loop_tainted((loop_idx).try_into().unwrap());
+        // we only want to load values if we saved them previously for optimized loops!
+        // this is because we only emit the save for tainted loops
+        if is_tainted {
+            result += &stack_ctx.restore_context_with_result_val(false, false, result_type);
+        }
     } else if !is_fastcall && block_type == 0 {
         // for blocks only restore locals
         result += &stack_ctx.restore_context_with_result_val(false, false, result_type);
@@ -274,9 +278,8 @@ pub fn emit_loop(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx
 pub fn emit_block(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, block: &wast::BlockType, _label: String, _branch_idx_u32: u32, _fn_name: &str, _function_id_map: HashMap<&str, u32>, is_fastcall: bool, _debug: bool) -> String {
     let mut result: String = String::from("");
 
-
     if !is_fastcall {
-        result += &stack_ctx.save_context(false, true);
+        result += &stack_ctx.save_context(false, false);
     }
 
     stack_ctx.vstack_push_stack_frame(false, false);

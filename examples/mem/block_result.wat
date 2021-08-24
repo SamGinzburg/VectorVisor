@@ -18,6 +18,7 @@
     i32.const 3
     i32.const 4
     block (result i32)
+      i32.const 100
     	loop (result i32)
         local.get 0
         i32.const 1
@@ -33,6 +34,7 @@
         i32.ne
         br_if 0
       end
+      i32.add
     end
     i32.add
     i32.add
