@@ -43,7 +43,7 @@
       br_if 0
     end ;; we need to read 0
     end
-    local.get 2
+    local.get 0
   )
   (table $T0 5 5 funcref)
   (elem $e1 0 (i32.const 0) $_add2) ;; the table index can be implicitly 0
