@@ -1220,28 +1220,7 @@ impl<'a> OpenCLCWriter<'_> {
                     _ => format!("l{}", loop_name_count),
                 };
 
-                // Get the type of the block
-                let block_type = get_func_result(&self, &b.ty);
-                let result_register = match block_type {
-                    Some(StackType::i32) => {
-                        Some(stack_ctx.vstack_alloc(StackType::i32))
-                    },
-                    Some(StackType::i64) => {
-                        Some(stack_ctx.vstack_alloc(StackType::i64))
-                    },
-                    Some(StackType::f32) => {
-                        Some(stack_ctx.vstack_alloc(StackType::f32))
-                    },
-                    Some(StackType::f64) => {
-                        Some(stack_ctx.vstack_alloc(StackType::f64))
-                    },
-                    None => None,
-                };
-
-                // the third parameter in the control stack stores loop header entry points
-                control_stack.push((label.to_string(), 1, (*call_ret_idx).try_into().unwrap(), *loop_name_count, block_type, result_register));
-                *loop_name_count += 1;
-                emit_loop(&self, stack_ctx, b, label, *loop_name_count-1, fn_name, function_id_map, call_ret_idx, is_fastcall, is_tainted, debug)
+                emit_loop(&self, stack_ctx, control_stack, b, label, loop_name_count, fn_name, function_id_map, call_ret_idx, is_fastcall, is_tainted, debug)
             }
             // if control_stack.pop() panics, that means we were parsing an incorrectly defined
             // wasm file, each block/loop must have a matching end!

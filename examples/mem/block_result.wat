@@ -5,7 +5,9 @@
     (local i32)
     i32.const 1
     block (result i32)
-    	i32.const 999
+    	block (result i32)
+    	  i32.const 999
+      end
     end
     i32.add
   )

@@ -159,21 +159,8 @@ pub fn emit_end<'a>(_writer: &opencl_writer::OpenCLCWriter<'a>, stack_ctx: &mut 
     };
 
     // unwind the stack frame
-    stack_ctx.vstack_pop_stack_frame(block_type == 1);
-    // pop the *sp tracking data
+    stack_ctx.vstack_pop_stack_frame(block_type == 2);
     stack_ctx.vstack_pop_stack_info();
-    
-    // First restore the context (only for loops/blocks)
-    if !is_fastcall && block_type != 2 {
-        // restore the intermediate values only after ending a block
-        result += &stack_ctx.restore_context(false, true);
-    }
-
-    // If there is a result value to push back, do it here
-    // The top of the stack is the register containing the value 
-    // The next value in the stack is the register we are storing the result into
-    // Do this for blocks / If statements
-
 
     /* 
      * For loops we have the following edge case:
@@ -212,23 +199,47 @@ pub fn emit_end<'a>(_writer: &opencl_writer::OpenCLCWriter<'a>, stack_ctx: &mut 
         result += &format!("\t{}_{}_end:\n", fn_name.replace(".", ""), label);
     }
 
+    // Restore the context (only for loops/blocks)
+    if !is_fastcall && block_type != 2 {
+        // restore the intermediate values only after ending a block
+        result += &stack_ctx.restore_context_with_result_val(false, false, result_type);
+    }
+
     result
 }
 
 // basically the same as emit_block, except we have to reset the stack pointer
 // at the *top* of the block, since we are doing a backwards jump not a forward jump
-pub fn emit_loop(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _block: &wast::BlockType, label: String, _branch_idx_u32: u32, fn_name: &str, _function_id_map: HashMap<&str, u32>, call_ret_idx: &mut u32, is_fastcall: bool, is_loop_tainted: bool, _debug: bool) -> String {
+pub fn emit_loop(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, control_stack: &mut Vec<ControlStackEntryType>, block: &wast::BlockType, label: String, loop_branch_idx: &mut u32, fn_name: &str, _function_id_map: HashMap<&str, u32>, call_ret_idx: &mut u32, is_fastcall: bool, is_loop_tainted: bool, _debug: bool) -> String {
     let mut result: String = String::from("");
+
+    // Get the type of the block
+    let block_type = get_func_result(&writer, &block.ty);
+
+    let result_register = match block_type {
+        Some(StackType::i32) => {
+            Some(stack_ctx.vstack_alloc(StackType::i32))
+        },
+        Some(StackType::i64) => {
+            Some(stack_ctx.vstack_alloc(StackType::i64))
+        },
+        Some(StackType::f32) => {
+            Some(stack_ctx.vstack_alloc(StackType::f32))
+        },
+        Some(StackType::f64) => {
+            Some(stack_ctx.vstack_alloc(StackType::f64))
+        },
+        None => None,
+    };
+
+    // the third parameter in the control stack stores loop header entry points
+    control_stack.push((label.to_string(), 1, (*call_ret_idx).try_into().unwrap(), *loop_branch_idx, block_type, result_register));
+    *loop_branch_idx += 1;
 
     if !is_fastcall && is_loop_tainted {
         // We need to save before we push the new stack frame
         result += &stack_ctx.save_context(false);
-        stack_ctx.vstack_push_stack_frame(false, true);
-
-        // We have to save the context, since this is the entry point for a function call
-        // TODO: optimize this by checking if we actually call a function inside the loop
-        // we can replace with a GOTO in certain situations
-        // This will have *huge* speedups for small loops
+        stack_ctx.vstack_push_stack_frame(false, false);
         stack_ctx.vstack_push_stack_info(stack_ctx.stack_frame_size().try_into().unwrap());
 
         // we convert our loop into a recursive call here - the loop header is treated as a function call re-entry point
@@ -243,7 +254,7 @@ pub fn emit_loop(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCt
     } else {
 
         // save a stack frame but don't save the context here
-        stack_ctx.vstack_push_stack_frame(true, true);
+        stack_ctx.vstack_push_stack_frame(true, false);
         stack_ctx.vstack_push_stack_info(stack_ctx.stack_frame_size().try_into().unwrap());
 
         // emit just the loop header for GOTOs during fastcalls or for non-tainted loops
@@ -258,7 +269,7 @@ pub fn emit_loop(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCt
     result
 }
 
-pub fn emit_block(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _block: &wast::BlockType, _label: String, _branch_idx_u32: u32, _fn_name: &str, _function_id_map: HashMap<&str, u32>, is_fastcall: bool, _debug: bool) -> String {
+pub fn emit_block(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, block: &wast::BlockType, _label: String, _branch_idx_u32: u32, _fn_name: &str, _function_id_map: HashMap<&str, u32>, is_fastcall: bool, _debug: bool) -> String {
     let mut result: String = String::from("");
 
     /*
@@ -270,6 +281,7 @@ pub fn emit_block(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackC
 
     stack_ctx.vstack_push_stack_frame(true, false);
     stack_ctx.vstack_push_stack_info(stack_ctx.stack_frame_size().try_into().unwrap());
+
 
     // we don't emit a label for block statements here, any br's goto the END of the block
     // we don't need to modify the sp here, we will do all stack unwinding in the br instr
@@ -312,13 +324,12 @@ pub fn emit_if(writer: &opencl_writer::OpenCLCWriter, label: String, fn_name: St
     };
 
     // Now save the stack frame
-    stack_ctx.vstack_push_stack_frame(true, false);
+    stack_ctx.vstack_push_stack_frame(true, true);
     stack_ctx.vstack_push_stack_info(stack_ctx.stack_frame_size().try_into().unwrap());
 
     // for the control stack, we don't use the third parameter for blocks
     control_stack.push((label, 2, -1, *if_name_count, block_type, result_register));
     *if_name_count += 1;
-    
 
     result
 }
