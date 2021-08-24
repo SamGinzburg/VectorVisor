@@ -1472,6 +1472,8 @@ impl<'a> StackCtx {
 
                     // push the stack frame
                     read_locals_stack.push(read_locals.clone());
+                    read_locals.clear();
+
                     curr_ctx.push(curr_ctx_idx);
                     curr_ctx_idx += 1;
                 },
@@ -1504,6 +1506,8 @@ impl<'a> StackCtx {
                                         current_f64_count.clone()));
 
                     read_locals_stack.push(read_locals.clone());
+                    read_locals.clear();
+
                     curr_ctx.push(curr_ctx_idx);
                     curr_ctx_idx += 1;
 

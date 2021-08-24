@@ -25,6 +25,10 @@
         call_indirect (type 0)
         local.tee 0
         local.get 0
+        i32.const 777
+        i32.eq
+        br_if 1
+        local.get 0
     	  i32.const 1000
         i32.ne
         br_if 0

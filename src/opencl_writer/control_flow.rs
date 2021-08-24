@@ -199,13 +199,12 @@ pub fn emit_end<'a>(_writer: &opencl_writer::OpenCLCWriter<'a>, stack_ctx: &mut 
         result += &format!("\t{}_{}_end:\n", fn_name.replace(".", ""), label);
     }
 
-    // Restore the context (only for loops)
     if !is_fastcall && block_type == 1 {
         // restore the intermediate values only after ending a block
         result += &stack_ctx.restore_context_with_result_val(false, false, result_type);
     } else if !is_fastcall && block_type == 0 {
         // for blocks only restore locals
-        result += &stack_ctx.restore_context_with_result_val(true, false, result_type);
+        result += &stack_ctx.restore_context_with_result_val(false, false, result_type);
     }
 
     result
@@ -277,11 +276,10 @@ pub fn emit_block(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCt
 
 
     if !is_fastcall {
-        result += &stack_ctx.save_context(true, false);
+        result += &stack_ctx.save_context(false, true);
     }
 
-
-    stack_ctx.vstack_push_stack_frame(true, false);
+    stack_ctx.vstack_push_stack_frame(false, false);
     stack_ctx.vstack_push_stack_info(stack_ctx.stack_frame_size().try_into().unwrap());
 
 
