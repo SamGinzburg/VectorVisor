@@ -285,6 +285,10 @@ pub fn emit_block(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCt
     stack_ctx.vstack_push_stack_frame(false, false);
     stack_ctx.vstack_push_stack_info(stack_ctx.stack_frame_size().try_into().unwrap());
 
+    // we need to load the locals at the top of each block
+    if !is_fastcall {
+        result += &stack_ctx.restore_context(true, false);
+    }
 
     // we don't emit a label for block statements here, any br's goto the END of the block
     // we don't need to modify the sp here, we will do all stack unwinding in the br instr

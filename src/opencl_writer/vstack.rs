@@ -1809,7 +1809,7 @@ impl<'a> StackCtx {
         // save the context idx values so we can return to them later
         if !is_if_frame {
             self.stack_frame_stack.push(self.stack_frame_idx);
-            self.stack_frame_idx += 1;    
+            self.stack_frame_idx += 1;
         }
     }
 
