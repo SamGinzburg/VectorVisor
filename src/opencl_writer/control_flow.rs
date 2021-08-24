@@ -84,7 +84,7 @@ pub fn emit_br(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx,
         if !is_fastcall && is_loop_tainted {
             // If we are targeting a loop, we have to emit a return instead, to convert the iterative loop into a recursive function call
             // save the context, since we are about to call a function (ourself)
-            ret_str += &stack_ctx.save_context(true);
+            ret_str += &stack_ctx.save_context(true, false);
 
             ret_str += &format!("\t{}\n",
                                 "*sfp += 1;");
@@ -238,7 +238,7 @@ pub fn emit_loop(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx
 
     if !is_fastcall && is_loop_tainted {
         // We need to save before we push the new stack frame
-        result += &stack_ctx.save_context(false);
+        result += &stack_ctx.save_context(false, false);
         stack_ctx.vstack_push_stack_frame(false, false);
         stack_ctx.vstack_push_stack_info(stack_ctx.stack_frame_size().try_into().unwrap());
 
@@ -272,12 +272,11 @@ pub fn emit_loop(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx
 pub fn emit_block(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, block: &wast::BlockType, _label: String, _branch_idx_u32: u32, _fn_name: &str, _function_id_map: HashMap<&str, u32>, is_fastcall: bool, _debug: bool) -> String {
     let mut result: String = String::from("");
 
-    /*
-    // We don't need to save the context for blocks
+
     if !is_fastcall {
-        result += &stack_ctx.save_context(false);
+        result += &stack_ctx.save_context(false, true);
     }
-    */
+
 
     stack_ctx.vstack_push_stack_frame(true, false);
     stack_ctx.vstack_push_stack_info(stack_ctx.stack_frame_size().try_into().unwrap());

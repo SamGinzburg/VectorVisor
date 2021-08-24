@@ -206,7 +206,7 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stack
 
     // Now, we need to save the intermediate context
     if !is_indirect && !is_fastcall {
-        ret_str += &stack_ctx.save_context(false);
+        ret_str += &stack_ctx.save_context(false, false);
     }
 
     // We need to manually write the parameters to the stack
@@ -661,7 +661,7 @@ pub fn emit_call_indirect(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut
         _ => (),
     };
 
-    let save_ctx = stack_ctx.save_context(false);
+    let save_ctx = stack_ctx.save_context(false, false);
     let restore_ctx = stack_ctx.restore_context(false, false);
 
     // First, generate the code for fastcall optimized cases for the indirect call

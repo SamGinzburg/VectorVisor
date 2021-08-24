@@ -2205,10 +2205,8 @@ impl<'a> StackCtx {
                 return (i32_range, i64_range, f32_range, f64_range)
             }
         }
-        
-        // If everything is virtual, then there was no previous non-optimized loop save point
-        // ... meaning that we shouldn't be restoring any intermediate values
-        (0..0, 0..0, 0..0, 0..0)
+
+        (0..self.i32_idx, 0..self.i64_idx, 0..self.f32_idx, 0..self.f64_idx)
     }
 
     pub fn emit_restore_local_cache(&self) -> String {
@@ -2219,12 +2217,11 @@ impl<'a> StackCtx {
         format!("\trestore_local_cache((uchar*)local_cache, {}, {}, (ulong)stack_u32, warp_idx);\n", self.local_cache_size, local_cache_start_offset)
     }
 
-
     /*
      * Generate the code to save the context of the current function
      * We can statically determine the minimum
      */
-    pub fn save_context(&mut self, save_locals_only: bool) -> String {
+    pub fn save_context(&mut self, save_locals_only: bool, save_intermediate_only: bool) -> String {
         let mut ret_str = String::from("");
 
         // save the local_cache context
@@ -2236,51 +2233,53 @@ impl<'a> StackCtx {
         */
 
         // save the locals to the stack frame
-        for (local, ty) in self.local_types.iter() {
-            let cache_idx: u32 = *self.local_offsets.get(local).unwrap();
-            let offset: i32 = *self.local_offsets.get(local).unwrap() as i32 + self.param_offset;
-            match ty {
-                StackType::i32 => {
-                    ret_str += &format!("\tif (local_cache[{}]) {};\n", cache_idx, &emit_write_u32(&format!("(ulong)(stack_u32+{}+{})",
-                                                                    offset,
-                                                                    &emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx")),
-                                                                    "(ulong)stack_u32",
-                                                                    &local,
-                                                                    "warp_idx"));
-                },
-                StackType::i64 => {
-                    ret_str += &format!("\tif (local_cache[{}]) {};\n", cache_idx, &emit_write_u64(&format!("(ulong)(stack_u32+{}+{})",
-                                                                    offset, 
-                                                                    &emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx")),
-                                                                    "(ulong)stack_u32",
-                                                                    &local,
-                                                                    "warp_idx"));
-                },
-                StackType::f32 => {
-                    ret_str += &format!("\tif (local_cache[{}]) {{\n", cache_idx);
-                    ret_str += &format!("\t\tuint temp = 0;\n");
-                    ret_str += &format!("\t\t___private_memcpy_nonmmu(&temp, &{}, sizeof(float));\n", local);
-                    ret_str += &format!("\t\t{};\n", &emit_write_u32(&format!("(ulong)(stack_u32+{}+{})",
-                                                                    offset, 
-                                                                    &emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx")),
-                                                                    "(ulong)stack_u32",
-                                                                    "temp",
-                                                                    "warp_idx"));
-                    ret_str += &format!("\t}}\n");
-                },
-                StackType::f64 => {
-                    ret_str += &format!("\tif (local_cache[{}]) {{\n", cache_idx);
-                    ret_str += &format!("\t\tulong temp = 0;\n");
-                    ret_str += &format!("\t\t___private_memcpy_nonmmu(&temp, &{}, sizeof(double));\n", local);
-                    ret_str += &format!("\t\t{};\n", &emit_write_u64(&format!("(ulong)(stack_u32+{}+{})",
-                                                                    offset, 
-                                                                    &emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx")),
-                                                                    "(ulong)stack_u32",
-                                                                    "temp",
-                                                                    "warp_idx"));
-                    ret_str += &format!("\t}}\n");
+        if !save_intermediate_only {
+            for (local, ty) in self.local_types.iter() {
+                let cache_idx: u32 = *self.local_offsets.get(local).unwrap();
+                let offset: i32 = *self.local_offsets.get(local).unwrap() as i32 + self.param_offset;
+                match ty {
+                    StackType::i32 => {
+                        ret_str += &format!("\tif (local_cache[{}]) {};\n", cache_idx, &emit_write_u32(&format!("(ulong)(stack_u32+{}+{})",
+                                                                        offset,
+                                                                        &emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx")),
+                                                                        "(ulong)stack_u32",
+                                                                        &local,
+                                                                        "warp_idx"));
+                    },
+                    StackType::i64 => {
+                        ret_str += &format!("\tif (local_cache[{}]) {};\n", cache_idx, &emit_write_u64(&format!("(ulong)(stack_u32+{}+{})",
+                                                                        offset, 
+                                                                        &emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx")),
+                                                                        "(ulong)stack_u32",
+                                                                        &local,
+                                                                        "warp_idx"));
+                    },
+                    StackType::f32 => {
+                        ret_str += &format!("\tif (local_cache[{}]) {{\n", cache_idx);
+                        ret_str += &format!("\t\tuint temp = 0;\n");
+                        ret_str += &format!("\t\t___private_memcpy_nonmmu(&temp, &{}, sizeof(float));\n", local);
+                        ret_str += &format!("\t\t{};\n", &emit_write_u32(&format!("(ulong)(stack_u32+{}+{})",
+                                                                        offset, 
+                                                                        &emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx")),
+                                                                        "(ulong)stack_u32",
+                                                                        "temp",
+                                                                        "warp_idx"));
+                        ret_str += &format!("\t}}\n");
+                    },
+                    StackType::f64 => {
+                        ret_str += &format!("\tif (local_cache[{}]) {{\n", cache_idx);
+                        ret_str += &format!("\t\tulong temp = 0;\n");
+                        ret_str += &format!("\t\t___private_memcpy_nonmmu(&temp, &{}, sizeof(double));\n", local);
+                        ret_str += &format!("\t\t{};\n", &emit_write_u64(&format!("(ulong)(stack_u32+{}+{})",
+                                                                        offset, 
+                                                                        &emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx")),
+                                                                        "(ulong)stack_u32",
+                                                                        "temp",
+                                                                        "warp_idx"));
+                        ret_str += &format!("\t}}\n");
+                    }
                 }
-            }
+            }    
         }
 
         // Now go through and save the intermediate values

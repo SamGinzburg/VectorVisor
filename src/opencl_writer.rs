@@ -187,7 +187,7 @@ impl<'a> OpenCLCWriter<'_> {
         // We need to save the context early, because we are going to need the stack parameters after returning...
         // But only if we are actually going to return to avoid overwriting ret vals
         if !is_proc_exit_start {
-            ret_str += &stack_ctx.save_context(false);
+            ret_str += &stack_ctx.save_context(false, false);
         }
 
         // set the hypercall ret flag flag + r
