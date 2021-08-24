@@ -36,7 +36,7 @@ pub fn emit_return(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackC
 }
 
 // this function is semantically equivalent to function_unwind
-pub fn emit_br(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, idx: wast::Index, fn_name: &str, control_stack: &mut Vec<ControlStackEntryType>, function_id_map: HashMap<&str, u32>, is_fastcall: bool, _debug: bool) -> String {
+pub fn emit_br(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, idx: wast::Index, fn_name: &str, control_stack: &mut Vec<ControlStackEntryType>, function_id_map: HashMap<&str, u32>, is_fastcall: bool, from_br_table: bool, _debug: bool) -> String {
     let mut ret_str = String::from("");
 
     // we need to do linear scans for blocks that are pre-named
@@ -73,6 +73,10 @@ pub fn emit_br(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx,
         }
 
         if !is_fastcall {
+            // we have to save locals on exiting the stack frame, unless we do it in br_table
+            if !from_br_table {
+                ret_str += &stack_ctx.save_context(true, false);
+            }
             ret_str += &format!("\t{}\n", format!("goto {}_{};", format!("{}{}", "__", fn_name.replace(".", "")), block_name));
         } else {
             ret_str += &format!("\t{}\n", format!("goto {}_{}_fastcall;", format!("{}{}", "__", fn_name.replace(".", "")), block_name));
@@ -84,7 +88,10 @@ pub fn emit_br(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx,
         if !is_fastcall && is_loop_tainted {
             // If we are targeting a loop, we have to emit a return instead, to convert the iterative loop into a recursive function call
             // save the context, since we are about to call a function (ourself)
-            ret_str += &stack_ctx.save_context(true, false);
+            // in br_table we unconditionally save the current locals
+            if !from_br_table {
+                ret_str += &stack_ctx.save_context(true, false);
+            }
 
             ret_str += &format!("\t{}\n",
                                 "*sfp += 1;");
@@ -122,7 +129,7 @@ pub fn emit_br_if(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCt
     let reg = stack_ctx.vstack_pop(StackType::i32);
 
     ret_str += &format!("\tif ({} != 0) {{\n", reg);
-    ret_str += &emit_br(writer, stack_ctx, idx, fn_name, control_stack, function_id_map, is_fastcall, debug);
+    ret_str += &emit_br(writer, stack_ctx, idx, fn_name, control_stack, function_id_map, is_fastcall, false, debug);
     ret_str += &format!("\t}}\n");
 
     ret_str
@@ -157,6 +164,16 @@ pub fn emit_end<'a>(_writer: &opencl_writer::OpenCLCWriter<'a>, stack_ctx: &mut 
         },
         (_, _) => (false, None),
     };
+
+    // before unwinding the stack frame, save the current locals for blocks & loops
+    if !is_fastcall && block_type == 0 {
+        result += &stack_ctx.save_context(true, false);
+    } else if !is_fastcall && block_type == 1 {
+        let is_tainted = stack_ctx.is_loop_tainted((loop_idx).try_into().unwrap());
+        if is_tainted {
+            result += &stack_ctx.save_context(true, false);
+        }
+    }
 
     // unwind the stack frame
     stack_ctx.vstack_pop_stack_frame(block_type == 2);
@@ -389,20 +406,25 @@ pub fn emit_br_table(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stac
     let label_idx = stack_ctx.vstack_pop(StackType::i32);
     stack_sizes.pop().unwrap();
 
+    // save locals
+    if !is_fastcall {
+        ret_str += &stack_ctx.save_context(true, false);
+    }
+
     // generate a switch case for each label index
     ret_str += &format!("\tswitch({}) {{\n", label_idx);
 
     for index in 0..indicies.len() {
         ret_str += &format!("\t\tcase {}:\n", index);
         // emit br i
-        ret_str += &emit_br(writer, stack_ctx, indicies[index], fn_name, control_stack, function_id_map.clone(), is_fastcall, debug);
+        ret_str += &emit_br(writer, stack_ctx, indicies[index], fn_name, control_stack, function_id_map.clone(), is_fastcall, true, debug);
         ret_str += &format!("\t\t\tbreak;\n");
     }
 
     // we add the default index, if label_idx > than length l*
     ret_str += &format!("\t\tdefault:\n");
     // emit br i
-    ret_str += &emit_br(writer, stack_ctx, table_indicies.default, fn_name, control_stack, function_id_map, is_fastcall, debug);
+    ret_str += &emit_br(writer, stack_ctx, table_indicies.default, fn_name, control_stack, function_id_map, is_fastcall, true, debug);
     ret_str += &format!("\t\t\tbreak;\n");
 
     ret_str += &format!("\t}}\n");

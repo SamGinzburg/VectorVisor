@@ -1226,13 +1226,8 @@ impl<'a> OpenCLCWriter<'_> {
             // wasm file, each block/loop must have a matching end!
             wast::Instruction::End(id) => {
                 let (label, t, _, loop_idx, result_type, result_register) = control_stack.pop().unwrap();
-                
-                let treat_as_fastcall = if (t == 1 && !stack_ctx.is_loop_tainted(loop_idx.try_into().unwrap())) || is_fastcall {
-                    true
-                } else {
-                    false
-                };
-                emit_end(&self, stack_ctx, id, &label, t, fn_name, result_type, result_register, treat_as_fastcall, loop_idx, debug)
+
+                emit_end(&self, stack_ctx, id, &label, t, fn_name, result_type, result_register, is_fastcall, loop_idx, debug)
             },
             wast::Instruction::Select(_) => {
                 emit_select(self, stack_ctx, stack_sizes, fn_name, debug)
@@ -1247,7 +1242,7 @@ impl<'a> OpenCLCWriter<'_> {
                 emit_mem_size(self, stack_ctx, arg, debug)
             },
             wast::Instruction::Return => emit_return(self, stack_ctx, fn_name, start_function_name, hypercall_id_count, is_fastcall, debug),
-            wast::Instruction::Br(idx) => emit_br(self, stack_ctx, *idx, fn_name, control_stack, function_id_map, is_fastcall, debug),
+            wast::Instruction::Br(idx) => emit_br(self, stack_ctx, *idx, fn_name, control_stack, function_id_map, is_fastcall, false, debug),
             wast::Instruction::BrIf(idx) => emit_br_if(self, stack_ctx, *idx, fn_name, stack_sizes, control_stack, function_id_map, is_fastcall, debug),
             wast::Instruction::BrTable(table_idxs) => emit_br_table(self, stack_ctx, table_idxs, fn_name, stack_sizes, control_stack, function_id_map, is_fastcall, debug),
             wast::Instruction::Unreachable => {
@@ -2385,7 +2380,7 @@ r#"
             for function in partition {
                 let fname = function.clone();
                 let func_to_emit = self.func_map.get(&function).unwrap();
-    
+
                 let func = self.emit_function(func_to_emit,
                                               function,
                                               call_ret_map,
