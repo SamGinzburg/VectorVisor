@@ -496,7 +496,6 @@ impl<'a> StackCtx {
                             }
                         },
                     };
-                    read_locals.insert(id.clone());
                     write_locals.insert(id.clone());
                 },
                 wast::Instruction::I32Add => {

@@ -285,7 +285,8 @@ pub fn emit_loop(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx
         if is_fastcall {
             result += &format!("{}\n", format!("{}_{}_fastcall:", format!("{}{}", "__", fn_name.replace(".", "")), label));
         } else {
-            // Emit optimized loops for non-tainted cases 
+            // Emit optimized loops for non-tainted cases
+            result += &stack_ctx.restore_context(true, false);
             result += &format!("{}\n", format!("{}_{}_loop:", format!("{}{}", "__", fn_name.replace(".", "")), label));
         }
     }
