@@ -166,13 +166,9 @@ pub fn emit_end<'a>(_writer: &opencl_writer::OpenCLCWriter<'a>, stack_ctx: &mut 
     };
 
     // before unwinding the stack frame, save the current locals for blocks & loops
-    if !is_fastcall && block_type == 0 {
+    if !is_fastcall && (block_type == 0 || block_type == 1) {
+        // we do this for tainted loops as well
         result += &stack_ctx.save_context(true, false);
-    } else if !is_fastcall && block_type == 1 {
-        let is_tainted = stack_ctx.is_loop_tainted((loop_idx).try_into().unwrap());
-        if is_tainted {
-            result += &stack_ctx.save_context(true, false);
-        }
     }
 
     // unwind the stack frame
