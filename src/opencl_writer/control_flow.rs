@@ -272,6 +272,11 @@ pub fn emit_loop(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx
         *call_ret_idx += 1;
     } else {
 
+        // we need to save locals in these cases as well
+        if !is_fastcall {
+            result += &stack_ctx.save_context(true, false);
+        }
+
         // save a stack frame but don't save the context here
         stack_ctx.vstack_push_stack_frame(true, false);
         stack_ctx.vstack_push_stack_info(stack_ctx.stack_frame_size().try_into().unwrap());

@@ -1035,7 +1035,6 @@ impl<'a> StackCtx {
                     }
                 },
                 wast::Instruction::CallIndirect(call_indirect) => {
-
                     // Taint open loops
                     taint_open_loops(&mut tainted_loops, open_loop_stack.clone());
 
