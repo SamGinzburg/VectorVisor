@@ -298,40 +298,20 @@ pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interle
 
     // emit a special de-interleave memcpy, that reads interleaved memory, and writes to linear
     // memory
-    // These functions guarantee that the CPU-side addresses are 8-byte aligned
     result += &format!("\n{}\n",
         "void ___private_memcpy_gpu2cpu(ulong src, ulong mem_start_src, ulong dst, ulong mem_start_dst, ulong buf_len_bytes, uint warp_id) {");
     result += &format!("\t{}\n",
-                       "ulong *dst_tmp = (ulong*)(dst);");
-
+                       "char *dst_tmp = (char*)(dst);");
     result += &format!("\t{}\n",
-                       "uint idx = 0;");
-    // Compute how many 8-byte reads we can do before defaulting to 1-byte reads
-    // do the big reads
-    result += &format!("\t{}\n",
-                       "for (uint num_big_reads = buf_len_bytes / 8; num_big_reads > 0; num_big_reads--) {");
+                       "for (uint idx = 0; idx < buf_len_bytes; idx++) {");
 
     result += &format!("\t{} = {};\n",
                        "*dst_tmp++",
-                       &emit_read_u64("(ulong)(src+idx)", "(ulong)(mem_start_src)", "warp_id"));
-    result += &format!("\t{}\n",
-                       "idx += 8;");
-    result += &format!("\t{}\n",
-                       "}");
-    // perform any remaining copies
-    result += &format!("\t{}\n",
-                       "uchar *dst_tmp_slow = (uchar*)(dst_tmp);");
-
-    result += &format!("\t{}\n",
-                       "for (; idx < buf_len_bytes; idx++) {");
-
-    result += &format!("\t{} = {};\n",
-                       "*dst_tmp_slow++",
                        &emit_read_u8("(ulong)(src+idx)", "(ulong)(mem_start_src)", "warp_id"));
 
     result += &format!("\t{}\n",
                        "}");
-
+    
     result += &format!("\n{}\n",
                        "}");   
 
@@ -340,38 +320,18 @@ pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interle
     result += &format!("\n{}\n",
         "void ___private_memcpy_cpu2gpu(ulong src, ulong mem_start_src, ulong dst, ulong mem_start_dst, ulong buf_len_bytes, uint warp_id) {");
     result += &format!("\t{}\n",
-                       "ulong *src_tmp = (ulong*)(src);");
-
-    // perform fast writes
+                       "char *src_tmp = (char*)(src);");
+ 
     result += &format!("\t{}\n",
-                       "uint idx = 0;");
-    result += &format!("\t{}\n",
-                       "for (uint num_big_writes = buf_len_bytes / 8; num_big_writes > 0; num_big_writes--) {");
+                       "for (uint idx = 0; idx < buf_len_bytes; idx++) {");
 
     result += &format!("\t{};\n",
-                       emit_write_u64("(ulong)(dst+idx)", "(ulong)(mem_start_dst)",
+                       emit_write_u8("(ulong)(dst+idx)", "(ulong)(mem_start_dst)",
                        "*src_tmp++", "warp_id"));
-
-    result += &format!("\t{}\n",
-                       "idx += 8;");
 
     result += &format!("\t{}\n",
                        "}");
     
-    // do the slow writes
-    result += &format!("\t{}\n",
-                       "uchar *src_tmp_slow = (uchar*)(src_tmp);");
-
-    result += &format!("\t{}\n",
-                       "for (; idx < buf_len_bytes; idx++) {");
-
-    result += &format!("\t{};\n",
-                       emit_write_u8("(ulong)(dst+idx)", "(ulong)(mem_start_dst)",
-                       "*src_tmp_slow++", "warp_id"));
-
-    result += &format!("\t{}\n",
-                       "}");
-
     result += &format!("\n{}\n",
                        "}");   
 
