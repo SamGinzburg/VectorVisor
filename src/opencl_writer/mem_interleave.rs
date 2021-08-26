@@ -32,6 +32,15 @@ use crate::opencl_writer;
  * 
  */
 
+// fast_read/write functions - are for private use only
+fn emit_fast_read_u8(addr: &str , mem_start: &str, warp_id: &str) -> String {
+    format!("fast_read_u8({}, {}, {})", addr, mem_start, warp_id)
+}
+
+fn emit_fast_write_u8(addr: &str , mem_start: &str, value: &str, warp_id: &str) -> String {
+    format!("fast_write_u8({}, {}, {}, {})", addr, mem_start, value, warp_id)
+}
+
 pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interleave: u32, _debug: bool) -> String {
     let mut result = String::from("");
 
@@ -302,12 +311,17 @@ pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interle
         "void ___private_memcpy_gpu2cpu(ulong src, ulong mem_start_src, ulong dst, ulong mem_start_dst, ulong buf_len_bytes, uint warp_id) {");
     result += &format!("\t{}\n",
                        "char *dst_tmp = (char*)(dst);");
+
+
+    result += &format!("\t{}\n",
+                       "ulong addr = (ulong)((global uchar*)(((src)-(ulong)(mem_start_src))*(NUM_THREADS) + warp_id + (ulong)mem_start_src));");
+
     result += &format!("\t{}\n",
                        "for (uint idx = 0; idx < buf_len_bytes; idx++) {");
 
     result += &format!("\t{} = {};\n",
                        "*dst_tmp++",
-                       &emit_read_u8("(ulong)(src+idx)", "(ulong)(mem_start_src)", "warp_id"));
+                       &emit_fast_read_u8("(ulong)(addr+idx*NUM_THREADS)", "(ulong)(mem_start_src)", "warp_id"));
 
     result += &format!("\t{}\n",
                        "}");

@@ -471,9 +471,11 @@ def run_image_bench():
     x=$(cloud-init status)
     done
 
-    go run /tmp/wasm2opencl/benchmarks/imageblur/run_image_blur.go {addr} 8000 {target_rps} 1 60
+    cd /tmp/wasm2opencl/benchmarks/imageblur/
 
-    go run /tmp/wasm2opencl/benchmarks/imageblur/run_image_blur.go {addr} 8000 {target_rps} 1 60
+    go run run_image_blur.go {addr} 8000 {target_rps} 1 60
+
+    go run run_image_blur.go {addr} 8000 {target_rps} 1 60
     """.format(addr=gpu_instance[0].private_dns_name, input_size=1000, target_rps=target_rps)
 
 
@@ -503,9 +505,11 @@ def run_image_bench():
     x=$(cloud-init status)
     done
 
-    go run /tmp/wasm2opencl/benchmarks/imageblur/run_image_blur.go {addr} 8000 {target_rps} 1 60
+    cd /tmp/wasm2opencl/benchmarks/imageblur/
 
-    go run /tmp/wasm2opencl/benchmarks/imageblur/run_image_blur.go {addr} 8000 {target_rps} 1 60
+    go run run_image_blur.go {addr} 8000 {target_rps} 1 60
+
+    go run run_image_blur.go {addr} 8000 {target_rps} 1 60
     """.format(addr=cpu_bench_instance[0].private_dns_name, input_size=1000, target_rps=target_rps)
 
     command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
@@ -705,12 +709,12 @@ while True:
 ssm_client = boto3.client('ssm')
 
 # run pbkdf2 bench
-run_pbkdf2_bench(True)
+#run_pbkdf2_bench(True)
 
-cleanup()
+#cleanup()
 
 # run lz4 bench
-run_lz4_bench()
+#run_lz4_bench()
 
 #cleanup()
 
@@ -723,7 +727,7 @@ run_lz4_bench()
 #run_average_bench()
 
 # run image bench
-#run_image_bench()
+run_image_bench()
 
 # clean up all instances at end
 ec2.instances.filter(InstanceIds = instance_id_list).terminate()

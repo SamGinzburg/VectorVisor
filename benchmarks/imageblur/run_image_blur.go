@@ -78,7 +78,7 @@ func IssueRequests(ip string, port int, req [][]byte, data_ch chan<-[]byte, end_
 		_ = start_read
 		resp, err := client.Do(http_request)
 		if err != nil {
-			fmt.Printf("client err: %s\n", err)
+			//fmt.Printf("client err: %s\n", err)
 			// check to see if we are done
 			if len(end_chan) > 0 {
 				return;
