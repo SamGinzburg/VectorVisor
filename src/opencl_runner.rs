@@ -1825,8 +1825,19 @@ impl OpenCLRunner {
                     dbg!(f32::from_le_bytes(bytes_i32));
                     dbg!(f64::from_le_bytes(bytes_i64));
                 } else {
-                    let result = LittleEndian::read_u32(&check_results_debug[vm_idx as usize..(vm_idx+4) as usize]);
-                    dbg!(result as i32);
+                    let result_i32 = LittleEndian::read_u32(&check_results_debug[512..516]);
+                    let result_i64 = LittleEndian::read_u64(&check_results_debug[512..520]);
+
+                    dbg!(result_i32 as i32);
+                    dbg!(result_i64 as i64);
+                    dbg!(result_i32 as u32);
+                    dbg!(result_i64 as u64);
+                    
+                    let bytes_i32: [u8; 4] = unsafe { transmute(result_i32.to_le()) };
+                    let bytes_i64: [u8; 8] = unsafe { transmute(result_i64.to_le()) };
+
+                    dbg!(f32::from_le_bytes(bytes_i32));
+                    dbg!(f64::from_le_bytes(bytes_i64));
                 }
             }
         }
