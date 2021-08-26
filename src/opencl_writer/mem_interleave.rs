@@ -333,7 +333,7 @@ pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interle
             result += &format!("\t{}\n",
                                "temp = temp << 8;");
             result += &format!("\t{}\n",
-                               "temp += fread_u8((ulong)(((char*)addr)+3), mem_start, warp_id);");
+                               "temp += read_u8((ulong)(((char*)addr)+3), mem_start, warp_id);");
             result += &format!("\t{}\n",
                                "temp = temp << 8;");
             result += &format!("\t{}\n",
