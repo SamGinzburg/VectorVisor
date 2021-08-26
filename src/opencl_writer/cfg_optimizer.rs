@@ -141,9 +141,9 @@ pub fn get_called_funcs(writer_ctx: &OpenCLCWriter, indirect_call_mapping: &Hash
  * each other into the same OpenCL kernel.
  */
 
-pub fn form_partitions(writer_ctx: &OpenCLCWriter, num_funcs_in_partition: u32, instr_count_limit: u32, func_copy_limit: u32, func_names: Vec<&String>, fastcalls: &HashSet<String>, func_map: &HashMap<String, &wast::Func>, imports_map: &HashMap<String, (&str, Option<&str>, wast::ItemSig)>, kernel_compile_stats: &mut HashMap<u32, (u32, u32, u32, u32, u32, u32)>, indirect_call_mapping: &HashMap<u32, &wast::Index>) -> Vec<(u32, HashSet<String>)> {
+pub fn form_partitions(writer_ctx: &OpenCLCWriter, num_funcs_in_partition: u32, instr_count_limit: u32, func_copy_limit: u32, func_names: Vec<String>, fastcalls: &HashSet<String>, func_map: &HashMap<String, &wast::Func>, imports_map: &HashMap<String, (&str, Option<&str>, wast::ItemSig)>, kernel_compile_stats: &mut HashMap<u32, (u32, u32, u32, u32, u32, u32)>, indirect_call_mapping: &HashMap<u32, &wast::Index>) -> Vec<(u32, HashSet<String>)> {
 
-    let mut func_set = HashSet::<&String>::from_iter(func_names);
+    let mut func_set = HashSet::<String>::from_iter(func_names.clone());
     let mut partitions: Vec<(u32, HashSet<String>)> = vec![];
     let mut partition_idx = 0;
     /*
@@ -161,7 +161,9 @@ pub fn form_partitions(writer_ctx: &OpenCLCWriter, num_funcs_in_partition: u32, 
     // track which partitions have a function duplicated in
     let mut dc_partitions: HashMap<String, HashSet<u32>> = HashMap::new();
 
-    let mut func_list = Vec::from_iter(func_set.clone());
+    // we don't need to de-dup function names with a set
+    let mut func_list = Vec::from_iter(func_names.clone());
+
     while let Some(f_name) = func_list.pop() {
         let mut current_partition = HashSet::<String>::new();
 
@@ -170,7 +172,7 @@ pub fn form_partitions(writer_ctx: &OpenCLCWriter, num_funcs_in_partition: u32, 
             continue
         }
 
-        current_partition.insert(String::from(f_name));
+        current_partition.insert(String::from(f_name.clone()));
 
         let (loop_called_fns, called_fns) = get_called_funcs(writer_ctx, indirect_call_mapping, func_map.get(&f_name.clone()).unwrap(), fastcalls, func_map, imports_map, &mut HashSet::new());
 
@@ -248,7 +250,7 @@ pub fn form_partitions(writer_ctx: &OpenCLCWriter, num_funcs_in_partition: u32, 
         }
 
         // only remove this if we managed to form a partition with at least 1 other function
-        func_set.remove(f_name);
+        func_set.remove(&f_name);
 
         /*
          * At this point we have formed the partition, but we may now have duplicate functions

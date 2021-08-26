@@ -90,6 +90,7 @@ pub struct OpenCLCWriter<'a> {
     imports_map: HashMap<String, (&'a str, Option<&'a str>, wast::ItemSig<'a>)>,
     // map of item.id -> (module, field)
     func_map: HashMap<String, wast::Func<'a>>,
+    func_names: Vec<String>,
     tables: Vec<wast::Table<'a>>,
     memory: Vec<wast::Memory<'a>>,
     globals: Vec<wast::Global<'a>>,
@@ -106,6 +107,7 @@ impl<'a> OpenCLCWriter<'_> {
             types: HashMap::new(),
             imports_map: HashMap::new(),
             func_map: HashMap::new(),
+            func_names: vec!(),
             tables: vec!(),
             memory: vec!(),
             globals: vec!(),
@@ -148,9 +150,11 @@ impl<'a> OpenCLCWriter<'_> {
                             match f.id {
                                 Some(f_id) => {
                                     self.func_map.insert(f_id.name().to_string(), f);
+                                    self.func_names.push(f_id.name().to_string());
                                 },
                                 None => {
                                     self.func_map.insert(format!("func_{}", func_name_count), f);
+                                    self.func_names.push(format!("func_{}", func_name_count));
                                     func_name_count += 1;
                                 },
                             };
@@ -2370,7 +2374,7 @@ r#"
 
         // Compute the function groups, we will then enumerate the groups to emit the functions
         // kernel_partition_mapping get the partition ID from a function idx
-        let partitions = form_partitions(&self, max_partitions, max_loc_in_partition, max_duplicate_funcs, self.func_map.keys().collect(), &fast_function_set, &func_mapping, &self.imports_map, &mut kernel_compile_stats, indirect_call_mapping);
+        let partitions = form_partitions(&self, max_partitions, max_loc_in_partition, max_duplicate_funcs, self.func_names.clone(), &fast_function_set, &func_mapping, &self.imports_map, &mut kernel_compile_stats, indirect_call_mapping);
 
         for (partition_idx, partition) in partitions.clone() {
             let mut function_idx_label_temp: HashMap<String, u32> = HashMap::new();
