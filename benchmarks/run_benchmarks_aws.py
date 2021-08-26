@@ -5,8 +5,8 @@ import time
 
 target_rps = 5000
 TIMEOUT_MINUTES = 120
-#local_group_size = 64
-local_group_size = 999999
+local_group_size = 16
+#local_group_size = 999999
 
 ec2 = boto3.resource('ec2')
 ec2_client = boto3.client('ec2')
@@ -79,27 +79,27 @@ userdata_ubuntu = """#cloud-config
      - cd benchmarks/
      - cd json-compression-lz4/
      - sudo ~/.cargo/bin/cargo build --release
-     - wasm-opt target/wasm32-wasi/release/json-compression.wasm -O4 -c -o target/wasm32-wasi/release/json-compression-opt.wasm
+     - wasm-opt target/wasm32-wasi/release/json-compression.wasm -O2 -c -o target/wasm32-wasi/release/json-compression-opt.wasm
      - cd ..
      - cd json-compression/
      - sudo ~/.cargo/bin/cargo build --release
-     - wasm-opt target/wasm32-wasi/release/json-compression.wasm -O4 -c -o target/wasm32-wasi/release/json-compression-opt.wasm
+     - wasm-opt target/wasm32-wasi/release/json-compression.wasm -O2 -c -o target/wasm32-wasi/release/json-compression-opt.wasm
      - cd ..
      - cd average/
      - sudo ~/.cargo/bin/cargo build --release
-     - wasm-opt target/wasm32-wasi/release/average.wasm -O4 -c -o target/wasm32-wasi/release/average-opt.wasm
+     - wasm-opt target/wasm32-wasi/release/average.wasm -O2 -c -o target/wasm32-wasi/release/average-opt.wasm
      - cd ..
      - cd pbkdf2/
      - sudo ~/.cargo/bin/cargo build --release
-     - wasm-opt target/wasm32-wasi/release/pbkdf2.wasm -O4 -c -o target/wasm32-wasi/release/pbkdf2-opt.wasm
+     - wasm-opt target/wasm32-wasi/release/pbkdf2.wasm -O2 -c -o target/wasm32-wasi/release/pbkdf2-opt.wasm
      - cd ..
      - cd nlp-count-vectorizer/
      - sudo ~/.cargo/bin/cargo build --release
-     - wasm-opt target/wasm32-wasi/release/nlp-count-vectorizer.wasm -O4 -c -o target/wasm32-wasi/release/nlp-count-vectorizer-opt.wasm
+     - wasm-opt target/wasm32-wasi/release/nlp-count-vectorizer.wasm -O2 -c -o target/wasm32-wasi/release/nlp-count-vectorizer-opt.wasm
      - cd ..
      - cd imageblur/
      - sudo ~/.cargo/bin/cargo build --release
-     - wasm-opt target/wasm32-wasi/release/imageblur.wasm -O4 -c -o target/wasm32-wasi/release/imageblur-opt.wasm
+     - wasm-opt target/wasm32-wasi/release/imageblur.wasm -O2 -c -o target/wasm32-wasi/release/imageblur-opt.wasm
 """
 
 
@@ -452,7 +452,7 @@ def run_image_bench():
     x=$(cloud-init status)
     done
 
-    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/imageblur/target/wasm32-wasi/release/imageblur-opt.wasm --ip=0.0.0.0 --heap=4194304 --stack=262144 --hcallsize=524288 --partition=true --serverless=true --vmcount=3072 --vmgroups=1 --maxdup=3 --disablefastcalls=false --lgroup={lgroup} &> /tmp/imageblur.log &
+    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/imageblur/target/wasm32-wasi/release/imageblur-opt.wasm --ip=0.0.0.0 --heap=4194304 --stack=262144 --hcallsize=524288 --partition=true --serverless=true --vmcount=3072 --vmgroups=1 --maxdup=3 --disablefastcalls=false --maxloc=1000000 --lgroup={lgroup} &> /tmp/imageblur.log &
     """.format(lgroup=local_group_size)
 
     run_command(run_image_command, "run_imageblur_gpu_command", gpu_instance[0].id)
@@ -550,7 +550,7 @@ def run_nlp_count_bench():
     x=$(cloud-init status)
     done
 
-    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/target/wasm32-wasi/release/nlp-count-vectorizer-opt.wasm --ip=0.0.0.0 --heap=4194304 --stack=262144 --hcallsize=524288 --partition=true --serverless=true --vmcount=3072 --vmgroups=1 --maxdup=3 --disablefastcalls=false --lgroup={lgroup} &> /tmp/nlp-count-vectorizer.log &
+    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/target/wasm32-wasi/release/nlp-count-vectorizer-opt.wasm --ip=0.0.0.0 --heap=4194304 --stack=262144 --hcallsize=524288 --partition=true --serverless=true --vmcount=3072 --vmgroups=1 --maxdup=3 --disablefastcalls=false --lgroup={lgroup} --maxloc=1000000 &> /tmp/nlp-count-vectorizer.log &
     """.format(lgroup=local_group_size)
 
     run_command(run_nlp_command, "run_nlp_command", gpu_instance[0].id)
@@ -730,6 +730,7 @@ cleanup()
 
 # run image bench
 run_image_bench()
+
 
 # clean up all instances at end
 ec2.instances.filter(InstanceIds = instance_id_list).terminate()
