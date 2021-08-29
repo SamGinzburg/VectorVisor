@@ -719,6 +719,8 @@ impl OpenCLRunner {
             },
             InputProgram::PartitionedBinary(map, kernel_partition_mappings) => {
                 let mut final_hashmap: HashMap<u32, ocl::core::Program> = HashMap::new();
+                // create the build log
+                File::create(format!("recent.buildlog")).unwrap();
 
                 // map contains a mapping of u32 (function ID) -> program
                 let binary_start = std::time::Instant::now();
@@ -736,8 +738,14 @@ impl OpenCLRunner {
                         Err(e) => panic!("Unable to create program from given binary: {:?}", e),
                     };
                     ocl::core::build_program(&program_to_run, Some(&[device_id]), &CString::new(format!("{} -DNUM_THREADS={} -DVMM_STACK_SIZE_BYTES={} -DVMM_HEAP_SIZE_BYTES={}", compile_flags, self.num_vms, stack_size, heap_size)).unwrap(), None, None).unwrap();
-                    let knames = ocl::core::get_program_info(&program_to_run, ocl::core::ProgramInfo::KernelNames);
-                    println!("Loaded kernels: {}", knames.unwrap());
+                    let buildinfo = ocl::core::get_program_build_info(&program_to_run,
+                                                                      &device_id,
+                                                                      ocl::core::ProgramBuildInfo::BuildLog).unwrap();
+                    let mut build_log = OpenOptions::new().append(true).open("recent.buildlog").unwrap();
+                    
+                    build_log.write_all(&format!("Compiler output for partition ID: {}\n\n", *id).into_bytes()).unwrap();
+                    build_log.write_all(&format!("{}\n", buildinfo.to_string()).into_bytes()).unwrap();
+
                     pb.set_position(count);
                     count += 1;
                     final_hashmap.insert(*id, program_to_run);

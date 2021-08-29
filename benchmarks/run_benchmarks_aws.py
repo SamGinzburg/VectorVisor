@@ -5,8 +5,8 @@ import time
 
 target_rps = 5000
 TIMEOUT_MINUTES = 120
-local_group_size = 16
-#local_group_size = 999999
+#local_group_size = 16
+local_group_size = 999999
 
 ec2 = boto3.resource('ec2')
 ec2_client = boto3.client('ec2')
@@ -452,7 +452,7 @@ def run_image_bench():
     x=$(cloud-init status)
     done
 
-    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/imageblur/target/wasm32-wasi/release/imageblur-opt.wasm --ip=0.0.0.0 --heap=4194304 --stack=262144 --hcallsize=524288 --partition=true --serverless=true --vmcount=3072 --vmgroups=1 --maxdup=3 --disablefastcalls=false --maxloc=1000000 --lgroup={lgroup} &> /tmp/imageblur.log &
+    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/imageblur/target/wasm32-wasi/release/imageblur-opt.wasm --ip=0.0.0.0 --heap=4194304 --stack=262144 --hcallsize=524288 --partition=true --serverless=true --vmcount=3072 --vmgroups=1 --maxdup=3 --disablefastcalls=false --maxloc=2000000 --lgroup={lgroup} &> /tmp/imageblur.log &
     """.format(lgroup=local_group_size)
 
     run_command(run_image_command, "run_imageblur_gpu_command", gpu_instance[0].id)
@@ -711,9 +711,9 @@ while True:
 ssm_client = boto3.client('ssm')
 
 # run pbkdf2 bench
-run_pbkdf2_bench(True)
+#run_pbkdf2_bench(True)
 
-cleanup()
+#cleanup()
 
 # run lz4 bench
 #run_lz4_bench()

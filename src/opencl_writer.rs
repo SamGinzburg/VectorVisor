@@ -1841,7 +1841,7 @@ impl<'a> OpenCLCWriter<'_> {
         // if we are an OpenCL kernel and we are not the control function, we only need the function header itself
         } else {
             write!(output, "{}", format!("
-void {}(global uint   *stack_u32,
+__attribute__((always_inline)) void {}(global uint   *stack_u32,
     global ulong  *stack_u64,
     global uint   *heap_u32,
     global ulong  *heap_u64,
@@ -2343,7 +2343,7 @@ r#"
                 }
             };
             let calling_func_name = format!("{}{}", "__", fastfunc.to_string().replace(".", ""));
-            let func_declaration = format!("static {} {}_fastcall({}global uint *, global uint *, global uint *, global uint *, ulong);\n", func_ret_val, calling_func_name, parameter_list);
+            let func_declaration = format!("{} {}_fastcall({}global uint *, global uint *, global uint *, global uint *, ulong);\n", func_ret_val, calling_func_name, parameter_list);
             write!(fastcall_header, "{}", func_declaration).unwrap();
         }
 
