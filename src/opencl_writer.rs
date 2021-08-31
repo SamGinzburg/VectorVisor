@@ -2078,7 +2078,7 @@ __attribute__((always_inline)) void {}(global uint   *stack_u32,
                 write!(ret_str, "\t\tprintf(\"{}\\n\");\n", format!("{}{}", "__", key.replace(".", ""))).unwrap();
             }
             // strip illegal chars from function names
-            write!(ret_str, "\t\t\t{}({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {});\n",
+            write!(ret_str, "\t\t\t{}({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {});\n",
                             format!("{}{}", "__", key.replace(".", "")),
                             "stack_u32",
                             "stack_u64",
@@ -2097,6 +2097,7 @@ __attribute__((always_inline)) void {}(global uint   *stack_u32,
                             "max_mem_size",
                             "is_calling",
                             "warp_idx",
+                            "thread_idx",
                             "*hcall_size",
                             "entry_point",
                             "*hcall_ret_val").unwrap();
