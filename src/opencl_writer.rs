@@ -1281,6 +1281,7 @@ impl<'a> OpenCLCWriter<'_> {
                      debug_call_print: bool,
                      start_function: String,
                      is_gpu: bool,
+                     reduction_size: &mut u32,
                      is_fastcall: bool,
                      debug: bool) -> (String, u32, HashSet<String>) {
         let mut final_string = String::from("");
@@ -1356,7 +1357,7 @@ impl<'a> OpenCLCWriter<'_> {
 
                 // Now that we have the type info for the parameters and locals, we can generate the stack context
                 // First, generate the stack context for the function
-                let mut stack_ctx = StackCtx::initialize_context(&self, &expression.instrs, &local_type_info, &local_parameter_stack_offset, &is_param, fastcall_set.clone(), param_offset, indirect_call_mapping, fn_name.clone(), is_gpu);
+                let mut stack_ctx = StackCtx::initialize_context(&self, &expression.instrs, &local_type_info, &local_parameter_stack_offset, &is_param, fastcall_set.clone(), param_offset, indirect_call_mapping, fn_name.clone(), reduction_size, local_work_group, is_gpu);
                 fastfunc_calls = stack_ctx.called_fastcalls();
 
                 // function entry point
@@ -1412,7 +1413,7 @@ impl<'a> OpenCLCWriter<'_> {
                 final_string += &cache_arr;
 
                 // emit the necessary intermediate values
-                final_string += &stack_ctx.emit_intermediates(is_fastcall);
+                final_string += &stack_ctx.emit_intermediates(is_fastcall, local_work_group);
 
                 if debug_call_print && !is_fastcall {
                     write!(final_string, "\t\tprintf(\"*sfp = %d\\n\", *sfp);\n").unwrap();
@@ -1477,7 +1478,7 @@ impl<'a> OpenCLCWriter<'_> {
                     write!(final_string, "\t}} else {{\n").unwrap();
                     // If we are running the func for the first time, init param intermediates
                     final_string += &stack_ctx.emit_load_params(debug_call_print);
-                    write!(final_string, "\t}}\n").unwrap();    
+                    write!(final_string, "\t}}\n").unwrap();
                 }
 
                 /*
@@ -1732,6 +1733,7 @@ impl<'a> OpenCLCWriter<'_> {
                     uint   *max_mem_size,
                     uchar  *is_calling,
                     ulong  warp_idx,
+                    ulong  thread_idx,
                     uint   hcall_size,
                     uint   *entry_point,
                     uint   *hcall_ret_val)", fn_name)).unwrap();
@@ -1753,6 +1755,7 @@ impl<'a> OpenCLCWriter<'_> {
                     uint   *max_mem_size,
                     uchar  *is_calling,
                     ulong  warp_idx,
+                    ulong  thread_idx,
                     uint   hcall_size,
                     uint   *entry_point,
                     uint   hcall_ret_val)", fn_name)).unwrap();
@@ -1790,7 +1793,7 @@ impl<'a> OpenCLCWriter<'_> {
             write!(output, "{}", header).unwrap();
             // TODO: for the openCL launcher, pass the memory stride as a function parameter
             if interleave > 0 {
-                write!(output, "\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\n\t{}\n",
+                write!(output, "\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\n\t{}\n",
                 "global uint  *stack_u32    = (global uint*)stack_u32_global;",
                 "global ulong *stack_u64    = (global ulong*)stack_u32;",
                 "global uint  *heap_u32     = (global uint *)heap_u32_global;",
@@ -1813,11 +1816,12 @@ impl<'a> OpenCLCWriter<'_> {
                 "global uchar *is_calling = (global uchar *)is_calling_global+(get_global_id(0));",
                 "global uint  *entry_point   = (global uint*)entry_point_global+get_global_id(0);",
                 "ulong warp_idx = get_global_id(0);",
+                "ulong thread_idx = get_local_id(0);",
                 "global uint  *hcall_ret_val = (global uint*)hcall_ret_val_global+get_global_id(0);",
                 "global uint  *hcall_size = (global uint*)hcall_size_global+get_global_id(0);").unwrap();
             } else {
                 // The pointer math must be calculated in terms of bytes, which is why we cast to (char*) first
-                write!(output, "\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\n\t{}\n",
+                write!(output, "\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\n\t{}\n",
                 format!("global uint  *stack_u32    = (global uint*)((global char*)stack_u32_global+(get_global_id(0) * {}));", stack_size_bytes),
                 "global ulong *stack_u64    = (global ulong*)stack_u32;",
                 format!("global uint  *heap_u32     = (global uint *)((global char*)heap_u32_global+(get_global_id(0) * {}));", heap_size_bytes),
@@ -1841,6 +1845,7 @@ impl<'a> OpenCLCWriter<'_> {
                 "global uchar *is_calling = (global uchar *)is_calling_global+(get_global_id(0));",
                 "global uint  *entry_point   = (global uint *)entry_point_global+get_global_id(0);",
                 "ulong warp_idx = get_global_id(0);",
+                "ulong thread_idx = get_local_id(0);",
                 "global uint  *hcall_ret_val = (global uint*)hcall_ret_val_global+get_global_id(0);").unwrap();
             }
         // if we are an OpenCL kernel and we are not the control function, we only need the function header itself
@@ -1863,6 +1868,7 @@ __attribute__((always_inline)) void {}(global uint   *stack_u32,
     global uint   *max_mem_size,
     global uchar  *is_calling,
     ulong  warp_idx,
+    ulong  thread_idx,
     uint   hcall_size,
     global uint   *entry_point,
     uint hcall_ret_val)", fn_name)).unwrap();
@@ -2374,6 +2380,7 @@ r#"
                                             debug_print_function_calls,
                                             start_func.clone(),
                                             is_gpu,
+                                            &mut 0,
                                             true,
                                             debug);
             fast_func_size.insert(fastfunc.to_string(), func_size);
@@ -2436,9 +2443,9 @@ r#"
             let mut partition_func_str = String::from("");
 
             // for each function in a partition, perform codegen
-            let mut partition_intermediate_size = vec![];;
+            let mut partition_intermediate_size = vec![];
             let mut temp_partition = String::from("");
-            for function in partition {
+            for function in partition.clone() {
                 let fname = function.clone();
                 let func_to_emit = self.func_map.get(&function).unwrap();
 
@@ -2456,6 +2463,7 @@ r#"
                                               debug_print_function_calls,
                                               start_func.clone(),
                                               is_gpu,
+                                              &mut 0,
                                               false,
                                               debug);
                 // perform conservative estimate of required register space
@@ -2476,9 +2484,54 @@ r#"
             let sum_partition_reg_usage = partition_intermediate_size.iter().sum::<u32>();
             println!("max size: {}, sum size: {}, part_idx: {}", &max_partition_reg_usage, &sum_partition_reg_usage, partition_idx);
 
+            // If constraint exceeded, regenerate the partition with constraints
+            if *max_partition_reg_usage > 10000 {
+                /*
+                 * Compute size to reduce kernel by:
+                 * 
+                 * For now:
+                 * max_partition_reg_usage > 10000 => Move 128, 4 byte sized locals or 64 8 byte sized locals
+                 */
+                let reduction_size: &mut u32 = &mut 512;
+
+                temp_partition = String::from("");
+                for function in partition.clone() {
+                    let fname = function.clone();
+                    let func_to_emit = self.func_map.get(&function).unwrap();
+    
+                    let (func, intermediate_size, called_fastcalls) = self.emit_function(func_to_emit,
+                                                  function,
+                                                  call_ret_map,
+                                                  &mut call_ret_idx,
+                                                  function_idx_label.clone(),
+                                                  hypercall_id_count,
+                                                  local_work_group,
+                                                  indirect_call_mapping,
+                                                  &global_mappings,
+                                                  fast_function_set.clone(),
+                                                  force_inline,
+                                                  debug_print_function_calls,
+                                                  start_func.clone(),
+                                                  is_gpu,
+                                                  reduction_size,
+                                                  false,
+                                                  debug);
+                    // perform conservative estimate of required register space
+                    let mut fastcall_int_sizes = vec![0];
+                    for fastcall in called_fastcalls.iter() {
+                        let fsize = fast_func_size.get(fastcall).unwrap();
+                        fastcall_int_sizes.push(*fsize);
+                    }
+                    partition_intermediate_size.push(intermediate_size + fastcall_int_sizes.iter().max().unwrap());
+                    temp_partition += &format!("{}", func);
+                    let fname_idx = function_idx_label.get(&fname as &str).unwrap();
+                    function_idx_label_temp.insert(fname, *fname_idx);
+                    kernel_partition_mappings.insert(*fname_idx, partition_idx);
+                }
+            }
+
             write!(output, "{}", temp_partition).unwrap();
             write!(partition_func_str, "{}\n", temp_partition).unwrap();
-
 
             let control_function = self.emit_wasm_control_fn(hcall_buf_size,
                                                             interleave,
@@ -2587,7 +2640,7 @@ r#"
                 write!(output, "\t\tprintf(\"{}\\n\");\n", format!("{}{}", "__", key.replace(".", ""))).unwrap();
             }
             // strip illegal chars from function names
-            write!(output, "\t\t\t{}({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {});\n",
+            write!(output, "\t\t\t{}({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {});\n",
                             format!("{}{}", "__", key.replace(".", "")),
                             "stack_u32",
                             "stack_u64",
@@ -2606,6 +2659,7 @@ r#"
                             "max_mem_size",
                             "is_calling",
                             "warp_idx",
+                            "thread_idx",
                             "*hcall_size",
                             "entry_point",
                             "*hcall_ret_val").unwrap();

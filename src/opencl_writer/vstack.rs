@@ -95,6 +95,7 @@ pub struct StackCtx {
     intermediate_offsets: HashMap<String, u32>,
     local_offsets: HashMap<String, u32>,
     local_types: HashMap<String, StackType>,
+    moved_locals: HashSet<String>,
     local_cache_size: u32,
     param_offset: i32,
     total_stack_types: Vec<StackType>,
@@ -119,7 +120,7 @@ impl<'a> StackCtx {
      * Parse a function and generate a stack context for it.
      * We can statically determine the maximum required amount of intermediate values
      */
-    pub fn initialize_context(writer_ctx: &OpenCLCWriter, instructions: &Box<[Instruction<'a>]>, local_param_types: &HashMap<String, ValType>, local_offsets: &HashMap<String, u32>, is_param: &HashMap<String, bool>, fastcalls: HashSet<String>, param_offset: i32, indirect_call_mapping: &HashMap<u32, &wast::Index>, curr_fn_name: String, is_gpu: bool) -> StackCtx {
+    pub fn initialize_context(writer_ctx: &OpenCLCWriter, instructions: &Box<[Instruction<'a>]>, local_param_types: &HashMap<String, ValType>, local_offsets: &HashMap<String, u32>, is_param: &HashMap<String, bool>, fastcalls: HashSet<String>, param_offset: i32, indirect_call_mapping: &HashMap<u32, &wast::Index>, curr_fn_name: String, reduction_size: &mut u32, local_work_group: usize, is_gpu: bool) -> StackCtx {
         let mut stack_sizes: Vec<StackType> = vec![];
         
         // Track which loops we can optimize for later
@@ -1733,7 +1734,66 @@ impl<'a> StackCtx {
         // save the read locals for this stack frame
         restore_context_map.insert(idx, read_locals.clone());
         save_context_map.insert(idx, write_locals.clone());
-    
+
+        // Now demote local values to shared memory (L1 cache) based on partitioning information
+        // reduction_size
+        let mut moved_locals: HashSet<String> = HashSet::new();
+        while *reduction_size > 0 && local_work_group != 999999 {
+            // Try to grab i32, then i64, then f32 or f64 last
+
+            // I32
+            for (local, l_type) in local_types_converted.clone().iter() {
+                match l_type {
+                    StackType::i32 => {
+                        if !is_param.get(local).unwrap() && *reduction_size > 0 {
+                            moved_locals.insert(local.to_string());
+                            *reduction_size -= 4;
+                        }
+                    },
+                    _ => (),
+                }
+            }
+
+            // I64
+            for (local, l_type) in local_types_converted.clone().iter() {
+                match l_type {
+                    StackType::i64 => {
+                        if !is_param.get(local).unwrap() && *reduction_size > 0 {
+                            moved_locals.insert(local.to_string());
+                            *reduction_size -= 8;
+                        }
+                    },
+                    _ => (),
+                }
+            }
+
+            // F32
+            for (local, l_type) in local_types_converted.clone().iter() {
+                match l_type {
+                    StackType::f32 => {
+                        if !is_param.get(local).unwrap() && *reduction_size > 0 {
+                            moved_locals.insert(local.to_string());
+                            *reduction_size -= 4;
+                        }
+                    },
+                    _ => (),
+                }
+            }
+
+            // F64
+            for (local, l_type) in local_types_converted.clone().iter() {
+                match l_type {
+                    StackType::f64 => {
+                        if !is_param.get(local).unwrap() && *reduction_size > 0 {
+                            moved_locals.insert(local.to_string());
+                            *reduction_size -= 8;
+                        }
+                    },
+                    _ => (),
+                }
+            }
+        }
+
         StackCtx {
             stack_frame_idx: 1,
             stack_frame_stack: vec![0],
@@ -1753,6 +1813,7 @@ impl<'a> StackCtx {
             intermediate_offsets: intermediate_offsets,
             local_offsets: local_offsets.clone(),
             local_types: local_types_converted,
+            moved_locals: moved_locals,
             param_offset: param_offset,
             total_stack_types: vec![],
             control_stack: vec![],
@@ -1765,6 +1826,10 @@ impl<'a> StackCtx {
             called_fastcalls: called_fastcalls,
             max_emitted_context: 0,
         }
+    }
+
+    pub fn is_local_local(&self, local: String) -> bool {
+        self.moved_locals.contains(&local)
     }
 
     /*
@@ -1965,7 +2030,7 @@ impl<'a> StackCtx {
         ret_str
     }
 
-    pub fn emit_intermediates(&self, is_fastcall: bool) -> String {
+    pub fn emit_intermediates(&self, is_fastcall: bool, local_work_group: usize) -> String {
         let mut ret_str = String::from("");
 
         // emit the locals and parameters
@@ -1976,18 +2041,35 @@ impl<'a> StackCtx {
                 _ => panic!("Local offset name not found (vstack)"),
             };
             if !is_fastcall || !param_found {
-                match local_type {
-                    StackType::i32 => {
-                        ret_str += &format!("\tuint {} = 0;\n", local_name);
-                    },
-                    StackType::i64 => {
-                        ret_str += &format!("\tulong {} = 0;\n", local_name);
-                    },
-                    StackType::f32 => {
-                        ret_str += &format!("\tfloat {} = 0.0;\n", local_name);
-                    },
-                    StackType::f64 => {
-                        ret_str += &format!("\tdouble {} = 0.0;\n", local_name);
+                if self.moved_locals.contains(local_name) && local_work_group != 999999 {
+                    match local_type {
+                        StackType::i32 => {
+                            ret_str += &format!("\t__local uint {}[{}] = {{ 0 }};\n", local_name, local_work_group);
+                        },
+                        StackType::i64 => {
+                            ret_str += &format!("\t__local ulong {}[{}] = {{ 0 }};\n", local_name, local_work_group);
+                        },
+                        StackType::f32 => {
+                            ret_str += &format!("\t__local float {}[{}] = {{ 0.0 }};\n", local_name, local_work_group);
+                        },
+                        StackType::f64 => {
+                            ret_str += &format!("\t__local double {}[{}] = {{ 0.0 }};\n", local_name, local_work_group);
+                        }
+                    }
+                } else {
+                    match local_type {
+                        StackType::i32 => {
+                            ret_str += &format!("\tuint {} = 0;\n", local_name);
+                        },
+                        StackType::i64 => {
+                            ret_str += &format!("\tulong {} = 0;\n", local_name);
+                        },
+                        StackType::f32 => {
+                            ret_str += &format!("\tfloat {} = 0.0;\n", local_name);
+                        },
+                        StackType::f64 => {
+                            ret_str += &format!("\tdouble {} = 0.0;\n", local_name);
+                        }
                     }
                 }
             }
@@ -2284,9 +2366,15 @@ impl<'a> StackCtx {
 
         // save the locals to the stack frame
         if !save_intermediate_only {
-            for (local, ty) in self.local_types.iter() {
+            for (tmp_local, ty) in self.local_types.iter() {
+                let local: &mut String = &mut tmp_local.clone();
+
                 if !locals_set.contains(local) {
                     continue;
+                }
+
+                if self.moved_locals.contains(local) {
+                    *local = format!("{}[thread_idx]", local);
                 }
 
                 let cache_idx: u32 = *self.local_offsets.get(local).unwrap();
@@ -2423,9 +2511,14 @@ impl<'a> StackCtx {
 
             // ret_str += &self.emit_restore_local_cache();
 
-            for (local, ty) in self.local_types.iter() {
+            for (tmp_local, ty) in self.local_types.iter() {
+                let local: &mut String = &mut tmp_local.clone();
                 if !locals_set.contains(local) {
                     continue;
+                }
+
+                if self.moved_locals.contains(local) {
+                    *local = format!("{}[thread_idx]", local);
                 }
 
                 let offset: i32 = *self.local_offsets.get(local).unwrap() as i32 + self.param_offset;
