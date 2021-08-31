@@ -613,7 +613,7 @@ impl OpenCLRunner {
                             let buildinfo = ocl::core::get_program_build_info(&program_to_build, &device_id, ocl::core::ProgramBuildInfo::BuildLog).unwrap();
                             let mut build_log = OpenOptions::new().append(true).open("recent.buildlog").unwrap();
 
-                            build_log.write_all(&format!("buildlog for partition idx: {:?}\n", key).into_bytes()).unwrap();
+                            build_log.write_all(&format!("\nbuildlog for partition idx: {:?}\n", key).into_bytes()).unwrap();
                             build_log.write_all(&buildinfo.to_string().into_bytes()).unwrap();
 
                             let end = Utc::now().timestamp_nanos();
