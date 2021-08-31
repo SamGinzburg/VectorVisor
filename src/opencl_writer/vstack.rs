@@ -109,6 +109,7 @@ pub struct StackCtx {
     num_fn_calls: u32,
     num_hypercalls: u32,
     called_fastcalls: HashSet<String>,
+    max_emitted_context: u32,
 }
 
 type ControlStackType = Vec<(String, Option<StackType>, ControlStackVStackTypes, Vec<StackType>, u32, u32, u32, u32)>;
@@ -1762,6 +1763,7 @@ impl<'a> StackCtx {
             num_hypercalls: num_hypercalls,
             is_param: is_param.clone(),
             called_fastcalls: called_fastcalls,
+            max_emitted_context: 0,
         }
     }
 
@@ -2122,7 +2124,7 @@ impl<'a> StackCtx {
      */
     pub fn vstack_alloc(&mut self, t: StackType) -> String {
         self.total_stack_types.push(t.clone());
-        match t {
+        let ret = match t {
             StackType::i32 => {
                 let alloc_val = self.i32_stack.get(self.i32_idx).unwrap();
                 self.i32_idx += 1;
@@ -2143,7 +2145,15 @@ impl<'a> StackCtx {
                 self.f64_idx += 1;
                 format!("{}", alloc_val)
             },
+        };
+
+        // update max emitted context
+        let curr_ctx: u32 = (self.i32_idx + self.i64_idx*2 + self.f32_idx + self.f64_idx*2).try_into().unwrap();
+        if self.max_emitted_context < curr_ctx {
+            self.max_emitted_context = curr_ctx as u32;
         }
+
+        ret
     }
 
     /*
@@ -2215,6 +2225,10 @@ impl<'a> StackCtx {
     // get the max possible size of a stack context for the current function
     pub fn max_stack_frame_size(&self) -> usize {
         self.i32_stack.len() + (self.i64_stack.len()*2) + self.f32_stack.len() + (self.f64_stack.len()*2)
+    }
+
+    pub fn get_max_emitted_context(&self) -> u32 {
+        self.max_emitted_context
     }
 
     pub fn generate_intermediate_ranges(&self) -> (Range<usize>, Range<usize>, Range<usize>, Range<usize>) {

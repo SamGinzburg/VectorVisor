@@ -1357,9 +1357,6 @@ impl<'a> OpenCLCWriter<'_> {
                 // Now that we have the type info for the parameters and locals, we can generate the stack context
                 // First, generate the stack context for the function
                 let mut stack_ctx = StackCtx::initialize_context(&self, &expression.instrs, &local_type_info, &local_parameter_stack_offset, &is_param, fastcall_set.clone(), param_offset, indirect_call_mapping, fn_name.clone(), is_gpu);
-
-                // The size of all the locals plus the intermediates
-                func_intermediate_size = (offset + stack_ctx.stack_frame_size() as u32) * 4; // *4 to convert to bytes
                 fastfunc_calls = stack_ctx.called_fastcalls();
 
                 // function entry point
@@ -1560,6 +1557,9 @@ impl<'a> OpenCLCWriter<'_> {
                                                             // actually emitting "debug" code
                                                             !is_gpu || debug);
                 }
+
+                // The size of all the locals plus the intermediates
+                func_intermediate_size = (offset + stack_ctx.get_max_emitted_context() as u32) * 4; // *4 to convert to bytes
 
                 // If we are emitting the start function, just emit a proc_exit here
                 if fn_name == start_function {
@@ -2473,7 +2473,8 @@ r#"
 
             // Check the partition size to see if we need to regenerate registers with constraints
             let max_partition_reg_usage = partition_intermediate_size.iter().max().unwrap();
-            dbg!(&max_partition_reg_usage);
+            let sum_partition_reg_usage = partition_intermediate_size.iter().sum::<u32>();
+            println!("max size: {}, sum size: {}, part_idx: {}", &max_partition_reg_usage, &sum_partition_reg_usage, partition_idx);
 
             write!(output, "{}", temp_partition).unwrap();
             write!(partition_func_str, "{}\n", temp_partition).unwrap();
