@@ -108,6 +108,7 @@ pub struct StackCtx {
     if_else_branches: Vec<bool>,
     num_fn_calls: u32,
     num_hypercalls: u32,
+    called_fastcalls: HashSet<String>,
 }
 
 type ControlStackType = Vec<(String, Option<StackType>, ControlStackVStackTypes, Vec<StackType>, u32, u32, u32, u32)>;
@@ -209,6 +210,8 @@ impl<'a> StackCtx {
 
         let mut current_f64_count: u32 = 0;
         let mut max_f64_count: u32 = 0;
+
+        let mut called_fastcalls: HashSet<String> = HashSet::new();
 
         // loop_idx tracks how many actively open loops there are, so we taint just those
         fn taint_open_loops(tainted_loops: &mut Vec<bool>, open_loop_stack: Vec<usize>) -> () {
@@ -944,6 +947,8 @@ impl<'a> StackCtx {
                             taint_open_loops(&mut tainted_loops, open_loop_stack.clone());
                             // Track how many regular function calls we perform
                             num_fn_calls += 1;
+                        } else {
+                            called_fastcalls.insert(id.to_string());
                         }
 
                         match writer_ctx.func_map.get(&id) {
@@ -1755,7 +1760,8 @@ impl<'a> StackCtx {
             if_else_branches: if_else_branches,
             num_fn_calls: num_fn_calls,
             num_hypercalls: num_hypercalls,
-            is_param: is_param.clone()
+            is_param: is_param.clone(),
+            called_fastcalls: called_fastcalls,
         }
     }
 
@@ -2199,6 +2205,11 @@ impl<'a> StackCtx {
     // get the size of the current stack frame
     pub fn stack_frame_size(&self) -> usize {
         self.i32_idx + (self.i64_idx*2) + self.f32_idx + (self.f64_idx*2)
+    }
+
+    // Used to track which fastcalls we call (for use in register spill analysis)
+    pub fn called_fastcalls(&self) -> HashSet<String> {
+        self.called_fastcalls.clone()
     }
 
     // get the max possible size of a stack context for the current function

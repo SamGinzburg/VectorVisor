@@ -1282,8 +1282,11 @@ impl<'a> OpenCLCWriter<'_> {
                      start_function: String,
                      is_gpu: bool,
                      is_fastcall: bool,
-                     debug: bool) -> String {
-        let mut final_string = String::from(""); 
+                     debug: bool) -> (String, u32, HashSet<String>) {
+        let mut final_string = String::from("");
+        let func_intermediate_size;
+        let fastfunc_calls;
+
         *call_ret_idx = 0;
         *hypercall_id_count = 0;
 
@@ -1354,6 +1357,10 @@ impl<'a> OpenCLCWriter<'_> {
                 // Now that we have the type info for the parameters and locals, we can generate the stack context
                 // First, generate the stack context for the function
                 let mut stack_ctx = StackCtx::initialize_context(&self, &expression.instrs, &local_type_info, &local_parameter_stack_offset, &is_param, fastcall_set.clone(), param_offset, indirect_call_mapping, fn_name.clone(), is_gpu);
+
+                // The size of all the locals plus the intermediates
+                func_intermediate_size = (offset + stack_ctx.stack_frame_size() as u32) * 4; // *4 to convert to bytes
+                fastfunc_calls = stack_ctx.called_fastcalls();
 
                 // function entry point
                 // strip illegal chars from function name
@@ -1521,8 +1528,6 @@ impl<'a> OpenCLCWriter<'_> {
                 // used for tracking fastcall optimizations for call_indirect
                 let call_indirect_count: &mut u32  = &mut 0;
 
-
-
                 // get the list of instructions first, to solve a lifetime mismatch error
                 // (we can't just iterate because the control stack would have a different lifetime)
 
@@ -1573,7 +1578,7 @@ impl<'a> OpenCLCWriter<'_> {
         // end function
         final_string += &format!("}}\n");
 
-        final_string
+        (final_string, func_intermediate_size, fastfunc_calls)
     }
 
     fn emit_memcpy_arr(&self, _debug: bool) -> String {
@@ -2348,8 +2353,14 @@ r#"
         }
 
         // emit functions
+        // Each fastcall has a stack frame size (size of intermediate values) + list of funcs it calls
+        // We track these to resolve register spilling to shared memory
+        let mut fast_func_size: HashMap<String, u32> = HashMap::new();
+        let mut fast_func_called: HashMap<String, HashSet<String>> = HashMap::new();
+        let mut fastcall_called_func_sizes: HashMap<String, Vec<u32>> = HashMap::new();
+
         for fastfunc in fast_function_set.iter() {
-            let func = self.emit_function(self.func_map.get(&fastfunc.to_string()).unwrap(),
+            let (func, func_size, func_called) = self.emit_function(self.func_map.get(&fastfunc.to_string()).unwrap(),
                                             fastfunc.to_string(),
                                             call_ret_map,
                                             &mut call_ret_idx,
@@ -2365,12 +2376,56 @@ r#"
                                             is_gpu,
                                             true,
                                             debug);
+            fast_func_size.insert(fastfunc.to_string(), func_size);
+            fast_func_called.insert(fastfunc.to_string(), func_called);
+
             write!(fastcall_header, "{}", func).unwrap();
         }
 
         // Compute how many instructions each fastcall contains (necessary for packing functions)
         // This is needed for the function packing
 
+        loop {
+            // Go through each fastcall, tracking which ones we have known maximum possible sizes for 
+            let mut counter = 0;
+            for fastfunc in fast_function_set.iter() {
+                let funcs_called = fast_func_called.get(&fastfunc as &str).unwrap();
+                // we know the max possible size for this function already
+                if funcs_called.len() == 0 {
+                    counter += 1;
+                } else {
+                    // Try to go through the called funcs and see if we know the sizes for any called functions
+                    // If so - we remove the func from the set
+                    let mut new_called_set: HashSet<String> = HashSet::new();
+                    for called_func in funcs_called {
+                        // Get all the funcs that this func calls
+                        let funcs_called = fast_func_called.get(&called_func as &str).unwrap();
+                        // If len==0, then the size is known, else if len>0, then we need to keep it in the set
+                        if funcs_called.len() != 0 {
+                            new_called_set.insert(called_func.to_string());
+                        } else {
+                            // we are removing the func from the set, so we track the size
+                            let size = fast_func_size.get(&called_func as &str).unwrap();
+                            fastcall_called_func_sizes.entry(fastfunc.to_string()).or_insert(vec![]).push(*size);
+                        }
+                    }
+                    // replace the hashset
+                    fast_func_called.insert(fastfunc.clone(), new_called_set);
+                }
+            }
+
+            // if all sizes are known, then that means we know all the sizes
+            if counter == fast_function_set.len() {
+                break;
+            }
+        }
+
+        // Now update fast_func_size with max possible sizes
+        for fastfunc in fast_function_set.iter() {
+            let tmp = vec![0];
+            let max = fastcall_called_func_sizes.get(fastfunc).unwrap_or(&tmp).iter().max().unwrap();
+            *fast_func_size.entry(fastfunc.to_string()).or_insert(0) += max;
+        }
 
         // Compute the function groups, we will then enumerate the groups to emit the functions
         // kernel_partition_mapping get the partition ID from a function idx
@@ -2381,11 +2436,13 @@ r#"
             let mut partition_func_str = String::from("");
 
             // for each function in a partition, perform codegen
+            let mut partition_intermediate_size = vec![];;
+            let mut temp_partition = String::from("");
             for function in partition {
                 let fname = function.clone();
                 let func_to_emit = self.func_map.get(&function).unwrap();
 
-                let func = self.emit_function(func_to_emit,
+                let (func, intermediate_size, called_fastcalls) = self.emit_function(func_to_emit,
                                               function,
                                               call_ret_map,
                                               &mut call_ret_idx,
@@ -2401,12 +2458,26 @@ r#"
                                               is_gpu,
                                               false,
                                               debug);
-                write!(output, "{}", func).unwrap();
-                write!(partition_func_str, "{}\n", func).unwrap();
+                // perform conservative estimate of required register space
+                let mut fastcall_int_sizes = vec![0];
+                for fastcall in called_fastcalls.iter() {
+                    let fsize = fast_func_size.get(fastcall).unwrap();
+                    fastcall_int_sizes.push(*fsize);
+                }
+                partition_intermediate_size.push(intermediate_size + fastcall_int_sizes.iter().max().unwrap());
+                temp_partition += &format!("{}", func);
                 let fname_idx = function_idx_label.get(&fname as &str).unwrap();
                 function_idx_label_temp.insert(fname, *fname_idx);
                 kernel_partition_mappings.insert(*fname_idx, partition_idx);
             }
+
+            // Check the partition size to see if we need to regenerate registers with constraints
+            let max_partition_reg_usage = partition_intermediate_size.iter().max().unwrap();
+            dbg!(&max_partition_reg_usage);
+
+            write!(output, "{}", temp_partition).unwrap();
+            write!(partition_func_str, "{}\n", temp_partition).unwrap();
+
 
             let control_function = self.emit_wasm_control_fn(hcall_buf_size,
                                                             interleave,
