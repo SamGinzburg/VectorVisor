@@ -576,7 +576,7 @@ impl OpenCLRunner {
                 let mut submit_compile_job = vec![];
 
                 for _idx in 0..num_threads {
-                    let (compile_sender, compile_receiver): (SyncSender<(u32, ocl::core::Program, ocl::core::Program, String)>, SyncReceiver<(u32, ocl::core::Program, ocl::core::Program, String)>) = unbounded();
+                    let (compile_sender, compile_receiver): (SyncSender<(u32, String, String)>, SyncReceiver<(u32, String, String)>) = unbounded();
                     let _cflags = compile_flags.clone();
                     let sender = finished_sender.clone();
                     let num_vms_clone = self.num_vms.clone();
@@ -590,7 +590,7 @@ impl OpenCLRunner {
                         let receiver = compile_receiver.clone();
                         loop {
                             // receive the function to compile
-                            let (key, program_to_build, fastcall_header, program_as_string) = match receiver.recv() {
+                            let (key, fastcall_header, program_as_string) = match receiver.recv() {
                                 Ok(m) => m,
                                 _ => {
                                     // if the main sending thread is closed, we will get an error
@@ -600,46 +600,25 @@ impl OpenCLRunner {
                             };
                             let start = Utc::now().timestamp_nanos();
                             let options = &CString::new(format!("{} -DNUM_THREADS={} -DVMM_STACK_SIZE_BYTES={} -DVMM_HEAP_SIZE_BYTES={}", compile_flags_clone, num_vms_clone, stack_size, heap_size)).unwrap();
-                            let build_result = ocl::core::compile_program(&program_to_build, Some(&[device_id]), options, &[&fastcall_header], &[CString::new("fastcalls.cl").unwrap()], None, None, None);
-                            match build_result {
-                                Ok(_) => {
-                                    let buildinfo = ocl::core::get_program_build_info(&program_to_build, &device_id, ocl::core::ProgramBuildInfo::BuildLog).unwrap();
-                                    let mut build_log = OpenOptions::new().append(true).open("recent.buildlog").unwrap();
-                                    build_log.write_all(&buildinfo.to_string().into_bytes()).unwrap();
-                                },
-                                Err(e) => {
-                                    println!("Error during building: {:?}", e);
-                                    let buildinfo = ocl::core::get_program_build_info(&program_to_build, &device_id, ocl::core::ProgramBuildInfo::BuildLog).unwrap();
-                                    let mut file = File::create(format!("{}.buildlog", key)).unwrap();
-                                    file.write_all(&buildinfo.to_string().into_bytes()).unwrap();
-                                    let mut file = File::create(format!("{}.cl", key)).unwrap();
-                                    file.write_all(&program_as_string.into_bytes()).unwrap();
-                                    panic!("Error: {} has occured, dumping build log to file: {:?}.buildlog, kernel written to file {:?}.cl\n", e, key, key);
-                                }
-                            }
-                            
-                            let final_program = match ocl::core::link_program(context, Some(&[device_id]), &CString::new(format!("{}", link_flags_clone)).unwrap(), &[&program_to_build], None, None, None) {
-                                Ok(p) => {
-                                    let buildinfo = ocl::core::get_program_build_info(&program_to_build, &device_id, ocl::core::ProgramBuildInfo::BuildLog).unwrap();
-                                    let mut build_log = OpenOptions::new().append(true).open("recent.buildlog").unwrap();
-
-                                    build_log.write_all(&buildinfo.to_string().into_bytes()).unwrap();
-                                    p
-                                },
-                                Err(e) => {
-                                    let buildinfo = ocl::core::get_program_build_info(&program_to_build, &device_id, ocl::core::ProgramBuildInfo::BuildLog).unwrap();
-                                    // Dump the build log too
-                                    let mut file = File::create(format!("{}.buildlog", key)).unwrap();
-                                    file.write_all(&buildinfo.to_string().into_bytes()).unwrap();
-                                    let mut file = File::create(format!("{}.cl", key)).unwrap();
-                                    file.write_all(&program_as_string.into_bytes()).unwrap();
-                                    panic!("Error: {} has occured, dumping build log to file: {:?}.buildlog, kernel written to file {:?}.cl\n", e, key, key);
-                                }
+                            // hack to deal with header file (compile/link program don't emit the debug info we want on nvidia)
+                            let formatted_program = str::replace(&program_as_string, "#include \"fastcalls.cl\"", &fastcall_header);
+                            let final_formatted_program = CString::new(formatted_program).unwrap();
+                            let program_to_build = match ocl::core::create_program_with_source(context, &[final_formatted_program]) {
+                                Ok(binary) => binary,
+                                Err(e) => panic!("Unable to create program from given text: {:?}", e),
                             };
+        
+                            ocl::core::build_program(&program_to_build, Some(&[device_id]), options, None, None).unwrap();
+
+                            let buildinfo = ocl::core::get_program_build_info(&program_to_build, &device_id, ocl::core::ProgramBuildInfo::BuildLog).unwrap();
+                            let mut build_log = OpenOptions::new().append(true).open("recent.buildlog").unwrap();
+
+                            build_log.write_all(&format!("buildlog for partition idx: {:?}\n", key).into_bytes()).unwrap();
+                            build_log.write_all(&buildinfo.to_string().into_bytes()).unwrap();
 
                             let end = Utc::now().timestamp_nanos();
 
-                            sender.send((key, final_program, (end-start).try_into().unwrap())).unwrap();
+                            sender.send((key, program_to_build, (end-start).try_into().unwrap())).unwrap();
                         }
                     });
                 }
@@ -648,11 +627,11 @@ impl OpenCLRunner {
                 let mut counter = 0;
                 for (key, value) in map.iter() {
                     let src_cstring = CString::new(value.clone()).unwrap();
-                    let header_cstring = CString::new(fastcall_header.clone()).unwrap();    
-                    let compiled_program = ocl::core::create_program_with_source(context, &[src_cstring.clone()]).unwrap();
-                    let fastcall_header = ocl::core::create_program_with_source(context, &[header_cstring.clone()]).unwrap();
+                    //let header_cstring = CString::new(fastcall_header.clone()).unwrap();    
+                    //let compiled_program = ocl::core::create_program_with_source(context, &[src_cstring.clone()]).unwrap();
+                    //let fastcall_header = ocl::core::create_program_with_source(context, &[header_cstring.clone()]).unwrap();
 
-                    submit_compile_job[counter % submit_compile_job.len() as usize].send((*key, compiled_program, fastcall_header, String::from(value))).unwrap();
+                    submit_compile_job[counter % submit_compile_job.len() as usize].send((*key, fastcall_header.clone(), String::from(value))).unwrap();
                     counter += 1;
                 }
                 let pb = ProgressBar::new(map.len().try_into().unwrap());
