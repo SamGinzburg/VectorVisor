@@ -2399,7 +2399,8 @@ impl<'a> StackCtx {
                     StackType::f32 => {
                         ret_str += &format!("\tif (local_cache[{}]) {{\n", cache_idx);
                         ret_str += &format!("\t\tuint temp = 0;\n");
-                        ret_str += &format!("\t\t___private_memcpy_nonmmu(&temp, &{}, sizeof(float));\n", local);
+                        ret_str += &format!("\t\tfloat tempaddr = {};\n", local);
+                        ret_str += &format!("\t\t___private_memcpy_nonmmu(&temp, &tempaddr, sizeof(float));\n");
                         ret_str += &format!("\t\t{};\n", &emit_write_u32(&format!("(ulong)(stack_u32+{}+{})",
                                                                         offset, 
                                                                         &emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx")),
@@ -2411,7 +2412,8 @@ impl<'a> StackCtx {
                     StackType::f64 => {
                         ret_str += &format!("\tif (local_cache[{}]) {{\n", cache_idx);
                         ret_str += &format!("\t\tulong temp = 0;\n");
-                        ret_str += &format!("\t\t___private_memcpy_nonmmu(&temp, &{}, sizeof(double));\n", local);
+                        ret_str += &format!("\t\tdouble tempaddr = {};\n", local);
+                        ret_str += &format!("\t\t___private_memcpy_nonmmu(&temp, &tempaddr, sizeof(double));\n");
                         ret_str += &format!("\t\t{};\n", &emit_write_u64(&format!("(ulong)(stack_u32+{}+{})",
                                                                         offset, 
                                                                         &emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx")),
@@ -2547,7 +2549,8 @@ impl<'a> StackCtx {
                                                                                         &emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx")),
                                                                                         "(ulong)stack_u32",
                                                                                         "warp_idx"));
-                        ret_str += &format!("\t\t___private_memcpy_nonmmu(&{}, &temp, sizeof(float));\n", local);
+                        ret_str += &format!("\t\tfloat tempaddr = {};\n", local);
+                        ret_str += &format!("\t\t___private_memcpy_nonmmu(&tempaddr, &temp, sizeof(float));\n");
                         ret_str += &format!("\t}}\n");
                     },
                     StackType::f64 => {
@@ -2557,7 +2560,8 @@ impl<'a> StackCtx {
                                                                                         &emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx")),
                                                                                         "(ulong)stack_u32",
                                                                                         "warp_idx"));
-                        ret_str += &format!("\t\t___private_memcpy_nonmmu(&{}, &temp, sizeof(double));\n", local);
+                        ret_str += &format!("\t\tdouble tempaddr = {};\n", local);
+                        ret_str += &format!("\t\t___private_memcpy_nonmmu(&tempaddr, &temp, sizeof(double));\n");
                         ret_str += &format!("\t}}\n");
                     }
                 }

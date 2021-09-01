@@ -2446,13 +2446,14 @@ r#"
 
             // for each function in a partition, perform codegen
             let mut partition_intermediate_size = vec![];
+            let mut new_partition_lst = vec![];
             let mut temp_partition = String::from("");
             for function in partition.clone() {
                 let fname = function.clone();
-                let func_to_emit = self.func_map.get(&function).unwrap();
+                let func_to_emit = self.func_map.get(&function.clone()).unwrap();
 
                 let (func, intermediate_size, called_fastcalls) = self.emit_function(func_to_emit,
-                                              function,
+                                              function.clone(),
                                               call_ret_map,
                                               &mut call_ret_idx,
                                               function_idx_label.clone(),
@@ -2475,6 +2476,7 @@ r#"
                     fastcall_int_sizes.push(*fsize);
                 }
                 partition_intermediate_size.push(intermediate_size + fastcall_int_sizes.iter().max().unwrap());
+                new_partition_lst.push(function.clone());
                 temp_partition += &format!("{}", func);
                 let fname_idx = function_idx_label.get(&fname as &str).unwrap();
                 function_idx_label_temp.insert(fname, *fname_idx);
@@ -2491,20 +2493,25 @@ r#"
                 /*
                  * Compute size to reduce kernel by:
                  * 
-                 * For now:
-                 * max_partition_reg_usage > 10000 => Move 128, 4 byte sized locals or 64 8 byte sized locals
-                 *
-                 * max_partition_reg_usage > 5000 => Move 64, 4 byte sized locals or 32 8 byte sized locals
+                 * TODO: This is a function of the local workgroup size & amount of shared memory
+                 * on the device.
                  *
                  */
                 let reduction_size: &mut u32 = &mut if sum_partition_reg_usage > 10000 {
-                    512
+                    256
                 } else {
                     256
                 };
 
+                // We want to emit the largest function first, so we can move more of its locals to
+                // smem.
+                let part_size_clone = partition_intermediate_size.clone();
+                let mut combined_part: Vec<(&String, &u32)> = new_partition_lst.iter().zip(part_size_clone.iter()).collect();
+                combined_part.sort_by(|(_, size1), (_, size2)| size2.cmp(size1));
+
                 temp_partition = String::from("");
-                for function in partition.clone() {
+                for (f, _) in combined_part.clone() {
+                    let function: String = f.clone();
                     let fname = function.clone();
                     let func_to_emit = self.func_map.get(&function).unwrap();
     
