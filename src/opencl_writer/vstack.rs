@@ -2045,15 +2045,19 @@ impl<'a> StackCtx {
                     match local_type {
                         StackType::i32 => {
                             ret_str += &format!("\t__local uint {}[{}];\n", local_name, local_work_group);
+                            ret_str += &format!("\t{}[thread_idx] = 0;\n", local_name);
                         },
                         StackType::i64 => {
                             ret_str += &format!("\t__local ulong {}[{}];\n", local_name, local_work_group);
+                            ret_str += &format!("\t{}[thread_idx] = 0;\n", local_name);
                         },
                         StackType::f32 => {
                             ret_str += &format!("\t__local float {}[{}];\n", local_name, local_work_group);
+                            ret_str += &format!("\t{}[thread_idx] = 0.0f;\n", local_name);
                         },
                         StackType::f64 => {
                             ret_str += &format!("\t__local double {}[{}];\n", local_name, local_work_group);
+                            ret_str += &format!("\t{}[thread_idx] = 0.0;\n", local_name);
                         }
                     }
                 } else {
@@ -2549,8 +2553,9 @@ impl<'a> StackCtx {
                                                                                         &emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx")),
                                                                                         "(ulong)stack_u32",
                                                                                         "warp_idx"));
-                        ret_str += &format!("\t\tfloat tempaddr = {};\n", local);
+                        ret_str += &format!("\t\tfloat tempaddr = 0.0f;\n");
                         ret_str += &format!("\t\t___private_memcpy_nonmmu(&tempaddr, &temp, sizeof(float));\n");
+                        ret_str += &format!("\t\t{} = tempaddr;\n", local);
                         ret_str += &format!("\t}}\n");
                     },
                     StackType::f64 => {
@@ -2560,8 +2565,9 @@ impl<'a> StackCtx {
                                                                                         &emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx")),
                                                                                         "(ulong)stack_u32",
                                                                                         "warp_idx"));
-                        ret_str += &format!("\t\tdouble tempaddr = {};\n", local);
+                        ret_str += &format!("\t\tdouble tempaddr = 0.0;\n");
                         ret_str += &format!("\t\t___private_memcpy_nonmmu(&tempaddr, &temp, sizeof(double));\n");
+                        ret_str += &format!("\t\t{} = tempaddr;\n", local);
                         ret_str += &format!("\t}}\n");
                     }
                 }
