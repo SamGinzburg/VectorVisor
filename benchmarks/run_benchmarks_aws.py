@@ -5,8 +5,8 @@ import time
 
 target_rps = 5000
 TIMEOUT_MINUTES = 120
-#local_group_size = 16
-local_group_size = 999999
+local_group_size = 16
+#local_group_size = 999999
 
 ec2 = boto3.resource('ec2')
 ec2_client = boto3.client('ec2')

@@ -1738,14 +1738,14 @@ impl<'a> StackCtx {
         // Now demote local values to shared memory (L1 cache) based on partitioning information
         // reduction_size
         let mut moved_locals: HashSet<String> = HashSet::new();
-        while *reduction_size > 0 && local_work_group != 999999 {
+        if *reduction_size > 4 && local_work_group != 999999 {
             // Try to grab i32, then i64, then f32 or f64 last
 
             // I32
             for (local, l_type) in local_types_converted.clone().iter() {
                 match l_type {
                     StackType::i32 => {
-                        if !is_param.get(local).unwrap() && *reduction_size > 0 {
+                        if !is_param.get(local).unwrap() && *reduction_size > 4 {
                             moved_locals.insert(local.to_string());
                             *reduction_size -= 4;
                         }
@@ -1758,7 +1758,7 @@ impl<'a> StackCtx {
             for (local, l_type) in local_types_converted.clone().iter() {
                 match l_type {
                     StackType::i64 => {
-                        if !is_param.get(local).unwrap() && *reduction_size > 0 {
+                        if !is_param.get(local).unwrap() && *reduction_size > 8 {
                             moved_locals.insert(local.to_string());
                             *reduction_size -= 8;
                         }
@@ -1771,7 +1771,7 @@ impl<'a> StackCtx {
             for (local, l_type) in local_types_converted.clone().iter() {
                 match l_type {
                     StackType::f32 => {
-                        if !is_param.get(local).unwrap() && *reduction_size > 0 {
+                        if !is_param.get(local).unwrap() && *reduction_size > 4 {
                             moved_locals.insert(local.to_string());
                             *reduction_size -= 4;
                         }
@@ -1784,7 +1784,7 @@ impl<'a> StackCtx {
             for (local, l_type) in local_types_converted.clone().iter() {
                 match l_type {
                     StackType::f64 => {
-                        if !is_param.get(local).unwrap() && *reduction_size > 0 {
+                        if !is_param.get(local).unwrap() && *reduction_size > 8 {
                             moved_locals.insert(local.to_string());
                             *reduction_size -= 8;
                         }
@@ -2044,16 +2044,16 @@ impl<'a> StackCtx {
                 if self.moved_locals.contains(local_name) && local_work_group != 999999 {
                     match local_type {
                         StackType::i32 => {
-                            ret_str += &format!("\t__local uint {}[{}] = {{ 0 }};\n", local_name, local_work_group);
+                            ret_str += &format!("\t__local uint {}[{}];\n", local_name, local_work_group);
                         },
                         StackType::i64 => {
-                            ret_str += &format!("\t__local ulong {}[{}] = {{ 0 }};\n", local_name, local_work_group);
+                            ret_str += &format!("\t__local ulong {}[{}];\n", local_name, local_work_group);
                         },
                         StackType::f32 => {
-                            ret_str += &format!("\t__local float {}[{}] = {{ 0.0 }};\n", local_name, local_work_group);
+                            ret_str += &format!("\t__local float {}[{}];\n", local_name, local_work_group);
                         },
                         StackType::f64 => {
-                            ret_str += &format!("\t__local double {}[{}] = {{ 0.0 }};\n", local_name, local_work_group);
+                            ret_str += &format!("\t__local double {}[{}];\n", local_name, local_work_group);
                         }
                     }
                 } else {
@@ -2368,6 +2368,8 @@ impl<'a> StackCtx {
         if !save_intermediate_only {
             for (tmp_local, ty) in self.local_types.iter() {
                 let local: &mut String = &mut tmp_local.clone();
+                let cache_idx: u32 = *self.local_offsets.get(local).unwrap();
+                let offset: i32 = *self.local_offsets.get(local).unwrap() as i32 + self.param_offset;
 
                 if !locals_set.contains(local) {
                     continue;
@@ -2377,8 +2379,6 @@ impl<'a> StackCtx {
                     *local = format!("{}[thread_idx]", local);
                 }
 
-                let cache_idx: u32 = *self.local_offsets.get(local).unwrap();
-                let offset: i32 = *self.local_offsets.get(local).unwrap() as i32 + self.param_offset;
                 match ty {
                     StackType::i32 => {
                         ret_str += &format!("\tif (local_cache[{}]) {};\n", cache_idx, &emit_write_u32(&format!("(ulong)(stack_u32+{}+{})",
@@ -2513,6 +2513,9 @@ impl<'a> StackCtx {
 
             for (tmp_local, ty) in self.local_types.iter() {
                 let local: &mut String = &mut tmp_local.clone();
+                let offset: i32 = *self.local_offsets.get(local).unwrap() as i32 + self.param_offset;
+                let cache_idx: u32 = *self.local_offsets.get(local).unwrap();
+
                 if !locals_set.contains(local) {
                     continue;
                 }
@@ -2520,9 +2523,6 @@ impl<'a> StackCtx {
                 if self.moved_locals.contains(local) {
                     *local = format!("{}[thread_idx]", local);
                 }
-
-                let offset: i32 = *self.local_offsets.get(local).unwrap() as i32 + self.param_offset;
-                let cache_idx: u32 = *self.local_offsets.get(local).unwrap();
 
                 match ty {
                     // Only load locals if they *haven't* been written to

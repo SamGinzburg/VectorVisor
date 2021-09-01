@@ -1764,7 +1764,8 @@ impl<'a> OpenCLCWriter<'_> {
             let work_group = if local_work_group == 999999 {
                 String::from("")
             } else {
-                format!("__attribute__((reqd_work_group_size({}, 1, 1)))", local_work_group)
+                //format!("__attribute__((reqd_work_group_size({}, 1, 1)))", local_work_group)
+                String::from("")
             };
             let header = format!("__kernel {} void {}(__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}) {{\n",
                                     work_group,
@@ -2486,14 +2487,21 @@ r#"
             println!("max size: {}, sum size: {}, part_idx: {}", &max_partition_reg_usage, &sum_partition_reg_usage, partition_idx);
 
             // If constraint exceeded, regenerate the partition with constraints
-            if *max_partition_reg_usage > 10000 {
+            if sum_partition_reg_usage > 5000 {
                 /*
                  * Compute size to reduce kernel by:
                  * 
                  * For now:
                  * max_partition_reg_usage > 10000 => Move 128, 4 byte sized locals or 64 8 byte sized locals
+                 *
+                 * max_partition_reg_usage > 5000 => Move 64, 4 byte sized locals or 32 8 byte sized locals
+                 *
                  */
-                let reduction_size: &mut u32 = &mut 512;
+                let reduction_size: &mut u32 = &mut if sum_partition_reg_usage > 10000 {
+                    512
+                } else {
+                    256
+                };
 
                 temp_partition = String::from("");
                 for function in partition.clone() {
