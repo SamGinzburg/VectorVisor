@@ -29,12 +29,16 @@ impl Serverless {
 
         let (msg, _) = recv_chan.lock().unwrap().blocking_recv().unwrap();
 
+        /*
         // Parse the incoming JSON to a Value object
         let incoming_json_obj: Value = serde_json::from_slice(&msg).unwrap();
         // Serialize parsed json
         let serialized_json = serde_cbor::ser::to_vec_packed(&incoming_json_obj).unwrap();
 
         hcall_buf[0..serialized_json.len()].copy_from_slice(&serialized_json);
+        */
+
+        hcall_buf[0..msg.len()].copy_from_slice(&msg);
 
         // store this in the vmctx for when we return
         *Arc::make_mut(&mut vm_ctx.timestamp_counter) = hypercall.timestamp_counter;
@@ -50,7 +54,7 @@ impl Serverless {
 
         // return the length of the incoming message
         sender.send({
-            HyperCallResult::new(serialized_json.len().try_into().unwrap(), hypercall.vm_id, WasiSyscalls::ServerlessInvoke)
+            HyperCallResult::new(msg.len().try_into().unwrap(), hypercall.vm_id, WasiSyscalls::ServerlessInvoke)
         }).unwrap();
     }
 

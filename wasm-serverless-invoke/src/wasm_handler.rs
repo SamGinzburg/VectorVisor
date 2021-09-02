@@ -74,12 +74,18 @@ impl<'a, T1: Deserialize<'a>, T2: Serialize> WasmHandler<T1, T2> {
                 serverless_invoke(buf_ptr, buffer.len() as u32)
             };
 
+            /*
             let parsed_func_input = {
                 // Deserialize the pre-parsed JSON here...
                 let function_input: Value = from_slice(&buffer[..incoming_req_size as usize]).unwrap();
 
                 // now that we have the input in the buffer, parse the json
                 T1::deserialize(function_input)
+            };
+            */
+
+            let parsed_func_input = {
+                serde_json::from_slice(&buffer[..incoming_req_size as usize])
             };
 
             match parsed_func_input {
