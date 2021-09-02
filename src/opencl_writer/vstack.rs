@@ -1726,6 +1726,7 @@ impl<'a> StackCtx {
 
         // Get the size of the local_cache
         // This array goes on the stack between the locals and intermediate values
+        // This is an artifact from trying out a bitvector (increases compile times substantially)
         //let round_up_to_next_multiple8: i32 = (((local_offsets.len() as i32 + 1) + 7) & (-8 as i32)) / 8;
         let round_up_to_next_multiple8: i32 = 0;
 
@@ -1738,16 +1739,24 @@ impl<'a> StackCtx {
         // Now demote local values to shared memory (L1 cache) based on partitioning information
         // reduction_size
         let mut moved_locals: HashSet<String> = HashSet::new();
-        if *reduction_size > 4 && local_work_group != 999999 {
+
+        // Set the reduction size to be half of reduction_size, so we telescope across 
+        // functions in the partition. (i.e. 64, 32, 16, 8, 4, 4 versus just 128 in one function)
+        let mut local_reduction_size = *reduction_size / 2;
+        if *reduction_size != 4 {
+            *reduction_size /= 2;
+        }
+
+        if local_reduction_size > 0 && local_work_group != 999999 {
             // Try to grab i32, then i64, then f32 or f64 last
 
             // I32
             for (local, l_type) in local_types_converted.clone().iter() {
                 match l_type {
                     StackType::i32 => {
-                        if !is_param.get(local).unwrap() && *reduction_size > 4 {
+                        if !is_param.get(local).unwrap() && local_reduction_size > 4 {
                             moved_locals.insert(local.to_string());
-                            *reduction_size -= 4;
+                            local_reduction_size -= 4;
                         }
                     },
                     _ => (),
@@ -1758,9 +1767,9 @@ impl<'a> StackCtx {
             for (local, l_type) in local_types_converted.clone().iter() {
                 match l_type {
                     StackType::i64 => {
-                        if !is_param.get(local).unwrap() && *reduction_size > 8 {
+                        if !is_param.get(local).unwrap() && local_reduction_size > 8 {
                             moved_locals.insert(local.to_string());
-                            *reduction_size -= 8;
+                            local_reduction_size -= 8;
                         }
                     },
                     _ => (),
@@ -1771,9 +1780,9 @@ impl<'a> StackCtx {
             for (local, l_type) in local_types_converted.clone().iter() {
                 match l_type {
                     StackType::f32 => {
-                        if !is_param.get(local).unwrap() && *reduction_size > 4 {
+                        if !is_param.get(local).unwrap() && local_reduction_size > 4 {
                             moved_locals.insert(local.to_string());
-                            *reduction_size -= 4;
+                            local_reduction_size -= 4;
                         }
                     },
                     _ => (),
@@ -1784,14 +1793,18 @@ impl<'a> StackCtx {
             for (local, l_type) in local_types_converted.clone().iter() {
                 match l_type {
                     StackType::f64 => {
-                        if !is_param.get(local).unwrap() && *reduction_size > 8 {
+                        if !is_param.get(local).unwrap() && local_reduction_size > 8 {
                             moved_locals.insert(local.to_string());
-                            *reduction_size -= 8;
+                            local_reduction_size -= 8;
                         }
                     },
                     _ => (),
                 }
             }
+        }
+
+        if *reduction_size == 4 {
+            *reduction_size = 0;
         }
 
         StackCtx {
