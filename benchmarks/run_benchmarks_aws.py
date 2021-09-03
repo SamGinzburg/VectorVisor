@@ -9,6 +9,7 @@ local_group_size = 16
 #local_group_size = 999999
 
 CFLAGS="-cl-nv-verbose"
+OPT_LEVEL="-O3 -g"
 
 ec2 = boto3.resource('ec2')
 ec2_client = boto3.client('ec2')
@@ -81,28 +82,28 @@ userdata_ubuntu = """#cloud-config
      - cd benchmarks/
      - cd json-compression-lz4/
      - sudo ~/.cargo/bin/cargo build --release
-     - wasm-opt target/wasm32-wasi/release/json-compression.wasm -O2 -c -o target/wasm32-wasi/release/json-compression-opt.wasm
+     - wasm-opt target/wasm32-wasi/release/json-compression.wasm {opt} -c -o target/wasm32-wasi/release/json-compression-opt.wasm
      - cd ..
      - cd json-compression/
      - sudo ~/.cargo/bin/cargo build --release
-     - wasm-opt target/wasm32-wasi/release/json-compression.wasm -O2 -c -o target/wasm32-wasi/release/json-compression-opt.wasm
+     - wasm-opt target/wasm32-wasi/release/json-compression.wasm {opt} -c -o target/wasm32-wasi/release/json-compression-opt.wasm
      - cd ..
      - cd average/
      - sudo ~/.cargo/bin/cargo build --release
-     - wasm-opt target/wasm32-wasi/release/average.wasm -O2 -c -o target/wasm32-wasi/release/average-opt.wasm
+     - wasm-opt target/wasm32-wasi/release/average.wasm {opt} -c -o target/wasm32-wasi/release/average-opt.wasm
      - cd ..
      - cd pbkdf2/
      - sudo ~/.cargo/bin/cargo build --release
-     - wasm-opt target/wasm32-wasi/release/pbkdf2.wasm -O2 -c -o target/wasm32-wasi/release/pbkdf2-opt.wasm
+     - wasm-opt target/wasm32-wasi/release/pbkdf2.wasm {opt} -c -o target/wasm32-wasi/release/pbkdf2-opt.wasm
      - cd ..
      - cd nlp-count-vectorizer/
      - sudo ~/.cargo/bin/cargo build --release
-     - wasm-opt target/wasm32-wasi/release/nlp-count-vectorizer.wasm -O2 -c -o target/wasm32-wasi/release/nlp-count-vectorizer-opt.wasm
+     - wasm-opt target/wasm32-wasi/release/nlp-count-vectorizer.wasm {opt} -c -o target/wasm32-wasi/release/nlp-count-vectorizer-opt.wasm
      - cd ..
      - cd imageblur/
      - sudo ~/.cargo/bin/cargo build --release
-     - wasm-opt target/wasm32-wasi/release/imageblur.wasm -O2 -c -o target/wasm32-wasi/release/imageblur-opt.wasm
-"""
+     - wasm-opt target/wasm32-wasi/release/imageblur.wasm {opt} -c -o target/wasm32-wasi/release/imageblur-opt.wasm
+""".format(opt=OPT_LEVEL)
 
 
 def run_command(command, command_name, instance_id):
@@ -454,7 +455,7 @@ def run_image_bench():
     x=$(cloud-init status)
     done
 
-    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/imageblur/target/wasm32-wasi/release/imageblur-opt.wasm --ip=0.0.0.0 --heap=4194304 --stack=262144 --hcallsize=524288 --partition=true --serverless=true --vmcount=3072 --vmgroups=1 --maxdup=3 --disablefastcalls=false --maxloc=2000000 --lgroup={lgroup} --cflags={cflags} &> /tmp/imageblur.log &
+    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/imageblur/target/wasm32-wasi/release/imageblur-opt.wasm --ip=0.0.0.0 --heap=4194304 --stack=262144 --hcallsize=524288 --partition=true --serverless=true --vmcount=3072 --vmgroups=1 --maxdup=3 --disablefastcalls=false --partitions=200 --maxloc=2000000 --lgroup={lgroup} --cflags={cflags} &> /tmp/imageblur.log &
     """.format(lgroup=local_group_size, cflags=CFLAGS)
 
     run_command(run_image_command, "run_imageblur_gpu_command", gpu_instance[0].id)
@@ -728,10 +729,12 @@ ssm_client = boto3.client('ssm')
 #cleanup()
 
 # run average bench
-run_average_bench()
+#run_average_bench()
+
+#cleanup()
 
 # run image bench
-#run_image_bench()
+run_image_bench()
 
 
 # clean up all instances at end

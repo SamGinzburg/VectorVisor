@@ -71,29 +71,55 @@ pub fn emit_i32_trunc_f64_u(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &
 pub fn emit_i64_reinterpret_f64(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _debug: bool) -> String {
     let reg = stack_ctx.vstack_pop(StackType::f64);
     let result_register = stack_ctx.vstack_alloc(StackType::i64);
+    let mut ret_str = String::from("");
 
-    format!("\t___private_memcpy_nonmmu(&{}, &{}, sizeof(double));\n", result_register, reg)
+    ret_str += &format!("\t{{\n");
+    ret_str += &format!("\t\tulong temp = 0;\n");
+    ret_str += &format!("\t\t___private_memcpy_nonmmu(&temp, &{}, sizeof(double));\n", reg);
+    ret_str += &format!("\t\t{} = temp;\n", result_register);
+    ret_str += &format!("\t}}\n");
+
+    ret_str
 }
 
 pub fn emit_f64_reinterpret_i64(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _debug: bool) -> String {
     let reg = stack_ctx.vstack_pop(StackType::i64);
     let result_register = stack_ctx.vstack_alloc(StackType::f64);
+    let mut ret_str = String::from("");
 
-    format!("\t___private_memcpy_nonmmu(&{}, &{}, sizeof(ulong));\n", result_register, reg)
+    ret_str += &format!("\t{{\n");
+    ret_str += &format!("\t\tulong temp = {};\n", reg);
+    ret_str += &format!("\t\t___private_memcpy_nonmmu(&{}, &temp, sizeof(double));\n", result_register);
+    ret_str += &format!("\t}}\n");
+
+    ret_str
 }
 
 pub fn emit_f32_reinterpret_i32(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _debug: bool) -> String {
     let reg = stack_ctx.vstack_pop(StackType::i32);
     let result_register = stack_ctx.vstack_alloc(StackType::f32);
+    let mut ret_str = String::from("");
 
-    format!("\t___private_memcpy_nonmmu(&{}, &{}, sizeof(float));\n", result_register, reg)
+    ret_str += &format!("\t{{\n");
+    ret_str += &format!("\t\tuint temp = {};\n", reg);
+    ret_str += &format!("\t\t___private_memcpy_nonmmu(&{}, &temp, sizeof(float));\n", result_register);
+    ret_str += &format!("\t}}\n");
+
+    ret_str
 }
 
 pub fn emit_i32_reinterpret_f32(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _debug: bool) -> String {
     let reg = stack_ctx.vstack_pop(StackType::f32);
     let result_register = stack_ctx.vstack_alloc(StackType::i32);
+    let mut ret_str = String::from("");
 
-    format!("\t___private_memcpy_nonmmu(&{}, &{}, sizeof(uint));\n", result_register, reg)
+    ret_str += &format!("\t{{\n");
+    ret_str += &format!("\t\tuint temp = 0;\n");
+    ret_str += &format!("\t\t___private_memcpy_nonmmu(&temp, &{}, sizeof(uint));\n", reg);
+    ret_str += &format!("\t\t{} = temp;\n", result_register);
+    ret_str += &format!("\t}}\n");
+
+    ret_str
 }
 
 pub fn emit_f64_promote_f32(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _debug: bool) -> String {

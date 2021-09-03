@@ -96,6 +96,7 @@ pub struct StackCtx {
     local_offsets: HashMap<String, u32>,
     local_types: HashMap<String, StackType>,
     moved_locals: HashSet<String>,
+    demoted_intermediates: HashSet<String>,
     local_cache_size: u32,
     param_offset: i32,
     total_stack_types: Vec<StackType>,
@@ -1747,8 +1748,55 @@ impl<'a> StackCtx {
             *reduction_size /= 2;
         }
 
+        let mut demoted_intermediates: HashSet<String> = HashSet::new();
         if local_reduction_size > 0 && local_work_group != 999999 {
-            // Try to grab i32, then i64, then f32 or f64 last
+
+            // Alloc some smem bytes for intermediate vals. We only demote i32/i64 vals to
+            // avoid changes elsewhere in the compiler (mostly memcpy for floats)
+            let mut intermediate_reduction_size = if local_reduction_size > 64 {
+                64
+            } else if local_reduction_size > 32 {
+                32
+            } else if local_reduction_size > 16 {
+                16
+            } else {
+                0
+            };
+
+            *reduction_size -= intermediate_reduction_size;
+
+            // I32
+            let mut idx = 0;
+            for val in i32_stack.clone() {
+                if intermediate_reduction_size > 0 {
+                    let old_offset: u32 = *intermediate_offsets.get(&val).unwrap();
+                    i32_stack[idx] = format!("{}[thread_idx]", val.clone());
+                    demoted_intermediates.insert(i32_stack[idx].clone());
+                    intermediate_offsets.insert(i32_stack[idx].clone(), old_offset);
+                    intermediate_reduction_size -= 4;
+                } else {
+                    break;
+                }
+                idx += 1;
+            }
+
+            // I64
+            idx = 0;
+            for val in i64_stack.clone() {
+                if intermediate_reduction_size > 0 {
+                    let old_offset: u32 = *intermediate_offsets.get(&val).unwrap();
+                    i64_stack[idx] = format!("{}[thread_idx]", val.clone());
+                    demoted_intermediates.insert(i64_stack[idx].clone());
+                    intermediate_offsets.insert(i64_stack[idx].clone(), old_offset);
+                    intermediate_reduction_size -= 8;
+                } else {
+                    break;
+                }
+                idx += 1;
+            }
+
+            // add remains of int reduction size back to locals
+            *reduction_size += intermediate_reduction_size;
 
             // I32
             for (local, l_type) in local_types_converted.clone().iter() {
@@ -1827,6 +1875,7 @@ impl<'a> StackCtx {
             local_offsets: local_offsets.clone(),
             local_types: local_types_converted,
             moved_locals: moved_locals,
+            demoted_intermediates: demoted_intermediates,
             param_offset: param_offset,
             total_stack_types: vec![],
             control_stack: vec![],
@@ -2092,12 +2141,26 @@ impl<'a> StackCtx {
             }
         }
 
-        for intermediate in &self.i32_stack {
-            ret_str += &format!("\tuint {} = 0;\n", intermediate);
+        let mut idx = 0;
+        for intermediate in &self.i32_stack.clone() {
+            if self.demoted_intermediates.contains(intermediate) && !is_fastcall {
+                                ret_str += &format!("\t__local uint {}[{}];\n",
+                                                    intermediate.replace("[thread_idx]", ""),
+                                                    local_work_group);
+            } else {
+                ret_str += &format!("\tuint {} = 0;\n", intermediate);
+            }
         }
 
-        for intermediate in &self.i64_stack {
-            ret_str += &format!("\tulong {} = 0;\n", intermediate);
+        idx = 0;
+        for intermediate in &self.i64_stack.clone() {
+            if self.demoted_intermediates.contains(intermediate) && !is_fastcall {
+                                ret_str += &format!("\t__local ulong {}[{}];\n",
+                                                    intermediate.replace("[thread_idx]", ""),
+                                                    local_work_group);
+            } else {
+                ret_str += &format!("\tulong {} = 0;\n", intermediate);
+            }
         }
 
         for intermediate in &self.f32_stack {
