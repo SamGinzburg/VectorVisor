@@ -2504,15 +2504,15 @@ r#"
                  *
                  */
                 let reduction_size: &mut u32 = &mut if local_work_group == 8 {
-                    256
+                    512
                 } else if local_work_group == 16 {
-                    128
+                    256
                 } else if local_work_group == 32 {
-                    64
+                    128
                 } else if local_work_group == 64 {
-                    32
+                    64
                 } else if local_work_group == 128 {
-                    16
+                    32
                 } else {
                     // unsupported local work group size found
                     0

@@ -1753,12 +1753,14 @@ impl<'a> StackCtx {
 
             // Alloc some smem bytes for intermediate vals. We only demote i32/i64 vals to
             // avoid changes elsewhere in the compiler (mostly memcpy for floats)
-            let mut intermediate_reduction_size = if local_reduction_size > 64 {
+            let mut intermediate_reduction_size = if local_reduction_size > 256 {
+                256
+            } else if local_reduction_size > 128 {
+                128
+            } else if local_reduction_size > 64 {
                 64
             } else if local_reduction_size > 32 {
                 32
-            } else if local_reduction_size > 16 {
-                16
             } else {
                 0
             };
