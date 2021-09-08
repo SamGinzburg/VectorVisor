@@ -1743,27 +1743,14 @@ impl<'a> StackCtx {
 
         // Set the reduction size to be half of reduction_size, so we telescope across 
         // functions in the partition. (i.e. 64, 32, 16, 8, 4, 4 versus just 128 in one function)
-        let mut local_reduction_size = *reduction_size / 2;
-        if *reduction_size != 4 {
-            *reduction_size /= 2;
-        }
+        let mut local_reduction_size = *reduction_size;
 
         let mut demoted_intermediates: HashSet<String> = HashSet::new();
         if local_reduction_size > 0 && local_work_group != 999999 {
 
             // Alloc some smem bytes for intermediate vals. We only demote i32/i64 vals to
             // avoid changes elsewhere in the compiler (mostly memcpy for floats)
-            let mut intermediate_reduction_size = if local_reduction_size > 256 {
-                256
-            } else if local_reduction_size > 128 {
-                128
-            } else if local_reduction_size > 64 {
-                64
-            } else if local_reduction_size > 32 {
-                32
-            } else {
-                0
-            };
+            let mut intermediate_reduction_size = *reduction_size;
 
             *reduction_size -= intermediate_reduction_size;
 

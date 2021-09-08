@@ -2496,27 +2496,8 @@ r#"
                  * TODO: This is a function of the local workgroup size & amount of shared memory
                  * on the device.
                  *
-                 * local_work_group of 8 => 256 (~2024 bytes per local work group -> ~32KiB of smem
-                 * usage on device)
-                 *                    16 => 128
-                 *                    32 => 64
-                 *                    64 => 32
-                 *
                  */
-                let reduction_size: &mut u32 = &mut if local_work_group == 8 {
-                    512
-                } else if local_work_group == 16 {
-                    256
-                } else if local_work_group == 32 {
-                    128
-                } else if local_work_group == 64 {
-                    64
-                } else if local_work_group == 128 {
-                    32
-                } else {
-                    // unsupported local work group size found
-                    0
-                };
+                let reduction_size: &mut u32 = &mut (4096 / local_work_group as u32);
 
                 // We want to emit the largest function first, so we can move more of its locals to
                 // smem.

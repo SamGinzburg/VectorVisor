@@ -5,7 +5,7 @@ import time
 
 target_rps = 5000
 TIMEOUT_MINUTES = 120
-local_group_size = 16
+local_group_size = 64
 #local_group_size = 999999
 
 CFLAGS="-cl-nv-verbose"
@@ -455,7 +455,7 @@ def run_image_bench():
     x=$(cloud-init status)
     done
 
-    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/imageblur/target/wasm32-wasi/release/imageblur-opt.wasm --ip=0.0.0.0 --heap=4194304 --stack=262144 --hcallsize=524288 --partition=true --serverless=true --vmcount=3072 --vmgroups=1 --maxdup=3 --disablefastcalls=false --partitions=200 --maxloc=2000000 --lgroup={lgroup} --cflags={cflags} &> /tmp/imageblur.log &
+    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/imageblur/target/wasm32-wasi/release/imageblur-opt.wasm --ip=0.0.0.0 --heap=4194304 --stack=262144 --hcallsize=524288 --partition=true --serverless=true --vmcount=3072 --vmgroups=1 --maxdup=3 --disablefastcalls=false --partitions=100 --maxloc=2000000 --lgroup={lgroup} --cflags={cflags} &> /tmp/imageblur.log &
     """.format(lgroup=local_group_size, cflags=CFLAGS)
 
     run_command(run_image_command, "run_imageblur_gpu_command", gpu_instance[0].id)
@@ -645,7 +645,7 @@ p3.2xlarge   => 1 V100, 16 GiB memory, 8 vCPU, $3.06 / hr
 
 """
 # AMIs specific to us-east-2
-gpu_instance = ec2.create_instances(ImageId='ami-028dbc12531690cf4',
+gpu_instance = ec2.create_instances(ImageId='ami-00339339e800db52e',
                                 InstanceType="g4dn.2xlarge",
                                 MinCount=1,
                                 MaxCount=1,
@@ -714,9 +714,9 @@ while True:
 ssm_client = boto3.client('ssm')
 
 # run pbkdf2 bench
-#run_pbkdf2_bench(True)
+run_pbkdf2_bench(True)
 
-#cleanup()
+cleanup()
 
 # run lz4 bench
 #run_lz4_bench()
