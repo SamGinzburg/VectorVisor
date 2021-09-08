@@ -1274,6 +1274,7 @@ impl<'a> OpenCLCWriter<'_> {
                      function_id_map: HashMap<&str, u32>,
                      hypercall_id_count: &mut u32,
                      local_work_group: usize,
+                     mexec: usize,
                      indirect_call_mapping: &HashMap<u32, &wast::Index>, 
                      global_mappings: &HashMap<String, (u32, u32)>,
                      fastcall_set: HashSet<String>,
@@ -1381,6 +1382,7 @@ impl<'a> OpenCLCWriter<'_> {
                                                     0,
                                                     0,
                                                     local_work_group,
+                                                    mexec,
                                                     false,
                                                     debug));
                 } else {
@@ -1707,6 +1709,7 @@ impl<'a> OpenCLCWriter<'_> {
                                  globals_buffer_size: u32,
                                  stack_frame_ptr_size_bytes: u32,
                                  local_work_group: usize,
+                                 mexec: usize,
                                  is_control_fn: bool,
                                  debug: bool) -> String {
         let mut output = String::new();
@@ -1734,6 +1737,7 @@ impl<'a> OpenCLCWriter<'_> {
                     uchar  *is_calling,
                     ulong  warp_idx,
                     ulong  thread_idx,
+                    ulong  read_idx,
                     uint   hcall_size,
                     uint   *entry_point,
                     uint   *hcall_ret_val)", fn_name)).unwrap();
@@ -1756,6 +1760,7 @@ impl<'a> OpenCLCWriter<'_> {
                     uchar  *is_calling,
                     ulong  warp_idx,
                     ulong  thread_idx,
+                    ulong  read_idx,
                     uint   hcall_size,
                     uint   *entry_point,
                     uint   hcall_ret_val)", fn_name)).unwrap();
@@ -1793,14 +1798,17 @@ impl<'a> OpenCLCWriter<'_> {
 
             write!(output, "{}", header).unwrap();
             // TODO: for the openCL launcher, pass the memory stride as a function parameter
-            if interleave > 0 {
-                write!(output, "\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\n\t{}\n",
+            if interleave > 0 && mexec > 1 {
+                write!(output, "\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\n\t{}\n",
+                format!("ulong warp_idx = get_global_id(0) / {};",  mexec),
+                format!("ulong thread_idx = get_local_id(0) / {};",  mexec),
+                format!("ulong read_idx = get_local_id(0) % {};",  mexec),
                 "global uint  *stack_u32    = (global uint*)stack_u32_global;",
                 "global ulong *stack_u64    = (global ulong*)stack_u32;",
                 "global uint  *heap_u32     = (global uint *)heap_u32_global;",
                 "global ulong *heap_u64     = (global ulong *)heap_u32;",
                 "global uint  *hypercall_buffer = (global uint *)hypercall_buffer_global;",
-                "global uint   *globals_buffer = (global uint *)globals_buffer_global;",
+                "global uint  *globals_buffer = (global uint *)globals_buffer_global;",
                 "global uint  *stack_frames = (global uint*)stack_frames_global;",
                 // only an array of N elements, where N=warp size
                 "global ulong *sp           = (global ulong *)sp_global+(get_global_id(0));",
@@ -1816,13 +1824,39 @@ impl<'a> OpenCLCWriter<'_> {
                 "global uint *max_mem_size = (global uint *)max_mem_size_global+(get_global_id(0));",
                 "global uchar *is_calling = (global uchar *)is_calling_global+(get_global_id(0));",
                 "global uint  *entry_point   = (global uint*)entry_point_global+get_global_id(0);",
+                "global uint  *hcall_ret_val = (global uint*)hcall_ret_val_global+warp_idx;",
+                "global uint  *hcall_size = (global uint*)hcall_size_global+warp_idx;").unwrap();
+            } else if interleave > 0 {
+                write!(output, "\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\n\t{}\n",
                 "ulong warp_idx = get_global_id(0);",
                 "ulong thread_idx = get_local_id(0);",
+                format!("ulong read_idx = 0;"), // dummy value here, isn't used
+                "global uint  *stack_u32    = (global uint*)stack_u32_global;",
+                "global ulong *stack_u64    = (global ulong*)stack_u32;",
+                "global uint  *heap_u32     = (global uint *)heap_u32_global;",
+                "global ulong *heap_u64     = (global ulong *)heap_u32;",
+                "global uint  *hypercall_buffer = (global uint *)hypercall_buffer_global;",
+                "global uint  *globals_buffer = (global uint *)globals_buffer_global;",
+                "global uint  *stack_frames = (global uint*)stack_frames_global;",
+                // only an array of N elements, where N=warp size
+                "global ulong *sp           = (global ulong *)sp_global+(get_global_id(0));",
+                // the stack frame pointer is used for both the stack frame, and call stack as they are
+                // essentially the same structure, except they hold different values
+                "global ulong *sfp          = (global ulong*)(sfp_global+(get_global_id(0)));",
+                // holds the numeric index of the return label for where to jump after a function call
+                "global ulong *call_stack   = (global ulong*)call_stack_global;",
+                "global ulong *call_return_stack   = (global ulong*)call_return_stack_global;",
+                "global int *hypercall_number = (global int *)hypercall_number_global+(get_global_id(0));",
+                "global uint *hypercall_continuation = (global uint *)hypercall_continuation_global+(get_global_id(0));",
+                "global uint *current_mem_size = (global uint *)current_mem_size_global+(get_global_id(0));",
+                "global uint *max_mem_size = (global uint *)max_mem_size_global+(get_global_id(0));",
+                "global uchar *is_calling = (global uchar *)is_calling_global+(get_global_id(0));",
+                "global uint  *entry_point   = (global uint*)entry_point_global+get_global_id(0);",
                 "global uint  *hcall_ret_val = (global uint*)hcall_ret_val_global+get_global_id(0);",
                 "global uint  *hcall_size = (global uint*)hcall_size_global+get_global_id(0);").unwrap();
             } else {
                 // The pointer math must be calculated in terms of bytes, which is why we cast to (char*) first
-                write!(output, "\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\n\t{}\n",
+                write!(output, "\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\n\t{}\n",
                 format!("global uint  *stack_u32    = (global uint*)((global char*)stack_u32_global+(get_global_id(0) * {}));", stack_size_bytes),
                 "global ulong *stack_u64    = (global ulong*)stack_u32;",
                 format!("global uint  *heap_u32     = (global uint *)((global char*)heap_u32_global+(get_global_id(0) * {}));", heap_size_bytes),
@@ -1847,6 +1881,7 @@ impl<'a> OpenCLCWriter<'_> {
                 "global uint  *entry_point   = (global uint *)entry_point_global+get_global_id(0);",
                 "ulong warp_idx = get_global_id(0);",
                 "ulong thread_idx = get_local_id(0);",
+                format!("ulong read_idx = 0;"), // dummy value here, isn't used
                 "global uint  *hcall_ret_val = (global uint*)hcall_ret_val_global+get_global_id(0);").unwrap();
             }
         // if we are an OpenCL kernel and we are not the control function, we only need the function header itself
@@ -1870,6 +1905,7 @@ __attribute__((always_inline)) void {}(global uint   *stack_u32,
     global uchar  *is_calling,
     ulong  warp_idx,
     ulong  thread_idx,
+    ulong  read_idx,
     uint   hcall_size,
     global uint   *entry_point,
     uint hcall_ret_val)", fn_name)).unwrap();
@@ -1900,7 +1936,7 @@ __attribute__((always_inline)) void {}(global uint   *stack_u32,
      * This function generates the helper kernel that loads the data sections
      * It is also ressponsible for loading globals into memory id -> (offset, size)
      */
-    fn generate_data_section(&self, interleave: u32, heap_size: u32, debug: bool) -> (String, HashMap<String, (u32, u32)>) {
+    fn generate_data_section(&self, interleave: u32, heap_size: u32, mexec: u32, debug: bool) -> (String, HashMap<String, (u32, u32)>) {
         let mut result = String::from("");
         let mut mapping: HashMap<String, (u32, u32)> = HashMap::new();
         let mut offset: u32 = 0;
@@ -1971,7 +2007,8 @@ __attribute__((always_inline)) void {}(global uint   *stack_u32,
             result += &String::from("}\n\n");
         } else {
             result += &String::from("\n__kernel void data_init(__global uint *stack_u32_global, __global uint *heap_u32_global, __global uint *globals_buffer_global, __global uint *curr_mem_global, __global uint *max_mem_global, __global uchar *is_calling_global, __global ulong *sfp_global) {\n");
-            result += &String::from("\tulong warp_idx = get_global_id(0);\n");
+            result += &format!("\tulong warp_idx = get_global_id(0) / {};\n", mexec);
+            result += &format!("\tulong read_idx = get_local_id(0) % {};\n", mexec);
             // these structures are not interleaved, so its fine to just read/write them as is
             // they are already implicitly interleaved (like sp for example)
             result += &format!("\tcurr_mem_global[warp_idx] = {};\n", program_start_mem_pages);
@@ -2037,6 +2074,7 @@ __attribute__((always_inline)) void {}(global uint   *stack_u32,
                             stack_frame_ptr_size_bytes: u32, 
                             predictor_size_bytes: u32,
                             local_work_group: usize,
+                            mexec: usize,
                             debug_print_function_calls: bool,
                             globals_buffer_size: u32,
                             function_idx_label: HashMap<String, u32>,
@@ -2054,6 +2092,7 @@ __attribute__((always_inline)) void {}(global uint   *stack_u32,
                                                globals_buffer_size,
                                                stack_frame_ptr_size_bytes,
                                                local_work_group,
+                                               mexec,
                                                true,
                                                debug)).unwrap();
         write!(ret_str, "\tstack_u32 += {};\n", 128).unwrap();
@@ -2079,7 +2118,7 @@ __attribute__((always_inline)) void {}(global uint   *stack_u32,
                 write!(ret_str, "\t\tprintf(\"{}\\n\");\n", format!("{}{}", "__", key.replace(".", ""))).unwrap();
             }
             // strip illegal chars from function names
-            write!(ret_str, "\t\t\t{}({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {});\n",
+            write!(ret_str, "\t\t\t{}({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {});\n",
                             format!("{}{}", "__", key.replace(".", "")),
                             "stack_u32",
                             "stack_u64",
@@ -2099,6 +2138,7 @@ __attribute__((always_inline)) void {}(global uint   *stack_u32,
                             "is_calling",
                             "warp_idx",
                             "thread_idx",
+                            "read_idx",
                             "*hcall_size",
                             "entry_point",
                             "*hcall_ret_val").unwrap();
@@ -2132,6 +2172,7 @@ __attribute__((always_inline)) void {}(global uint   *stack_u32,
                              max_loc_in_partition: u32,
                              max_duplicate_funcs: u32,
                              local_work_group: usize,
+                             mexec: usize,
                              disable_fastcalls: bool,
                              debug_print_function_calls: bool,
                              force_inline: bool,
@@ -2187,8 +2228,8 @@ r#"
         // generate the read/write functions
         // we support only either a 1 byte interleave, or no interleave
         // 0 = no interleave
-        write!(output, "{}", generate_read_write_calls(&self, interleave, debug)).unwrap();
-        write!(header, "{}", generate_read_write_calls(&self, interleave, debug)).unwrap();
+        write!(output, "{}", generate_read_write_calls(&self, interleave, local_work_group, mexec, debug)).unwrap();
+        write!(header, "{}", generate_read_write_calls(&self, interleave, local_work_group, mexec, debug)).unwrap();
 
         // generate the hypercall helper section
         write!(output, "{}", self.generate_hypercall_helpers(debug)).unwrap();
@@ -2202,7 +2243,7 @@ r#"
 
         // generate the data loading function
         // also return the global mappings: global id -> (global buffer offset, global size)
-        let (data_section, global_mappings) = self.generate_data_section(interleave, heap_size_bytes, debug);
+        let (data_section, global_mappings) = self.generate_data_section(interleave, heap_size_bytes, mexec.try_into().unwrap(), debug);
         let mut globals_buffer_size = 0;
 
         for (_key, (_offset, size)) in &global_mappings {
@@ -2299,7 +2340,7 @@ r#"
             for f in allowed_fastcalls {
                 hset.insert(f.to_string());
             }
-            let mut fastcall_set = compute_fastcall_set(self, &self.func_map, &mut indirect_call_set, start_func.clone());
+            let fastcall_set = compute_fastcall_set(self, &self.func_map, &mut indirect_call_set, start_func.clone());
 
             // now filter to only allow the allowed list and functions they call
             let hset_clone = hset.clone();
@@ -2375,6 +2416,7 @@ r#"
                                             function_idx_label.clone(),
                                             hypercall_id_count,
                                             local_work_group,
+                                            mexec,
                                             indirect_call_mapping,
                                             &global_mappings,
                                             fast_function_set.clone(),
@@ -2459,6 +2501,7 @@ r#"
                                               function_idx_label.clone(),
                                               hypercall_id_count,
                                               local_work_group,
+                                              mexec,
                                               indirect_call_mapping,
                                               &global_mappings,
                                               fast_function_set.clone(),
@@ -2518,6 +2561,7 @@ r#"
                                                   function_idx_label.clone(),
                                                   hypercall_id_count,
                                                   local_work_group,
+                                                  mexec,
                                                   indirect_call_mapping,
                                                   &global_mappings,
                                                   fast_function_set.clone(),
@@ -2554,6 +2598,7 @@ r#"
                                                             stack_frame_ptr_size_bytes, 
                                                             predictor_size_bytes,
                                                             local_work_group,
+                                                            mexec,
                                                             debug_print_function_calls,
                                                             globals_buffer_size,
                                                             function_idx_label_temp,
@@ -2578,6 +2623,7 @@ r#"
                                                globals_buffer_size,
                                                stack_frame_ptr_size_bytes,
                                                local_work_group,
+                                               mexec,
                                                true,
                                                debug)).unwrap();
 
@@ -2652,7 +2698,7 @@ r#"
                 write!(output, "\t\tprintf(\"{}\\n\");\n", format!("{}{}", "__", key.replace(".", ""))).unwrap();
             }
             // strip illegal chars from function names
-            write!(output, "\t\t\t{}({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {});\n",
+            write!(output, "\t\t\t{}({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {});\n",
                             format!("{}{}", "__", key.replace(".", "")),
                             "stack_u32",
                             "stack_u64",
@@ -2672,6 +2718,7 @@ r#"
                             "is_calling",
                             "warp_idx",
                             "thread_idx",
+                            "read_idx",
                             "*hcall_size",
                             "entry_point",
                             "*hcall_ret_val").unwrap();

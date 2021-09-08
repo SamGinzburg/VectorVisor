@@ -202,6 +202,7 @@ impl OpenCLRunner {
                num_compiled_funcs: u32,
                globals_buffer_size: u32,
                local_work_group: usize,
+               mexec: usize,
                vm_sender: Arc<Vec<Mutex<Sender<(Vec<u8>, usize, u64, u64, u64, u64)>>>>,
                vm_recv: Arc<Vec<Mutex<Receiver<(Vec<u8>, usize)>>>>,
                _compile_flags: String,
@@ -217,6 +218,7 @@ impl OpenCLRunner {
                                              sfp_size, 
                                              num_compiled_funcs,
                                              globals_buffer_size,
+                                             mexec as u32,
                                              context);
 
         let handler = std::thread::spawn(move || {
@@ -240,7 +242,7 @@ impl OpenCLRunner {
                     final_runner.run_vector_vms(stack_frames_size, local_work_group, program, &leaked_command_queue, hypercall_buffer_read_buffer, hcall_size.try_into().unwrap(), context, print_return, vm_sender, vm_recv)
                 },
                 ProgramType::Partitioned(program_map, kernel_partition_mapping) => {
-                    final_runner.run_partitioned_vector_vms(stack_frames_size, local_work_group, program_map, kernel_partition_mapping, &leaked_command_queue, hypercall_buffer_read_buffer, hcall_size.try_into().unwrap(), &context, print_return, vm_sender, vm_recv)
+                    final_runner.run_partitioned_vector_vms(stack_frames_size, local_work_group, mexec, program_map, kernel_partition_mapping, &leaked_command_queue, hypercall_buffer_read_buffer, hcall_size.try_into().unwrap(), &context, print_return, vm_sender, vm_recv)
                 }
             };
 
@@ -268,6 +270,7 @@ impl OpenCLRunner {
                           // needed for loop/branch structures
                           _num_compiled_funcs: u32,
                           global_buffers_size: u32,
+                          mexec: u32,
                           context: &ocl::core::Context) -> OpenCLRunner {
         let mut size_tracker: u64 = 0;
         
@@ -322,19 +325,19 @@ impl OpenCLRunner {
         let sp = unsafe {
             ocl::core::create_buffer::<_, u8>(context,
                                               ocl::core::MEM_READ_WRITE | ocl::core::MEM_ALLOC_HOST_PTR,
-                                              (8 * self.num_vms) as usize,
+                                              (8 * self.num_vms * mexec) as usize,
                                               None).unwrap()
         };
-        size_tracker += (8 * self.num_vms) as u64;
+        size_tracker += (8 * self.num_vms * mexec) as u64;
 
         // way, way too big
         let sfp = unsafe {
             ocl::core::create_buffer::<_, u8>(context,
                                               ocl::core::MEM_READ_WRITE | ocl::core::MEM_ALLOC_HOST_PTR,
-                                              (stack_frame_ptr_size * 8 * self.num_vms) as usize,
+                                              (stack_frame_ptr_size * 8 * self.num_vms * mexec) as usize,
                                               None).unwrap()
         };
-        size_tracker += (stack_frame_ptr_size * 8 * self.num_vms) as u64;
+        size_tracker += (stack_frame_ptr_size * 8 * self.num_vms * mexec) as u64;
 
         // 1KB call stack should be way more than enough
         let call_stack = unsafe {
@@ -356,48 +359,48 @@ impl OpenCLRunner {
         let hypercall_num = unsafe {
             ocl::core::create_buffer::<_, u8>(context,
                                               ocl::core::MEM_READ_WRITE | ocl::core::MEM_ALLOC_HOST_PTR,
-                                              (4 * self.num_vms) as usize,
+                                              (4 * self.num_vms * mexec) as usize,
                                               None).unwrap()
         };
-        size_tracker += (4 * self.num_vms) as u64;
+        size_tracker += (4 * self.num_vms * mexec) as u64;
 
         let hypercall_continuation = unsafe {
             ocl::core::create_buffer::<_, u8>(context,
                                               ocl::core::MEM_READ_WRITE | ocl::core::MEM_ALLOC_HOST_PTR,
-                                              (4 * self.num_vms) as usize,
+                                              (4 * self.num_vms * mexec) as usize,
                                               None).unwrap()
         };
-        size_tracker += (4 * self.num_vms) as u64;
+        size_tracker += (4 * self.num_vms * mexec) as u64;
 
         let current_mem = unsafe {
             ocl::core::create_buffer::<_, u8>(context,
                                               ocl::core::MEM_READ_WRITE,
-                                              (4 * self.num_vms) as usize,
+                                              (4 * self.num_vms * mexec) as usize,
                                               None).unwrap()
         };
-        size_tracker += (4 * self.num_vms) as u64;
+        size_tracker += (4 * self.num_vms * mexec) as u64;
 
         let max_mem = unsafe {
             ocl::core::create_buffer::<_, u8>(context,
                                               ocl::core::MEM_READ_WRITE,
-                                              (4 * self.num_vms) as usize,
+                                              (4 * self.num_vms * mexec) as usize,
                                               None).unwrap()
         };
-        size_tracker += (4 * self.num_vms) as u64;
+        size_tracker += (4 * self.num_vms * mexec) as u64;
 
 
         let entry = unsafe {
             ocl::core::create_buffer::<_, u8>(context,
                                               ocl::core::MEM_READ_WRITE | ocl::core::MEM_ALLOC_HOST_PTR,
-                                              (4 * self.num_vms) as usize,
+                                              (4 * self.num_vms * mexec) as usize,
                                               None).unwrap()
         };
-        size_tracker += (4 * self.num_vms) as u64;
+        size_tracker += (4 * self.num_vms * mexec) as u64;
 
         let is_calling = unsafe {
             ocl::core::create_buffer::<_, u8>(context,
                                               ocl::core::MEM_READ_WRITE,
-                                              (self.num_vms) as usize,
+                                              (self.num_vms * mexec) as usize,
                                               None).unwrap()
         };
         size_tracker += (self.num_vms) as u64;
@@ -1158,6 +1161,7 @@ impl OpenCLRunner {
     pub fn run_partitioned_vector_vms(self: &'static OpenCLRunner,
                                     per_vm_stack_frames_size: u32,
                                     local_work_group: usize,
+                                    mexec: usize,
                                     program_map: HashMap<u32, ocl::core::Program>,
                                     kernel_partition_mappings: HashMap<u32, u32>,
                                     queue: &'static CommandQueue,
@@ -1180,9 +1184,9 @@ impl OpenCLRunner {
             }
         }
 
-        let mut stack_pointer_temp: &mut [u64] = &mut vec![0u64; self.num_vms as usize];
-        let mut entry_point_temp = vec![0u32; self.num_vms as usize];
-        let mut hypercall_num_temp = vec![0i32; self.num_vms as usize];
+        let mut stack_pointer_temp: &mut [u64] = &mut vec![0u64; self.num_vms as usize * mexec];
+        let mut entry_point_temp = vec![0u32; self.num_vms as usize * mexec];
+        let mut hypercall_num_temp = vec![0i32; self.num_vms as usize * mexec];
         let mut hypercall_retval_temp = vec![0i32; self.num_vms as usize];
         let mut entry_point_exit_flag;
         let vm_slice: Vec<u32> = std::ops::Range { start: 0, end: (self.num_vms) }.collect();
@@ -1313,9 +1317,9 @@ impl OpenCLRunner {
         println!("{:?}", default_entry_point);
         // first, set up the default values for the VMs
         unsafe {
-            for idx in 0..self.num_vms {
-                //println!("setting up VM: {}", idx);
-                // sizeof(ulong) * 8 - NOTE: if we update sp to be 4 bytes, we have to change this too
+
+            // values that need to be set up for M.E.
+            for idx in 0..(self.num_vms * mexec as u32) {
                 let sp_result = ocl::core::enqueue_write_buffer(&queue, &buffers.sp, true, (idx * 8) as usize, &default_sp, None::<Event>, None::<&mut Event>);
 
                 match sp_result {
@@ -1323,20 +1327,19 @@ impl OpenCLRunner {
                     _ => (),
                 }
 
-                // set the stack frame: stack_frames[sfp - 1] = sp
-                let stack_frame_result = ocl::core::enqueue_write_buffer(&queue, &buffers.stack_frames, true, (idx * per_vm_stack_frames_size) as usize, &default_sp, None::<Event>, None::<&mut Event>);
-
-                match stack_frame_result {
-                    Err(e) => panic!("stack_frame_result, Error: {}", e),
-                    _ => (),
-                }
-
                 // set the entry point!
                 let entry_point_result = ocl::core::enqueue_write_buffer(&queue, &buffers.entry, true, (idx * 4) as usize, &default_entry_point, None::<Event>, None::<&mut Event>);
 
-
                 match entry_point_result {
                     Err(e) => panic!("entry_point_result, Error: {}", e),
+                    _ => (),
+                }
+
+                // set the default hypercall number to -2
+                let hypercall_continuation_result = ocl::core::enqueue_write_buffer(&queue, &buffers.hypercall_continuation, true, (idx * 4) as usize, &default_hypercall_continuation, None::<Event>, None::<&mut Event>);
+
+                match hypercall_continuation_result {
+                    Err(e) => panic!("hypercall_continuation_result, Error: {}", e),
                     _ => (),
                 }
 
@@ -1347,13 +1350,14 @@ impl OpenCLRunner {
                     Err(e) => panic!("hypercall_num_result, Error: {}", e),
                     _ => (),
                 }
+            }
 
+            for idx in 0..(self.num_vms) {
+                // set the stack frame: stack_frames[sfp - 1] = sp
+                let stack_frame_result = ocl::core::enqueue_write_buffer(&queue, &buffers.stack_frames, true, (idx * per_vm_stack_frames_size) as usize, &default_sp, None::<Event>, None::<&mut Event>);
 
-                // set the default hypercall number to -2
-                let hypercall_continuation_result = ocl::core::enqueue_write_buffer(&queue, &buffers.hypercall_continuation, true, (idx * 4) as usize, &default_hypercall_continuation, None::<Event>, None::<&mut Event>);
-
-                match hypercall_continuation_result {
-                    Err(e) => panic!("hypercall_continuation_result, Error: {}", e),
+                match stack_frame_result {
+                    Err(e) => panic!("stack_frame_result, Error: {}", e),
                     _ => (),
                 }
 
@@ -1367,7 +1371,7 @@ impl OpenCLRunner {
             }
         }
 
-        let global_dims = &[self.num_vms as usize, 1, 1];
+        let global_dims = &[self.num_vms as usize * mexec, 1, 1];
         let local_dims = if local_work_group == 999999 {
             None
         } else {
@@ -1554,13 +1558,16 @@ impl OpenCLRunner {
                 // If the following conditions are met:
                 // 1) We are not blocked on a hypercall
                 // 2) The VM is not currently masked off
-                if entry_point_temp[idx] != ((-1) as i32) as u32 && (hypercall_num_temp[idx] == -2 || hypercall_num_temp[idx] == -1) {
-                    divergence_stack.insert(*kernel_partition_mappings.get(&entry_point_temp[idx]).unwrap());
-                    stored_entry_points[idx] = entry_point_temp[idx];
-                } else if hypercall_num_temp[idx] != -2 && entry_point_temp[idx] != ((-1) as i32) as u32 {
-                    hcall_divergence_stack.insert(*kernel_partition_mappings.get(&entry_point_temp[idx]).unwrap());
-                    stored_entry_points[idx] = entry_point_temp[idx];
-                    entry_point_temp[idx] = ((-1) as i32) as u32;
+                let arr_idx = idx*mexec;
+                if entry_point_temp[arr_idx] != ((-1) as i32) as u32 && (hypercall_num_temp[arr_idx] == -2 || hypercall_num_temp[arr_idx] == -1) {
+                    divergence_stack.insert(*kernel_partition_mappings.get(&entry_point_temp[arr_idx]).unwrap());
+                    stored_entry_points[idx] = entry_point_temp[arr_idx];
+                } else if hypercall_num_temp[arr_idx] != -2 && entry_point_temp[arr_idx] != ((-1) as i32) as u32 {
+                    hcall_divergence_stack.insert(*kernel_partition_mappings.get(&entry_point_temp[arr_idx]).unwrap());
+                    stored_entry_points[idx] = entry_point_temp[arr_idx];
+                    for m in 0..mexec {
+                        entry_point_temp[arr_idx+m] = ((-1) as i32) as u32;
+                    }
                 }
             }
 
@@ -1612,7 +1619,9 @@ impl OpenCLRunner {
                 set_entry_point = true;
 
                 for idx in 0..(self.num_vms as usize) {
-                    entry_point_temp[idx] = stored_entry_points[idx];
+                    for m in 0..mexec {
+                        entry_point_temp[idx*mexec + m] = stored_entry_points[idx];
+                    }
                 }
 
                 let vmm_pre_overhead_end = std::time::Instant::now();
@@ -1641,7 +1650,7 @@ impl OpenCLRunner {
             let start_hcall_dispatch2 = std::time::Instant::now();
             vm_slice.as_slice().par_chunks((number_vms/num_threads) as usize).for_each(|vm_id| {
                 let hcall_batch: Vec<Box<HyperCall>> = vm_id.par_iter().map(|vm_idx| {
-                    let hypercall_id = match hypercall_num_temp[*vm_idx as usize] as i64 {
+                    let hypercall_id = match hypercall_num_temp[*vm_idx as usize * mexec] as i64 {
                         0 => WasiSyscalls::FdWrite,
                         1 => WasiSyscalls::ProcExit,
                         2 => WasiSyscalls::EnvironSizeGet,
@@ -1679,11 +1688,13 @@ impl OpenCLRunner {
             // now block until all of the hypercalls have been successfully dispatched
             // first, check for how many hcalls we have to wait on
             let mut number_hcalls_blocking = 0;
-            for hypercall_idx in 0..hypercall_num_temp.len() {
-                match hypercall_num_temp[hypercall_idx] {
+            for hypercall_idx in 0..hypercall_num_temp.len() / mexec {
+                match hypercall_num_temp[hypercall_idx * mexec] {
                     // We are performing async responses for all serverless_response calls
                     10000 => {
-                        hypercall_num_temp[hypercall_idx] = -1;
+                        for m in 0..mexec {
+                            hypercall_num_temp[hypercall_idx*mexec + m] = -1;
+                        }
                         hypercall_retval_temp[hypercall_idx] = 0;
                     },
                     _ => {
@@ -1704,12 +1715,19 @@ impl OpenCLRunner {
                 total_recv += (end_recv-start_recv).as_nanos();
                 // we want to special case proc_exit to exit the VM
                 match result.get_type() {
-                    WasiSyscalls::ProcExit => entry_point_temp[result.get_vm_id() as usize] = ((-1) as i32) as u32,
+                    WasiSyscalls::ProcExit => {
+                        for m in 0..mexec {
+                            entry_point_temp[result.get_vm_id() as usize * mexec + m] = ((-1) as i32) as u32
+                        }
+                    }
                     WasiSyscalls::ServerlessResponse => no_resp_counter += 1,
                     _ => (),
                 }
                 // after all of the hypercalls are finished, we should update all of the stack pointers
-                hypercall_num_temp[result.get_vm_id() as usize] = -1;
+                for m in 0..mexec {
+                    hypercall_num_temp[result.get_vm_id() as usize * mexec + m] = -1;
+                }
+
                 hypercall_retval_temp[result.get_vm_id() as usize] = result.get_result();
             }
 
@@ -1797,7 +1815,10 @@ impl OpenCLRunner {
                 ocl::core::enqueue_read_buffer(&queue, &buffers.stack_buffer, true, 0, &mut check_results_debug, None::<Event>, None::<&mut Event>).unwrap();
             }
 
-            for vm_idx in 0..self.num_vms {
+            /*
+             * When multi-execution is enabled, VMs with nearby idx's have the same result. (i.e. 0,1,2,3 -> are all really VM 0)
+             */
+            for vm_idx in 0..self.num_vms as u32 {
                 if self.is_memory_interleaved {
                     let result_i32 = Interleave::read_u32(&mut check_results_debug[512..], 0, self.num_vms, vm_idx);
                     let result_i64 = Interleave::read_u64(&mut check_results_debug[512..], 0, self.num_vms, vm_idx);
@@ -1841,7 +1862,6 @@ impl OpenCLRunner {
         println!("fraction of time on device: {}", total_gpu_execution_time as f64 / (e2e_time_end - e2e_time_start).as_nanos() as f64);
         println!("fraction of time on hcall dispatch: {}", hcall_execution_time as f64 / (e2e_time_end - e2e_time_start).as_nanos() as f64);
         println!("fraction of time on VMM overhead: {}", vmm_overhead as f64 / (e2e_time_end - e2e_time_start).as_nanos() as f64);
-        println!("sanity check: {}", (vmm_overhead + total_gpu_execution_time as u128 + hcall_execution_time + vmm_overhead));
 
         //dbg!(&first_invokes);
         let mut avg = 0;

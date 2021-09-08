@@ -37,11 +37,7 @@ fn emit_fast_read_u8(addr: &str , mem_start: &str, warp_id: &str) -> String {
     format!("fast_read_u8({}, {}, {})", addr, mem_start, warp_id)
 }
 
-fn emit_fast_write_u8(addr: &str , mem_start: &str, value: &str, warp_id: &str) -> String {
-    format!("fast_write_u8({}, {}, {}, {})", addr, mem_start, value, warp_id)
-}
-
-pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interleave: u32, _debug: bool) -> String {
+pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interleave: u32, local_work_group: usize, mexec: usize, _debug: bool) -> String {
     let mut result = String::from("");
 
     // fast_write_u8 is used for writes greater than 1 byte to reduce computation
@@ -60,7 +56,7 @@ pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interle
 
 
     result += &format!("\n{}\n",
-                        "inline void write_u8(ulong addr, ulong mem_start, uchar value, uint warp_id) {");
+                        "inline void write_u8(ulong addr, ulong mem_start, uchar value, uint warp_id, uint read_idx) {");
 
     match interleave {
         0 => {
@@ -77,7 +73,7 @@ pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interle
                         "}");
 
     result += &format!("\n{}\n",
-                        "inline void write_u16(ulong addr, ulong mem_start, ushort value, uint warp_id) {");
+                        "inline void write_u16(ulong addr, ulong mem_start, ushort value, uint warp_id, uint read_idx) {");
     match interleave {
         0 => {
             // write the lower byte first
@@ -90,13 +86,28 @@ pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interle
         1 => {
             // Compute the address first
             result += &format!("\t{}\n",
-                               "addr = (ulong)((global uchar*)((addr-mem_start)*(NUM_THREADS) + warp_id + mem_start));");
-            // write the lower byte first
-            result += &format!("\t{}\n",
-                                "fast_write_u8(addr, mem_start, value & 0xFF, warp_id);");
-            // now write the upper byte
-            result += &format!("\t{}",
-                                "fast_write_u8((ulong)(((char*)addr)+NUM_THREADS), mem_start, (value >> 8) & 0xFF, warp_id);");
+                            "addr = (ulong)((global uchar*)((addr-mem_start)*(NUM_THREADS) + warp_id + mem_start));");
+
+            match mexec {
+                2 => {
+                    result += &format!("\t{}",
+                                    "fast_write_u8((ulong)(((char*)addr)+(NUM_THREADS*read_idx)), mem_start, (value >> (8*read_idx)) & 0xFF, warp_id);");
+                },
+                4 => {
+                    result += &format!("\n\tread_idx = read_idx / 2;\n"); // we have to duplicate work
+                    result += &format!("\t{}",
+                                    "fast_write_u8((ulong)(((char*)addr)+(NUM_THREADS*read_idx)), mem_start, (value >> (8*read_idx)) & 0xFF, warp_id);");
+                },
+                _ => {
+                    // write the lower byte first
+                    result += &format!("\t{}\n",
+                                        "fast_write_u8(addr, mem_start, value & 0xFF, warp_id);");
+                    // now write the upper byte
+                    result += &format!("\t{}",
+                                        "fast_write_u8((ulong)(((char*)addr)+NUM_THREADS), mem_start, (value >> 8) & 0xFF, warp_id);");
+
+                }
+            };
         }
         _ => panic!("Unsupported read/write interleave"),
     }
@@ -104,7 +115,7 @@ pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interle
                         "}");
 
     result += &format!("\n{}\n",
-                        "inline void write_u32(ulong addr, ulong mem_start, uint value, uint warp_id) {");
+                        "inline void write_u32(ulong addr, ulong mem_start, uint value, uint warp_id, uint read_idx) {");
     match interleave {
         0 => {
             result += &format!("\t{}\n",
@@ -117,19 +128,36 @@ pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interle
                         "write_u8((ulong)(((char*)addr)+3), mem_start, (value >> 24) & 0xFF, warp_id);");
         },
         1 => {
-            // Compute addr for byte 0
+            // Compute the address first
             result += &format!("\t{}\n",
-                               "addr = (ulong)((global uchar*)((addr-mem_start)*(NUM_THREADS) + warp_id + mem_start));");
-            
-            // write the bytes lowest to highest
-            result += &format!("\t{}\n",
-                        "fast_write_u8(addr, mem_start, value & 0xFF, warp_id);");
-            result += &format!("\t{}",
-                        "fast_write_u8((ulong)(((char*)addr)+NUM_THREADS), mem_start, (value >> 8) & 0xFF, warp_id);");
-            result += &format!("\t{}\n",
-                        "fast_write_u8((ulong)(((char*)addr)+NUM_THREADS*2), mem_start, (value >> 16) & 0xFF, warp_id);");
-            result += &format!("\t{}",
-                        "fast_write_u8((ulong)(((char*)addr)+NUM_THREADS*3), mem_start, (value >> 24) & 0xFF, warp_id);");
+                            "addr = (ulong)((global uchar*)((addr-mem_start)*(NUM_THREADS) + warp_id + mem_start));");
+
+            match mexec {
+                2 => {
+                    result += &format!("\n\tread_idx = read_idx * 2;\n");
+                    result += &format!("\t{}",
+                                    "fast_write_u8((ulong)(((char*)addr)+(NUM_THREADS*read_idx)), mem_start, (value >> 8*read_idx) & 0xFF, warp_id);");
+                    result += &format!("\t{}",
+                                    "fast_write_u8((ulong)(((char*)addr)+(NUM_THREADS*(read_idx+1))), mem_start, (value >> 8*(read_idx+1)) & 0xFF, warp_id);");
+
+                },
+                4 => {
+                    result += &format!("\t{}",
+                                    "fast_write_u8((ulong)(((char*)addr)+(NUM_THREADS*read_idx)), mem_start, (value >> (8*read_idx)) & 0xFF, warp_id);");
+                },
+                _ => {                    
+                    // write the bytes lowest to highest
+                    result += &format!("\t{}\n",
+                                "fast_write_u8(addr, mem_start, value & 0xFF, warp_id);");
+                    result += &format!("\t{}",
+                                "fast_write_u8((ulong)(((char*)addr)+NUM_THREADS), mem_start, (value >> 8) & 0xFF, warp_id);");
+                    result += &format!("\t{}\n",
+                                "fast_write_u8((ulong)(((char*)addr)+NUM_THREADS*2), mem_start, (value >> 16) & 0xFF, warp_id);");
+                    result += &format!("\t{}",
+                                "fast_write_u8((ulong)(((char*)addr)+NUM_THREADS*3), mem_start, (value >> 24) & 0xFF, warp_id);");
+                }
+            }
+
         }
         _ => panic!("Unsupported read/write interleave"),
     }
@@ -137,7 +165,7 @@ pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interle
                         "}");
 
     result += &format!("\n{}\n",
-                        "inline void write_u64(ulong addr, ulong mem_start, ulong value, uint warp_id) {");
+                        "inline void write_u64(ulong addr, ulong mem_start, ulong value, uint warp_id, uint read_idx) {");
     match interleave {
         0 => {
             result += &format!("\t{}\n",
@@ -159,26 +187,47 @@ pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interle
         },
         1 => {
             result += &format!("\t{}\n",
-                               "addr = (ulong)((global uchar*)((addr-mem_start)*(NUM_THREADS) + warp_id + mem_start));");
-            
-            // write the bytes lowest to highest
-            result += &format!("\t{}\n",
-                        "fast_write_u8(addr, mem_start, value & 0xFF, warp_id);");
-            result += &format!("\t{}",
-                        "fast_write_u8((ulong)(((char*)addr)+NUM_THREADS), mem_start, (value >> 8) & 0xFF, warp_id);");
-            result += &format!("\t{}\n",
-                        "fast_write_u8((ulong)(((char*)addr)+NUM_THREADS*2), mem_start, (value >> 16) & 0xFF, warp_id);");
-            result += &format!("\t{}",
-                        "fast_write_u8((ulong)(((char*)addr)+NUM_THREADS*3), mem_start, (value >> 24) & 0xFF, warp_id);");
-            result += &format!("\t{}\n",
-                        "fast_write_u8((ulong)(((char*)addr)+NUM_THREADS*4), mem_start, (value >> 32) & 0xFF, warp_id);");
-            result += &format!("\t{}",
-                        "fast_write_u8((ulong)(((char*)addr)+NUM_THREADS*5), mem_start, (value >> 40) & 0xFF, warp_id);");
-            result += &format!("\t{}\n",
-                        "fast_write_u8((ulong)(((char*)addr)+NUM_THREADS*6), mem_start, (value >> 48) & 0xFF, warp_id);");
-            result += &format!("\t{}",
-                        "fast_write_u8((ulong)(((char*)addr)+NUM_THREADS*7), mem_start, (value >> 56) & 0xFF, warp_id);");
+                            "addr = (ulong)((global uchar*)((addr-mem_start)*(NUM_THREADS) + warp_id + mem_start));");
 
+            match mexec {
+                2 => {
+                    result += &format!("\n\tread_idx = read_idx * 4;\n");
+                    result += &format!("\t{}",
+                                    "fast_write_u8((ulong)(((char*)addr)+(NUM_THREADS*read_idx)), mem_start, (value >> 8*(read_idx)) & 0xFF, warp_id);");
+                    result += &format!("\t{}",
+                                    "fast_write_u8((ulong)(((char*)addr)+(NUM_THREADS*(read_idx+1))), mem_start, (value >> 8*(read_idx+1)) & 0xFF, warp_id);");
+                    result += &format!("\t{}",
+                                    "fast_write_u8((ulong)(((char*)addr)+(NUM_THREADS*(read_idx+2))), mem_start, (value >> 8*(read_idx+2)) & 0xFF, warp_id);");
+                    result += &format!("\t{}",
+                                    "fast_write_u8((ulong)(((char*)addr)+(NUM_THREADS*(read_idx+3))), mem_start, (value >> 8*(read_idx+3)) & 0xFF, warp_id);");
+                },
+                4 => {
+                    result += &format!("\n\tread_idx = read_idx * 2;\n");
+                    result += &format!("\t{}",
+                                    "fast_write_u8((ulong)(((char*)addr)+(NUM_THREADS*read_idx)), mem_start, (value >> 8*(read_idx)) & 0xFF, warp_id);");
+                    result += &format!("\t{}",
+                                    "fast_write_u8((ulong)(((char*)addr)+(NUM_THREADS*(read_idx+1))), mem_start, (value >> 8*(read_idx+1)) & 0xFF, warp_id);");
+                },
+                _ => {
+                    // write the bytes lowest to highest
+                    result += &format!("\t{}\n",
+                                "fast_write_u8(addr, mem_start, value & 0xFF, warp_id);");
+                    result += &format!("\t{}",
+                                "fast_write_u8((ulong)(((char*)addr)+NUM_THREADS), mem_start, (value >> 8) & 0xFF, warp_id);");
+                    result += &format!("\t{}\n",
+                                "fast_write_u8((ulong)(((char*)addr)+NUM_THREADS*2), mem_start, (value >> 16) & 0xFF, warp_id);");
+                    result += &format!("\t{}",
+                                "fast_write_u8((ulong)(((char*)addr)+NUM_THREADS*3), mem_start, (value >> 24) & 0xFF, warp_id);");
+                    result += &format!("\t{}\n",
+                                "fast_write_u8((ulong)(((char*)addr)+NUM_THREADS*4), mem_start, (value >> 32) & 0xFF, warp_id);");
+                    result += &format!("\t{}",
+                                "fast_write_u8((ulong)(((char*)addr)+NUM_THREADS*5), mem_start, (value >> 40) & 0xFF, warp_id);");
+                    result += &format!("\t{}\n",
+                                "fast_write_u8((ulong)(((char*)addr)+NUM_THREADS*6), mem_start, (value >> 48) & 0xFF, warp_id);");
+                    result += &format!("\t{}",
+                                "fast_write_u8((ulong)(((char*)addr)+NUM_THREADS*7), mem_start, (value >> 56) & 0xFF, warp_id);");
+                }
+            }
         }
         _ => panic!("Unsupported read/write interleave"),
     }
@@ -200,7 +249,7 @@ pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interle
                         "}");
 
     result += &format!("\n{}\n",
-                        "inline uchar read_u8(ulong addr, ulong mem_start, uint warp_id) {");
+                        "inline uchar read_u8(ulong addr, ulong mem_start, uint warp_id, uint read_idx) {");
     match interleave {
         0 => {
             result += &format!("\t{}",
@@ -216,7 +265,7 @@ pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interle
                         "}");
 
     result += &format!("\n{}\n",
-                        "inline ushort read_u16(ulong addr, ulong mem_start, uint warp_id) {");
+                        "inline ushort read_u16(ulong addr, ulong mem_start, uint warp_id, uint read_idx, uint thread_idx) {");
     match interleave {
         0 => {
             result += &format!("\t{}\n",
@@ -238,13 +287,32 @@ pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interle
                                "addr = (ulong)((global uchar*)((addr-mem_start)*(NUM_THREADS) + warp_id + mem_start));");
             result += &format!("\t{}\n",
                                 "ushort temp = 0;");
-            result += &format!("\t{}\n",
-                                "temp += fast_read_u8((ulong)(((char*)addr)+NUM_THREADS), mem_start, warp_id);");
-            // bitshift over to make room for the next byte
-            result += &format!("\t{}\n",
-                                "temp = temp << 8;");
-            result += &format!("\t{}\n",
-                                "temp += fast_read_u8(addr, mem_start, warp_id);");
+
+            match mexec {
+                2 => {
+                    result += &format!("\n\tlocal ushort scratch_space[{}];\n", local_work_group / mexec);
+                    result += &format!("\n\tlocal uchar *scratch_space_byte = &scratch_space;\n");
+                    result += &format!("\n\tscratch_space_byte[thread_idx*2+read_idx] = fast_read_u8((ulong)(((char*)addr)+NUM_THREADS*read_idx), mem_start, warp_id);\n");
+                    result += &format!("\n\ttemp = (ushort)scratch_space[thread_idx];\n");
+                },
+                4 => {
+                    result += &format!("\n\tlocal ushort scratch_space[{}];\n", local_work_group / mexec);
+                    result += &format!("\n\tlocal uchar *scratch_space_byte = &scratch_space;\n");
+                    result += &format!("\n\tread_idx = read_idx / 2;\n");
+                    result += &format!("\n\tscratch_space_byte[warp_id*2+read_idx] = fast_read_u8((ulong)(((char*)addr)+NUM_THREADS*read_idx), mem_start, warp_id);\n");
+                    result += &format!("\n\ttemp = (ushort)scratch_space[warp_id];\n");
+                },
+                _ => {
+                    result += &format!("\t{}\n",
+                                        "temp += fast_read_u8((ulong)(((char*)addr)+NUM_THREADS), mem_start, warp_id);");
+                    // bitshift over to make room for the next byte
+                    result += &format!("\t{}\n",
+                                        "temp = temp << 8;");
+                    result += &format!("\t{}\n",
+                                        "temp += fast_read_u8(addr, mem_start, warp_id);");
+                },
+            }
+
             result += &format!("\t{}",
                                 "return temp;");
         }
@@ -254,7 +322,7 @@ pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interle
                         "}");
 
     result += &format!("\n{}\n",
-                        "inline uint read_u32(ulong addr, ulong mem_start, uint warp_id) {");
+                        "inline uint read_u32(ulong addr, ulong mem_start, uint warp_id, uint read_idx, uint thread_idx) {");
     match interleave {
         0 => {
             result += &format!("\t{}\n",
@@ -310,7 +378,7 @@ pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interle
                         "}");
 
     result += &format!("\n{}\n",
-                        "inline ulong read_u64(ulong addr, ulong mem_start, uint warp_id) {");
+                        "inline ulong read_u64(ulong addr, ulong mem_start, uint warp_id, uint read_idx, uint thread_idx) {");
     match interleave {
         0 => {
             result += &format!("\t{}\n",
@@ -397,7 +465,7 @@ pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interle
 
     // emit a memcpy function as well, for utility purposes
     result += &format!("\n{}\n",
-        "void ___private_memcpy(ulong src, ulong mem_start_src, ulong dst, ulong mem_start_dst, ulong buf_len_bytes, uint warp_id) {");
+        "void ___private_memcpy(ulong src, ulong mem_start_src, ulong dst, ulong mem_start_dst, ulong buf_len_bytes, uint warp_id, uint read_idx) {");
 
     result += &format!("\t{}\n",
                        "for (uint idx = 0; idx < buf_len_bytes; idx++) {");
@@ -417,7 +485,7 @@ pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interle
     // memory
 
     result += &format!("\n{}\n",
-        "void ___private_memcpy_gpu2cpu(ulong src, ulong mem_start_src, ulong dst, ulong mem_start_dst, ulong buf_len_bytes, uint warp_id) {");
+        "void ___private_memcpy_gpu2cpu(ulong src, ulong mem_start_src, ulong dst, ulong mem_start_dst, ulong buf_len_bytes, uint warp_id, uint read_idx) {");
     result += &format!("\t{}\n",
                        "char *dst_tmp = (char*)(dst);");
 
@@ -456,7 +524,7 @@ pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interle
     // emit another de-interleave memcpy, that reads linear memory and writes to interleaved
     // memory
     result += &format!("\n{}\n",
-        "void ___private_memcpy_cpu2gpu(ulong src, ulong mem_start_src, ulong dst, ulong mem_start_dst, ulong buf_len_bytes, uint warp_id) {");
+        "void ___private_memcpy_cpu2gpu(ulong src, ulong mem_start_src, ulong dst, ulong mem_start_dst, ulong buf_len_bytes, uint warp_id, uint read_idx) {");
     result += &format!("\t{}\n",
                        "char *src_tmp = (char*)(src);");
  
@@ -534,33 +602,33 @@ pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interle
  * These are compiler-internal utility functions for emitting code
  */
 pub fn emit_read_u8(addr: &str , mem_start: &str, warp_id: &str) -> String {
-    format!("read_u8({}, {}, {})", addr, mem_start, warp_id)
+    format!("read_u8({}, {}, {}, read_idx)", addr, mem_start, warp_id)
 }
 
 pub fn emit_read_u16(addr: &str , mem_start: &str, warp_id: &str) -> String {
-    format!("read_u16({}, {}, {})", addr, mem_start, warp_id)
+    format!("read_u16({}, {}, {}, read_idx, thread_idx)", addr, mem_start, warp_id)
 }
 
 pub fn emit_write_u8(addr: &str , mem_start: &str, value: &str, warp_id: &str) -> String {
-    format!("write_u8({}, {}, {}, {})", addr, mem_start, value, warp_id)
+    format!("write_u8({}, {}, {}, {}, read_idx)", addr, mem_start, value, warp_id)
 }
 
 pub fn emit_write_u16(addr: &str , mem_start: &str, value: &str, warp_id: &str) -> String {
-    format!("write_u16({}, {}, {}, {})", addr, mem_start, value, warp_id)
+    format!("write_u16({}, {}, {}, {}, read_idx)", addr, mem_start, value, warp_id)
 }
 
 pub fn emit_read_u32(addr: &str , mem_start: &str, warp_id: &str) -> String {
-    format!("read_u32({}, {}, {})", addr, mem_start, warp_id)
+    format!("read_u32({}, {}, {}, read_idx, thread_idx)", addr, mem_start, warp_id)
 }
 
 pub fn emit_write_u32(addr: &str , mem_start: &str, value: &str, warp_id: &str) -> String {
-    format!("write_u32({}, {}, {}, {})", addr, mem_start, value, warp_id)
+    format!("write_u32({}, {}, {}, {}, read_idx)", addr, mem_start, value, warp_id)
 }
 
 pub fn emit_read_u64(addr: &str , mem_start: &str, warp_id: &str) -> String {
-    format!("read_u64({}, {}, {})", addr, mem_start, warp_id)
+    format!("read_u64({}, {}, {}, read_idx, thread_idx)", addr, mem_start, warp_id)
 }
 
 pub fn emit_write_u64(addr: &str , mem_start: &str, value: &str, warp_id: &str) -> String {
-    format!("write_u64({}, {}, {}, {})", addr, mem_start, value, warp_id)
+    format!("write_u64({}, {}, {}, {}, read_idx)", addr, mem_start, value, warp_id)
 }

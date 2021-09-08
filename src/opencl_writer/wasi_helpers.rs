@@ -185,13 +185,14 @@ pub fn emit_fd_prestat_dir_name_post(_writer: &opencl_writer::OpenCLCWriter, sta
 
     // we need to copy back the directory name that we just read
     ret_str += &format!("\t{};\n",
-                        format!("___private_memcpy({}, {}, {}, {}, {}, {})",
+                        format!("___private_memcpy({}, {}, {}, {}, {}, {}, {})",
                                 "(ulong)(hypercall_buffer+2)",
                                 "(ulong)(hypercall_buffer)",
                                 format!("(ulong)(global uchar *)heap_u32+{}", str_ptr),
                                 "(ulong)(heap_u32)",
                                 str_len,
-                                "warp_idx"));
+                                "warp_idx",
+                                "read_idx"));
 
     // now return the error code
     ret_str += &format!("\t{} = {};\n", result_regsiter, "hcall_ret_val");
@@ -268,15 +269,15 @@ pub fn emit_environ_get_post(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: 
     let result_register = stack_ctx.vstack_alloc(StackType::i32);
 
     // copy over the buffer of pointers
-    ret_str += &format!("\t___private_memcpy((ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), warp_idx);\n",
+    ret_str += &format!("\t___private_memcpy((ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), warp_idx, read_idx);\n",
                         "(ulong)((global char *)hypercall_buffer+8)",
                         "hypercall_buffer", // mem_start_src
                         &format!("(global char *)heap_u32+{}", size_ptr_buf), //dst
-                        "heap_u32", // mem_start_dst
+                        "heap_u32", // mem_start_dst`
                         &emit_read_u32("(ulong)(hypercall_buffer)", "(ulong)(hypercall_buffer)", "warp_idx")); // buf_len_bytes;
 
     // copy the string data
-    ret_str += &format!("\t___private_memcpy((ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), warp_idx);\n",
+    ret_str += &format!("\t___private_memcpy((ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), warp_idx, read_idx);\n",
                         &format!("(ulong)((global char *)hypercall_buffer+8+({}*4))", env_count), //src
                         "hypercall_buffer", // mem_start_src
                         &format!("((global char *)heap_u32+{})", size_string_buf), //dst
@@ -328,7 +329,7 @@ pub fn emit_serverless_invoke_post(_writer: &opencl_writer::OpenCLCWriter, stack
 
     // we need to copy the data stored in the hcall buffer, to the json_buf_ptr
     // specifically, we need to de-interleave the data, so the CPU sees the data `normally`
-    ret_str += &format!("\t___private_memcpy_cpu2gpu((ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), warp_idx);\n",
+    ret_str += &format!("\t___private_memcpy_cpu2gpu((ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), warp_idx, read_idx);\n",
                         "(ulong)((global char *)hypercall_buffer + (hcall_size*warp_idx))", // src
                         "hypercall_buffer", // mem_start_src
                         &format!("(global char *)heap_u32+{}", json_buf_ptr), //dst
@@ -348,7 +349,7 @@ pub fn emit_serverless_response_pre(_writer: &opencl_writer::OpenCLCWriter, stac
     let json_buf_ptr = stack_ctx.vstack_peak(StackType::i32, 1);
 
     // copy the buffer to the hcall buf so we can return it back via our middleware setup
-    ret_str += &format!("\t___private_memcpy_gpu2cpu((ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), warp_idx);\n",
+    ret_str += &format!("\t___private_memcpy_gpu2cpu((ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), warp_idx, read_idx);\n",
                         &format!("(global char *)heap_u32+{}", json_buf_ptr),
                         "heap_u32", // mem_start_src
                         "(ulong)((global char *)hypercall_buffer+(hcall_size*warp_idx)+4)", //dst, first 4 bytes are the len
@@ -389,7 +390,7 @@ pub fn emit_random_get_post(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &
     let result_register = stack_ctx.vstack_alloc(StackType::i32);
 
     // Copy the random bytes back from the hcall_buf to the heap
-    ret_str += &format!("\t___private_memcpy((ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), warp_idx);\n",
+    ret_str += &format!("\t___private_memcpy((ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), warp_idx, read_idx);\n",
                         "(ulong)((global char *)hypercall_buffer)", // src
                         "hypercall_buffer", // mem_start_src
                         &format!("(global char *)heap_u32+{}", random_buf_ptr), //dst

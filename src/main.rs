@@ -270,6 +270,14 @@ fn main() {
             .multiple(false)
             .number_of_values(1)
             .takes_value(true))
+        .arg(Arg::with_name("mexec")
+            .long("mexec")
+            .value_name("Specifies how many GPU threads per-VM are assigned to improve read parallelism")
+            .default_value("1") // This value is a multiplier, so 1 || 0 = disabled.
+            .help("")
+            .multiple(false)
+            .number_of_values(1)
+            .takes_value(true))
         .get_matches();
 
     dbg!(matches.clone());
@@ -301,6 +309,11 @@ fn main() {
     let max_dup = value_t!(matches.value_of("maxdup"), u32).unwrap_or_else(|e| e.exit());
     let disable_fastcalls = value_t!(matches.value_of("disablefastcalls"), bool).unwrap_or_else(|e| e.exit());
     let local_work_group = value_t!(matches.value_of("localworkgroup"), usize).unwrap_or_else(|e| e.exit());
+    let mexec = value_t!(matches.value_of("mexec"), usize).unwrap_or_else(|e| e.exit());
+
+    if mexec > 1 && interleaved == false {
+        panic!("Multi-Execution is only enabled for interleaved workloads!");
+    }
 
     dbg!(compile_args.clone());
 
@@ -340,6 +353,7 @@ fn main() {
                                                                     max_loc,
                                                                     max_dup,
                                                                     local_work_group,
+                                                                    mexec,
                                                                     disable_fastcalls,
                                                                     debug_call_print,
                                                                     force_inline,
@@ -404,6 +418,7 @@ fn main() {
                                                                         max_loc,
                                                                         max_dup,
                                                                         local_work_group,
+                                                                        mexec,
                                                                         disable_fastcalls,
                                                                         debug_call_print,
                                                                         force_inline,
@@ -445,6 +460,7 @@ fn main() {
                                                                         max_loc,
                                                                         max_dup,
                                                                         local_work_group,
+                                                                        mexec,
                                                                         disable_fastcalls,
                                                                         debug_call_print,
                                                                         force_inline,
@@ -489,6 +505,7 @@ fn main() {
                                                                         max_loc,
                                                                         max_dup,
                                                                         local_work_group,
+                                                                        mexec,
                                                                         disable_fastcalls,
                                                                         debug_call_print,
                                                                         force_inline,
@@ -530,6 +547,7 @@ fn main() {
                                                                         max_loc,
                                                                         max_dup,
                                                                         local_work_group,
+                                                                        mexec,
                                                                         disable_fastcalls,
                                                                         debug_call_print,
                                                                         force_inline,
@@ -665,6 +683,7 @@ fn main() {
                        num_compiled_funcs,
                        globals_buffer_size,
                        local_work_group,
+                       mexec,
                        vm_sender_vec_arc.clone(),
                        vm_recv_vec_arc.clone(),
                        compile_args.clone(),
