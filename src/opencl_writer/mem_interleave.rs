@@ -80,7 +80,7 @@ pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interle
             result += &format!("\t{}\n",
                                 "write_u8(addr, mem_start, value & 0xFF, warp_id);");
             // now write the upper byte
-            result += &format!("\t{}",
+            result += &format!("\t{}\n",
                                 "write_u8((ulong)(((char*)addr)+1), mem_start, (value >> 8) & 0xFF, warp_id);");
         },
         1 => {
@@ -90,12 +90,12 @@ pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interle
 
             match mexec {
                 2 => {
-                    result += &format!("\t{}",
+                    result += &format!("\t{}\n",
                                     "fast_write_u8((ulong)(((char*)addr)+(NUM_THREADS*read_idx)), mem_start, (value >> (8*read_idx)) & 0xFF, warp_id);");
                 },
                 4 => {
                     result += &format!("\n\tread_idx = read_idx / 2;\n"); // we have to duplicate work
-                    result += &format!("\t{}",
+                    result += &format!("\t{}\n",
                                     "fast_write_u8((ulong)(((char*)addr)+(NUM_THREADS*read_idx)), mem_start, (value >> (8*read_idx)) & 0xFF, warp_id);");
                 },
                 _ => {
@@ -103,7 +103,7 @@ pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interle
                     result += &format!("\t{}\n",
                                         "fast_write_u8(addr, mem_start, value & 0xFF, warp_id);");
                     // now write the upper byte
-                    result += &format!("\t{}",
+                    result += &format!("\t{}\n",
                                         "fast_write_u8((ulong)(((char*)addr)+NUM_THREADS), mem_start, (value >> 8) & 0xFF, warp_id);");
 
                 }
@@ -120,11 +120,11 @@ pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interle
         0 => {
             result += &format!("\t{}\n",
                         "write_u8(addr, mem_start, value & 0xFF, warp_id);");
-            result += &format!("\t{}",
+            result += &format!("\t{}\n",
                         "write_u8((ulong)(((char*)addr)+1), mem_start, (value >> 8) & 0xFF, warp_id);");
             result += &format!("\t{}\n",
                         "write_u8((ulong)(((char*)addr)+2), mem_start, (value >> 16) & 0xFF, warp_id);");
-            result += &format!("\t{}",
+            result += &format!("\t{}\n",
                         "write_u8((ulong)(((char*)addr)+3), mem_start, (value >> 24) & 0xFF, warp_id);");
         },
         1 => {
@@ -135,25 +135,26 @@ pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interle
             match mexec {
                 2 => {
                     result += &format!("\n\tread_idx = read_idx * 2;\n");
-                    result += &format!("\t{}",
+                    result += &format!("\t{}\n",
                                     "fast_write_u8((ulong)(((char*)addr)+(NUM_THREADS*read_idx)), mem_start, (value >> 8*read_idx) & 0xFF, warp_id);");
-                    result += &format!("\t{}",
+                    result += &format!("\t{}\n",
                                     "fast_write_u8((ulong)(((char*)addr)+(NUM_THREADS*(read_idx+1))), mem_start, (value >> 8*(read_idx+1)) & 0xFF, warp_id);");
-
+                    result += &format!("\t{}\n", "mem_fence(CLK_LOCAL_MEM_FENCE);");
                 },
                 4 => {
-                    result += &format!("\t{}",
+                    result += &format!("\t{}\n",
                                     "fast_write_u8((ulong)(((char*)addr)+(NUM_THREADS*read_idx)), mem_start, (value >> (8*read_idx)) & 0xFF, warp_id);");
+                    result += &format!("\t{}\n", "barrier(CLK_LOCAL_MEM_FENCE);");
                 },
                 _ => {                    
                     // write the bytes lowest to highest
                     result += &format!("\t{}\n",
                                 "fast_write_u8(addr, mem_start, value & 0xFF, warp_id);");
-                    result += &format!("\t{}",
+                    result += &format!("\t{}\n",
                                 "fast_write_u8((ulong)(((char*)addr)+NUM_THREADS), mem_start, (value >> 8) & 0xFF, warp_id);");
                     result += &format!("\t{}\n",
                                 "fast_write_u8((ulong)(((char*)addr)+NUM_THREADS*2), mem_start, (value >> 16) & 0xFF, warp_id);");
-                    result += &format!("\t{}",
+                    result += &format!("\t{}\n",
                                 "fast_write_u8((ulong)(((char*)addr)+NUM_THREADS*3), mem_start, (value >> 24) & 0xFF, warp_id);");
                 }
             }
@@ -192,21 +193,23 @@ pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interle
             match mexec {
                 2 => {
                     result += &format!("\n\tread_idx = read_idx * 4;\n");
-                    result += &format!("\t{}",
+                    result += &format!("\t{}\n",
                                     "fast_write_u8((ulong)(((char*)addr)+(NUM_THREADS*read_idx)), mem_start, (value >> 8*(read_idx)) & 0xFF, warp_id);");
-                    result += &format!("\t{}",
+                    result += &format!("\t{}\n",
                                     "fast_write_u8((ulong)(((char*)addr)+(NUM_THREADS*(read_idx+1))), mem_start, (value >> 8*(read_idx+1)) & 0xFF, warp_id);");
-                    result += &format!("\t{}",
+                    result += &format!("\t{}\n",
                                     "fast_write_u8((ulong)(((char*)addr)+(NUM_THREADS*(read_idx+2))), mem_start, (value >> 8*(read_idx+2)) & 0xFF, warp_id);");
-                    result += &format!("\t{}",
+                    result += &format!("\t{}\n",
                                     "fast_write_u8((ulong)(((char*)addr)+(NUM_THREADS*(read_idx+3))), mem_start, (value >> 8*(read_idx+3)) & 0xFF, warp_id);");
+                    result += &format!("\t{}\n", "mem_fence(CLK_LOCAL_MEM_FENCE);");
                 },
                 4 => {
                     result += &format!("\n\tread_idx = read_idx * 2;\n");
-                    result += &format!("\t{}",
+                    result += &format!("\t{}\n",
                                     "fast_write_u8((ulong)(((char*)addr)+(NUM_THREADS*read_idx)), mem_start, (value >> 8*(read_idx)) & 0xFF, warp_id);");
-                    result += &format!("\t{}",
+                    result += &format!("\t{}\n",
                                     "fast_write_u8((ulong)(((char*)addr)+(NUM_THREADS*(read_idx+1))), mem_start, (value >> 8*(read_idx+1)) & 0xFF, warp_id);");
+                    result += &format!("\t{}\n", "mem_fence(CLK_LOCAL_MEM_FENCE);");
                 },
                 _ => {
                     // write the bytes lowest to highest
@@ -289,19 +292,6 @@ pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interle
                                 "ushort temp = 0;");
 
             match mexec {
-                2 => {
-                    result += &format!("\n\tlocal ushort scratch_space[{}];\n", local_work_group / mexec);
-                    result += &format!("\n\tlocal uchar *scratch_space_byte = &scratch_space;\n");
-                    result += &format!("\n\tscratch_space_byte[thread_idx*2+read_idx] = fast_read_u8((ulong)(((char*)addr)+NUM_THREADS*read_idx), mem_start, warp_id);\n");
-                    result += &format!("\n\ttemp = (ushort)scratch_space[thread_idx];\n");
-                },
-                4 => {
-                    result += &format!("\n\tlocal ushort scratch_space[{}];\n", local_work_group / mexec);
-                    result += &format!("\n\tlocal uchar *scratch_space_byte = &scratch_space;\n");
-                    result += &format!("\n\tread_idx = read_idx / 2;\n");
-                    result += &format!("\n\tscratch_space_byte[warp_id*2+read_idx] = fast_read_u8((ulong)(((char*)addr)+NUM_THREADS*read_idx), mem_start, warp_id);\n");
-                    result += &format!("\n\ttemp = (ushort)scratch_space[warp_id];\n");
-                },
                 _ => {
                     result += &format!("\t{}\n",
                                         "temp += fast_read_u8((ulong)(((char*)addr)+NUM_THREADS), mem_start, warp_id);");

@@ -1422,8 +1422,8 @@ impl<'a> OpenCLCWriter<'_> {
                     write!(final_string, "\t\tprintf(\"*sp = %d\\n\", *sp);\n").unwrap();
                     write!(final_string, "\t\tprintf(\"*hypercall_number = %d\\n\", *hypercall_number);\n").unwrap();
                     write!(final_string, "\t\tprintf(\"*hypercall_continuation = %d\\n\", *hypercall_continuation);\n").unwrap();
-                    write!(final_string, "\t\tprintf(\"read_u32(stack_frames+*sfp) = %d\\n\", read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx));\n").unwrap();
-                    write!(final_string, "\t\tprintf(\"read_u64(call_stack+*sfp) = %d\\n\", read_u64((ulong)(call_stack+*sfp), (ulong)(call_stack), warp_idx));\n").unwrap();
+                    write!(final_string, "\t\tprintf(\"read_u32(stack_frames+*sfp) = %d\\n\", read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx, read_idx, thread_idx));\n").unwrap();
+                    write!(final_string, "\t\tprintf(\"read_u64(call_stack+*sfp) = %d\\n\", read_u64((ulong)(call_stack+*sfp), (ulong)(call_stack), warp_idx, read_idx, thread_idx));\n").unwrap();
                 }
 
                 /*
@@ -1618,7 +1618,7 @@ impl<'a> OpenCLCWriter<'_> {
             result += &format!("\t{}\n", format!("for(uint idx = 0; idx < {}; idx++) {{", arr_len));
 
             result += &format!("\t\t{}\n",
-                format!("write_u8((ulong)((global char*)heap_u32 + {} + idx), (ulong)(heap_u32), data_segment_data_{}[idx], warp_idx);",
+                format!("write_u8((ulong)((global char*)heap_u32 + {} + idx), (ulong)(heap_u32), data_segment_data_{}[idx], warp_idx, read_idx);",
                     offset_val,
                     counter));
 
@@ -2011,9 +2011,9 @@ __attribute__((always_inline)) void {}(global uint   *stack_u32,
             result += &format!("\tulong read_idx = get_local_id(0) % {};\n", mexec);
             // these structures are not interleaved, so its fine to just read/write them as is
             // they are already implicitly interleaved (like sp for example)
-            result += &format!("\tcurr_mem_global[warp_idx] = {};\n", program_start_mem_pages);
-            result += &String::from("\tis_calling_global[warp_idx] = 1;\n");
-            result += &format!("\tmax_mem_global[warp_idx] = {};\n", program_start_max_pages);
+            result += &format!("\tcurr_mem_global[get_global_id(0)] = {};\n", program_start_mem_pages);
+            result += &String::from("\tis_calling_global[get_global_id(0)] = 1;\n");
+            result += &format!("\tmax_mem_global[get_global_id(0)] = {};\n", program_start_max_pages);
             result += &format!("\t{};\n",
                                "global ulong *sfp = (global ulong *)sfp_global+(get_global_id(0))");
 
@@ -2101,6 +2101,8 @@ __attribute__((always_inline)) void {}(global uint   *stack_u32,
             write!(ret_str, "\tprintf(\"heap_u32: %p\\n\", heap_u32);\n").unwrap();
             write!(ret_str, "\tprintf(\"is_calling: %p\\n\", is_calling);\n").unwrap();
             write!(ret_str, "\tprintf(\"hypercall_buffer: %p\\n\", hypercall_buffer);\n").unwrap();
+            write!(ret_str, "\tprintf(\"globals_buffer: %p\\n\", globals_buffer);\n").unwrap();
+            write!(ret_str, "\tprintf(\"entry_point: %p\\n\", entry_point);\n").unwrap();
             write!(ret_str, "\tprintf(\"call_stack: %p\\n\", call_stack);\n").unwrap();
             write!(ret_str, "\tprintf(\"stack_frames: %p\\n\", stack_frames);\n").unwrap();
             write!(ret_str, "\tprintf(\"call_return_stack: %p\\n\", call_return_stack);\n").unwrap();
@@ -2397,7 +2399,7 @@ r#"
                 }
             };
             let calling_func_name = format!("{}{}", "__", fastfunc.to_string().replace(".", ""));
-            let func_declaration = format!("{} {}_fastcall({}global uint *, global uint *, global uint *, global uint *, ulong);\n", func_ret_val, calling_func_name, parameter_list);
+            let func_declaration = format!("{} {}_fastcall({}global uint *, global uint *, global uint *, global uint *, uint, uint, uint);\n", func_ret_val, calling_func_name, parameter_list);
             write!(fastcall_header, "{}", func_declaration).unwrap();
         }
 
