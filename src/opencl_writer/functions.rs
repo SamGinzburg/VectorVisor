@@ -381,11 +381,11 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stack
 
         if return_size > 0 && !is_indirect {
             let result_register = stack_ctx.vstack_alloc(StackCtx::convert_wast_types(&return_type.unwrap()));
-            ret_str += &format!("\t{} = {}_fastcall({}heap_u32, current_mem_size, max_mem_size, globals_buffer, warp_idx, thread_idx, read_idx);\n", result_register, calling_func_name, parameter_list);
+            ret_str += &format!("\t{} = {}_fastcall({}heap_u32, current_mem_size, max_mem_size, globals_buffer, warp_idx, thread_idx, read_idx, scratch_space);\n", result_register, calling_func_name, parameter_list);
         } else if return_size > 0 {
-            ret_str += &format!("\t{} = {}_fastcall({}heap_u32, current_mem_size, max_mem_size, globals_buffer, warp_idx, thread_idx, read_idx);\n", indirect_fastcall_param, calling_func_name, parameter_list);
+            ret_str += &format!("\t{} = {}_fastcall({}heap_u32, current_mem_size, max_mem_size, globals_buffer, warp_idx, thread_idx, read_idx, scratch_space);\n", indirect_fastcall_param, calling_func_name, parameter_list);
         } else {
-            ret_str += &format!("\t{}_fastcall({}heap_u32, current_mem_size, max_mem_size, globals_buffer, warp_idx, thread_idx, read_idx);\n", calling_func_name, parameter_list);
+            ret_str += &format!("\t{}_fastcall({}heap_u32, current_mem_size, max_mem_size, globals_buffer, warp_idx, thread_idx, read_idx, scratch_space);\n", calling_func_name, parameter_list);
         }
     }
 
@@ -487,12 +487,12 @@ pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut St
     
                     if sp_counter > 0 {
                         // TODO refactor using stubs in mem_interleave
-                        offset = format!("write_u32((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), warp_idx, read_idx, thread_idx)),
+                        offset = format!("write_u32((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), warp_idx, read_idx, thread_idx, scratch_space)),
                                                     (ulong)stack_u32,
                                                     {},
                                                     warp_idx, read_idx);", parameter_offset, reg);
                     } else {
-                        offset = format!("write_u32((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx, read_idx, thread_idx)),
+                        offset = format!("write_u32((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx, read_idx, thread_idx, scratch_space)),
                                                     (ulong)stack_u32,
                                                     {},
                                                     warp_idx, read_idx);", parameter_offset, reg);
@@ -509,12 +509,12 @@ pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut St
                     };
     
                     if sp_counter > 0 {
-                        offset = format!("write_u64((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx, read_idx, thread_idx)),
+                        offset = format!("write_u64((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx, read_idx, thread_idx, scratch_space)),
                                                     (ulong)stack_u32,
                                                     {},
                                                     warp_idx, read_idx);", parameter_offset, reg);
                     } else {
-                        offset = format!("write_u64((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx, read_idx, thread_idx)),
+                        offset = format!("write_u64((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx, read_idx, thread_idx, scratch_space)),
                                                     (ulong)stack_u32,
                                                     {},
                                                     warp_idx, read_idx);", parameter_offset, reg);
@@ -532,12 +532,12 @@ pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut St
     
                     if sp_counter > 0 {
                         // TODO refactor this using stubs in mem_interleave
-                        offset = format!("write_u32((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx, read_idx, thread_idx)),
+                        offset = format!("write_u32((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx, read_idx, thread_idx, scratch_space)),
                                                     (ulong)stack_u32,
                                                     {},
                                                     warp_idx, read_idx);", parameter_offset, "temp");
                     } else {
-                        offset = format!("write_u32((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx, read_idx, thread_idx)),
+                        offset = format!("write_u32((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx, read_idx, thread_idx, scatch_space)),
                                                     (ulong)stack_u32,
                                                     {},
                                                     warp_idx, read_idx);", parameter_offset, "temp");
@@ -559,12 +559,12 @@ pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut St
                     };
     
                     if sp_counter > 0 {
-                        offset = format!("write_u64((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx, read_idx, thread_idx)),
+                        offset = format!("write_u64((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx, read_idx, thread_idx, scatch_space)),
                                                     (ulong)stack_u32,
                                                     {},
                                                     warp_idx, read_idx);", parameter_offset, "temp");
                     } else {
-                        offset = format!("write_u64((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx, read_idx, thread_idx)),
+                        offset = format!("write_u64((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx, read_idx, thread_idx, scatch_space)),
                                                     (ulong)stack_u32,
                                                     {},
                                                     warp_idx, read_idx);", parameter_offset, "temp");
