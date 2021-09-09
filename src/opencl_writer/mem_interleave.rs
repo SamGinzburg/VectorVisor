@@ -139,12 +139,12 @@ pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interle
                                     "fast_write_u8((ulong)(((char*)addr)+(NUM_THREADS*read_idx)), mem_start, (value >> 8*read_idx) & 0xFF, warp_id);");
                     result += &format!("\t{}\n",
                                     "fast_write_u8((ulong)(((char*)addr)+(NUM_THREADS*(read_idx+1))), mem_start, (value >> 8*(read_idx+1)) & 0xFF, warp_id);");
-                    result += &format!("\t{}\n", "mem_fence(CLK_LOCAL_MEM_FENCE);");
+                    //result += &format!("\t{}\n", "mem_fence(CLK_LOCAL_MEM_FENCE);");
                 },
                 4 => {
                     result += &format!("\t{}\n",
                                     "fast_write_u8((ulong)(((char*)addr)+(NUM_THREADS*read_idx)), mem_start, (value >> (8*read_idx)) & 0xFF, warp_id);");
-                    result += &format!("\t{}\n", "barrier(CLK_LOCAL_MEM_FENCE);");
+                    //result += &format!("\t{}\n", "barrier(CLK_LOCAL_MEM_FENCE);");
                 },
                 _ => {                    
                     // write the bytes lowest to highest
@@ -201,7 +201,7 @@ pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interle
                                     "fast_write_u8((ulong)(((char*)addr)+(NUM_THREADS*(read_idx+2))), mem_start, (value >> 8*(read_idx+2)) & 0xFF, warp_id);");
                     result += &format!("\t{}\n",
                                     "fast_write_u8((ulong)(((char*)addr)+(NUM_THREADS*(read_idx+3))), mem_start, (value >> 8*(read_idx+3)) & 0xFF, warp_id);");
-                    result += &format!("\t{}\n", "mem_fence(CLK_LOCAL_MEM_FENCE);");
+                    //result += &format!("\t{}\n", "mem_fence(CLK_LOCAL_MEM_FENCE);");
                 },
                 4 => {
                     result += &format!("\n\tread_idx = read_idx * 2;\n");
@@ -209,7 +209,7 @@ pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interle
                                     "fast_write_u8((ulong)(((char*)addr)+(NUM_THREADS*read_idx)), mem_start, (value >> 8*(read_idx)) & 0xFF, warp_id);");
                     result += &format!("\t{}\n",
                                     "fast_write_u8((ulong)(((char*)addr)+(NUM_THREADS*(read_idx+1))), mem_start, (value >> 8*(read_idx+1)) & 0xFF, warp_id);");
-                    result += &format!("\t{}\n", "mem_fence(CLK_LOCAL_MEM_FENCE);");
+                    //result += &format!("\t{}\n", "mem_fence(CLK_LOCAL_MEM_FENCE);");
                 },
                 _ => {
                     // write the bytes lowest to highest
