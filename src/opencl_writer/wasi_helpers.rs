@@ -45,7 +45,7 @@ pub fn emit_fd_write_helpers(_writer: &opencl_writer::OpenCLCWriter, _debug: boo
     let mut result = String::from("");
 
 
-    result += &String::from("\nvoid fd_write_helper(global uint *stack_u32, global uint* heap_u32, global uint *hypercall_buffer, global ulong *sp, uint warp_idx, uint thread_idx, uint read_idx, uint fd_write_buf_len, uint iovec_count, uint iovec, uint fd) {\n");
+    result += &String::from("\nvoid fd_write_helper(global uint *stack_u32, global uint* heap_u32, global uint *hypercall_buffer, global ulong *sp, uint warp_idx, uint thread_idx, uint read_idx, local uchar *scratch_space, uint fd_write_buf_len, uint iovec_count, uint iovec, uint fd) {\n");
 
     // first, copy all of the iovecs over to the hypercall_buffer
     // the number of iovecs and the iovec array ptr is on the stack
@@ -129,12 +129,12 @@ pub fn emit_fd_write_call_helper(_writer: &opencl_writer::OpenCLCWriter, stack_c
 
     //uint buf_len, uint iovec_count, uint iovec, uint fd
     format!("\t{}\n",
-              format!("fd_write_helper({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {});",
+              format!("fd_write_helper({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {});",
                         "stack_u32",
                         "heap_u32",
                         "hypercall_buffer",
                         "sp",
-                        "warp_idx", "thread_idx", "read_idx", buf_len, iovec_count, iovec_ptr, fd))
+                        "warp_idx", "thread_idx", "read_idx", "scratch_space", buf_len, iovec_count, iovec_ptr, fd))
 }
 
 pub fn emit_fd_prestat_get_helper(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _debug: bool) -> String {

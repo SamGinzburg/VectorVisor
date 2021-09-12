@@ -54,7 +54,7 @@ pub struct HyperCall<'a> {
     pub num_queue_submits: u64,
     pub called_fns: HashSet<u32>,
     pub syscall: WasiSyscalls,
-    pub is_interleaved_mem: bool,
+    pub is_interleaved_mem: u32,
     pub ocl_buffers: &'a OpenCLBuffers,
     pub hypercall_buffer: Arc<UnsafeCellWrapper>,
     pub queue: &'a CommandQueue,
@@ -68,7 +68,7 @@ impl<'a> HyperCall<'a> {
                num_queue_submits: u64,
                called_funcs: HashSet<u32>,
                syscall: WasiSyscalls,
-               is_interleaved_mem: bool,
+               is_interleaved_mem: u32,
                ocl_buffers: &'a OpenCLBuffers,
                hypercall_buffer: Arc<UnsafeCellWrapper>,
                queue: &'a CommandQueue) -> HyperCall<'a> {

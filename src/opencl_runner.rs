@@ -138,7 +138,7 @@ pub struct SeralizedProgram {
     pub entry_point: u32,
     pub num_compiled_funcs: u32,
     pub globals_buffer_size: u32,
-    pub interleaved: bool,
+    pub interleave: u32,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -148,7 +148,7 @@ pub struct PartitionedSeralizedProgram {
     pub entry_point: u32,
     pub num_compiled_funcs: u32,
     pub globals_buffer_size: u32,
-    pub interleaved: bool,
+    pub interleave: u32,
 }
 
 #[derive(Clone)]
@@ -170,13 +170,13 @@ pub struct OpenCLRunner {
     num_vms: u32,
     input_program: InputProgram,
     is_gpu_backend: bool,
-    is_memory_interleaved: bool,
+    is_memory_interleaved: u32,
     entry_point: u32,
     buffers: Option<OpenCLBuffers>
 }
 
 impl OpenCLRunner {
-    pub fn new(num_vms: u32, mem_interleave: bool, running_on_gpu: bool, entry_point: u32, program: InputProgram) -> OpenCLRunner {
+    pub fn new(num_vms: u32, mem_interleave: u32, running_on_gpu: bool, entry_point: u32, program: InputProgram) -> OpenCLRunner {
         OpenCLRunner {
             num_vms: num_vms,
             input_program: program,
@@ -533,7 +533,7 @@ impl OpenCLRunner {
                     globals_buffer_size: globals_buffer_size,
                     entry_point: self.entry_point,
                     num_compiled_funcs: num_compiled_funcs,
-                    interleaved: self.is_memory_interleaved,
+                    interleave: self.is_memory_interleaved,
                 };
 
                 let serialized_program = bincode::serialize(&program_to_serialize).unwrap();
@@ -690,7 +690,7 @@ impl OpenCLRunner {
                     globals_buffer_size: globals_buffer_size,
                     entry_point: self.entry_point,
                     num_compiled_funcs: num_compiled_funcs,
-                    interleaved: self.is_memory_interleaved,
+                    interleave: self.is_memory_interleaved,
                 };
 
                 let serialized_program = bincode::serialize(&program_to_serialize).unwrap();
@@ -1128,9 +1128,9 @@ impl OpenCLRunner {
             }
 
             for vm_idx in 0..self.num_vms {
-                if self.is_memory_interleaved {
-                    let result_i32 = Interleave::read_u32(&mut check_results_debug[512..], 0, self.num_vms, vm_idx);
-                    let result_i64 = Interleave::read_u64(&mut check_results_debug[512..], 0, self.num_vms, vm_idx);
+                if self.is_memory_interleaved > 0 {
+                    let result_i32 = Interleave::read_u32(&mut check_results_debug[512..], 0, self.num_vms, vm_idx, self.is_memory_interleaved);
+                    let result_i64 = Interleave::read_u64(&mut check_results_debug[512..], 0, self.num_vms, vm_idx, self.is_memory_interleaved);
                     dbg!(result_i32 as i32);
                     dbg!(result_i64 as i64);
                     dbg!(result_i64 as u64);
@@ -1447,7 +1447,7 @@ impl OpenCLRunner {
         // Also keep track of encountered hypercall entry points
         let mut hcall_divergence_stack = BTreeSet::new();
         // track stored entry points of hcalls
-        let mut stored_entry_points = vec![0u32; self.num_vms.try_into().unwrap()];
+        let mut stored_entry_points = vec![0u32; (self.num_vms as usize * mexec).try_into().unwrap()];
         // Flag to write entry point at end of critical path 
         let mut set_entry_point = false;
 
@@ -1553,21 +1553,18 @@ impl OpenCLRunner {
              */
 
             // for each VM, add to the set of kernels that we need to run next
-            for idx in 0..(self.num_vms as usize) {
+            for idx in 0..(self.num_vms as usize * mexec) {
                 // For each VM, add the next function to run to the divergence stack
                 // If the following conditions are met:
                 // 1) We are not blocked on a hypercall
                 // 2) The VM is not currently masked off
-                let arr_idx = idx*mexec;
-                if entry_point_temp[arr_idx] != ((-1) as i32) as u32 && (hypercall_num_temp[arr_idx] == -2 || hypercall_num_temp[arr_idx] == -1) {
-                    divergence_stack.insert(*kernel_partition_mappings.get(&entry_point_temp[arr_idx]).unwrap());
-                    stored_entry_points[idx] = entry_point_temp[arr_idx];
-                } else if hypercall_num_temp[arr_idx] != -2 && entry_point_temp[arr_idx] != ((-1) as i32) as u32 {
-                    hcall_divergence_stack.insert(*kernel_partition_mappings.get(&entry_point_temp[arr_idx]).unwrap());
-                    stored_entry_points[idx] = entry_point_temp[arr_idx];
-                    for m in 0..mexec {
-                        entry_point_temp[arr_idx+m] = ((-1) as i32) as u32;
-                    }
+                if entry_point_temp[idx] != ((-1) as i32) as u32 && (hypercall_num_temp[idx] == -2 || hypercall_num_temp[idx] == -1) {
+                    divergence_stack.insert(*kernel_partition_mappings.get(&entry_point_temp[idx]).unwrap());
+                    stored_entry_points[idx] = entry_point_temp[idx];
+                } else if hypercall_num_temp[idx] != -2 && entry_point_temp[idx] != ((-1) as i32) as u32 {
+                    hcall_divergence_stack.insert(*kernel_partition_mappings.get(&entry_point_temp[idx]).unwrap());
+                    stored_entry_points[idx] = entry_point_temp[idx];
+                    entry_point_temp[idx] = ((-1) as i32) as u32;
                 }
             }
 
@@ -1618,10 +1615,8 @@ impl OpenCLRunner {
                 // Remember to write the entry points back at the end
                 set_entry_point = true;
 
-                for idx in 0..(self.num_vms as usize) {
-                    for m in 0..mexec {
-                        entry_point_temp[idx*mexec + m] = stored_entry_points[idx];
-                    }
+                for idx in 0..(self.num_vms as usize * mexec) {
+                    entry_point_temp[idx] = stored_entry_points[idx];
                 }
 
                 let vmm_pre_overhead_end = std::time::Instant::now();
@@ -1819,9 +1814,9 @@ impl OpenCLRunner {
              * When multi-execution is enabled, VMs with nearby idx's have the same result. (i.e. 0,1,2,3 -> are all really VM 0)
              */
             for vm_idx in 0..self.num_vms as u32 {
-                if self.is_memory_interleaved {
-                    let result_i32 = Interleave::read_u32(&mut check_results_debug[512..], 0, self.num_vms, vm_idx);
-                    let result_i64 = Interleave::read_u64(&mut check_results_debug[512..], 0, self.num_vms, vm_idx);
+                if self.is_memory_interleaved > 0 {
+                    let result_i32 = Interleave::read_u32(&mut check_results_debug[512..], 0, self.num_vms, vm_idx, self.is_memory_interleaved);
+                    let result_i64 = Interleave::read_u64(&mut check_results_debug[512..], 0, self.num_vms, vm_idx, self.is_memory_interleaved);
                     dbg!(result_i32 as i32);
                     dbg!(result_i64 as i64);
                     dbg!(result_i32 as u32);

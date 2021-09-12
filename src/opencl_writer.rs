@@ -1422,8 +1422,8 @@ impl<'a> OpenCLCWriter<'_> {
                     write!(final_string, "\t\tprintf(\"*sp = %d\\n\", *sp);\n").unwrap();
                     write!(final_string, "\t\tprintf(\"*hypercall_number = %d\\n\", *hypercall_number);\n").unwrap();
                     write!(final_string, "\t\tprintf(\"*hypercall_continuation = %d\\n\", *hypercall_continuation);\n").unwrap();
-                    write!(final_string, "\t\tprintf(\"read_u32(stack_frames+*sfp) = %d\\n\", read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx, read_idx, thread_idx));\n").unwrap();
-                    write!(final_string, "\t\tprintf(\"read_u64(call_stack+*sfp) = %d\\n\", read_u64((ulong)(call_stack+*sfp), (ulong)(call_stack), warp_idx, read_idx, thread_idx));\n").unwrap();
+                    write!(final_string, "\t\tprintf(\"read_u32(stack_frames+*sfp) = %d\\n\", read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx, read_idx, thread_idx, scratch_space));\n").unwrap();
+                    write!(final_string, "\t\tprintf(\"read_u64(call_stack+*sfp) = %d\\n\", read_u64((ulong)(call_stack+*sfp), (ulong)(call_stack), warp_idx, read_idx, thread_idx, scratch_space));\n").unwrap();
                 }
 
                 /*
@@ -1805,7 +1805,7 @@ impl<'a> OpenCLCWriter<'_> {
                 format!("ulong warp_idx = get_global_id(0) / {};",  mexec),
                 format!("ulong thread_idx = get_local_id(0) / {};",  mexec),
                 format!("ulong read_idx = get_local_id(0) % {};",  mexec),
-                format!("local uchar scratch_space[{}];", (local_work_group / mexec) * 8),
+                format!("local ulong scratch_space[{}];", (local_work_group)),
                 "global uint  *stack_u32    = (global uint*)stack_u32_global;",
                 "global ulong *stack_u64    = (global ulong*)stack_u32;",
                 "global uint  *heap_u32     = (global uint *)heap_u32_global;",

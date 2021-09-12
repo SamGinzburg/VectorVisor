@@ -40,6 +40,21 @@ extern "C" {
 
     // return the json response back to the VMM
     fn serverless_response(output_arr: *mut u8, output_arr_len: u32) -> ();
+
+    // Custom syscalls for accelerating workloads
+    fn start_accelerate(count: usize) -> usize;
+    fn end_accelerate() -> ();
+}
+
+
+// Utility function for enhanced parallelism on GPUs
+#[inline(never)]
+pub fn accelerate<F>(count: usize, mut closure: F)
+where
+    F: FnMut(usize) -> () {
+    let index = unsafe { start_accelerate(count) };
+    closure(index);
+    unsafe { end_accelerate() };
 }
 
 impl<'a, T1: Deserialize<'a>, T2: Serialize> WasmHandler<T1, T2> {

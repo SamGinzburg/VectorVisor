@@ -27,8 +27,8 @@ impl Random {
         let wasm_mem = &vm_ctx.wasm_memory;
         let raw_mem: &mut [u8] = unsafe { memory.data_unchecked_mut() };
 
-        let random_len = if hypercall.is_interleaved_mem {
-            Interleave::read_u32(hcall_buf, 0, hypercall.num_total_vms, hypercall.vm_id)
+        let random_len = if hypercall.is_interleaved_mem > 0 {
+            Interleave::read_u32(hcall_buf, 0, hypercall.num_total_vms, hypercall.vm_id, hypercall.is_interleaved_mem)
         } else {
             LittleEndian::read_u32(&hcall_buf[0..4])
         };
@@ -37,9 +37,9 @@ impl Random {
         let _result = ctx.random_get(buf, random_len).unwrap();
 
         // now copy the random data back to the hcall_buffer
-        if hypercall.is_interleaved_mem {
+        if hypercall.is_interleaved_mem > 0 {
             for offset in 0..(random_len as usize) {
-                Interleave::write_u8(hcall_buf, offset.try_into().unwrap(), hypercall.num_total_vms, raw_mem[offset], hypercall.vm_id);
+                Interleave::write_u8(hcall_buf, offset.try_into().unwrap(), hypercall.num_total_vms, raw_mem[offset], hypercall.vm_id, hypercall.is_interleaved_mem);
             }
         } else {
             hcall_buf = &mut hcall_buf[(hypercall.vm_id * hcall_buf_size) as usize..((hypercall.vm_id+1) * hcall_buf_size) as usize];

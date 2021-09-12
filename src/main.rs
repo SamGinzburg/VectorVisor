@@ -79,11 +79,11 @@ fn main() {
             .multiple(false)
             .number_of_values(1)
             .takes_value(true))
-        .arg(Arg::with_name("isinterleaved")
+        .arg(Arg::with_name("interleave")
             .short("l")
-            .long("isinterleaved")
-            .help("If this flag is set to true, the compiler will interleave all reads/writes such that they are properly coalesced")
-            .default_value("true") // default to true
+            .long("interleave")
+            .help("Select the cell size for memory interleaving (disabled = 0, supported = 1, 8)")
+            .default_value("1") // default to true
             .multiple(false)
             .number_of_values(1)
             .takes_value(true))
@@ -283,7 +283,7 @@ fn main() {
     dbg!(matches.clone());
 
     let file_path = value_t!(matches.value_of("input"), String).unwrap_or_else(|e| e.exit());
-    let interleaved = value_t!(matches.value_of("isinterleaved"), bool).unwrap_or_else(|e| e.exit());
+    let interleave = value_t!(matches.value_of("interleave"), u32).unwrap_or_else(|e| e.exit());
     let stack_size = value_t!(matches.value_of("stack"), u32).unwrap_or_else(|e| e.exit());
     let heap_size = value_t!(matches.value_of("heap"), u32).unwrap_or_else(|e| e.exit());
     let call_stack_size = value_t!(matches.value_of("callstack"), u32).unwrap_or_else(|e| e.exit());
@@ -311,7 +311,7 @@ fn main() {
     let local_work_group = value_t!(matches.value_of("localworkgroup"), usize).unwrap_or_else(|e| e.exit());
     let mexec = value_t!(matches.value_of("mexec"), usize).unwrap_or_else(|e| e.exit());
 
-    if mexec > 1 && interleaved == false {
+    if mexec > 1 && interleave == 0 {
         panic!("Multi-Execution is only enabled for interleaved workloads!");
     }
 
@@ -342,7 +342,7 @@ fn main() {
             entry_point,
             globals_buffer_size,
             num_compiled_funcs, _, _, _) = ast.write_opencl_file(hcall_size.try_into().unwrap(),
-                                                                    interleaved as u32,
+                                                                    interleave,
                                                                     stack_size,
                                                                     heap_size, 
                                                                     call_stack_size, 
@@ -364,7 +364,7 @@ fn main() {
         println!("Compiled: {} functions", num_compiled_funcs);
         println!("Entry point: {}", entry_point);
         println!("Globals buffer: {}", globals_buffer_size);
-        println!("interleaved: {}", interleaved);
+        println!("interleave: {}", interleave);
 
         let mut file = File::create(format!("{}.cl", file_path)).unwrap();
         file.write_all(&compiled_kernel.clone().into_bytes()).unwrap();
@@ -407,7 +407,7 @@ fn main() {
                     _kernel_hashmap,
                     _kernel_compile_stats,
                     _kernel_partition_mappings) = ast.write_opencl_file(hcall_size.try_into().unwrap(),
-                                                                        interleaved as u32,
+                                                                        interleave,
                                                                         stack_size,
                                                                         heap_size, 
                                                                         call_stack_size, 
@@ -427,9 +427,9 @@ fn main() {
                 println!("Compiled: {} functions", num_compiled_funcs);
                 println!("Entry point: {}", entry_point);
                 println!("Globals buffer: {}", globals_buffer_size);
-                println!("interleaved: {}", interleaved);
+                println!("interleave: {}", interleave);
     
-                (InputProgram::Text(compiled_kernel.clone(), fastcall_header.clone()), entry_point, num_compiled_funcs, globals_buffer_size, interleaved)
+                (InputProgram::Text(compiled_kernel.clone(), fastcall_header.clone()), entry_point, num_compiled_funcs, globals_buffer_size, interleave)
             },
             ("wasm", false) => {
                 let filedata_text = wasmprinter::print_file(file_path.clone()).unwrap();
@@ -449,7 +449,7 @@ fn main() {
                     _kernel_hashmap,
                     _kernel_compile_stats,
                     _kernel_partition_mappings) = ast.write_opencl_file(hcall_size.try_into().unwrap(),
-                                                                        interleaved as u32,
+                                                                        interleave,
                                                                         stack_size,
                                                                         heap_size, 
                                                                         call_stack_size, 
@@ -469,9 +469,9 @@ fn main() {
                 println!("Compiled: {} functions", num_compiled_funcs);
                 println!("Entry point: {}", entry_point);
                 println!("Globals buffer: {}", globals_buffer_size);
-                println!("interleaved: {}", interleaved);
+                println!("interleave: {}", interleave);
     
-                (InputProgram::Text(compiled_kernel.clone(), fastcall_header.clone()), entry_point, num_compiled_funcs, globals_buffer_size, interleaved)
+                (InputProgram::Text(compiled_kernel.clone(), fastcall_header.clone()), entry_point, num_compiled_funcs, globals_buffer_size, interleave)
             },
             ("wat", true) => {
                 let filedata = match fs::read_to_string(file_path.clone()) {
@@ -494,7 +494,7 @@ fn main() {
                      kernel_hashmap,
                      kernel_compile_stats,
                      kernel_partition_mappings) = ast.write_opencl_file(hcall_size.try_into().unwrap(),
-                                                                        interleaved as u32,
+                                                                        interleave,
                                                                         stack_size,
                                                                         heap_size, 
                                                                         call_stack_size, 
@@ -514,9 +514,9 @@ fn main() {
                 println!("Compiled: {} functions", num_compiled_funcs);
                 println!("Entry point: {}", entry_point);
                 println!("Globals buffer: {}", globals_buffer_size);
-                println!("interleaved: {}", interleaved);
+                println!("interleave: {}", interleave);
     
-                (InputProgram::Partitioned(kernel_hashmap.clone(), fastcall_header.clone(), kernel_compile_stats.clone(), kernel_partition_mappings.clone()), entry_point, num_compiled_funcs, globals_buffer_size, interleaved)
+                (InputProgram::Partitioned(kernel_hashmap.clone(), fastcall_header.clone(), kernel_compile_stats.clone(), kernel_partition_mappings.clone()), entry_point, num_compiled_funcs, globals_buffer_size, interleave)
             },
             ("wasm", true) => {
                 let filedata_text = wasmprinter::print_file(file_path.clone()).unwrap();
@@ -536,7 +536,7 @@ fn main() {
                     kernel_hashmap,
                     kernel_compile_stats,
                     kernel_partition_mappings) = ast.write_opencl_file(hcall_size.try_into().unwrap(),
-                                                                        interleaved as u32,
+                                                                        interleave,
                                                                         stack_size,
                                                                         heap_size, 
                                                                         call_stack_size, 
@@ -556,9 +556,9 @@ fn main() {
                 println!("Compiled: {} functions", num_compiled_funcs);
                 println!("Entry point: {}", entry_point);
                 println!("Globals buffer: {}", globals_buffer_size);
-                println!("interleaved: {}", interleaved);
+                println!("interleave: {}", interleave);
     
-                (InputProgram::Partitioned(kernel_hashmap.clone(), fastcall_header.clone(), kernel_compile_stats.clone(), kernel_partition_mappings.clone()), entry_point, num_compiled_funcs, globals_buffer_size, interleaved)
+                (InputProgram::Partitioned(kernel_hashmap.clone(), fastcall_header.clone(), kernel_compile_stats.clone(), kernel_partition_mappings.clone()), entry_point, num_compiled_funcs, globals_buffer_size, interleave)
             },
             ("bin", _) => {
                 // read the binary file as a Vec<u8>
@@ -568,8 +568,8 @@ fn main() {
                 };
 
                 let program: SeralizedProgram = bincode::deserialize(&filedata).unwrap();
-                println!("Loaded program with entry point: {}, num_compiled_funcs: {}, globals_buffer_size: {}, is_interleaved: {}", program.entry_point, program.num_compiled_funcs, program.globals_buffer_size, program.interleaved);
-                (InputProgram::Binary(program.program_data), program.entry_point, program.num_compiled_funcs, program.globals_buffer_size, program.interleaved)
+                println!("Loaded program with entry point: {}, num_compiled_funcs: {}, globals_buffer_size: {}, interleave: {}", program.entry_point, program.num_compiled_funcs, program.globals_buffer_size, program.interleave);
+                (InputProgram::Binary(program.program_data), program.entry_point, program.num_compiled_funcs, program.globals_buffer_size, program.interleave)
             },
             ("partbin", _) => {
                 // read the binary file as a Vec<u8>
@@ -579,9 +579,9 @@ fn main() {
                 };
     
                 let program: PartitionedSeralizedProgram = bincode::deserialize(&filedata).unwrap();
-                println!("Loaded partitioned program with entry point: {}, num_compiled_funcs: {}, globals_buffer_size: {}, is_interleaved: {}", program.entry_point, program.num_compiled_funcs, program.globals_buffer_size, program.interleaved);
+                println!("Loaded partitioned program with entry point: {}, num_compiled_funcs: {}, globals_buffer_size: {}, interleave: {}", program.entry_point, program.num_compiled_funcs, program.globals_buffer_size, program.interleave);
 
-                (InputProgram::PartitionedBinary(program.program_data, program.partition_mapping), program.entry_point, program.num_compiled_funcs, program.globals_buffer_size, program.interleaved)
+                (InputProgram::PartitionedBinary(program.program_data, program.partition_mapping), program.entry_point, program.num_compiled_funcs, program.globals_buffer_size, program.interleave)
             },
             // nvidia specific assembly code, prebuilt
             // this is a legacy stub from earlier testing, it still works though
@@ -595,8 +595,8 @@ fn main() {
                 let numfuncs = value_t!(matches.value_of("numfuncs"), u32).unwrap_or_else(|e| e.exit());
                 let globals_buffer_size = value_t!(matches.value_of("globals-buffer-size"), u32).unwrap_or_else(|e| e.exit());
             
-                println!("Loaded program with entry point: {}, num_compiled_funcs: {}, globals_buffer_size: {}, is_interleaved: {}", entry, numfuncs, globals_buffer_size, interleaved);
-                (InputProgram::Binary(filedata), entry, numfuncs, globals_buffer_size, interleaved)
+                println!("Loaded program with entry point: {}, num_compiled_funcs: {}, globals_buffer_size: {}, interleave: {}", entry, numfuncs, globals_buffer_size, interleave);
+                (InputProgram::Binary(filedata), entry, numfuncs, globals_buffer_size, interleave)
             }
             _ => panic!("Unrecognized input filetype: {:?}", (extension, partition)),
         };
@@ -621,7 +621,7 @@ fn main() {
         let temp_context = ocl::core::create_context(Some(&context_properties), &[device_id], None, None).unwrap();
         let context: &'static ocl::core::Context = Box::leak(Box::new(temp_context));
 
-        let runner = opencl_runner::OpenCLRunner::new(num_vms, interleaved, is_gpu, entry_point, file.clone());
+        let runner = opencl_runner::OpenCLRunner::new(num_vms, interleave, is_gpu, entry_point, file.clone());
         let (program, device_id) = runner.setup_kernel(context, device_id, fname, stack_size, heap_size, num_compiled_funcs, globals_buffer_size, compile_args.clone(), link_args.clone());
 
         rayon::ThreadPoolBuilder::new().num_threads(num_cpus::get() * 2).build_global().unwrap();
@@ -635,7 +635,7 @@ fn main() {
 
             // Compile the input program
             */
-            //let runner = opencl_runner::OpenCLRunner::new(num_vms, interleaved, is_gpu, entry_point, file.clone());
+            //let runner = opencl_runner::OpenCLRunner::new(num_vms, interleave, is_gpu, entry_point, file.clone());
             //let (program, device_id) = runner.setup_kernel(context, device_id, fname, stack_size, heap_size, num_compiled_funcs, globals_buffer_size, compile_args.clone(), link_args.clone());
 
             let mut server_sender_vec = vec![];

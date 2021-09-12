@@ -27,9 +27,9 @@ impl Environment {
             Ok(tuple) => {
                 // now that we have retreived the sizes
                 // now we copy the result to the hcall buf
-                if hypercall.is_interleaved_mem {
-                    Interleave::write_u32(hcall_buf, 0, hypercall.num_total_vms, tuple.0, hypercall.vm_id);
-                    Interleave::write_u32(hcall_buf, 4, hypercall.num_total_vms, tuple.1, hypercall.vm_id);
+                if hypercall.is_interleaved_mem > 0 {
+                    Interleave::write_u32(hcall_buf, 0, hypercall.num_total_vms, tuple.0, hypercall.vm_id, hypercall.is_interleaved_mem);
+                    Interleave::write_u32(hcall_buf, 4, hypercall.num_total_vms, tuple.1, hypercall.vm_id, hypercall.is_interleaved_mem);
                 } else {
                     let hcall_buf_size: u32 = (hcall_buf.len() / hypercall.num_total_vms as usize).try_into().unwrap();
                     hcall_buf = &mut hcall_buf[(hypercall.vm_id * hcall_buf_size) as usize..((hypercall.vm_id+1) * hcall_buf_size) as usize];
@@ -74,11 +74,11 @@ impl Environment {
         //println!("{:?}", &arr);
 
         // copy the results back to the hcall_buf
-        if hypercall.is_interleaved_mem {
-            Interleave::write_u32(&mut hcall_buf, 0, hypercall.num_total_vms, num_env_vars, hypercall.vm_id);
-            Interleave::write_u32(&mut hcall_buf, 4, hypercall.num_total_vms, env_str_size, hypercall.vm_id);
+        if hypercall.is_interleaved_mem > 0 {
+            Interleave::write_u32(&mut hcall_buf, 0, hypercall.num_total_vms, num_env_vars, hypercall.vm_id, hypercall.is_interleaved_mem);
+            Interleave::write_u32(&mut hcall_buf, 4, hypercall.num_total_vms, env_str_size, hypercall.vm_id, hypercall.is_interleaved_mem);
             for idx in 8..(num_env_vars * 4 + env_str_size) {
-                Interleave::write_u8(&mut hcall_buf, idx, hypercall.num_total_vms, raw_mem[idx as usize], hypercall.vm_id);
+                Interleave::write_u8(&mut hcall_buf, idx, hypercall.num_total_vms, raw_mem[idx as usize], hypercall.vm_id, hypercall.is_interleaved_mem);
             }    
         } else {
             hcall_buf = &mut hcall_buf[(hypercall.vm_id * hcall_buf_size) as usize..((hypercall.vm_id+1) * hcall_buf_size) as usize];
