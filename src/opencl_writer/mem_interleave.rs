@@ -129,7 +129,7 @@ pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interle
             result += &format!("\t{}\n",
                                "if (cell_offset < 7) {");
             result += &format!("\t\t{}\n",
-                               "uchar8 val_vec = (uchar8)*((global ulong*)write_addr);");
+                               "uchar8 val_vec = as_uchar8((ulong)*((global ulong*)write_addr));");
             result += &format!("\t\t{}\n",
                                "uchar *val = &val_vec;");
             result += &format!("\t\t{}\n",
@@ -137,14 +137,14 @@ pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interle
             result += &format!("\t\t{}\n",
                                "val[cell_offset+1] = (value >> 8) & 0xFF;");
             result += &format!("\t\t{}\n",
-                               "vstore8(val_vec, 0, write_addr);");
+                               "*((global ulong*)write_addr) = as_ulong(val_vec);");
             result += &format!("\t{}\n",
                                "} else {");
             // sheared write case
             result += &format!("\t\t{}\n",
-                               "uchar8 val1 = (uchar8)*((global ulong*)write_addr);");
+                               "uchar8 val1 = as_uchar8((ulong)*((global ulong*)write_addr));");
             result += &format!("\t\t{}\n",
-                               "uchar8 val2 = (uchar8)*((global ulong*)write_addr+(NUM_THREADS*8));");
+                               "uchar8 val2 = as_uchar8((ulong)*((global ulong*)write_addr+(NUM_THREADS*8)));");
             result += &format!("\t\t{}\n",
                                "uchar16 combined_vec = (uchar16)(val1, val2);");
             result += &format!("\t\t{}\n",
@@ -158,9 +158,9 @@ pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interle
             result += &format!("\t\t{}\n",
                                "val2 = (uchar8)*(ulong*)(combined+8);");
             result += &format!("\t\t{}\n",
-                               "vstore8(val1, 0, write_addr);");
+                               "*((global ulong*)write_addr) = as_ulong(val1);");
             result += &format!("\t\t{}\n",
-                               "vstore8(val2, 0, write_addr+(NUM_THREADS*8));");
+                               "*((global ulong*)write_addr+(NUM_THREADS*8)) = as_ulong(val2);");
             result += &format!("\t{}\n",
                                "}");
         },
@@ -222,7 +222,7 @@ pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interle
             result += &format!("\t{}\n",
                                "if (cell_offset < 5) {");
             result += &format!("\t\t{}\n",
-                               "uchar8 val_vec = (uchar8)*((global ulong*)write_addr);");
+                               "uchar8 val_vec = as_uchar8((ulong)*((global ulong*)write_addr));");
             result += &format!("\t\t{}\n",
                                "uchar *val = &val_vec;");
             result += &format!("\t\t{}\n",
@@ -234,14 +234,14 @@ pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interle
             result += &format!("\t\t{}\n",
                                "val[cell_offset+3] = (value >> 24) & 0xFF;");
             result += &format!("\t\t{}\n",
-                               "vstore8(val_vec, 0, write_addr);");
+                               "*((global ulong*)write_addr) = as_ulong(val_vec);");
             result += &format!("\t{}\n",
                                "} else {");
             // sheared write case
             result += &format!("\t\t{}\n",
-                               "uchar8 val1 = (uchar8)*((global ulong*)write_addr);");
+                               "uchar8 val1 = as_uchar8((ulong)*((global ulong*)write_addr));");
             result += &format!("\t\t{}\n",
-                               "uchar8 val2 = (uchar8)*((global ulong*)write_addr+(NUM_THREADS*8));");
+                               "uchar8 val2 = as_uchar8((ulong)*((global ulong*)write_addr+(NUM_THREADS*8)));");
             result += &format!("\t\t{}\n",
                                "uchar16 combined_vec = (uchar16)(val1, val2);");
             result += &format!("\t\t{}\n",
@@ -259,9 +259,9 @@ pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interle
             result += &format!("\t\t{}\n",
                                "val2 = (uchar8)*(ulong*)(combined+8);");
             result += &format!("\t\t{}\n",
-                               "vstore8(val1, 0, write_addr);");
+                               "*((global ulong*)write_addr) = as_ulong(val1);");
             result += &format!("\t\t{}\n",
-                               "vstore8(val2, 0, write_addr+(NUM_THREADS*8));");
+                               "*((global ulong*)write_addr+(NUM_THREADS*8)) = as_ulong(val2);");
             result += &format!("\t{}\n",
                                "}");
         },
@@ -351,9 +351,9 @@ pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interle
                                "} else {");
             // sheared write case
             result += &format!("\t\t{}\n",
-                               "uchar8 val1 = (uchar8)*((global ulong*)write_addr);");
+                               "uchar8 val1 = as_uchar8((ulong)*((global ulong*)write_addr));");
             result += &format!("\t\t{}\n",
-                               "uchar8 val2 = (uchar8)*((global ulong*)write_addr+(NUM_THREADS*8));");
+                               "uchar8 val2 = as_uchar8((ulong)*((global ulong*)write_addr+(NUM_THREADS*8)));");
             result += &format!("\t\t{}\n",
                                "uchar16 combined_vec = (uchar16)(val1, val2);");
             result += &format!("\t\t{}\n",
@@ -379,9 +379,9 @@ pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interle
             result += &format!("\t\t{}\n",
                                "val2 = (uchar8)*(ulong*)(combined+8);");
             result += &format!("\t\t{}\n",
-                               "vstore8(val1, 0, write_addr);");
+                               "*((global ulong*)write_addr) = as_ulong(val1);");
             result += &format!("\t\t{}\n",
-                               "vstore8(val2, 0, write_addr+(NUM_THREADS*8));");
+                               "*((global ulong*)write_addr+(NUM_THREADS*8)) = as_ulong(val2);");
             result += &format!("\t{}\n",
                                "}");
         },
