@@ -1926,13 +1926,13 @@ __attribute__((always_inline)) void {}(global uint   *stack_u32,
         // zero the stack first
         ret_str += &format!("{}{}{}",
                             "\tfor (uint idx = 0; idx < (VMM_STACK_SIZE_BYTES / 4); idx++) {\n",
-                            format!("\t\t{};\n", &emit_write_u32("(ulong)(stack_u32+idx)", "(ulong)(stack_u32)", "0", "warp_idx")),
+                            format!("\t\t{};\n", &emit_write_u32("(ulong)((global uchar*)stack_u32+idx)", "(ulong)(stack_u32)", "0", "warp_idx")),
                             "\t}\n");
 
         // zero the heap next
         ret_str += &format!("{}{}{}",
                             "\tfor (uint idx = 0; idx < (VMM_HEAP_SIZE_BYTES / 4); idx++) {\n",
-                            format!("\t\t{};\n", &emit_write_u32("(ulong)(heap_u32+idx)", "(ulong)(heap_u32)", "0", "warp_idx")),
+                            format!("\t\t{};\n", &emit_write_u32("(ulong)((global uchar*)heap_u32+idx)", "(ulong)(heap_u32)", "0", "warp_idx")),
                             "\t}\n");
 
         ret_str
