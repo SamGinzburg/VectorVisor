@@ -486,18 +486,27 @@ pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut St
                     };
     
                     if sp_counter > 0 {
-                        // TODO refactor using stubs in mem_interleave
+                        let read_sfp = emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)(stack_frames)", "warp_idx");
+                        let write_u32 = emit_write_u32(&format!("(ulong)(stack_u32-{}+{})", parameter_offset, read_sfp), "(ulong)stack_u32", &format!("{}", reg), "warp_idx");
+                        /*
                         offset = format!("write_u32((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), warp_idx, read_idx, thread_idx, scratch_space)),
                                                     (ulong)stack_u32,
                                                     {},
-                                                    warp_idx, read_idx);", parameter_offset, reg);
+                                                    warp_idx, read_idx, scratch_space);", parameter_offset, reg);
+                        */
+                        offset = write_u32;
                     } else {
+                        let read_sfp = emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)(stack_frames)", "warp_idx");
+                        let write_u32 = emit_write_u32(&format!("(ulong)(stack_u32-{}+{})", parameter_offset, read_sfp), "(ulong)stack_u32", &format!("{}", reg), "warp_idx");
+                        /*
                         offset = format!("write_u32((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx, read_idx, thread_idx, scratch_space)),
                                                     (ulong)stack_u32,
                                                     {},
-                                                    warp_idx, read_idx);", parameter_offset, reg);
+                                                    warp_idx, read_idx, thread_idx, scratch_space);", parameter_offset, reg);
+                        */
+                        offset = write_u32;
                     }
-                    final_str += &format!("\t{}\n", offset);
+                    final_str += &format!("\t{};\n", offset);
                     sp_counter += 1;
                 },
                 wast::ValType::I64 => {
@@ -509,17 +518,27 @@ pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut St
                     };
     
                     if sp_counter > 0 {
+                        let read_sfp = emit_read_u64("(ulong)(stack_frames+*sfp)", "(ulong)(stack_frames)", "warp_idx");
+                        let write_u64 = emit_write_u64(&format!("(ulong)(stack_u32-{}+{})", parameter_offset, read_sfp), "(ulong)stack_u32", &format!("{}", reg), "warp_idx");
+                        /*
                         offset = format!("write_u64((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx, read_idx, thread_idx, scratch_space)),
                                                     (ulong)stack_u32,
                                                     {},
                                                     warp_idx, read_idx);", parameter_offset, reg);
+                        */
+                        offset = write_u64;
                     } else {
+                        let read_sfp = emit_read_u64("(ulong)(stack_frames+*sfp)", "(ulong)(stack_frames)", "warp_idx");
+                        let write_u64 = emit_write_u64(&format!("(ulong)(stack_u32-{}+{})", parameter_offset, read_sfp), "(ulong)stack_u32", &format!("{}", reg), "warp_idx");
+                        /*
                         offset = format!("write_u64((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx, read_idx, thread_idx, scratch_space)),
                                                     (ulong)stack_u32,
                                                     {},
                                                     warp_idx, read_idx);", parameter_offset, reg);
+                        */
+                        offset = write_u64;
                     }
-                    final_str += &format!("\t{}\n", offset);
+                    final_str += &format!("\t{};\n", offset);
                     sp_counter += 2;
                 },
                 wast::ValType::F32 => {
@@ -531,21 +550,31 @@ pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut St
                     };
     
                     if sp_counter > 0 {
-                        // TODO refactor this using stubs in mem_interleave
-                        offset = format!("write_u32((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx, read_idx, thread_idx, scratch_space)),
+                        let read_sfp = emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)(stack_frames)", "warp_idx");
+                        let write_u32 = emit_write_u32(&format!("(ulong)(stack_u32-{}+{})", parameter_offset, read_sfp), "(ulong)stack_u32", &format!("temp"), "warp_idx");
+                        /*
+                        offset = format!("write_u32((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), warp_idx, read_idx, thread_idx, scratch_space)),
                                                     (ulong)stack_u32,
                                                     {},
-                                                    warp_idx, read_idx);", parameter_offset, "temp");
+                                                    warp_idx, read_idx, scratch_space);", parameter_offset, reg);
+                        */
+                        offset = write_u32;
                     } else {
+                        let read_sfp = emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)(stack_frames)", "warp_idx");
+                        let write_u32 = emit_write_u32(&format!("(ulong)(stack_u32-{}+{})", parameter_offset, read_sfp), "(ulong)stack_u32", &format!("temp"), "warp_idx");
+                        /*
                         offset = format!("write_u32((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx, read_idx, thread_idx, scratch_space)),
                                                     (ulong)stack_u32,
                                                     {},
-                                                    warp_idx, read_idx);", parameter_offset, "temp");
+                                                    warp_idx, read_idx, thread_idx, scratch_space);", parameter_offset, reg);
+                        */
+                        offset = write_u32;
                     }
+
                     final_str += &format!("\t{{\n");
                     final_str += &format!("\t\tuint temp = 0;\n");
                     final_str += &format!("\t\t___private_memcpy_nonmmu(&temp, &{}, sizeof(float));\n", reg);
-                    final_str += &format!("\t\t{}\n", offset);
+                    final_str += &format!("\t\t{};\n", offset);
                     final_str += &format!("\t}}\n");
                     sp_counter += 1;
                 },
@@ -559,20 +588,31 @@ pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut St
                     };
     
                     if sp_counter > 0 {
+                        let read_sfp = emit_read_u64("(ulong)(stack_frames+*sfp)", "(ulong)(stack_frames)", "warp_idx");
+                        let write_u64 = emit_write_u64(&format!("(ulong)(stack_u32-{}+{})", parameter_offset, read_sfp), "(ulong)stack_u32", &format!("temp"), "warp_idx");
+                        /*
                         offset = format!("write_u64((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx, read_idx, thread_idx, scratch_space)),
                                                     (ulong)stack_u32,
                                                     {},
-                                                    warp_idx, read_idx);", parameter_offset, "temp");
+                                                    warp_idx, read_idx);", parameter_offset, reg);
+                        */
+                        offset = write_u64;
                     } else {
+                        let read_sfp = emit_read_u64("(ulong)(stack_frames+*sfp)", "(ulong)(stack_frames)", "warp_idx");
+                        let write_u64 = emit_write_u64(&format!("(ulong)(stack_u32-{}+{})", parameter_offset, read_sfp), "(ulong)stack_u32", &format!("temp"), "warp_idx");
+                        /*
                         offset = format!("write_u64((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx, read_idx, thread_idx, scratch_space)),
                                                     (ulong)stack_u32,
                                                     {},
-                                                    warp_idx, read_idx);", parameter_offset, "temp");
+                                                    warp_idx, read_idx);", parameter_offset, reg);
+                        */
+                        offset = write_u64;
                     }
+
                     final_str += &format!("\t{{\n");
                     final_str += &format!("\t\tulong temp = 0;\n");
                     final_str += &format!("\t\t___private_memcpy_nonmmu(&temp, &{}, sizeof(double));\n", &reg);
-                    final_str += &format!("\t\t{}\n", offset);
+                    final_str += &format!("\t\t{};\n", offset);
                     final_str += &format!("\t}}\n");
     
                     sp_counter += 2;

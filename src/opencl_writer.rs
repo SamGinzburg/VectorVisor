@@ -1834,7 +1834,7 @@ impl<'a> OpenCLCWriter<'_> {
                 "ulong warp_idx = get_global_id(0);",
                 "ulong thread_idx = get_local_id(0);",
                 format!("ulong read_idx = 0;"), // dummy value here, isn't used
-                format!("local uchar scratch_space[{}];", 0), // dummy value here, isn't used
+                format!("local ulong2 scratch_space[{}];", (local_work_group)),
                 "global uint  *stack_u32    = (global uint*)stack_u32_global;",
                 "global ulong *stack_u64    = (global ulong*)stack_u32;",
                 "global uint  *heap_u32     = (global uint *)heap_u32_global;",
@@ -1942,7 +1942,7 @@ __attribute__((always_inline)) void {}(global uint   *stack_u32,
      * This function generates the helper kernel that loads the data sections
      * It is also ressponsible for loading globals into memory id -> (offset, size)
      */
-    fn generate_data_section(&self, interleave: u32, heap_size: u32, mexec: u32, debug: bool) -> (String, HashMap<String, (u32, u32)>) {
+    fn generate_data_section(&self, interleave: u32, heap_size: u32, mexec: u32, local_work_group: u32, debug: bool) -> (String, HashMap<String, (u32, u32)>) {
         let mut result = String::from("");
         let mut mapping: HashMap<String, (u32, u32)> = HashMap::new();
         let mut offset: u32 = 0;
@@ -1996,6 +1996,7 @@ __attribute__((always_inline)) void {}(global uint   *stack_u32,
         if debug {
             result += &String::from("\nvoid data_init(uint *stack_u32, uint *heap_u32, uint *globals_buffer, uint *curr_mem, uint *max_mem, uchar *is_calling, ulong *sfp) {\n");
             result += &String::from("\tulong warp_idx = 0;\n");
+            result += &format!("local ulong2 scratch_space[{}];", (local_work_group));
             // each page = 64KiB
             result += &format!("\tcurr_mem[warp_idx] = {};\n", program_start_mem_pages);
             result += &String::from("\tis_calling[warp_idx] = 1;\n");
@@ -2014,7 +2015,8 @@ __attribute__((always_inline)) void {}(global uint   *stack_u32,
         } else {
             result += &String::from("\n__kernel void data_init(__global uint *stack_u32_global, __global uint *heap_u32_global, __global uint *globals_buffer_global, __global uint *curr_mem_global, __global uint *max_mem_global, __global uchar *is_calling_global, __global ulong *sfp_global) {\n");
             result += &format!("\tulong warp_idx = get_global_id(0) / {};\n", mexec);
-            result += &format!("\tulong read_idx = get_local_id(0) % {};\n", mexec);
+            result += &format!("\tulong thread_idx = get_local_id(0);\n");
+            result += &format!("\tulong read_idx = thread_idx % {};\n", mexec);
             // these structures are not interleaved, so its fine to just read/write them as is
             // they are already implicitly interleaved (like sp for example)
             result += &format!("\tcurr_mem_global[get_global_id(0)] = {};\n", program_start_mem_pages);
@@ -2025,6 +2027,7 @@ __attribute__((always_inline)) void {}(global uint   *stack_u32,
 
             result += &format!("\t{};\n",
                                "*sfp = 0");
+            result += &format!("local ulong2 scratch_space[{}];", (local_work_group));
 
             if interleave == 0 {
                 result += &format!("\t{}\n",
@@ -2252,7 +2255,7 @@ r#"
 
         // generate the data loading function
         // also return the global mappings: global id -> (global buffer offset, global size)
-        let (data_section, global_mappings) = self.generate_data_section(interleave, heap_size_bytes, mexec.try_into().unwrap(), debug);
+        let (data_section, global_mappings) = self.generate_data_section(interleave, heap_size_bytes, mexec.try_into().unwrap(), local_work_group.try_into().unwrap(), debug);
         let mut globals_buffer_size = 0;
 
         for (_key, (_offset, size)) in &global_mappings {

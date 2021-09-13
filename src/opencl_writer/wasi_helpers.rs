@@ -350,7 +350,7 @@ pub fn emit_serverless_response_pre(_writer: &opencl_writer::OpenCLCWriter, stac
     let json_buf_ptr = stack_ctx.vstack_peak(StackType::i32, 1);
 
     // copy the buffer to the hcall buf so we can return it back via our middleware setup
-    ret_str += &format!("\t___private_memcpy_gpu2cpu((ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), warp_idx, read_idx);\n",
+    ret_str += &format!("\t___private_memcpy_gpu2cpu((ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), warp_idx, read_idx, thread_idx, scratch_space);\n",
                         &format!("(global char *)heap_u32+{}", json_buf_ptr),
                         "heap_u32", // mem_start_src
                         "(ulong)((global char *)hypercall_buffer+(hcall_size*warp_idx)+4)", //dst, first 4 bytes are the len
