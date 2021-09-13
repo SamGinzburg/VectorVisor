@@ -1,9 +1,10 @@
 use crate::opencl_writer;
 use std::collections::{HashMap, HashSet};
-use crate::opencl_writer::mem_interleave::emit_read_u32;
-use crate::opencl_writer::mem_interleave::emit_write_u32;
+use crate::opencl_writer::mem_interleave::emit_read_u32_aligned;
+use crate::opencl_writer::mem_interleave::emit_write_u32_aligned;
 use crate::opencl_writer::mem_interleave::emit_read_u64;
 use crate::opencl_writer::mem_interleave::emit_write_u64;
+use crate::opencl_writer::mem_interleave::emit_write_u64_aligned;
 use crate::opencl_writer::StackCtx;
 use crate::opencl_writer::StackType;
 use crate::opencl_writer::trap::{emit_trap, TrapCode};
@@ -216,7 +217,7 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stack
             match ty {
                 StackType::i32 => {
                     ret_str += &format!("\t{};\n\t*sp += 1;\n",
-                                            emit_write_u32("(ulong)(stack_u32+*sp)", "(ulong)(stack_u32)", &param, "warp_idx"));
+                                            emit_write_u32_aligned("(ulong)(stack_u32+*sp)", "(ulong)(stack_u32)", &param, "warp_idx"));
                 },
                 StackType::i64 => {
                     ret_str += &format!("\t{};\n\t*sp += 2;\n",
@@ -227,7 +228,7 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stack
                     ret_str += &format!("\t\tuint temp = 0;\n");
                     ret_str += &format!("\t\t___private_memcpy_nonmmu(&temp, &{}, sizeof(uint));\n", param);
                     ret_str += &format!("\t\t{};\n\t*sp += 1;\n",
-                                        emit_write_u32("(ulong)(stack_u32+*sp)", "(ulong)(stack_u32)", "temp", "warp_idx"));
+                                        emit_write_u32_aligned("(ulong)(stack_u32+*sp)", "(ulong)(stack_u32)", "temp", "warp_idx"));
                     ret_str += &format!("\t}}\n");
                 },
                 StackType::f64 => {
@@ -263,14 +264,14 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stack
         "*sfp += 1;",
         // save the current stack pointer for unwinding later
         //"stack_frames[*sfp] = *sp;",
-        format!("{};", emit_write_u32("(ulong)(stack_frames+*sfp)", "(ulong)(stack_frames)", "*sp", "warp_idx")),
+        format!("{};", emit_write_u32_aligned("(ulong)(stack_frames+*sfp)", "(ulong)(stack_frames)", "*sp", "warp_idx")),
         // save the callee return stub number
         format!("{}", &format!("{};",
-                      emit_write_u64("(ulong)(call_stack+*sfp)",
+                      emit_write_u64_aligned("(ulong)(call_stack+*sfp)",
                                      "(ulong)(call_stack)",
                                      &format!("{}", *call_ret_idx), "warp_idx"))),
         // push the entry point of the current function so we can return to it after the call
-        format!("{};", emit_write_u32("(ulong)(call_return_stack+*sfp)",
+        format!("{};", emit_write_u32_aligned("(ulong)(call_return_stack+*sfp)",
                                       "(ulong)(call_return_stack)",
                                       "(uint)*entry_point",
                                       "warp_idx")),
@@ -288,14 +289,14 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stack
                 // increment stack frame pointer
                 "*sfp += 1;",
                 // save the current stack pointer for unwinding later
-                format!("{};", emit_write_u32("(ulong)(stack_frames+*sfp)", "(ulong)(stack_frames)", "*sp", "warp_idx")),
+                format!("{};", emit_write_u32_aligned("(ulong)(stack_frames+*sfp)", "(ulong)(stack_frames)", "*sp", "warp_idx")),
                 // save the callee return stub number
                 format!("{}", &format!("{};",
-                      emit_write_u64("(ulong)(call_stack+*sfp)",
+                      emit_write_u64_aligned("(ulong)(call_stack+*sfp)",
                                      "(ulong)(call_stack)",
                                      &format!("{}", *call_ret_idx), "warp_idx"))),
                 // push the entry point of the current function so we can return to it after the call
-                format!("{};", emit_write_u32("(ulong)(call_return_stack+*sfp)",
+                format!("{};", emit_write_u32_aligned("(ulong)(call_return_stack+*sfp)",
                                               "(ulong)(call_return_stack)",
                                               "(uint)*entry_point",
                                               "warp_idx")),
@@ -334,7 +335,7 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stack
         match StackCtx::convert_wast_types(&return_type.unwrap()) {
             StackType::i32 => {
                 ret_str += &format!("\t{} = {};\n\t{};\n", result_register, 
-                                    emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx"),
+                                    emit_read_u32_aligned("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx"),
                                     "*sp -= 1");
             },
             StackType::i64 => {
@@ -344,7 +345,7 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stack
             },
             StackType::f32 => {
                 ret_str += &format!("\t{{\n");
-                ret_str += &format!("\t\tuint temp = {};\n", emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx"));
+                ret_str += &format!("\t\tuint temp = {};\n", emit_read_u32_aligned("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx"));
                 ret_str += &format!("\t\t___private_memcpy_nonmmu(&{}, &temp, sizeof(uint));\n", result_register);
                 ret_str += &format!("\t\t*sp -= 1;\n");
                 ret_str += &format!("\t}}\n");
@@ -486,8 +487,8 @@ pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut St
                     };
     
                     if sp_counter > 0 {
-                        let read_sfp = emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)(stack_frames)", "warp_idx");
-                        let write_u32 = emit_write_u32(&format!("(ulong)(stack_u32-{}+{})", parameter_offset, read_sfp), "(ulong)stack_u32", &format!("{}", reg), "warp_idx");
+                        let read_sfp = emit_read_u32_aligned("(ulong)(stack_frames+*sfp)", "(ulong)(stack_frames)", "warp_idx");
+                        let write_u32 = emit_write_u32_aligned(&format!("(ulong)(stack_u32-{}+{})", parameter_offset, read_sfp), "(ulong)stack_u32", &format!("{}", reg), "warp_idx");
                         /*
                         offset = format!("write_u32((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), warp_idx, read_idx, thread_idx, scratch_space)),
                                                     (ulong)stack_u32,
@@ -496,8 +497,8 @@ pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut St
                         */
                         offset = write_u32;
                     } else {
-                        let read_sfp = emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)(stack_frames)", "warp_idx");
-                        let write_u32 = emit_write_u32(&format!("(ulong)(stack_u32-{}+{})", parameter_offset, read_sfp), "(ulong)stack_u32", &format!("{}", reg), "warp_idx");
+                        let read_sfp = emit_read_u32_aligned("(ulong)(stack_frames+*sfp)", "(ulong)(stack_frames)", "warp_idx");
+                        let write_u32 = emit_write_u32_aligned(&format!("(ulong)(stack_u32-{}+{})", parameter_offset, read_sfp), "(ulong)stack_u32", &format!("{}", reg), "warp_idx");
                         /*
                         offset = format!("write_u32((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx, read_idx, thread_idx, scratch_space)),
                                                     (ulong)stack_u32,
@@ -518,7 +519,7 @@ pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut St
                     };
     
                     if sp_counter > 0 {
-                        let read_sfp = emit_read_u64("(ulong)(stack_frames+*sfp)", "(ulong)(stack_frames)", "warp_idx");
+                        let read_sfp = emit_read_u32_aligned("(ulong)(stack_frames+*sfp)", "(ulong)(stack_frames)", "warp_idx");
                         let write_u64 = emit_write_u64(&format!("(ulong)(stack_u32-{}+{})", parameter_offset, read_sfp), "(ulong)stack_u32", &format!("{}", reg), "warp_idx");
                         /*
                         offset = format!("write_u64((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx, read_idx, thread_idx, scratch_space)),
@@ -528,7 +529,7 @@ pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut St
                         */
                         offset = write_u64;
                     } else {
-                        let read_sfp = emit_read_u64("(ulong)(stack_frames+*sfp)", "(ulong)(stack_frames)", "warp_idx");
+                        let read_sfp = emit_read_u32_aligned("(ulong)(stack_frames+*sfp)", "(ulong)(stack_frames)", "warp_idx");
                         let write_u64 = emit_write_u64(&format!("(ulong)(stack_u32-{}+{})", parameter_offset, read_sfp), "(ulong)stack_u32", &format!("{}", reg), "warp_idx");
                         /*
                         offset = format!("write_u64((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx, read_idx, thread_idx, scratch_space)),
@@ -550,8 +551,8 @@ pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut St
                     };
     
                     if sp_counter > 0 {
-                        let read_sfp = emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)(stack_frames)", "warp_idx");
-                        let write_u32 = emit_write_u32(&format!("(ulong)(stack_u32-{}+{})", parameter_offset, read_sfp), "(ulong)stack_u32", &format!("temp"), "warp_idx");
+                        let read_sfp = emit_read_u32_aligned("(ulong)(stack_frames+*sfp)", "(ulong)(stack_frames)", "warp_idx");
+                        let write_u32 = emit_write_u32_aligned(&format!("(ulong)(stack_u32-{}+{})", parameter_offset, read_sfp), "(ulong)stack_u32", &format!("temp"), "warp_idx");
                         /*
                         offset = format!("write_u32((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), warp_idx, read_idx, thread_idx, scratch_space)),
                                                     (ulong)stack_u32,
@@ -560,8 +561,8 @@ pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut St
                         */
                         offset = write_u32;
                     } else {
-                        let read_sfp = emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)(stack_frames)", "warp_idx");
-                        let write_u32 = emit_write_u32(&format!("(ulong)(stack_u32-{}+{})", parameter_offset, read_sfp), "(ulong)stack_u32", &format!("temp"), "warp_idx");
+                        let read_sfp = emit_read_u32_aligned("(ulong)(stack_frames+*sfp)", "(ulong)(stack_frames)", "warp_idx");
+                        let write_u32 = emit_write_u32_aligned(&format!("(ulong)(stack_u32-{}+{})", parameter_offset, read_sfp), "(ulong)stack_u32", &format!("temp"), "warp_idx");
                         /*
                         offset = format!("write_u32((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx, read_idx, thread_idx, scratch_space)),
                                                     (ulong)stack_u32,
@@ -588,7 +589,7 @@ pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut St
                     };
     
                     if sp_counter > 0 {
-                        let read_sfp = emit_read_u64("(ulong)(stack_frames+*sfp)", "(ulong)(stack_frames)", "warp_idx");
+                        let read_sfp = emit_read_u32_aligned("(ulong)(stack_frames+*sfp)", "(ulong)(stack_frames)", "warp_idx");
                         let write_u64 = emit_write_u64(&format!("(ulong)(stack_u32-{}+{})", parameter_offset, read_sfp), "(ulong)stack_u32", &format!("temp"), "warp_idx");
                         /*
                         offset = format!("write_u64((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx, read_idx, thread_idx, scratch_space)),
@@ -598,7 +599,7 @@ pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut St
                         */
                         offset = write_u64;
                     } else {
-                        let read_sfp = emit_read_u64("(ulong)(stack_frames+*sfp)", "(ulong)(stack_frames)", "warp_idx");
+                        let read_sfp = emit_read_u32_aligned("(ulong)(stack_frames+*sfp)", "(ulong)(stack_frames)", "warp_idx");
                         let write_u64 = emit_write_u64(&format!("(ulong)(stack_u32-{}+{})", parameter_offset, read_sfp), "(ulong)stack_u32", &format!("temp"), "warp_idx");
                         /*
                         offset = format!("write_u64((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx, read_idx, thread_idx, scratch_space)),
@@ -625,11 +626,11 @@ pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut St
     // If we aren't the start function we need to properly unwind
     if !is_start_fn && !is_fastcall {
         // load the entry point to return to in the control function
-        final_str += &format!("\t*entry_point = {};\n", emit_read_u32("(ulong)(call_return_stack+*sfp)", "(ulong)(call_return_stack)", "warp_idx"));
+        final_str += &format!("\t*entry_point = {};\n", emit_read_u32_aligned("(ulong)(call_return_stack+*sfp)", "(ulong)(call_return_stack)", "warp_idx"));
 
         final_str += &format!("\t{}\n",
                                 // reset the stack pointer to point at the end of the previous frame
-                                &format!("*sp = {};", emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)(stack_frames)", "warp_idx")));
+                                &format!("*sp = {};", emit_read_u32_aligned("(ulong)(stack_frames+*sfp)", "(ulong)(stack_frames)", "warp_idx")));
 
         // set the is_calling parameter to 0, to indicate that we are unwinding the call stack
         final_str += &format!("\t{}\n", "*is_calling = 0;");
@@ -773,7 +774,7 @@ pub fn emit_call_indirect(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut
         match ty {
             StackType::i32 => {
                 result += &format!("\t\t{};\n\t\t*sp += 1;\n",
-                                        emit_write_u32("(ulong)(stack_u32+*sp)", "(ulong)(stack_u32)", &param, "warp_idx"));
+                                        emit_write_u32_aligned("(ulong)(stack_u32+*sp)", "(ulong)(stack_u32)", &param, "warp_idx"));
             },
             StackType::i64 => {
                 result += &format!("\t\t{};\n\t\t*sp += 2;\n",
@@ -784,7 +785,7 @@ pub fn emit_call_indirect(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut
                 result += &format!("\t\tuint temp = 0;\n");
                 result += &format!("\t\t___private_memcpy_nonmmu(&temp, &{}, sizeof(uint));\n", param);
                 result += &format!("\t\t{};\n\t\t*sp += 1;\n",
-                                    emit_write_u32("(ulong)(stack_u32+*sp)", "(ulong)(stack_u32)", "temp", "warp_idx"));
+                                    emit_write_u32_aligned("(ulong)(stack_u32+*sp)", "(ulong)(stack_u32)", "temp", "warp_idx"));
                 result += &format!("\t}}\n");
             },
             StackType::f64 => {
@@ -835,7 +836,7 @@ pub fn emit_call_indirect(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut
         match StackCtx::convert_wast_types(&result_types[0]) {
             StackType::i32 => {
                 result += &format!("\t{} = {};\n\t{};\n", result_register, 
-                                    emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx"),
+                                    emit_read_u32_aligned("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx"),
                                     "*sp -= 1");
             },
             StackType::i64 => {
@@ -845,7 +846,7 @@ pub fn emit_call_indirect(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut
             },
             StackType::f32 => {
                 result += &format!("\t{{\n");
-                result += &format!("\t\tuint temp = {};\n", emit_read_u32("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx"));
+                result += &format!("\t\tuint temp = {};\n", emit_read_u32_aligned("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx"));
                 result += &format!("\t\t___private_memcpy_nonmmu(&{}, &temp, sizeof(uint));\n", result_register);
                 result += &format!("\t\t*sp -= 1;\n");
                 result += &format!("\t}}\n");

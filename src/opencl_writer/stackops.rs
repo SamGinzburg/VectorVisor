@@ -1,6 +1,6 @@
 use crate::opencl_writer;
 use crate::opencl_writer::ValType;
-use crate::opencl_writer::mem_interleave::emit_write_u32;
+use crate::opencl_writer::mem_interleave::emit_write_u32_aligned;
 use crate::opencl_writer::mem_interleave::emit_write_u64;
 use crate::opencl_writer::StackCtx;
 use crate::opencl_writer::StackType;
@@ -128,7 +128,7 @@ pub fn emit_local(_writer: &opencl_writer::OpenCLCWriter, local: &wast::Local, _
     match local.ty {
         wast::ValType::I32 => {
             String::from(format!("\t{};\n\t{}\n",
-                            &emit_write_u32("(ulong)(stack_u32+*sp)",
+                            &emit_write_u32_aligned("(ulong)(stack_u32+*sp)",
                                             "(ulong)(stack_u32)",
                                             "(uint)0",
                                             "warp_idx"),
@@ -144,7 +144,7 @@ pub fn emit_local(_writer: &opencl_writer::OpenCLCWriter, local: &wast::Local, _
         },
         wast::ValType::F32 => {
             String::from(format!("\t{};\n\t{}\n",
-                            &emit_write_u32("(ulong)(stack_u32+*sp)",
+                            &emit_write_u32_aligned("(ulong)(stack_u32+*sp)",
                                             "(ulong)(stack_u32)",
                                             "(uint)0",
                                             "warp_idx"),

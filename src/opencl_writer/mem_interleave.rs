@@ -17,10 +17,17 @@ use crate::opencl_writer;
  *  [0x1, 0x1, 0x1, 0x1], with each of the writes sharing an offset of 0
  *  [T0 (byte 0), T1 (byte 0), T2 (byte 0), T3 (byte 0), T0 (byte 1), ...]
  * 
+ * For a X byte interleave, there are X adjacent bytes per 'cell' of memory. For example, 
+ * with 4 threads with an interleave of 8 that you write 0x1 to an address of 0, the corresponding memory would look like:
+ * 
+ *  [0x1, 0x1, 0x1, 0x1], with each of the writes sharing an offset of 0
+ *  [T0 (byte 0), T0 (byte 1), T0 (byte 2), T0 (byte 3), T0 (byte 4), T0 (byte 5), T0 (byte 6), T0 (byte 7),
+ *   ...
+ *   T3 (byte 0), T3 (byte 1), T3 (byte 2), T3 (byte 3), T3 (byte 4), T3 (byte 5), T3 (byte 6), T3 (byte 7)]
  * 
  *  The offset calc is:
- *  (offset = address - mem_start_addr)
- *  Virtual Address = (offset * NUM_THREADS) + warp_idx + mem_start_addr
+ *  offset = address - mem_start_addr
+ *  Virtual Address = ((offset/interleave) * (NUM_THREADS/interleave)) + (warp_idx*interleave) + mem_start_addr
  *  
  *  ex: if you are in thread 0, and you write to 0, and then 1
  *  the physical addresses are first 0, and then address+NUM_THREADS, with each
@@ -28,7 +35,7 @@ use crate::opencl_writer;
  * 
  *  We expect NUM_THREADS to be defined at compile time with the macro NUM_THREADS
  * 
- *  We also have to split multi-byte reads into multiple calls, in little-endian format
+ *  We also have to split multi-cell reads into multiple calls, in little-endian format
  * 
  */
 
@@ -37,52 +44,9 @@ fn emit_fast_read_u8(addr: &str , mem_start: &str, warp_id: &str) -> String {
     format!("fast_read_u8({}, {}, {})", addr, mem_start, warp_id)
 }
 
-pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interleave: u32, local_work_group: usize, mexec: usize, _debug: bool) -> String {
+fn emit_write_u16_body(interleave: u32, local_work_group: usize, mexec: usize, emit_aligned: bool) -> String {
     let mut result = String::from("");
 
-    // fast_write_u8 is used for writes greater than 1 byte to reduce computation
-    result += &format!("\n{}\n",
-                        "inline void fast_write_u8(ulong addr, ulong mem_start, uchar value, uint warp_id) {");
-
-    match interleave {
-        0 | 1 | 8 => {
-            result += &format!("\t{}",
-                                "*((global uchar*)addr) = value;");
-        },
-        _ => panic!("Unsupported read/write interleave"),
-    }
-    result += &format!("\n{}\n",
-                        "}");
-
-
-    result += &format!("\n{}\n",
-                        "inline void write_u8(ulong addr, ulong mem_start, uchar value, uint warp_id, uint read_idx) {");
-
-    match interleave {
-        0 => {
-            result += &format!("\t{}\n",
-                                "*((global uchar*)addr) = value;");
-        },
-        1 => {
-            result += &format!("\t{}\n",
-                                "*((global uchar*)((addr-mem_start)*(NUM_THREADS) + warp_id + mem_start)) = value;")
-        },
-        8 => {
-            // determine which cell to read
-            result += &format!("\t{}\n",
-                                "global uchar *write_addr = ((global uchar*)(((addr-mem_start)/8)*(NUM_THREADS*8) + (warp_id*8) + mem_start));");
-            result += &format!("\t{}\n",
-                               "ulong cell_offset = (addr-mem_start) % 8;");
-            result += &format!("\t{}\n",
-                               "*(global uchar*)(write_addr + cell_offset) = value;")
-        },
-        _ => panic!("Unsupported read/write interleave"),
-    }
-    result += &format!("\n{}\n",
-                        "}");
-
-    result += &format!("\n{}\n",
-                        "inline void write_u16(ulong addr, ulong mem_start, ushort value, uint warp_id, uint read_idx, uint thread_idx, local ulong2 *scratch_space) {");
     match interleave {
         0 => {
             // write the lower byte first
@@ -121,32 +85,43 @@ pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interle
             };
         },
         8 => {
-            result += &format!("\t{}\n",
-                                "global uchar *write_addr = ((global uchar*)(((addr-mem_start)/8)*(NUM_THREADS*8) + (warp_id*8) + mem_start));");
-            result += &format!("\t{}\n",
-                               "ulong cell_offset = (addr-mem_start) % 8;");
-            result += &format!("\t{}\n",
-                               "scratch_space[thread_idx].lo = (ulong)*((global ulong*)write_addr);");
-            result += &format!("\t{}\n",
-                               "scratch_space[thread_idx].hi = (ulong)*((global ulong*)write_addr+(NUM_THREADS));");
-            result += &format!("\t{}\n",
-                               "local uchar *combined = &scratch_space[thread_idx];");
-            result += &format!("\t{}\n",
-                               "combined[cell_offset] = value & 0xFF;");
-            result += &format!("\t{}\n",
-                               "combined[cell_offset+1] = (value >> 8) & 0xFF;");
-            result += &format!("\t{}\n",
-                               "*((global ulong*)write_addr) = scratch_space[thread_idx].lo;");
-            result += &format!("\t{}\n",
-                               "*((global ulong*)write_addr+(NUM_THREADS)) = scratch_space[thread_idx].hi;");
+            if emit_aligned {
+                result += &format!("\t{}\n",
+                            "global uchar *write_addr = ((global uchar*)(((addr-mem_start)/8)*(NUM_THREADS*8) + (warp_id*8) + mem_start));");
+                result += &format!("\t{}\n",
+                            "ulong cell_offset = (addr-mem_start) % 8;");
+                result += &format!("\t{}\n",
+                            "*((global ushort*)((global uchar*)write_addr+cell_offset)) = value;");
+            } else {
+                result += &format!("\t{}\n",
+                            "global uchar *write_addr = ((global uchar*)(((addr-mem_start)/8)*(NUM_THREADS*8) + (warp_id*8) + mem_start));");
+                result += &format!("\t{}\n",
+                            "ulong cell_offset = (addr-mem_start) % 8;");
+                result += &format!("\t{}\n",
+                            "scratch_space[thread_idx].lo = (ulong)*((global ulong*)write_addr);");
+                result += &format!("\t{}\n",
+                            "scratch_space[thread_idx].hi = (ulong)*((global ulong*)write_addr+(NUM_THREADS));");
+                result += &format!("\t{}\n",
+                            "local uchar *combined = &scratch_space[thread_idx];");
+                result += &format!("\t{}\n",
+                            "combined[cell_offset] = value & 0xFF;");
+                result += &format!("\t{}\n",
+                            "combined[cell_offset+1] = (value >> 8) & 0xFF;");
+                result += &format!("\t{}\n",
+                            "*((global ulong*)write_addr) = scratch_space[thread_idx].lo;");
+                result += &format!("\t{}\n",
+                            "*((global ulong*)write_addr+(NUM_THREADS)) = scratch_space[thread_idx].hi;");
+            }
         },
         _ => panic!("Unsupported read/write interleave"),
     }
-    result += &format!("\n{}\n",
-                        "}");
 
-    result += &format!("\n{}\n",
-                        "inline void write_u32(ulong addr, ulong mem_start, uint value, uint warp_id, uint read_idx, uint thread_idx, local ulong2 *scratch_space) {");
+    result
+}
+
+fn emit_write_u32_body(interleave: u32, local_work_group: usize, mexec: usize, emit_aligned: bool) -> String {
+    let mut result = String::from("");
+
     match interleave {
         0 => {
             result += &format!("\t{}\n",
@@ -191,36 +166,47 @@ pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interle
         },
         8 => {
             // determine which cell to read
-            result += &format!("\t{}\n",
+            if emit_aligned {
+                result += &format!("\t{}\n",
+                            "global uchar *write_addr = ((global uchar*)(((addr-mem_start)/8)*(NUM_THREADS*8) + (warp_id*8) + mem_start));");
+                result += &format!("\t{}\n",
+                            "ulong cell_offset = (addr-mem_start) % 8;");
+                result += &format!("\t{}\n",
+                            "*((global uint*)((global uchar*)write_addr+cell_offset)) = value;");
+            } else {
+                result += &format!("\t{}\n",
                                 "global uchar *write_addr = ((global uchar*)(((addr-mem_start)/8)*(NUM_THREADS*8) + (warp_id*8) + mem_start));");
-            result += &format!("\t{}\n",
-                               "ulong cell_offset = (addr-mem_start) % 8;");
-            result += &format!("\t{}\n",
-                               "scratch_space[thread_idx].lo = (ulong)*((global ulong*)write_addr);");
-            result += &format!("\t{}\n",
-                               "scratch_space[thread_idx].hi = (ulong)*((global ulong*)write_addr+(NUM_THREADS));");
-            result += &format!("\t{}\n",
-                               "local uchar *combined = &scratch_space[thread_idx];");
-            result += &format!("\t{}\n",
-                               "combined[cell_offset] = value & 0xFF;");
-            result += &format!("\t{}\n",
-                               "combined[cell_offset+1] = (value >> 8) & 0xFF;");
-            result += &format!("\t{}\n",
-                               "combined[cell_offset+2] = (value >> 16) & 0xFF;");
-            result += &format!("\t{}\n",
-                               "combined[cell_offset+3] = (value >> 24) & 0xFF;");
-            result += &format!("\t{}\n",
-                               "*((global ulong*)write_addr) = scratch_space[thread_idx].lo;");
-            result += &format!("\t{}\n",
-                               "*((global ulong*)write_addr+(NUM_THREADS)) = scratch_space[thread_idx].hi;");
+                result += &format!("\t{}\n",
+                                "ulong cell_offset = (addr-mem_start) % 8;");
+                result += &format!("\t{}\n",
+                                "scratch_space[thread_idx].lo = (ulong)*((global ulong*)write_addr);");
+                result += &format!("\t{}\n",
+                                "scratch_space[thread_idx].hi = (ulong)*((global ulong*)write_addr+(NUM_THREADS));");
+                result += &format!("\t{}\n",
+                                "local uchar *combined = &scratch_space[thread_idx];");
+                result += &format!("\t{}\n",
+                                "combined[cell_offset] = value & 0xFF;");
+                result += &format!("\t{}\n",
+                                "combined[cell_offset+1] = (value >> 8) & 0xFF;");
+                result += &format!("\t{}\n",
+                                "combined[cell_offset+2] = (value >> 16) & 0xFF;");
+                result += &format!("\t{}\n",
+                                "combined[cell_offset+3] = (value >> 24) & 0xFF;");
+                result += &format!("\t{}\n",
+                                "*((global ulong*)write_addr) = scratch_space[thread_idx].lo;");
+                result += &format!("\t{}\n",
+                                "*((global ulong*)write_addr+(NUM_THREADS)) = scratch_space[thread_idx].hi;");
+            }
         },
         _ => panic!("Unsupported read/write interleave"),
     }
-    result += &format!("\n{}\n",
-                        "}");
 
-    result += &format!("\n{}\n",
-                        "inline void write_u64(ulong addr, ulong mem_start, ulong value, uint warp_id, uint read_idx, uint thread_idx, local ulong2 *scratch_space) {");
+    result
+}
+
+fn emit_write_u64_body(interleave: u32, local_work_group: usize, mexec: usize, emit_aligned: bool) -> String {
+    let mut result = String::from("");
+
     match interleave {
         0 => {
             result += &format!("\t{}\n",
@@ -288,83 +274,55 @@ pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interle
         },
         8 => {
             // determine which cell to read
-            result += &format!("\t{}\n",
+            if emit_aligned {
+                result += &format!("\t{}\n",
+                            "global uchar *write_addr = ((global uchar*)(((addr-mem_start)/8)*(NUM_THREADS*8) + (warp_id*8) + mem_start));");
+                result += &format!("\t{}\n",
+                            "ulong cell_offset = (addr-mem_start) % 8;");
+                result += &format!("\t{}\n",
+                            "*((global ulong*)((global uchar*)write_addr+cell_offset)) = value;");
+            } else {
+                result += &format!("\t{}\n",
                                 "global uchar *write_addr = ((global uchar*)(((addr-mem_start)/8)*(NUM_THREADS*8) + (warp_id*8) + mem_start));");
-            result += &format!("\t{}\n",
-                               "ulong cell_offset = (addr-mem_start) % 8;");
-            result += &format!("\t{}\n",
-                               "scratch_space[thread_idx].lo = (ulong)*((global ulong*)write_addr);");
-            result += &format!("\t{}\n",
-                               "scratch_space[thread_idx].hi = (ulong)*((global ulong*)write_addr+(NUM_THREADS));");
-            result += &format!("\t{}\n",
-                               "local uchar *combined = &scratch_space[thread_idx];");
-            result += &format!("\t{}\n",
-                               "combined[cell_offset] = value & 0xFF;");
-            result += &format!("\t{}\n",
-                               "combined[cell_offset+1] = (value >> 8) & 0xFF;");
-            result += &format!("\t{}\n",
-                               "combined[cell_offset+2] = (value >> 16) & 0xFF;");
-            result += &format!("\t{}\n",
-                               "combined[cell_offset+3] = (value >> 24) & 0xFF;");
-            result += &format!("\t{}\n",
-                               "combined[cell_offset+4] = (value >> 32) & 0xFF;");
-            result += &format!("\t{}\n",
-                               "combined[cell_offset+5] = (value >> 40) & 0xFF;");
-            result += &format!("\t{}\n",
-                               "combined[cell_offset+6] = (value >> 48) & 0xFF;");
-            result += &format!("\t{}\n",
-                               "combined[cell_offset+7] = (value >> 56) & 0xFF;");
-            result += &format!("\t{}\n",
-                               "*((global ulong*)write_addr) = scratch_space[thread_idx].lo;");
-            result += &format!("\t{}\n",
-                               "*((global ulong*)write_addr+(NUM_THREADS)) = scratch_space[thread_idx].hi;");
+                result += &format!("\t{}\n",
+                                "ulong cell_offset = (addr-mem_start) % 8;");
+                result += &format!("\t{}\n",
+                                "scratch_space[thread_idx].lo = (ulong)*((global ulong*)write_addr);");
+                result += &format!("\t{}\n",
+                                "scratch_space[thread_idx].hi = (ulong)*((global ulong*)write_addr+(NUM_THREADS));");
+                result += &format!("\t{}\n",
+                                "local uchar *combined = &scratch_space[thread_idx];");
+                result += &format!("\t{}\n",
+                                "combined[cell_offset] = value & 0xFF;");
+                result += &format!("\t{}\n",
+                                "combined[cell_offset+1] = (value >> 8) & 0xFF;");
+                result += &format!("\t{}\n",
+                                "combined[cell_offset+2] = (value >> 16) & 0xFF;");
+                result += &format!("\t{}\n",
+                                "combined[cell_offset+3] = (value >> 24) & 0xFF;");
+                result += &format!("\t{}\n",
+                                "combined[cell_offset+4] = (value >> 32) & 0xFF;");
+                result += &format!("\t{}\n",
+                                "combined[cell_offset+5] = (value >> 40) & 0xFF;");
+                result += &format!("\t{}\n",
+                                "combined[cell_offset+6] = (value >> 48) & 0xFF;");
+                result += &format!("\t{}\n",
+                                "combined[cell_offset+7] = (value >> 56) & 0xFF;");
+                result += &format!("\t{}\n",
+                                "*((global ulong*)write_addr) = scratch_space[thread_idx].lo;");
+                result += &format!("\t{}\n",
+                                "*((global ulong*)write_addr+(NUM_THREADS)) = scratch_space[thread_idx].hi;");
+            }
         },
 
         _ => panic!("Unsupported read/write interleave"),
     }
-    result += &format!("\n{}\n",
-                        "}");
 
-    // the read functions
-    
-    result += &format!("\n{}\n",
-                        "inline uchar fast_read_u8(ulong addr, ulong mem_start, uint warp_id) {");
-    match interleave {
-        0 | 1 | 8 => {
-            result += &format!("\t{}",
-                                "return *((global uchar*)addr);");
-        },
-        _ => panic!("Unsupported read/write interleave"),
-    }
-    result += &format!("\n{}\n",
-                        "}");
+    result
+}
 
-    result += &format!("\n{}\n",
-                        "inline uchar read_u8(ulong addr, ulong mem_start, uint warp_id, uint read_idx) {");
-    match interleave {
-        0 => {
-            result += &format!("\t{}",
-                                "return *((global uchar*)addr);");
-        },
-        1 => {
-            result += &format!("\t{}",
-                                "return *((global uchar*)((addr-mem_start)*NUM_THREADS + warp_id + mem_start));");
-        },
-        8 => {
-            result += &format!("\t{}\n",
-                                "global uchar *read_addr = ((global uchar*)(((addr-mem_start)/8)*(NUM_THREADS*8) + (warp_id*8) + mem_start));");
-            result += &format!("\t{}\n",
-                               "ulong cell_offset = (addr-mem_start) % 8;");
-            result += &format!("\t{}\n",
-                               "return *(read_addr + cell_offset);")
-        },
-        _ => panic!("Unsupported read/write interleave"),
-    }
-    result += &format!("\n{}\n",
-                        "}");
-
-    result += &format!("\n{}\n",
-                        "inline ushort read_u16(ulong addr, ulong mem_start, uint warp_id, uint read_idx, uint thread_idx, local ulong2 *scratch_space) {");
+fn emit_read_u16_body(interleave: u32, local_work_group: usize, mexec: usize, emit_aligned: bool) -> String {
+    let mut result = String::from("");
     match interleave {
         0 => {
             result += &format!("\t{}\n",
@@ -431,34 +389,44 @@ pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interle
         },
         8 => {
             // determine which cell to read
-            result += &format!("\t{}\n",
+            if emit_aligned {
+                result += &format!("\t{}\n",
                                 "global uchar *read_addr = ((global uchar*)(((addr-mem_start)/8)*(NUM_THREADS*8) + (warp_id*8) + mem_start));");
-            result += &format!("\t{}\n",
-                               "ulong cell_offset = (addr-mem_start) % 8;");
-            result += &format!("\t{}\n",
-                               "ushort tmp_vec = 0;");
-            result += &format!("\t{}\n",
-                               "uchar *tmp = &tmp_vec;");
-            result += &format!("\t{}\n",
-                               "scratch_space[thread_idx].lo = (ulong)*((global ulong*)read_addr);");
-            result += &format!("\t{}\n",
-                               "scratch_space[thread_idx].hi = (ulong)*((global ulong*)read_addr+(NUM_THREADS));");
-            result += &format!("\t{}\n",
-                               "local uchar *combined = &scratch_space[thread_idx];");
-            result += &format!("\t{}\n",
-                               "tmp[0] = combined[cell_offset];");
-            result += &format!("\t{}\n",
-                               "tmp[1] = combined[cell_offset+1];");
-            result += &format!("\t{}\n",
-                               "return tmp_vec;");
+                result += &format!("\t{}\n",
+                                "ulong cell_offset = (addr-mem_start) % 8;");
+                result += &format!("\t{}\n",
+                                "return *((global ushort*)((global uchar*)read_addr+cell_offset));");
+            } else {
+                result += &format!("\t{}\n",
+                                "global uchar *read_addr = ((global uchar*)(((addr-mem_start)/8)*(NUM_THREADS*8) + (warp_id*8) + mem_start));");
+                result += &format!("\t{}\n",
+                                "ulong cell_offset = (addr-mem_start) % 8;");
+                result += &format!("\t{}\n",
+                                "ushort tmp_vec = 0;");
+                result += &format!("\t{}\n",
+                                "uchar *tmp = &tmp_vec;");
+                result += &format!("\t{}\n",
+                                "scratch_space[thread_idx].lo = (ulong)*((global ulong*)read_addr);");
+                result += &format!("\t{}\n",
+                                "scratch_space[thread_idx].hi = (ulong)*((global ulong*)read_addr+(NUM_THREADS));");
+                result += &format!("\t{}\n",
+                                "local uchar *combined = &scratch_space[thread_idx];");
+                result += &format!("\t{}\n",
+                                "tmp[0] = combined[cell_offset];");
+                result += &format!("\t{}\n",
+                                "tmp[1] = combined[cell_offset+1];");
+                result += &format!("\t{}\n",
+                                "return tmp_vec;");
+            }
         },
         _ => panic!("Unsupported read/write interleave"),
     }
-    result += &format!("\n{}",
-                        "}");
 
-    result += &format!("\n{}\n",
-                        "inline uint read_u32(ulong addr, ulong mem_start, uint warp_id, uint read_idx, uint thread_idx, local ulong2 *scratch_space) {");
+    result
+}
+
+fn emit_read_u32_body(interleave: u32, local_work_group: usize, mexec: usize, emit_aligned: bool) -> String {
+    let mut result = String::from("");
     match interleave {
         0 => {
             result += &format!("\t{}\n",
@@ -541,38 +509,49 @@ pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interle
         },
         8 => {
             // determine which cell to read
-            result += &format!("\t{}\n",
+            if emit_aligned {
+                result += &format!("\t{}\n",
                                 "global uchar *read_addr = ((global uchar*)(((addr-mem_start)/8)*(NUM_THREADS*8) + (warp_id*8) + mem_start));");
-            result += &format!("\t{}\n",
-                               "ulong cell_offset = (addr-mem_start) % 8;");
-            result += &format!("\t{}\n",
-                               "uint tmp_vec = 0;");
-            result += &format!("\t{}\n",
-                               "uchar *tmp = &tmp_vec;");
-            result += &format!("\t{}\n",
-                               "scratch_space[thread_idx].lo = (ulong)*((global ulong*)read_addr);");
-            result += &format!("\t{}\n",
-                               "scratch_space[thread_idx].hi = (ulong)*((global ulong*)read_addr+(NUM_THREADS));");
-            result += &format!("\t{}\n",
-                               "local uchar *combined = &scratch_space[thread_idx];");
-            result += &format!("\t\t{}\n",
-                               "tmp[0] = combined[cell_offset];");
-            result += &format!("\t{}\n",
-                               "tmp[1] = combined[cell_offset+1];");
-            result += &format!("\t{}\n",
-                               "tmp[2] = combined[cell_offset+2];");
-            result += &format!("\t{}\n",
-                               "tmp[3] = combined[cell_offset+3];");
-            result += &format!("\t{}\n",
-                               "return tmp_vec;");
+                result += &format!("\t{}\n",
+                                "ulong cell_offset = (addr-mem_start) % 8;");
+                result += &format!("\t{}\n",
+                                "return *((global uint*)((global uchar*)read_addr+cell_offset));");
+            } else {
+                result += &format!("\t{}\n",
+                                "global uchar *read_addr = ((global uchar*)(((addr-mem_start)/8)*(NUM_THREADS*8) + (warp_id*8) + mem_start));");
+                result += &format!("\t{}\n",
+                                "ulong cell_offset = (addr-mem_start) % 8;");
+                result += &format!("\t{}\n",
+                                "uint tmp_vec = 0;");
+                result += &format!("\t{}\n",
+                                "uchar *tmp = &tmp_vec;");
+                result += &format!("\t{}\n",
+                                "scratch_space[thread_idx].lo = (ulong)*((global ulong*)read_addr);");
+                result += &format!("\t{}\n",
+                                "scratch_space[thread_idx].hi = (ulong)*((global ulong*)read_addr+(NUM_THREADS));");
+                result += &format!("\t{}\n",
+                                "local uchar *combined = &scratch_space[thread_idx];");
+                result += &format!("\t{}\n",
+                                "tmp[0] = combined[cell_offset];");
+                result += &format!("\t{}\n",
+                                "tmp[1] = combined[cell_offset+1];");
+                result += &format!("\t{}\n",
+                                "tmp[2] = combined[cell_offset+2];");
+                result += &format!("\t{}\n",
+                                "tmp[3] = combined[cell_offset+3];");
+                result += &format!("\t{}\n",
+                                "return tmp_vec;");
+            }
         },
         _ => panic!("Unsupported read/write interleave"),
     }
-    result += &format!("\n{}",
-                        "}");
 
-    result += &format!("\n{}\n",
-                        "inline ulong read_u64(ulong addr, ulong mem_start, uint warp_id, uint read_idx, uint thread_idx, local ulong2 *scratch_space) {");
+    result
+}
+
+fn emit_read_u64_body(interleave: u32, local_work_group: usize, mexec: usize, emit_aligned: bool) -> String {
+    let mut result = String::from("");
+
     match interleave {
         0 => {
             result += &format!("\t{}\n",
@@ -694,41 +673,206 @@ pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interle
         },
         8 => {
             // determine which cell to read
+            if emit_aligned {
+                result += &format!("\t{}\n",
+                                "global uchar *read_addr = ((global uchar*)(((addr-mem_start)/8)*(NUM_THREADS*8) + (warp_id*8) + mem_start));");
+                result += &format!("\t{}\n",
+                                "ulong cell_offset = (addr-mem_start) % 8;");
+                result += &format!("\t{}\n",
+                                "return *((global ulong*)((global uchar*)read_addr+cell_offset));");
+            } else {
+                result += &format!("\t{}\n",
+                                "global uchar *read_addr = ((global uchar*)(((addr-mem_start)/8)*(NUM_THREADS*8) + (warp_id*8) + mem_start));");
+                result += &format!("\t{}\n",
+                                "ulong cell_offset = (addr-mem_start) % 8;");
+                result += &format!("\t{}\n",
+                                "ulong tmp_vec = 0;");
+                result += &format!("\t{}\n",
+                                "uchar *tmp = &tmp_vec;");
+                result += &format!("\t{}\n",
+                                "scratch_space[thread_idx].lo = (ulong)*((global ulong*)read_addr);");
+                result += &format!("\t{}\n",
+                                "scratch_space[thread_idx].hi = (ulong)*((global ulong*)read_addr+(NUM_THREADS));");
+                result += &format!("\t{}\n",
+                                "local uchar *combined = &scratch_space[thread_idx];");
+                result += &format!("\t{}\n",
+                                "tmp[0] = combined[cell_offset];");
+                result += &format!("\t{}\n",
+                                "tmp[1] = combined[cell_offset+1];");
+                result += &format!("\t{}\n",
+                                "tmp[2] = combined[cell_offset+2];");
+                result += &format!("\t{}\n",
+                                "tmp[3] = combined[cell_offset+3];");
+                result += &format!("\t{}\n",
+                                "tmp[4] = combined[cell_offset+4];");
+                result += &format!("\t{}\n",
+                                "tmp[5] = combined[cell_offset+5];");
+                result += &format!("\t{}\n",
+                                "tmp[6] = combined[cell_offset+6];");
+                result += &format!("\t{}\n",
+                                "tmp[7] = combined[cell_offset+7];");
+                result += &format!("\t{}\n",
+                                "return tmp_vec;");
+            }
+        },
+        _ => panic!("Unsupported read/write interleave"),
+    }
+
+    result
+}
+
+
+pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interleave: u32, local_work_group: usize, mexec: usize, _debug: bool) -> String {
+    let mut result = String::from("");
+
+    // fast_write_u8 is used for writes greater than 1 byte to reduce computation
+    result += &format!("\n{}\n",
+                        "inline void fast_write_u8(ulong addr, ulong mem_start, uchar value, uint warp_id) {");
+
+    match interleave {
+        0 | 1 | 8 => {
+            result += &format!("\t{}",
+                                "*((global uchar*)addr) = value;");
+        },
+        _ => panic!("Unsupported read/write interleave"),
+    }
+    result += &format!("\n{}\n",
+                        "}");
+
+
+    result += &format!("\n{}\n",
+                        "inline void write_u8(ulong addr, ulong mem_start, uchar value, uint warp_id, uint read_idx) {");
+
+    match interleave {
+        0 => {
+            result += &format!("\t{}\n",
+                                "*((global uchar*)addr) = value;");
+        },
+        1 => {
+            result += &format!("\t{}\n",
+                                "*((global uchar*)((addr-mem_start)*(NUM_THREADS) + warp_id + mem_start)) = value;")
+        },
+        8 => {
+            // determine which cell to read
+            result += &format!("\t{}\n",
+                                "global uchar *write_addr = ((global uchar*)(((addr-mem_start)/8)*(NUM_THREADS*8) + (warp_id*8) + mem_start));");
+            result += &format!("\t{}\n",
+                               "ulong cell_offset = (addr-mem_start) % 8;");
+            result += &format!("\t{}\n",
+                               "*(global uchar*)(write_addr + cell_offset) = value;")
+        },
+        _ => panic!("Unsupported read/write interleave"),
+    }
+    result += &format!("\n{}\n",
+                        "}");
+
+    result += &format!("\n{}\n",
+                        "inline void write_u16(ulong addr, ulong mem_start, ushort value, uint warp_id, uint read_idx, uint thread_idx, local ulong2 *scratch_space) {");
+    result += &format!("{}", emit_write_u16_body(interleave, local_work_group, mexec, false));
+    result += &format!("\n{}\n",
+                        "}");
+
+    result += &format!("\n{}\n",
+                        "inline void write_u16_aligned(ulong addr, ulong mem_start, ushort value, uint warp_id, uint read_idx, uint thread_idx, local ulong2 *scratch_space) {");
+    result += &format!("{}", emit_write_u16_body(interleave, local_work_group, mexec, true));
+    result += &format!("\n{}\n",
+                        "}");
+
+    result += &format!("\n{}\n",
+                        "inline void write_u32(ulong addr, ulong mem_start, uint value, uint warp_id, uint read_idx, uint thread_idx, local ulong2 *scratch_space) {");
+    result += &format!("{}", emit_write_u32_body(interleave, local_work_group, mexec, false));
+    result += &format!("\n{}\n",
+                        "}");
+
+    result += &format!("\n{}\n",
+                        "inline void write_u32_aligned(ulong addr, ulong mem_start, uint value, uint warp_id, uint read_idx, uint thread_idx, local ulong2 *scratch_space) {");
+    result += &format!("{}", emit_write_u32_body(interleave, local_work_group, mexec, true));
+    result += &format!("\n{}\n",
+                        "}");
+
+    result += &format!("\n{}\n",
+                        "inline void write_u64(ulong addr, ulong mem_start, ulong value, uint warp_id, uint read_idx, uint thread_idx, local ulong2 *scratch_space) {");
+    result += &format!("{}", emit_write_u64_body(interleave, local_work_group, mexec, false));
+    result += &format!("\n{}\n",
+                        "}");
+
+    result += &format!("\n{}\n",
+                        "inline void write_u64_aligned(ulong addr, ulong mem_start, ulong value, uint warp_id, uint read_idx, uint thread_idx, local ulong2 *scratch_space) {");
+    result += &format!("{}", emit_write_u64_body(interleave, local_work_group, mexec, true));
+    result += &format!("\n{}\n",
+                        "}");
+
+    // the read functions
+    
+    result += &format!("\n{}\n",
+                        "inline uchar fast_read_u8(ulong addr, ulong mem_start, uint warp_id) {");
+    match interleave {
+        0 | 1 | 8 => {
+            result += &format!("\t{}",
+                                "return *((global uchar*)addr);");
+        },
+        _ => panic!("Unsupported read/write interleave"),
+    }
+    result += &format!("\n{}\n",
+                        "}");
+
+    result += &format!("\n{}\n",
+                        "inline uchar read_u8(ulong addr, ulong mem_start, uint warp_id, uint read_idx) {");
+    match interleave {
+        0 => {
+            result += &format!("\t{}",
+                                "return *((global uchar*)addr);");
+        },
+        1 => {
+            result += &format!("\t{}",
+                                "return *((global uchar*)((addr-mem_start)*NUM_THREADS + warp_id + mem_start));");
+        },
+        8 => {
             result += &format!("\t{}\n",
                                 "global uchar *read_addr = ((global uchar*)(((addr-mem_start)/8)*(NUM_THREADS*8) + (warp_id*8) + mem_start));");
             result += &format!("\t{}\n",
                                "ulong cell_offset = (addr-mem_start) % 8;");
             result += &format!("\t{}\n",
-                               "ulong tmp_vec = 0;");
-            result += &format!("\t{}\n",
-                               "uchar *tmp = &tmp_vec;");
-            result += &format!("\t{}\n",
-                               "scratch_space[thread_idx].lo = (ulong)*((global ulong*)read_addr);");
-            result += &format!("\t{}\n",
-                               "scratch_space[thread_idx].hi = (ulong)*((global ulong*)read_addr+(NUM_THREADS));");
-            result += &format!("\t{}\n",
-                               "local uchar *combined = &scratch_space[thread_idx];");
-            result += &format!("\t{}\n",
-                               "tmp[0] = combined[cell_offset];");
-            result += &format!("\t{}\n",
-                               "tmp[1] = combined[cell_offset+1];");
-            result += &format!("\t{}\n",
-                               "tmp[2] = combined[cell_offset+2];");
-            result += &format!("\t{}\n",
-                               "tmp[3] = combined[cell_offset+3];");
-            result += &format!("\t{}\n",
-                               "tmp[4] = combined[cell_offset+4];");
-            result += &format!("\t{}\n",
-                               "tmp[5] = combined[cell_offset+5];");
-            result += &format!("\t\t{}\n",
-                               "tmp[6] = combined[cell_offset+6];");
-            result += &format!("\t{}\n",
-                               "tmp[7] = combined[cell_offset+7];");
-            result += &format!("\t{}\n",
-                               "return tmp_vec;");
+                               "return *(read_addr + cell_offset);")
         },
         _ => panic!("Unsupported read/write interleave"),
     }
+    result += &format!("\n{}\n",
+                        "}");
+
+    result += &format!("\n{}\n",
+                        "inline ushort read_u16(ulong addr, ulong mem_start, uint warp_id, uint read_idx, uint thread_idx, local ulong2 *scratch_space) {");
+    result += &format!("{}", emit_read_u16_body(interleave, local_work_group, mexec, false));
+    result += &format!("\n{}",
+                        "}");
+
+    result += &format!("\n{}\n",
+                        "inline ushort read_u16_aligned(ulong addr, ulong mem_start, uint warp_id, uint read_idx, uint thread_idx, local ulong2 *scratch_space) {");
+    result += &format!("{}", emit_read_u16_body(interleave, local_work_group, mexec, true));
+    result += &format!("\n{}",
+                        "}");
+
+    result += &format!("\n{}\n",
+                        "inline uint read_u32(ulong addr, ulong mem_start, uint warp_id, uint read_idx, uint thread_idx, local ulong2 *scratch_space) {");
+    result += &format!("{}", emit_read_u32_body(interleave, local_work_group, mexec, false));
+    result += &format!("\n{}",
+                        "}");
+
+    result += &format!("\n{}\n",
+                        "inline uint read_u32_aligned(ulong addr, ulong mem_start, uint warp_id, uint read_idx, uint thread_idx, local ulong2 *scratch_space) {");
+    result += &format!("{}", emit_read_u32_body(interleave, local_work_group, mexec, true));
+    result += &format!("\n{}",
+                        "}");
+
+    result += &format!("\n{}\n",
+                        "inline ulong read_u64(ulong addr, ulong mem_start, uint warp_id, uint read_idx, uint thread_idx, local ulong2 *scratch_space) {");
+    result += &format!("{}", emit_read_u64_body(interleave, local_work_group, mexec, false));
+    result += &format!("\n{}\n",
+                        "}");
+
+    result += &format!("\n{}\n",
+                        "inline ulong read_u64_aligned(ulong addr, ulong mem_start, uint warp_id, uint read_idx, uint thread_idx, local ulong2 *scratch_space) {");
+    result += &format!("{}", emit_read_u64_body(interleave, local_work_group, mexec, true));
     result += &format!("\n{}\n",
                         "}");
 
@@ -889,12 +1033,12 @@ pub fn emit_read_u8(addr: &str , mem_start: &str, warp_id: &str) -> String {
     format!("read_u8({}, {}, {}, read_idx)", addr, mem_start, warp_id)
 }
 
-pub fn emit_read_u16(addr: &str , mem_start: &str, warp_id: &str) -> String {
-    format!("read_u16({}, {}, {}, read_idx, thread_idx, scratch_space)", addr, mem_start, warp_id)
-}
-
 pub fn emit_write_u8(addr: &str , mem_start: &str, value: &str, warp_id: &str) -> String {
     format!("write_u8({}, {}, {}, {}, read_idx)", addr, mem_start, value, warp_id)
+}
+
+pub fn emit_read_u16(addr: &str , mem_start: &str, warp_id: &str) -> String {
+    format!("read_u16({}, {}, {}, read_idx, thread_idx, scratch_space)", addr, mem_start, warp_id)
 }
 
 pub fn emit_write_u16(addr: &str , mem_start: &str, value: &str, warp_id: &str) -> String {
@@ -915,4 +1059,28 @@ pub fn emit_read_u64(addr: &str , mem_start: &str, warp_id: &str) -> String {
 
 pub fn emit_write_u64(addr: &str , mem_start: &str, value: &str, warp_id: &str) -> String {
     format!("write_u64({}, {}, {}, {}, read_idx, thread_idx, scratch_space)", addr, mem_start, value, warp_id)
+}
+
+pub fn emit_read_u16_aligned(addr: &str , mem_start: &str, warp_id: &str) -> String {
+    format!("read_u16_aligned({}, {}, {}, read_idx, thread_idx, scratch_space)", addr, mem_start, warp_id)
+}
+
+pub fn emit_write_u16_aligned(addr: &str , mem_start: &str, value: &str, warp_id: &str) -> String {
+    format!("write_u16_aligned({}, {}, {}, {}, read_idx, thread_idx, scratch_space)", addr, mem_start, value, warp_id)
+}
+
+pub fn emit_read_u32_aligned(addr: &str , mem_start: &str, warp_id: &str) -> String {
+    format!("read_u32_aligned({}, {}, {}, read_idx, thread_idx, scratch_space)", addr, mem_start, warp_id)
+}
+
+pub fn emit_write_u32_aligned(addr: &str , mem_start: &str, value: &str, warp_id: &str) -> String {
+    format!("write_u32_aligned({}, {}, {}, {}, read_idx, thread_idx, scratch_space)", addr, mem_start, value, warp_id)
+}
+
+pub fn emit_read_u64_aligned(addr: &str , mem_start: &str, warp_id: &str) -> String {
+    format!("read_u64_aligned({}, {}, {}, read_idx, thread_idx, scratch_space)", addr, mem_start, warp_id)
+}
+
+pub fn emit_write_u64_aligned(addr: &str , mem_start: &str, value: &str, warp_id: &str) -> String {
+    format!("write_u64_aligned({}, {}, {}, {}, read_idx, thread_idx, scratch_space)", addr, mem_start, value, warp_id)
 }
