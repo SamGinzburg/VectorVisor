@@ -121,48 +121,30 @@ pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interle
             };
         },
         8 => {
-            // determine which cell to read
             result += &format!("\t{}\n",
                                 "global uchar *write_addr = ((global uchar*)(((addr-mem_start)/8)*(NUM_THREADS*8) + (warp_id*8) + mem_start));");
             result += &format!("\t{}\n",
                                "ulong cell_offset = (addr-mem_start) % 8;");
             result += &format!("\t{}\n",
-                               "if (cell_offset < 7) {");
-            result += &format!("\t\t{}\n",
-                               "uchar8 val_vec = as_uchar8((ulong)*((global ulong*)write_addr));");
-            result += &format!("\t\t{}\n",
-                               "uchar *val = &val_vec;");
-            result += &format!("\t\t{}\n",
-                               "val[cell_offset] = value & 0xFF;");
-            result += &format!("\t\t{}\n",
-                               "val[cell_offset+1] = (value >> 8) & 0xFF;");
-            result += &format!("\t\t{}\n",
-                               "*((global ulong*)write_addr) = as_ulong(val_vec);");
+                               "ulong val1 = (ulong)*((global ulong*)write_addr);");
             result += &format!("\t{}\n",
-                               "} else {");
-            // sheared write case
-            result += &format!("\t\t{}\n",
-                               "uchar8 val1 = as_uchar8((ulong)*((global ulong*)write_addr));");
-            result += &format!("\t\t{}\n",
-                               "uchar8 val2 = as_uchar8((ulong)*((global ulong*)write_addr+(NUM_THREADS*8)));");
-            result += &format!("\t\t{}\n",
-                               "uchar16 combined_vec = (uchar16)(val1, val2);");
-            result += &format!("\t\t{}\n",
+                               "ulong val2 = (ulong)*((global ulong*)write_addr+(NUM_THREADS));");
+            result += &format!("\t{}\n",
+                               "ulong combined_vec[2] = { 0 };");
+            result += &format!("\t{}\n",
+                               "combined_vec[0] = val1;");
+            result += &format!("\t{}\n",
+                               "combined_vec[1] = val2;");
+            result += &format!("\t{}\n",
                                "uchar *combined = &combined_vec;");
-            result += &format!("\t\t{}\n",
-                               "combined[cell_offset] = value & 0xFF;");
-            result += &format!("\t\t{}\n",
-                               "combined[cell_offset+1] = (value >> 8) & 0xFF;");
-            result += &format!("\t\t{}\n",
-                               "val1 = (uchar8)*(ulong*)(combined);");
-            result += &format!("\t\t{}\n",
-                               "val2 = (uchar8)*(ulong*)(combined+8);");
-            result += &format!("\t\t{}\n",
-                               "*((global ulong*)write_addr) = as_ulong(val1);");
-            result += &format!("\t\t{}\n",
-                               "*((global ulong*)write_addr+(NUM_THREADS*8)) = as_ulong(val2);");
             result += &format!("\t{}\n",
-                               "}");
+                               "combined[cell_offset] = value & 0xFF;");
+            result += &format!("\t{}\n",
+                               "combined[cell_offset+1] = (value >> 8) & 0xFF;");
+            result += &format!("\t{}\n",
+                               "*((global ulong*)write_addr) = combined_vec[0];");
+            result += &format!("\t{}\n",
+                               "*((global ulong*)write_addr+(NUM_THREADS)) = combined_vec[1];");
         },
         _ => panic!("Unsupported read/write interleave"),
     }
@@ -220,50 +202,29 @@ pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interle
             result += &format!("\t{}\n",
                                "ulong cell_offset = (addr-mem_start) % 8;");
             result += &format!("\t{}\n",
-                               "if (cell_offset < 5) {");
-            result += &format!("\t\t{}\n",
-                               "uchar8 val_vec = as_uchar8((ulong)*((global ulong*)write_addr));");
-            result += &format!("\t\t{}\n",
-                               "uchar *val = &val_vec;");
-            result += &format!("\t\t{}\n",
-                               "val[cell_offset] = value & 0xFF;");
-            result += &format!("\t\t{}\n",
-                               "val[cell_offset+1] = (value >> 8) & 0xFF;");
-            result += &format!("\t\t{}\n",
-                               "val[cell_offset+2] = (value >> 16) & 0xFF;");
-            result += &format!("\t\t{}\n",
-                               "val[cell_offset+3] = (value >> 24) & 0xFF;");
-            result += &format!("\t\t{}\n",
-                               "*((global ulong*)write_addr) = as_ulong(val_vec);");
+                               "ulong val1 = (ulong)*((global ulong*)write_addr);");
             result += &format!("\t{}\n",
-                               "} else {");
-            // sheared write case
-            result += &format!("\t\t{}\n",
-                               "uchar8 val1 = as_uchar8((ulong)*((global ulong*)write_addr));");
-            result += &format!("\t\t{}\n",
-                               "uchar8 val2 = as_uchar8((ulong)*((global ulong*)write_addr+(NUM_THREADS*8)));");
-            result += &format!("\t\t{}\n",
-                               "uchar16 combined_vec = (uchar16)(val1, val2);");
-            result += &format!("\t\t{}\n",
+                               "ulong val2 = (ulong)*((global ulong*)write_addr+(NUM_THREADS));");
+            result += &format!("\t{}\n",
+                               "ulong combined_vec[2] = { 0 };");
+            result += &format!("\t{}\n",
+                               "combined_vec[0] = val1;");
+            result += &format!("\t{}\n",
+                               "combined_vec[1] = val2;");
+            result += &format!("\t{}\n",
                                "uchar *combined = &combined_vec;");
-            result += &format!("\t\t{}\n",
-                               "combined[cell_offset] = value & 0xFF;");
-            result += &format!("\t\t{}\n",
-                               "combined[cell_offset+1] = (value >> 8) & 0xFF;");
-            result += &format!("\t\t{}\n",
-                               "combined[cell_offset+2] = (value >> 16) & 0xFF;");
-            result += &format!("\t\t{}\n",
-                               "combined[cell_offset+3] = (value >> 24) & 0xFF;");
-            result += &format!("\t\t{}\n",
-                               "val1 = (uchar8)*(ulong*)(combined);");
-            result += &format!("\t\t{}\n",
-                               "val2 = (uchar8)*(ulong*)(combined+8);");
-            result += &format!("\t\t{}\n",
-                               "*((global ulong*)write_addr) = as_ulong(val1);");
-            result += &format!("\t\t{}\n",
-                               "*((global ulong*)write_addr+(NUM_THREADS*8)) = as_ulong(val2);");
             result += &format!("\t{}\n",
-                               "}");
+                               "combined[cell_offset] = value & 0xFF;");
+            result += &format!("\t{}\n",
+                               "combined[cell_offset+1] = (value >> 8) & 0xFF;");
+            result += &format!("\t{}\n",
+                               "combined[cell_offset+2] = (value >> 16) & 0xFF;");
+            result += &format!("\t{}\n",
+                               "combined[cell_offset+3] = (value >> 24) & 0xFF;");
+            result += &format!("\t{}\n",
+                               "*((global ulong*)write_addr) = combined_vec[0];");
+            result += &format!("\t{}\n",
+                               "*((global ulong*)write_addr+(NUM_THREADS)) = combined_vec[1];");
         },
         _ => panic!("Unsupported read/write interleave"),
     }
@@ -344,46 +305,37 @@ pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interle
             result += &format!("\t{}\n",
                                "ulong cell_offset = (addr-mem_start) % 8;");
             result += &format!("\t{}\n",
-                               "if (cell_offset < 1) {");
-            result += &format!("\t\t{}\n",
-                               "*(global ulong*)write_addr = value;");
+                               "ulong val1 = (ulong)*((global ulong*)write_addr);");
             result += &format!("\t{}\n",
-                               "} else {");
-            // sheared write case
-            result += &format!("\t\t{}\n",
-                               "uchar8 val1 = as_uchar8((ulong)*((global ulong*)write_addr));");
-            result += &format!("\t\t{}\n",
-                               "uchar8 val2 = as_uchar8((ulong)*((global ulong*)write_addr+(NUM_THREADS*8)));");
-            result += &format!("\t\t{}\n",
-                               "uchar16 combined_vec = (uchar16)(val1, val2);");
-            result += &format!("\t\t{}\n",
+                               "ulong val2 = (ulong)*((global ulong*)write_addr+(NUM_THREADS));");
+            result += &format!("\t{}\n",
+                               "ulong combined_vec[2] = { 0 };");
+            result += &format!("\t{}\n",
+                               "combined_vec[0] = val1;");
+            result += &format!("\t{}\n",
+                               "combined_vec[1] = val2;");           
+            result += &format!("\t{}\n",
                                "uchar *combined = &combined_vec;");
-            result += &format!("\t\t{}\n",
-                               "combined[cell_offset] = value & 0xFF;");
-            result += &format!("\t\t{}\n",
-                               "combined[cell_offset+1] = (value >> 8) & 0xFF;");
-            result += &format!("\t\t{}\n",
-                               "combined[cell_offset+2] = (value >> 16) & 0xFF;");
-            result += &format!("\t\t{}\n",
-                               "combined[cell_offset+3] = (value >> 24) & 0xFF;");
-            result += &format!("\t\t{}\n",
-                               "combined[cell_offset+4] = (value >> 32) & 0xFF;");
-            result += &format!("\t\t{}\n",
-                               "combined[cell_offset+5] = (value >> 40) & 0xFF;");
-            result += &format!("\t\t{}\n",
-                               "combined[cell_offset+6] = (value >> 48) & 0xFF;");
-            result += &format!("\t\t{}\n",
-                               "combined[cell_offset+7] = (value >> 56) & 0xFF;");
-            result += &format!("\t\t{}\n",
-                               "val1 = (uchar8)*(ulong*)(combined);");
-            result += &format!("\t\t{}\n",
-                               "val2 = (uchar8)*(ulong*)(combined+8);");
-            result += &format!("\t\t{}\n",
-                               "*((global ulong*)write_addr) = as_ulong(val1);");
-            result += &format!("\t\t{}\n",
-                               "*((global ulong*)write_addr+(NUM_THREADS*8)) = as_ulong(val2);");
             result += &format!("\t{}\n",
-                               "}");
+                               "combined[cell_offset] = value & 0xFF;");
+            result += &format!("\t{}\n",
+                               "combined[cell_offset+1] = (value >> 8) & 0xFF;");
+            result += &format!("\t{}\n",
+                               "combined[cell_offset+2] = (value >> 16) & 0xFF;");
+            result += &format!("\t{}\n",
+                               "combined[cell_offset+3] = (value >> 24) & 0xFF;");
+            result += &format!("\t{}\n",
+                               "combined[cell_offset+4] = (value >> 32) & 0xFF;");
+            result += &format!("\t{}\n",
+                               "combined[cell_offset+5] = (value >> 40) & 0xFF;");
+            result += &format!("\t{}\n",
+                               "combined[cell_offset+6] = (value >> 48) & 0xFF;");
+            result += &format!("\t{}\n",
+                               "combined[cell_offset+7] = (value >> 56) & 0xFF;");
+            result += &format!("\t{}\n",
+                               "*((global ulong*)write_addr) = combined_vec[0];");
+            result += &format!("\t{}\n",
+                               "*((global ulong*)write_addr+(NUM_THREADS)) = combined_vec[1];");
         },
 
         _ => panic!("Unsupported read/write interleave"),
@@ -502,38 +454,27 @@ pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interle
             result += &format!("\t{}\n",
                                "ulong cell_offset = (addr-mem_start) % 8;");
             result += &format!("\t{}\n",
-                               "uchar2 tmp_vec = (uchar2)(0, 0);");
+                               "ushort tmp_vec = 0;");
             result += &format!("\t{}\n",
                                "uchar *tmp = &tmp_vec;");
             result += &format!("\t{}\n",
-                               "if (cell_offset < 7) {");
-            result += &format!("\t\t{}\n",
-                               "uchar8 val_vec = as_uchar8((ulong)*((global ulong*)read_addr));");
-            result += &format!("\t\t{}\n",
-                               "uchar *val = &val_vec;");
-            result += &format!("\t\t{}\n",
-                               "tmp[0] = val[cell_offset];");
-            result += &format!("\t\t{}\n",
-                               "tmp[1] = val[cell_offset+1];");
+                               "ulong val1 = (ulong)*((global ulong*)read_addr);");
             result += &format!("\t{}\n",
-                               "} else {");
-            // sheared write case
-            result += &format!("\t\t{}\n",
-                               "uchar8 val1 = as_uchar8((ulong)*((global ulong*)read_addr));");
-            result += &format!("\t\t{}\n",
-                               "uchar8 val2 = as_uchar8((ulong)*((global ulong*)read_addr+(NUM_THREADS*8)));");
-            result += &format!("\t\t{}\n",
-                               "uchar16 combined_vec = (uchar16)(val1, val2);");
-            result += &format!("\t\t{}\n",
+                               "ulong val2 = (ulong)*((global ulong*)read_addr+(NUM_THREADS));");
+            result += &format!("\t{}\n",
+                               "ulong combined_vec[2] = { 0 };");
+            result += &format!("\t{}\n",
+                               "combined_vec[0] = val1;");
+            result += &format!("\t{}\n",
+                               "combined_vec[1] = val2;");
+            result += &format!("\t{}\n",
                                "uchar *combined = &combined_vec;");
-            result += &format!("\t\t{}\n",
+            result += &format!("\t{}\n",
                                "tmp[0] = combined[cell_offset];");
-            result += &format!("\t\t{}\n",
+            result += &format!("\t{}\n",
                                "tmp[1] = combined[cell_offset+1];");
             result += &format!("\t{}\n",
-                               "}");
-            result += &format!("\t{}\n",
-                               "return *(ushort*)tmp;");
+                               "return tmp_vec;");
         },
         _ => panic!("Unsupported read/write interleave"),
     }
@@ -629,46 +570,31 @@ pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interle
             result += &format!("\t{}\n",
                                "ulong cell_offset = (addr-mem_start) % 8;");
             result += &format!("\t{}\n",
-                               "uchar4 tmp_vec = (uchar4)(0, 0, 0, 0);");
+                               "uint tmp_vec = 0;");
             result += &format!("\t{}\n",
                                "uchar *tmp = &tmp_vec;");
             result += &format!("\t{}\n",
-                               "if (cell_offset < 5) {");
-            result += &format!("\t\t{}\n",
-                               "uchar8 val_vec = as_uchar8((ulong)*((global ulong*)read_addr));");
-            result += &format!("\t\t{}\n",
-                               "uchar *val = &val_vec;");
-            result += &format!("\t\t{}\n",
-                               "tmp[0] = val[cell_offset];");
-            result += &format!("\t\t{}\n",
-                               "tmp[1] = val[cell_offset+1];");
-            result += &format!("\t\t{}\n",
-                               "tmp[2] = val[cell_offset+2];");
-            result += &format!("\t\t{}\n",
-                               "tmp[3] = val[cell_offset+3];");
+                               "ulong val1 = (ulong)*((global ulong*)read_addr);");
             result += &format!("\t{}\n",
-                               "} else {");
-            // sheared write case
-            result += &format!("\t\t{}\n",
-                               "uchar8 val1 = as_uchar8((ulong)*((global ulong*)read_addr));");
-            result += &format!("\t\t{}\n",
-                               "uchar8 val2 = as_uchar8((ulong)*((global ulong*)read_addr+(NUM_THREADS*8)));");
-            result += &format!("\t\t{}\n",
-                               "uchar16 combined_vec = (uchar16)(val1, val2);");
-            result += &format!("\t\t{}\n",
+                               "ulong val2 = (ulong)*((global ulong*)read_addr+(NUM_THREADS));");
+            result += &format!("\t{}\n",
+                               "ulong combined_vec[2] = { 0 };");
+            result += &format!("\t{}\n",
+                               "combined_vec[0] = val1;");
+            result += &format!("\t{}\n",
+                               "combined_vec[1] = val2;");
+            result += &format!("\t{}\n",
                                "uchar *combined = &combined_vec;");
             result += &format!("\t\t{}\n",
                                "tmp[0] = combined[cell_offset];");
-            result += &format!("\t\t{}\n",
+            result += &format!("\t{}\n",
                                "tmp[1] = combined[cell_offset+1];");
-            result += &format!("\t\t{}\n",
+            result += &format!("\t{}\n",
                                "tmp[2] = combined[cell_offset+2];");
-            result += &format!("\t\t{}\n",
+            result += &format!("\t{}\n",
                                "tmp[3] = combined[cell_offset+3];");
             result += &format!("\t{}\n",
-                               "}");
-            result += &format!("\t{}\n",
-                               "return *(uint*)tmp;");
+                               "return tmp_vec;");
         },
         _ => panic!("Unsupported read/write interleave"),
     }
@@ -803,62 +729,39 @@ pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interle
             result += &format!("\t{}\n",
                                "ulong cell_offset = (addr-mem_start) % 8;");
             result += &format!("\t{}\n",
-                               "uchar8 tmp_vec = (uchar8)(0, 0, 0, 0, 0, 0, 0, 0);");
+                               "ulong tmp_vec = 0;");
             result += &format!("\t{}\n",
                                "uchar *tmp = &tmp_vec;");
             result += &format!("\t{}\n",
-                               "if (cell_offset < 1) {");
-            result += &format!("\t\t{}\n",
-                               "uchar8 val_vec = as_uchar8((ulong)*((global ulong*)read_addr));");
-            result += &format!("\t\t{}\n",
-                               "uchar *val = &val_vec;");
-            result += &format!("\t\t{}\n",
-                               "tmp[0] = val[cell_offset];");
-            result += &format!("\t\t{}\n",
-                               "tmp[1] = val[cell_offset+1];");
-            result += &format!("\t\t{}\n",
-                               "tmp[2] = val[cell_offset+2];");
-            result += &format!("\t\t{}\n",
-                               "tmp[3] = val[cell_offset+3];");
-            result += &format!("\t\t{}\n",
-                               "tmp[4] = val[cell_offset+4];");
-            result += &format!("\t\t{}\n",
-                               "tmp[5] = val[cell_offset+5];");
-            result += &format!("\t\t{}\n",
-                               "tmp[6] = val[cell_offset+6];");
-            result += &format!("\t\t{}\n",
-                               "tmp[7] = val[cell_offset+7];");
+                               "ulong val1 = (ulong)*((global ulong*)read_addr);");
             result += &format!("\t{}\n",
-                               "} else {");
-            // sheared write case
-            result += &format!("\t\t{}\n",
-                               "uchar8 val1 = as_uchar8((ulong)*((global ulong*)read_addr));");
-            result += &format!("\t\t{}\n",
-                               "uchar8 val2 = as_uchar8((ulong)*((global ulong*)read_addr+(NUM_THREADS*8)));");
-            result += &format!("\t\t{}\n",
-                               "uchar16 combined_vec = (uchar16)(val1, val2);");
-            result += &format!("\t\t{}\n",
+                               "ulong val2 = (ulong)*((global ulong*)read_addr+(NUM_THREADS));");
+            result += &format!("\t{}\n",
+                               "ulong combined_vec[2] = { 0 };");
+            result += &format!("\t{}\n",
+                               "combined_vec[0] = val1;");
+            result += &format!("\t{}\n",
+                               "combined_vec[1] = val2;");
+            result += &format!("\t{}\n",
                                "uchar *combined = &combined_vec;");
-            result += &format!("\t\t{}\n",
+            result += &format!("\t{}\n",
                                "tmp[0] = combined[cell_offset];");
-            result += &format!("\t\t{}\n",
+            result += &format!("\t{}\n",
                                "tmp[1] = combined[cell_offset+1];");
-            result += &format!("\t\t{}\n",
+            result += &format!("\t{}\n",
                                "tmp[2] = combined[cell_offset+2];");
-            result += &format!("\t\t{}\n",
+            result += &format!("\t{}\n",
                                "tmp[3] = combined[cell_offset+3];");
-            result += &format!("\t\t{}\n",
+            result += &format!("\t{}\n",
                                "tmp[4] = combined[cell_offset+4];");
-            result += &format!("\t\t{}\n",
+            result += &format!("\t{}\n",
                                "tmp[5] = combined[cell_offset+5];");
             result += &format!("\t\t{}\n",
                                "tmp[6] = combined[cell_offset+6];");
-            result += &format!("\t\t{}\n",
+            result += &format!("\t{}\n",
                                "tmp[7] = combined[cell_offset+7];");
             result += &format!("\t{}\n",
-                               "}");
-            result += &format!("\t{}\n",
-                               "return *(ulong*)tmp;");
+                               "return tmp_vec;");
         },
         _ => panic!("Unsupported read/write interleave"),
     }
@@ -923,14 +826,11 @@ pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interle
             result += &format!("\t{}\n",
                                "ulong cell_offset = (src-mem_start_src) % 8;");
             result += &format!("\t{}\n",
-                               "addr += cell_offset;");
-
-            result += &format!("\t{}\n",
                                "for (uint idx = 0; idx < buf_len_bytes; idx++) {");
 
             result += &format!("\t{} = {};\n",
                                "*dst_tmp++",
-                               &emit_fast_read_u8("(ulong)(addr+(idx*NUM_THREADS*8))", "(ulong)(mem_start_src)", "warp_id"));
+                               &emit_fast_read_u8("(ulong)(addr+(idx*NUM_THREADS*8)) + cell_offset", "(ulong)(mem_start_src)", "warp_id"));
 
             result += &format!("\t{}\n",
                                "}");
