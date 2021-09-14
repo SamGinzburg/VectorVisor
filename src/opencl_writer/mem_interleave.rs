@@ -89,7 +89,7 @@ fn emit_write_u16_body(interleave: u32, local_work_group: usize, mexec: usize, e
                 result += &format!("\t{}\n",
                             "global uchar *write_addr = ((global uchar*)(((addr-mem_start)/8)*(NUM_THREADS*8) + (warp_id*8) + mem_start));");
                 result += &format!("\t{}\n",
-                            "write_addr += (addr-mem_start) % 8;");
+                            "write_addr += GET_POW2_OFFSET((addr-mem_start), 8);");
                 result += &format!("\t{}\n",
                             "if (IS_ALIGNED_POW2((ulong)write_addr, 2)) {");
                 result += &format!("\t\t{}\n",
@@ -104,14 +104,14 @@ fn emit_write_u16_body(interleave: u32, local_work_group: usize, mexec: usize, e
                 result += &format!("\t{}\n",
                             "global uchar *write_addr = ((global uchar*)(((addr-mem_start)/8)*(NUM_THREADS*8) + (warp_id*8) + mem_start));");
                 result += &format!("\t{}\n",
-                            "ulong cell_offset = (addr-mem_start) % 8;");
+                            "write_addr += GET_POW2_OFFSET((addr-mem_start), 8);");
                 result += &format!("\t{}\n",
-                            "*((global ushort*)((global uchar*)write_addr+cell_offset)) = value;");
+                            "*((global ushort*)((global uchar*)write_addr)) = value;");
             } else {
                 result += &format!("\t{}\n",
                             "global uchar *write_addr = ((global uchar*)(((addr-mem_start)/8)*(NUM_THREADS*8) + (warp_id*8) + mem_start));");
                 result += &format!("\t{}\n",
-                            "ulong cell_offset = (addr-mem_start) % 8;");
+                            "ulong cell_offset = GET_POW2_OFFSET((addr-mem_start), 8);");
                 result += &format!("\t{}\n",
                             "scratch_space[thread_idx].lo = (ulong)*((global ulong*)write_addr);");
                 result += &format!("\t{}\n",
@@ -185,7 +185,7 @@ fn emit_write_u32_body(interleave: u32, local_work_group: usize, mexec: usize, e
                 result += &format!("\t{}\n",
                             "global uchar *write_addr = ((global uchar*)(((addr-mem_start)/8)*(NUM_THREADS*8) + (warp_id*8) + mem_start));");
                 result += &format!("\t{}\n",
-                            "write_addr += (addr-mem_start) % 8;");
+                            "write_addr += GET_POW2_OFFSET((addr-mem_start), 8);");
                 result += &format!("\t{}\n",
                             "if (IS_ALIGNED_POW2((ulong)write_addr, 4)) {");
                 result += &format!("\t\t{}\n",
@@ -200,14 +200,14 @@ fn emit_write_u32_body(interleave: u32, local_work_group: usize, mexec: usize, e
                 result += &format!("\t{}\n",
                             "global uchar *write_addr = ((global uchar*)(((addr-mem_start)/8)*(NUM_THREADS*8) + (warp_id*8) + mem_start));");
                 result += &format!("\t{}\n",
-                            "ulong cell_offset = (addr-mem_start) % 8;");
+                            "write_addr += GET_POW2_OFFSET((addr-mem_start), 8);");
                 result += &format!("\t{}\n",
-                            "*((global uint*)((global uchar*)write_addr+cell_offset)) = value;");
+                            "*((global uint*)((global uchar*)write_addr)) = value;");
             } else {
                 result += &format!("\t{}\n",
                                 "global uchar *write_addr = ((global uchar*)(((addr-mem_start)/8)*(NUM_THREADS*8) + (warp_id*8) + mem_start));");
                 result += &format!("\t{}\n",
-                                "ulong cell_offset = (addr-mem_start) % 8;");
+                                "ulong cell_offset = GET_POW2_OFFSET((addr-mem_start), 8);");
                 result += &format!("\t{}\n",
                                 "scratch_space[thread_idx].lo = (ulong)*((global ulong*)write_addr);");
                 result += &format!("\t{}\n",
@@ -308,7 +308,7 @@ fn emit_write_u64_body(interleave: u32, local_work_group: usize, mexec: usize, e
                 result += &format!("\t{}\n",
                             "global uchar *write_addr = ((global uchar*)(((addr-mem_start)/8)*(NUM_THREADS*8) + (warp_id*8) + mem_start));");
                 result += &format!("\t{}\n",
-                            "write_addr += (addr-mem_start) % 8;");
+                            "write_addr += GET_POW2_OFFSET((addr-mem_start), 8);");
                 result += &format!("\t{}\n",
                             "if (IS_ALIGNED_POW2((ulong)write_addr, 8)) {");
                 result += &format!("\t\t{}\n",
@@ -324,14 +324,14 @@ fn emit_write_u64_body(interleave: u32, local_work_group: usize, mexec: usize, e
                 result += &format!("\t{}\n",
                             "global uchar *write_addr = ((global uchar*)(((addr-mem_start)/8)*(NUM_THREADS*8) + (warp_id*8) + mem_start));");
                 result += &format!("\t{}\n",
-                            "ulong cell_offset = (addr-mem_start) % 8;");
+                            "write_addr += GET_POW2_OFFSET((addr-mem_start), 8);");
                 result += &format!("\t{}\n",
-                            "*((global ulong*)((global uchar*)write_addr+cell_offset)) = value;");
+                            "*((global ulong*)((global uchar*)write_addr)) = value;");
             } else {
                 result += &format!("\t{}\n",
                                 "global uchar *write_addr = ((global uchar*)(((addr-mem_start)/8)*(NUM_THREADS*8) + (warp_id*8) + mem_start));");
                 result += &format!("\t{}\n",
-                                "ulong cell_offset = (addr-mem_start) % 8;");
+                                "ulong cell_offset = GET_POW2_OFFSET((addr-mem_start), 8);");
                 result += &format!("\t{}\n",
                                 "scratch_space[thread_idx].lo = (ulong)*((global ulong*)write_addr);");
                 result += &format!("\t{}\n",
@@ -439,7 +439,7 @@ fn emit_read_u16_body(interleave: u32, local_work_group: usize, mexec: usize, em
                 result += &format!("\t{}\n",
                                 "global uchar *read_addr = ((global uchar*)(((addr-mem_start)/8)*(NUM_THREADS*8) + (warp_id*8) + mem_start));");
                 result += &format!("\t{}\n",
-                                "read_addr += (addr-mem_start) % 8;");
+                                "read_addr += GET_POW2_OFFSET((addr-mem_start), 8);");
                 result += &format!("\t{}\n",
                                 "if (IS_ALIGNED_POW2((ulong)read_addr, 2)) {");
                 result += &format!("\t\t{}\n",
@@ -452,14 +452,14 @@ fn emit_read_u16_body(interleave: u32, local_work_group: usize, mexec: usize, em
                 result += &format!("\t{}\n",
                                 "global uchar *read_addr = ((global uchar*)(((addr-mem_start)/8)*(NUM_THREADS*8) + (warp_id*8) + mem_start));");
                 result += &format!("\t{}\n",
-                                "ulong cell_offset = (addr-mem_start) % 8;");
+                                "read_addr += GET_POW2_OFFSET((addr-mem_start), 8);");
                 result += &format!("\t{}\n",
-                                "return *((global ushort*)((global uchar*)read_addr+cell_offset));");
+                                "return *((global ushort*)((global uchar*)read_addr));");
             } else {
                 result += &format!("\t{}\n",
                                 "global uchar *read_addr = ((global uchar*)(((addr-mem_start)/8)*(NUM_THREADS*8) + (warp_id*8) + mem_start));");
                 result += &format!("\t{}\n",
-                                "ulong cell_offset = (addr-mem_start) % 8;");
+                                "ulong cell_offset = GET_POW2_OFFSET((addr-mem_start), 8);");
                 result += &format!("\t{}\n",
                                 "scratch_space[thread_idx].lo = (ulong)*((global ulong*)read_addr);");
                 result += &format!("\t{}\n",
@@ -564,7 +564,7 @@ fn emit_read_u32_body(interleave: u32, local_work_group: usize, mexec: usize, em
                 result += &format!("\t{}\n",
                                 "global uchar *read_addr = ((global uchar*)(((addr-mem_start)/8)*(NUM_THREADS*8) + (warp_id*8) + mem_start));");
                 result += &format!("\t{}\n",
-                                "read_addr += (addr-mem_start) % 8;");
+                                "read_addr += GET_POW2_OFFSET((addr-mem_start), 8);");
                 result += &format!("\t{}\n",
                                 "if (IS_ALIGNED_POW2((ulong)read_addr, 4)) {");
                 result += &format!("\t\t{}\n",
@@ -577,14 +577,14 @@ fn emit_read_u32_body(interleave: u32, local_work_group: usize, mexec: usize, em
                 result += &format!("\t{}\n",
                                 "global uchar *read_addr = ((global uchar*)(((addr-mem_start)/8)*(NUM_THREADS*8) + (warp_id*8) + mem_start));");
                 result += &format!("\t{}\n",
-                                "ulong cell_offset = (addr-mem_start) % 8;");
+                                "read_addr += GET_POW2_OFFSET((addr-mem_start), 8);");
                 result += &format!("\t{}\n",
-                                "return *((global uint*)((global uchar*)read_addr+cell_offset));");
+                                "return *((global uint*)((global uchar*)read_addr));");
             } else {
                 result += &format!("\t{}\n",
                                 "global uchar *read_addr = ((global uchar*)(((addr-mem_start)/8)*(NUM_THREADS*8) + (warp_id*8) + mem_start));");
                 result += &format!("\t{}\n",
-                                "ulong cell_offset = (addr-mem_start) % 8;");
+                                "ulong cell_offset = GET_POW2_OFFSET((addr-mem_start), 8);");
                 result += &format!("\t{}\n",
                                 "scratch_space[thread_idx].lo = (ulong)*((global ulong*)read_addr);");
                 result += &format!("\t{}\n",
@@ -729,7 +729,7 @@ fn emit_read_u64_body(interleave: u32, local_work_group: usize, mexec: usize, em
                 result += &format!("\t{}\n",
                                 "global uchar *read_addr = ((global uchar*)(((addr-mem_start)/8)*(NUM_THREADS*8) + (warp_id*8) + mem_start));");
                 result += &format!("\t{}\n",
-                                "read_addr += (addr-mem_start) % 8;");
+                                "read_addr += GET_POW2_OFFSET((addr-mem_start), 8);");
                 result += &format!("\t{}\n",
                                 "if (IS_ALIGNED_POW2((ulong)read_addr, 8)) {");
                 result += &format!("\t\t{}\n",
@@ -742,14 +742,14 @@ fn emit_read_u64_body(interleave: u32, local_work_group: usize, mexec: usize, em
                 result += &format!("\t{}\n",
                                 "global uchar *read_addr = ((global uchar*)(((addr-mem_start)/8)*(NUM_THREADS*8) + (warp_id*8) + mem_start));");
                 result += &format!("\t{}\n",
-                                "ulong cell_offset = (addr-mem_start) % 8;");
+                                "read_addr += GET_POW2_OFFSET((addr-mem_start), 8);");
                 result += &format!("\t{}\n",
-                                "return *((global ulong*)((global uchar*)read_addr+cell_offset));");
+                                "return *((global ulong*)((global uchar*)read_addr));");
             } else {
                 result += &format!("\t{}\n",
                                 "global uchar *read_addr = ((global uchar*)(((addr-mem_start)/8)*(NUM_THREADS*8) + (warp_id*8) + mem_start));");
                 result += &format!("\t{}\n",
-                                "ulong cell_offset = (addr-mem_start) % 8;");
+                                "ulong cell_offset = GET_POW2_OFFSET((addr-mem_start), 8);");
                 result += &format!("\t{}\n",
                                 "scratch_space[thread_idx].lo = (ulong)*((global ulong*)read_addr);");
                 result += &format!("\t{}\n",
@@ -765,7 +765,6 @@ fn emit_read_u64_body(interleave: u32, local_work_group: usize, mexec: usize, em
 
     result
 }
-
 
 pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interleave: u32, local_work_group: usize, mexec: usize, _debug: bool) -> String {
     let mut result = String::from("");
@@ -802,9 +801,9 @@ pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interle
             result += &format!("\t{}\n",
                                 "global uchar *write_addr = ((global uchar*)(((addr-mem_start)/8)*(NUM_THREADS*8) + (warp_id*8) + mem_start));");
             result += &format!("\t{}\n",
-                               "ulong cell_offset = (addr-mem_start) % 8;");
+                               "write_addr += GET_POW2_OFFSET((addr-mem_start), 8);");
             result += &format!("\t{}\n",
-                               "*(global uchar*)(write_addr + cell_offset) = value;")
+                               "*(global uchar*)(write_addr) = value;")
         },
         _ => panic!("Unsupported read/write interleave"),
     }
@@ -894,9 +893,9 @@ pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interle
             result += &format!("\t{}\n",
                                 "global uchar *read_addr = ((global uchar*)(((addr-mem_start)/8)*(NUM_THREADS*8) + (warp_id*8) + mem_start));");
             result += &format!("\t{}\n",
-                               "ulong cell_offset = (addr-mem_start) % 8;");
+                               "read_addr += GET_POW2_OFFSET((addr-mem_start), 8);");
             result += &format!("\t{}\n",
-                               "return *(read_addr + cell_offset);")
+                               "return *(read_addr);")
         },
         _ => panic!("Unsupported read/write interleave"),
     }

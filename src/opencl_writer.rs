@@ -1922,7 +1922,10 @@ r#"
   : (x > y) ? x : y)
 
 #define IS_ALIGNED_POW2(addr, align) \
-    !((addr - (addr & ~(align-1))) > 0)
+    !(addr & (align-1))
+
+#define GET_POW2_OFFSET(addr, align) \
+    (addr & (align-1))
 "#).unwrap();
 
         // generate the read/write functions
