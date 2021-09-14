@@ -160,7 +160,7 @@ impl VectorizedVM {
 
         let engine = Engine::default();
         let store = Store::new(&engine);
-        let memory_ty = MemoryType::new(Limits::new(hcall_buf_size / (1024 * 64), None));
+        let memory_ty = MemoryType::new(Limits::new(1, None));
         let memory = Memory::new(&store, memory_ty);
 
         VectorizedVM {
