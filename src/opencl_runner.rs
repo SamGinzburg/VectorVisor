@@ -293,7 +293,7 @@ impl OpenCLRunner {
 
         let globals_buffer = unsafe {
             if global_buffers_size > 0 {
-                size_tracker += (global_buffers_size * 4 * self.num_vms) as u64;
+                size_tracker += (global_buffers_size * 8 * self.num_vms) as u64;
                 ocl::core::create_buffer::<_, u8>(context,
                     ocl::core::MEM_READ_WRITE,
                     // global_buffers_size is in increments of 8 bytes
