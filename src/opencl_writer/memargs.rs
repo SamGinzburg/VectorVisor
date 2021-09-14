@@ -170,8 +170,6 @@ pub fn emit_memload_i64_32u(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &
         format!("({})", emit_read_u32(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load), "(ulong)(heap_u32)", "warp_idx"))
     };
 
-    let read = format!("(ulong)({})", &emit_read_u32(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load), "(ulong)(heap_u32)", "warp_idx"));
-
     ret_str += &format!("\t{} = {};\n", result_register, read);
 
     ret_str

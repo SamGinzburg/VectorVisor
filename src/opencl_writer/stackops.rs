@@ -132,7 +132,7 @@ pub fn emit_local(_writer: &opencl_writer::OpenCLCWriter, local: &wast::Local, _
                                             "(ulong)(stack_u32)",
                                             "(uint)0",
                                             "warp_idx"),
-                            "*sp += 1;"))
+                            "*sp += 2;"))
         },
         wast::ValType::I64 => {
             String::from(format!("\t{};\n\t{}\n",
@@ -148,7 +148,7 @@ pub fn emit_local(_writer: &opencl_writer::OpenCLCWriter, local: &wast::Local, _
                                             "(ulong)(stack_u32)",
                                             "(uint)0",
                                             "warp_idx"),
-                            "*sp += 1;"))
+                            "*sp += 2;"))
         },
         wast::ValType::F64 => {
             String::from(format!("\t{};\n\t{}\n",

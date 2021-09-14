@@ -10,11 +10,10 @@
  */
 use crate::opencl_writer::OpenCLCWriter;
 use crate::opencl_writer::WASI_SNAPSHOT_PREVIEW1;
-use crate::opencl_writer::emit_read_u32;
 use crate::opencl_writer::emit_read_u32_aligned;
-use crate::opencl_writer::emit_read_u64;
+use crate::opencl_writer::emit_read_u64_aligned;
 use crate::opencl_writer::emit_write_u32_aligned;
-use crate::opencl_writer::emit_write_u64;
+use crate::opencl_writer::emit_write_u64_aligned;
 use crate::opencl_writer::get_func_result;
 
 use wast::Index::Id;
@@ -1708,7 +1707,7 @@ impl<'a> StackCtx {
         let mut curr_offset = 0;
         for idx in i32_stack.clone() {
             intermediate_offsets.insert(idx, curr_offset);
-            curr_offset += 1;
+            curr_offset += 2;
         }
         for idx in i64_stack.clone() {
             intermediate_offsets.insert(idx, curr_offset);
@@ -1716,7 +1715,7 @@ impl<'a> StackCtx {
         }
         for idx in f32_stack.clone() {
             intermediate_offsets.insert(idx, curr_offset);
-            curr_offset += 1;
+            curr_offset += 2;
         }
         for idx in f64_stack.clone() {
             intermediate_offsets.insert(idx, curr_offset);
@@ -2176,14 +2175,14 @@ impl<'a> StackCtx {
             let offset: i32 = *self.local_offsets.get(local_name).unwrap() as i32 + self.param_offset;
             // only load parameters, locals are already zeroed out.
             if offset < 0 {
-                let param_lookup_u32 = emit_read_u32(&format!("(ulong)(stack_u32+{}+{})",
+                let param_lookup_u32 = emit_read_u32_aligned(&format!("(ulong)(stack_u32+{}+{})",
                                                           offset, 
-                                                          &emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx")),
+                                                          &emit_read_u32_aligned("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx")),
                                                           "(ulong)stack_u32",
                                                           "warp_idx");
-                let param_lookup_u64 = emit_read_u64(&format!("(ulong)(stack_u32+{}+{})",
+                let param_lookup_u64 = emit_read_u64_aligned(&format!("(ulong)(stack_u32+{}+{})",
                                                           offset, 
-                                                          &emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx")),
+                                                          &emit_read_u32_aligned("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx")),
                                                           "(ulong)stack_u32",
                                                           "warp_idx");
                 match local_type {
@@ -2376,7 +2375,7 @@ impl<'a> StackCtx {
 
     // get the max possible size of a stack context for the current function
     pub fn max_stack_frame_size(&self) -> usize {
-        self.i32_stack.len() + (self.i64_stack.len()*2) + self.f32_stack.len() + (self.f64_stack.len()*2)
+        (self.i32_stack.len()*2) + (self.i64_stack.len()*2) + (self.f32_stack.len()*2) + (self.f64_stack.len()*2)
     }
 
     pub fn get_max_emitted_context(&self) -> u32 {
@@ -2411,7 +2410,7 @@ impl<'a> StackCtx {
     pub fn emit_restore_local_cache(&self) -> String {
         let local_cache_start_offset = format!("(ulong)(stack_u32+{}+{})",
                                     self.stack_frame_offset - self.local_cache_size, 
-                                    &emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx"));
+                                    &emit_read_u32_aligned("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx"));
 
         format!("\trestore_local_cache((uchar*)local_cache, {}, {}, (ulong)stack_u32, warp_idx);\n", self.local_cache_size, local_cache_start_offset)
     }
@@ -2459,7 +2458,7 @@ impl<'a> StackCtx {
                                                                         "warp_idx"));
                     },
                     StackType::i64 => {
-                        ret_str += &format!("\tif (local_cache[{}]) {};\n", cache_idx, &emit_write_u64(&format!("(ulong)(stack_u32+{}+{})",
+                        ret_str += &format!("\tif (local_cache[{}]) {};\n", cache_idx, &emit_write_u64_aligned(&format!("(ulong)(stack_u32+{}+{})",
                                                                         offset, 
                                                                         &emit_read_u32_aligned("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx")),
                                                                         "(ulong)stack_u32",
@@ -2484,7 +2483,7 @@ impl<'a> StackCtx {
                         ret_str += &format!("\t\tulong temp = 0;\n");
                         ret_str += &format!("\t\tdouble tempaddr = {};\n", local);
                         ret_str += &format!("\t\t___private_memcpy_nonmmu(&temp, &tempaddr, sizeof(double));\n");
-                        ret_str += &format!("\t\t{};\n", &emit_write_u64(&format!("(ulong)(stack_u32+{}+{})",
+                        ret_str += &format!("\t\t{};\n", &emit_write_u64_aligned(&format!("(ulong)(stack_u32+{}+{})",
                                                                         offset, 
                                                                         &emit_read_u32_aligned("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx")),
                                                                         "(ulong)stack_u32",
@@ -2520,7 +2519,7 @@ impl<'a> StackCtx {
             for idx in i64_range {
                 let i_name = self.i64_stack.get(idx).unwrap();
                 let i_name_offset = self.intermediate_offsets.get(i_name).unwrap();
-                ret_str += &format!("\t{};\n", &emit_write_u64(&format!("(ulong)(stack_u32+{}+{}+{})", sfp_val, self.stack_frame_offset, i_name_offset),
+                ret_str += &format!("\t{};\n", &emit_write_u64_aligned(&format!("(ulong)(stack_u32+{}+{}+{})", sfp_val, self.stack_frame_offset, i_name_offset),
                                                                 "(ulong)stack_u32",
                                                                 &i_name,
                                                                 "warp_idx"));
@@ -2547,7 +2546,7 @@ impl<'a> StackCtx {
                 ret_str += &format!("\t{{\n");
                 ret_str += &format!("\t\tulong temp = 0;\n");
                 ret_str += &format!("\t\t___private_memcpy_nonmmu(&temp, &{}, sizeof(double));\n", &i_name);
-                ret_str += &format!("\t\t{};\n", &emit_write_u64(&format!("(ulong)(stack_u32+{}+{}+{})", sfp_val, self.stack_frame_offset, i_name_offset),
+                ret_str += &format!("\t\t{};\n", &emit_write_u64_aligned(&format!("(ulong)(stack_u32+{}+{}+{})", sfp_val, self.stack_frame_offset, i_name_offset),
                                                                 "(ulong)stack_u32",
                                                                 "temp",
                                                                 "warp_idx"));
@@ -2606,7 +2605,7 @@ impl<'a> StackCtx {
                                                                         "warp_idx"));
                     },
                     StackType::i64 => {
-                        ret_str += &format!("\tif (!local_cache[{}]) {} = {};\n", cache_idx, local, &emit_read_u64(&format!("(ulong)(stack_u32+{}+{})",
+                        ret_str += &format!("\tif (!local_cache[{}]) {} = {};\n", cache_idx, local, &emit_read_u64_aligned(&format!("(ulong)(stack_u32+{}+{})",
                                                                         offset, 
                                                                         &emit_read_u32_aligned("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx")),
                                                                         "(ulong)stack_u32",
@@ -2626,7 +2625,7 @@ impl<'a> StackCtx {
                     },
                     StackType::f64 => {
                         ret_str += &format!("\tif (!local_cache[{}]) {{\n", cache_idx);
-                        ret_str += &format!("\t\tulong temp = {};\n", &emit_read_u64(&format!("(ulong)(stack_u32+{}+{})",
+                        ret_str += &format!("\t\tulong temp = {};\n", &emit_read_u64_aligned(&format!("(ulong)(stack_u32+{}+{})",
                                                                                         offset, 
                                                                                         &emit_read_u32_aligned("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx")),
                                                                                         "(ulong)stack_u32",
@@ -2644,7 +2643,7 @@ impl<'a> StackCtx {
             // Now restore the intermediate values
 
             let (i32_range, i64_range, f32_range, f64_range) = self.generate_intermediate_ranges();
-            let sfp_val = emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx");
+            let sfp_val = emit_read_u32_aligned("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx");
 
             for idx in i32_range {
                 let i_name = self.i32_stack.get(idx).unwrap();
@@ -2661,7 +2660,7 @@ impl<'a> StackCtx {
                 let i_name_offset = self.intermediate_offsets.get(i_name).unwrap();
 
                 ret_str += &format!("\t{} = {};\n", &i_name, 
-                                                    &emit_read_u64(&format!("(ulong)(stack_u32+{}+{}+{})", sfp_val, self.stack_frame_offset, i_name_offset),
+                                                    &emit_read_u64_aligned(&format!("(ulong)(stack_u32+{}+{}+{})", sfp_val, self.stack_frame_offset, i_name_offset),
                                                                 "(ulong)stack_u32",
                                                                 "warp_idx"));
             }
@@ -2683,7 +2682,7 @@ impl<'a> StackCtx {
                 let i_name_offset = self.intermediate_offsets.get(i_name).unwrap();
 
                 ret_str += &format!("\t{{\n");
-                ret_str += &format!("\t\tulong temp = {};\n", &emit_read_u64(&format!("(ulong)(stack_u32+{}+{}+{})", sfp_val, self.stack_frame_offset, i_name_offset),
+                ret_str += &format!("\t\tulong temp = {};\n", &emit_read_u64_aligned(&format!("(ulong)(stack_u32+{}+{}+{})", sfp_val, self.stack_frame_offset, i_name_offset),
                                                                                 "(ulong)stack_u32",
                                                                                 "warp_idx"));
                 ret_str += &format!("\t\t___private_memcpy_nonmmu(&{}, &temp, sizeof(double));\n", &i_name);

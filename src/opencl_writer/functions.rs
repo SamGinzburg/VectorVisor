@@ -2,8 +2,7 @@ use crate::opencl_writer;
 use std::collections::{HashMap, HashSet};
 use crate::opencl_writer::mem_interleave::emit_read_u32_aligned;
 use crate::opencl_writer::mem_interleave::emit_write_u32_aligned;
-use crate::opencl_writer::mem_interleave::emit_read_u64;
-use crate::opencl_writer::mem_interleave::emit_write_u64;
+use crate::opencl_writer::mem_interleave::emit_read_u64_aligned;
 use crate::opencl_writer::mem_interleave::emit_write_u64_aligned;
 use crate::opencl_writer::StackCtx;
 use crate::opencl_writer::StackType;
@@ -159,7 +158,7 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stack
                             stack_params.insert(0, param);
                             stack_params_types.insert(0, param_type);
                         }
-                        parameter_offset += writer.get_size_valtype(&t);
+                        parameter_offset += 2;
                     },
                 }
             }
@@ -189,7 +188,7 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stack
                                     stack_params.insert(0, param);
                                     stack_params_types.insert(0, param_type);
                                 }
-                                parameter_offset += writer.get_size_valtype(&t);
+                                parameter_offset += 2;
                             },
                         }
                     }
@@ -216,18 +215,18 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stack
         for (param, ty) in stack_params.iter().zip(stack_params_types.iter()) {
             match ty {
                 StackType::i32 => {
-                    ret_str += &format!("\t{};\n\t*sp += 1;\n",
+                    ret_str += &format!("\t{};\n\t*sp += 2;\n",
                                             emit_write_u32_aligned("(ulong)(stack_u32+*sp)", "(ulong)(stack_u32)", &param, "warp_idx"));
                 },
                 StackType::i64 => {
                     ret_str += &format!("\t{};\n\t*sp += 2;\n",
-                                            emit_write_u64("(ulong)(stack_u32+*sp)", "(ulong)(stack_u32)", &param, "warp_idx"));
+                                            emit_write_u64_aligned("(ulong)(stack_u32+*sp)", "(ulong)(stack_u32)", &param, "warp_idx"));
                 },
                 StackType::f32 => {
                     ret_str += &format!("\t{{\n");
                     ret_str += &format!("\t\tuint temp = 0;\n");
                     ret_str += &format!("\t\t___private_memcpy_nonmmu(&temp, &{}, sizeof(uint));\n", param);
-                    ret_str += &format!("\t\t{};\n\t*sp += 1;\n",
+                    ret_str += &format!("\t\t{};\n\t*sp += 2;\n",
                                         emit_write_u32_aligned("(ulong)(stack_u32+*sp)", "(ulong)(stack_u32)", "temp", "warp_idx"));
                     ret_str += &format!("\t}}\n");
                 },
@@ -236,7 +235,7 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stack
                     ret_str += &format!("\t\tulong temp = 0;\n");
                     ret_str += &format!("\t\t___private_memcpy_nonmmu(&temp, &{}, sizeof(double));\n", param);
                     ret_str += &format!("\t\t{};\n\t*sp += 2;\n",
-                                        emit_write_u64("(ulong)(stack_u32+*sp)", "(ulong)(stack_u32)", "temp", "warp_idx"));
+                                        emit_write_u64_aligned("(ulong)(stack_u32+*sp)", "(ulong)(stack_u32)", "temp", "warp_idx"));
                     ret_str += &format!("\t}}\n");
                 },
             }
@@ -250,7 +249,11 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stack
     call_ret_map.insert(ret_label, *call_ret_idx);
     
     // get the return type of the function
-    let return_size = get_return_size(writer, &func_type_signature.clone());
+    let return_size = if get_return_size(writer, &func_type_signature.clone()) > 0 {
+        2
+    } else {
+        0
+    };
 
     if !is_indirect {
         stack_sizes.push(return_size);
@@ -335,24 +338,24 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stack
         match StackCtx::convert_wast_types(&return_type.unwrap()) {
             StackType::i32 => {
                 ret_str += &format!("\t{} = {};\n\t{};\n", result_register, 
-                                    emit_read_u32_aligned("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx"),
-                                    "*sp -= 1");
+                                    emit_read_u32_aligned("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx"),
+                                    "*sp -= 2");
             },
             StackType::i64 => {
                 ret_str += &format!("\t{} = {};\n\t{};\n", result_register, 
-                                    emit_read_u64("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx"),
+                                    emit_read_u64_aligned("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx"),
                                     "*sp -= 2;");
             },
             StackType::f32 => {
                 ret_str += &format!("\t{{\n");
-                ret_str += &format!("\t\tuint temp = {};\n", emit_read_u32_aligned("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx"));
+                ret_str += &format!("\t\tuint temp = {};\n", emit_read_u32_aligned("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx"));
                 ret_str += &format!("\t\t___private_memcpy_nonmmu(&{}, &temp, sizeof(uint));\n", result_register);
-                ret_str += &format!("\t\t*sp -= 1;\n");
+                ret_str += &format!("\t\t*sp -= 2;\n");
                 ret_str += &format!("\t}}\n");
             },
             StackType::f64 => {
                 ret_str += &format!("\t{{\n");
-                ret_str += &format!("\t\tulong temp = {};\n", emit_read_u64("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx"));
+                ret_str += &format!("\t\tulong temp = {};\n", emit_read_u64_aligned("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx"));
                 ret_str += &format!("\t\t___private_memcpy_nonmmu(&{}, &temp, sizeof(ulong));\n", result_register);
                 ret_str += &format!("\t\t*sp -= 2;\n");
                 ret_str += &format!("\t}}\n");
@@ -420,7 +423,7 @@ pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut St
             for parameter in func_type_signature.clone().inline.unwrap().params.to_vec() {
                 match parameter {
                     (_, _, t) => {
-                        parameter_offset += writer.get_size_valtype(&t);
+                        parameter_offset += 2;
                     },
                 }
             }
@@ -508,7 +511,7 @@ pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut St
                         offset = write_u32;
                     }
                     final_str += &format!("\t{};\n", offset);
-                    sp_counter += 1;
+                    sp_counter += 2;
                 },
                 wast::ValType::I64 => {
                     // compute the offset to read from the bottom of the stack
@@ -520,7 +523,7 @@ pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut St
     
                     if sp_counter > 0 {
                         let read_sfp = emit_read_u32_aligned("(ulong)(stack_frames+*sfp)", "(ulong)(stack_frames)", "warp_idx");
-                        let write_u64 = emit_write_u64(&format!("(ulong)(stack_u32-{}+{})", parameter_offset, read_sfp), "(ulong)stack_u32", &format!("{}", reg), "warp_idx");
+                        let write_u64 = emit_write_u64_aligned(&format!("(ulong)(stack_u32-{}+{})", parameter_offset, read_sfp), "(ulong)stack_u32", &format!("{}", reg), "warp_idx");
                         /*
                         offset = format!("write_u64((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx, read_idx, thread_idx, scratch_space)),
                                                     (ulong)stack_u32,
@@ -530,7 +533,7 @@ pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut St
                         offset = write_u64;
                     } else {
                         let read_sfp = emit_read_u32_aligned("(ulong)(stack_frames+*sfp)", "(ulong)(stack_frames)", "warp_idx");
-                        let write_u64 = emit_write_u64(&format!("(ulong)(stack_u32-{}+{})", parameter_offset, read_sfp), "(ulong)stack_u32", &format!("{}", reg), "warp_idx");
+                        let write_u64 = emit_write_u64_aligned(&format!("(ulong)(stack_u32-{}+{})", parameter_offset, read_sfp), "(ulong)stack_u32", &format!("{}", reg), "warp_idx");
                         /*
                         offset = format!("write_u64((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx, read_idx, thread_idx, scratch_space)),
                                                     (ulong)stack_u32,
@@ -577,7 +580,7 @@ pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut St
                     final_str += &format!("\t\t___private_memcpy_nonmmu(&temp, &{}, sizeof(float));\n", reg);
                     final_str += &format!("\t\t{};\n", offset);
                     final_str += &format!("\t}}\n");
-                    sp_counter += 1;
+                    sp_counter += 2;
                 },
                 wast::ValType::F64 => {
                     // compute the offset to read from the bottom of the stack
@@ -590,7 +593,7 @@ pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut St
     
                     if sp_counter > 0 {
                         let read_sfp = emit_read_u32_aligned("(ulong)(stack_frames+*sfp)", "(ulong)(stack_frames)", "warp_idx");
-                        let write_u64 = emit_write_u64(&format!("(ulong)(stack_u32-{}+{})", parameter_offset, read_sfp), "(ulong)stack_u32", &format!("temp"), "warp_idx");
+                        let write_u64 = emit_write_u64_aligned(&format!("(ulong)(stack_u32-{}+{})", parameter_offset, read_sfp), "(ulong)stack_u32", &format!("temp"), "warp_idx");
                         /*
                         offset = format!("write_u64((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx, read_idx, thread_idx, scratch_space)),
                                                     (ulong)stack_u32,
@@ -600,7 +603,7 @@ pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut St
                         offset = write_u64;
                     } else {
                         let read_sfp = emit_read_u32_aligned("(ulong)(stack_frames+*sfp)", "(ulong)(stack_frames)", "warp_idx");
-                        let write_u64 = emit_write_u64(&format!("(ulong)(stack_u32-{}+{})", parameter_offset, read_sfp), "(ulong)stack_u32", &format!("temp"), "warp_idx");
+                        let write_u64 = emit_write_u64_aligned(&format!("(ulong)(stack_u32-{}+{})", parameter_offset, read_sfp), "(ulong)stack_u32", &format!("temp"), "warp_idx");
                         /*
                         offset = format!("write_u64((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx, read_idx, thread_idx, scratch_space)),
                                                     (ulong)stack_u32,
@@ -773,18 +776,18 @@ pub fn emit_call_indirect(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut
     for (param, ty) in stack_params.iter().zip(stack_params_types.iter()) {
         match ty {
             StackType::i32 => {
-                result += &format!("\t\t{};\n\t\t*sp += 1;\n",
+                result += &format!("\t{};\n\t*sp += 2;\n",
                                         emit_write_u32_aligned("(ulong)(stack_u32+*sp)", "(ulong)(stack_u32)", &param, "warp_idx"));
             },
             StackType::i64 => {
-                result += &format!("\t\t{};\n\t\t*sp += 2;\n",
-                                        emit_write_u64("(ulong)(stack_u32+*sp)", "(ulong)(stack_u32)", &param, "warp_idx"));
+                result += &format!("\t{};\n\t*sp += 2;\n",
+                                        emit_write_u64_aligned("(ulong)(stack_u32+*sp)", "(ulong)(stack_u32)", &param, "warp_idx"));
             },
             StackType::f32 => {
                 result += &format!("\t{{\n");
                 result += &format!("\t\tuint temp = 0;\n");
                 result += &format!("\t\t___private_memcpy_nonmmu(&temp, &{}, sizeof(uint));\n", param);
-                result += &format!("\t\t{};\n\t\t*sp += 1;\n",
+                result += &format!("\t\t{};\n\t\t*sp += 2;\n",
                                     emit_write_u32_aligned("(ulong)(stack_u32+*sp)", "(ulong)(stack_u32)", "temp", "warp_idx"));
                 result += &format!("\t}}\n");
             },
@@ -793,7 +796,7 @@ pub fn emit_call_indirect(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut
                 result += &format!("\t\tulong temp = 0;\n");
                 result += &format!("\t\t___private_memcpy_nonmmu(&temp, &{}, sizeof(double));\n", param);
                 result += &format!("\t\t{};\n\t\t*sp += 2;\n",
-                                    emit_write_u64("(ulong)(stack_u32+*sp)", "(ulong)(stack_u32)", "temp", "warp_idx"));
+                                    emit_write_u64_aligned("(ulong)(stack_u32+*sp)", "(ulong)(stack_u32)", "temp", "warp_idx"));
                 result += &format!("\t}}\n");
             }
         }
@@ -836,24 +839,24 @@ pub fn emit_call_indirect(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut
         match StackCtx::convert_wast_types(&result_types[0]) {
             StackType::i32 => {
                 result += &format!("\t{} = {};\n\t{};\n", result_register, 
-                                    emit_read_u32_aligned("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx"),
-                                    "*sp -= 1");
+                                    emit_read_u32_aligned("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx"),
+                                    "*sp -= 2");
             },
             StackType::i64 => {
                 result += &format!("\t{} = {};\n\t{};\n", result_register, 
-                                    emit_read_u64("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx"),
+                                    emit_read_u64_aligned("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx"),
                                     "*sp -= 2;");
             },
             StackType::f32 => {
                 result += &format!("\t{{\n");
-                result += &format!("\t\tuint temp = {};\n", emit_read_u32_aligned("(ulong)(stack_u32+*sp-1)", "(ulong)(stack_u32)", "warp_idx"));
+                result += &format!("\t\tuint temp = {};\n", emit_read_u32_aligned("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx"));
                 result += &format!("\t\t___private_memcpy_nonmmu(&{}, &temp, sizeof(uint));\n", result_register);
-                result += &format!("\t\t*sp -= 1;\n");
+                result += &format!("\t\t*sp -= 2;\n");
                 result += &format!("\t}}\n");
             },
             StackType::f64 => {
                 result += &format!("\t{{\n");
-                result += &format!("\t\tulong temp = {};\n", emit_read_u64("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx"));
+                result += &format!("\t\tulong temp = {};\n", emit_read_u64_aligned("(ulong)(stack_u32+*sp-2)", "(ulong)(stack_u32)", "warp_idx"));
                 result += &format!("\t\t___private_memcpy_nonmmu(&{}, &temp, sizeof(ulong));\n", result_register);
                 result += &format!("\t\t*sp -= 2;\n");
                 result += &format!("\t}}\n");

@@ -1316,14 +1316,14 @@ impl<'a> OpenCLCWriter<'_> {
                                     local_parameter_stack_offset.insert(id.name().to_string(), offset);
                                     local_type_info.insert(id.name().to_string(), t.clone());
                                     is_param.insert(id.name().to_string(), true);
-                                    offset += self.get_size_valtype(&t);
+                                    offset += 2;
                                 },
                                 // if there is no id, we have to name the parameter ourselves!
                                 (None, _, t) => {
                                     local_parameter_stack_offset.insert(format!("p{}", param_idx), offset);
                                     local_type_info.insert(format!("p{}", param_idx), t.clone());
                                     is_param.insert(format!("p{}", param_idx), true);
-                                    offset += self.get_size_valtype(&t);
+                                    offset += 2;
                                 },
                                 _ => panic!("Unhandled parameter type")
                             }
@@ -1352,7 +1352,7 @@ impl<'a> OpenCLCWriter<'_> {
                     local_type_info.insert(local_id.clone(), local.ty.clone());
                     is_param.insert(local_id.clone(), false);
 
-                    offset += self.get_size_valtype(&local.ty);
+                    offset += 2;
                     param_idx += 1;
                 }
 
@@ -1926,13 +1926,13 @@ __attribute__((always_inline)) void {}(global uint   *stack_u32,
         // zero the stack first
         ret_str += &format!("{}{}{}",
                             "\tfor (uint idx = 0; idx < (VMM_STACK_SIZE_BYTES / 4); idx++) {\n",
-                            format!("\t\t{};\n", &emit_write_u32("(ulong)((global uchar*)stack_u32+idx)", "(ulong)(stack_u32)", "0", "warp_idx")),
+                            format!("\t\t{};\n", &emit_write_u32_aligned("(ulong)((global uchar*)stack_u32+idx)", "(ulong)(stack_u32)", "0", "warp_idx")),
                             "\t}\n");
 
         // zero the heap next
         ret_str += &format!("{}{}{}",
                             "\tfor (uint idx = 0; idx < (VMM_HEAP_SIZE_BYTES / 4); idx++) {\n",
-                            format!("\t\t{};\n", &emit_write_u32("(ulong)((global uchar*)heap_u32+idx)", "(ulong)(heap_u32)", "0", "warp_idx")),
+                            format!("\t\t{};\n", &emit_write_u32_aligned("(ulong)((global uchar*)heap_u32+idx)", "(ulong)(heap_u32)", "0", "warp_idx")),
                             "\t}\n");
 
         ret_str
@@ -2027,7 +2027,7 @@ __attribute__((always_inline)) void {}(global uint   *stack_u32,
 
             result += &format!("\t{};\n",
                                "*sfp = 0");
-            result += &format!("local ulong2 scratch_space[{}];", (local_work_group));
+            result += &format!("\tlocal ulong2 scratch_space[{}];\n", (local_work_group));
 
             if interleave == 0 {
                 result += &format!("\t{}\n",
