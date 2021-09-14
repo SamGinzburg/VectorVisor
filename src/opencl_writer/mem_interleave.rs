@@ -907,7 +907,7 @@ pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interle
             result += &format!("\t{}\n",
                                "for (uint idx = 0; idx < buf_len_bytes; idx++) {");
 
-            result += &format!("\t{} = {};\n",
+            result += &format!("\t\t{} = {};\n",
                                "*dst_tmp++",
                                &emit_read_u8("(ulong)(src+idx)", "(ulong)(mem_start_src)", "warp_id"));
 
@@ -921,7 +921,7 @@ pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interle
             result += &format!("\t{}\n",
                                "for (uint idx = 0; idx < buf_len_bytes; idx++) {");
 
-            result += &format!("\t{} = {};\n",
+            result += &format!("\t\t{} = {};\n",
                                "*dst_tmp++",
                                &emit_fast_read_u8("(ulong)(addr+idx*NUM_THREADS)", "(ulong)(mem_start_src)", "warp_id"));
 
@@ -930,16 +930,11 @@ pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interle
         },
         8 => {
             result += &format!("\t{}\n",
-                               "ulong addr = (ulong)((global uchar*)((((src)-(ulong)(mem_start_src))/8)*(NUM_THREADS*8) + (warp_id*8) + (ulong)mem_start_src));");
-            result += &format!("\t{}\n",
-                               "ulong cell_offset = (src-mem_start_src) % 8;");
-            result += &format!("\t{}\n",
                                "for (uint idx = 0; idx < buf_len_bytes; idx++) {");
 
-            result += &format!("\t{} = {};\n",
+            result += &format!("\t\t{} = {};\n",
                                "*dst_tmp++",
-                               &emit_fast_read_u8("(ulong)(addr+(idx*NUM_THREADS*8)) + cell_offset", "(ulong)(mem_start_src)", "warp_id"));
-
+                               &emit_read_u8("(ulong)(src+idx)", "(ulong)(mem_start_src)", "warp_id"));
             result += &format!("\t{}\n",
                                "}");
         }
