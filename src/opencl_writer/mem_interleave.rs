@@ -465,7 +465,7 @@ fn emit_read_u16_body(interleave: u32, local_work_group: usize, mexec: usize, em
                 result += &format!("\t{}\n",
                                 "scratch_space[thread_idx].hi = (ulong)*((global ulong*)read_addr+(NUM_THREADS));");
                 result += &format!("\t{}\n",
-                                "scratch_space[thread_idx] = (ulong2)shuffle((uchar16)scratch_space[thread_idx], (uchar16)(cell_offset, cell_offset+1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0));");
+                                "scratch_space[thread_idx] = as_ulong2(shuffle(as_uchar16(scratch_space[thread_idx]), (uchar16)(cell_offset, cell_offset+1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)));");
                 result += &format!("\t{}\n",
                                 "return (ushort)scratch_space[thread_idx].lo;");
             }
@@ -590,7 +590,7 @@ fn emit_read_u32_body(interleave: u32, local_work_group: usize, mexec: usize, em
                 result += &format!("\t{}\n",
                                 "scratch_space[thread_idx].hi = (ulong)*((global ulong*)read_addr+(NUM_THREADS));");
                 result += &format!("\t{}\n",
-                                "scratch_space[thread_idx] = (ulong2)shuffle((uchar16)scratch_space[thread_idx], (uchar16)(cell_offset, cell_offset+1, cell_offset+2, cell_offset+3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0));");
+                                "scratch_space[thread_idx] = as_ulong2(shuffle(as_uchar16(scratch_space[thread_idx]), (uchar16)(cell_offset, cell_offset+1, cell_offset+2, cell_offset+3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)));");
                 result += &format!("\t{}\n",
                                 "return (uint)scratch_space[thread_idx].lo;");
             }
@@ -755,7 +755,7 @@ fn emit_read_u64_body(interleave: u32, local_work_group: usize, mexec: usize, em
                 result += &format!("\t{}\n",
                                 "scratch_space[thread_idx].hi = (ulong)*((global ulong*)read_addr+(NUM_THREADS));");
                 result += &format!("\t{}\n",
-                                "scratch_space[thread_idx] = (ulong2)shuffle((uchar16)scratch_space[thread_idx], (uchar16)(cell_offset, cell_offset+1, cell_offset+2, cell_offset+3, cell_offset+4, cell_offset+5, cell_offset+6, cell_offset+7, 0, 0, 0, 0, 0, 0, 0, 0));");
+                                "scratch_space[thread_idx] = as_ulong2(shuffle(as_uchar16(scratch_space[thread_idx]), (uchar16)(cell_offset, cell_offset+1, cell_offset+2, cell_offset+3, cell_offset+4, cell_offset+5, cell_offset+6, cell_offset+7, 0, 0, 0, 0, 0, 0, 0, 0)));");
                 result += &format!("\t{}\n",
                                 "return (ulong)scratch_space[thread_idx].lo;");
             }
