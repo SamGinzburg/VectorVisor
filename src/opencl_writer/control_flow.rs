@@ -121,10 +121,8 @@ pub fn emit_br(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx,
     ret_str
 }
 
-pub fn emit_br_if(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, idx: wast::Index, fn_name: &str, stack_sizes: &mut Vec<u32>, control_stack: &mut Vec<ControlStackEntryType>, function_id_map: HashMap<&str, u32>, is_fastcall: bool, debug: bool) -> String {
+pub fn emit_br_if(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, idx: wast::Index, fn_name: &str, control_stack: &mut Vec<ControlStackEntryType>, function_id_map: HashMap<&str, u32>, is_fastcall: bool, debug: bool) -> String {
     let mut ret_str = String::from("");
-    
-    stack_sizes.pop().unwrap();
 
     let reg = stack_ctx.vstack_pop(StackType::i32);
 
@@ -399,14 +397,13 @@ pub fn emit_else(_writer: &opencl_writer::OpenCLCWriter, fn_name: String, contro
     result
 }
 
-pub fn emit_br_table(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, table_indicies: &wast::BrTableIndices, fn_name: &str, stack_sizes: &mut Vec<u32>, control_stack: &mut Vec<ControlStackEntryType>, function_id_map: HashMap<&str, u32>, is_fastcall: bool, debug: bool) -> String {
+pub fn emit_br_table(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, table_indicies: &wast::BrTableIndices, fn_name: &str, control_stack: &mut Vec<ControlStackEntryType>, function_id_map: HashMap<&str, u32>, is_fastcall: bool, debug: bool) -> String {
     let mut ret_str = String::from("");
 
     let indicies = &table_indicies.labels;
 
     // read the label_idx from stack, always i32
     let label_idx = stack_ctx.vstack_pop(StackType::i32);
-    stack_sizes.pop().unwrap();
 
     // save locals
     if !is_fastcall {

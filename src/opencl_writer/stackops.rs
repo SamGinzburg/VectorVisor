@@ -7,7 +7,7 @@ use crate::opencl_writer::StackType;
 
 use std::collections::HashMap;
 
-pub fn emit_local_get(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _parameter_offset: i32, id: &str, _offsets: &HashMap<String, u32>, type_info: &HashMap<String, ValType>, stack_sizes: &mut Vec<u32>, _debug: bool) -> String {
+pub fn emit_local_get(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _parameter_offset: i32, id: &str, _offsets: &HashMap<String, u32>, type_info: &HashMap<String, ValType>, _debug: bool) -> String {
     let t = type_info.get(id).unwrap();
 
     let local_id = if stack_ctx.is_local_local(id.to_string()) {
@@ -18,30 +18,18 @@ pub fn emit_local_get(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut St
 
     match t {
         wast::ValType::I32 => {
-
-            stack_sizes.push(1);
-
             let register = stack_ctx.vstack_alloc(StackType::i32);
             format!("\t{} = {};\n", register, local_id)
         },
         wast::ValType::I64 => {
-
-            stack_sizes.push(2);
-
             let register = stack_ctx.vstack_alloc(StackType::i64);
             format!("\t{} = {};\n", register, local_id)
         },
         wast::ValType::F32 => {
-
-            stack_sizes.push(1);
-
             let register = stack_ctx.vstack_alloc(StackType::f32);
             format!("\t{} = {};\n", register, local_id)
         },
         wast::ValType::F64 => {
-
-            stack_sizes.push(2);
-
             let register = stack_ctx.vstack_alloc(StackType::f64);
             format!("\t{} = {};\n", register, local_id)
         },
@@ -49,7 +37,7 @@ pub fn emit_local_get(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut St
     }
 }
 
-pub fn emit_local_set(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _parameter_offset: i32, id: &str, offsets: &HashMap<String, u32>, type_info: &HashMap<String, ValType>, stack_sizes: &mut Vec<u32>, is_fastcall: bool, _debug: bool) -> String {
+pub fn emit_local_set(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _parameter_offset: i32, id: &str, offsets: &HashMap<String, u32>, type_info: &HashMap<String, ValType>, is_fastcall: bool, _debug: bool) -> String {
     let cache_offset: u32 = *offsets.get(id).unwrap();
     let t = type_info.get(id).unwrap();
     let cache = if !is_fastcall {
@@ -57,8 +45,6 @@ pub fn emit_local_set(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut St
     } else {
         String::from("")
     };
-
-    stack_sizes.pop();
 
     let local_id = if stack_ctx.is_local_local(id.to_string()) {
         format!("{}[thread_idx]", id)
@@ -87,7 +73,7 @@ pub fn emit_local_set(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut St
     }
 }
 
-pub fn emit_local_tee(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, parameter_offset: i32, id: &str, offsets: &HashMap<String, u32>, type_info: &HashMap<String, ValType>, stack_sizes: &mut Vec<u32>, is_fastcall: bool, debug: bool) -> String {
+pub fn emit_local_tee(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, parameter_offset: i32, id: &str, offsets: &HashMap<String, u32>, type_info: &HashMap<String, ValType>, is_fastcall: bool, debug: bool) -> String {
     let t = type_info.get(id).unwrap();
     let cache_offset: u32 = *offsets.get(id).unwrap();
     let cache = if !is_fastcall {

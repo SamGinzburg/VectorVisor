@@ -125,7 +125,7 @@ pub fn get_func_result(writer: &opencl_writer::OpenCLCWriter, ty: &wast::TypeUse
 }
 
 
-pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, fn_name: String, idx: wast::Index, call_ret_map: &mut HashMap<&str, u32>, call_ret_idx: &mut u32, function_id_map: &HashMap<&str, u32>, stack_sizes: &mut Vec<u32>, is_indirect: bool, is_fastcall: bool, indirect_fastcall_param: String, indirect_fastcall_stack_params: Vec<String>, _debug: bool) -> String {
+pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, fn_name: String, idx: wast::Index, call_ret_map: &mut HashMap<&str, u32>, call_ret_idx: &mut u32, function_id_map: &HashMap<&str, u32>, is_indirect: bool, is_fastcall: bool, indirect_fastcall_param: String, indirect_fastcall_stack_params: Vec<String>, _debug: bool) -> String {
     let mut ret_str = String::from("");
     let id = &match idx {
         wast::Index::Id(id) => id.name().to_string(),
@@ -153,7 +153,6 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stack
                 match parameter {
                     (_, _, t) => {
                         if !is_indirect {
-                            stack_sizes.pop().unwrap();
                             let (param, param_type) = stack_ctx.vstack_pop_any();
                             stack_params.insert(0, param);
                             stack_params_types.insert(0, param_type);
@@ -183,7 +182,6 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stack
                         match parameter {
                             (_, _, t) => {
                                 if !is_indirect {
-                                    stack_sizes.pop().unwrap();
                                     let (param, param_type) = stack_ctx.vstack_pop_any();
                                     stack_params.insert(0, param);
                                     stack_params_types.insert(0, param_type);
@@ -254,10 +252,6 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stack
     } else {
         0
     };
-
-    if !is_indirect {
-        stack_sizes.push(return_size);
-    }
 
     let result = if return_size > 0 && !is_fastcall {
         format!("\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n",
@@ -657,16 +651,11 @@ pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut St
  *  each other, so we must process them sequentially.
  * 
  */
-pub fn emit_call_indirect(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, call_indirect: &wast::CallIndirect, curr_fn_name: String, fastcalls: &HashSet<String>, table: &HashMap<u32, &wast::Index>, call_ret_map: &mut HashMap<&str, u32>, call_ret_idx: &mut u32, call_indirect_count: &mut u32, function_id_map: HashMap<&str, u32>, stack_sizes: &mut Vec<u32>, call_indirect_type_index: String, debug: bool) -> String {
+pub fn emit_call_indirect(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, call_indirect: &wast::CallIndirect, curr_fn_name: String, fastcalls: &HashSet<String>, table: &HashMap<u32, &wast::Index>, call_ret_map: &mut HashMap<&str, u32>, call_ret_idx: &mut u32, call_indirect_count: &mut u32, function_id_map: HashMap<&str, u32>, call_indirect_type_index: String, debug: bool) -> String {
     let mut result = String::from("");
     // set up a switch case statement, we read the last value on the stack and determine what function we are going to call
     // this adds code bloat, but it reduces the complexity of the compiler.
     // It is worth revisiting this later, but not urgent. 
-
-    // the index into the function table
-    if stack_sizes.pop().unwrap() != 1 {
-        panic!("Function table index for indirect call must be of type i32");
-    }
 
     let index_register = stack_ctx.vstack_pop(StackType::i32);
 
@@ -691,7 +680,6 @@ pub fn emit_call_indirect(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut
 
             // First, pop off the parameters
             for (_, _, _) in func_type.params.iter() {
-                stack_sizes.pop().unwrap();
                 let (param, param_type) = stack_ctx.vstack_pop_any();
                 stack_params.insert(0, param);
                 stack_params_types.insert(0, param_type);
@@ -699,7 +687,6 @@ pub fn emit_call_indirect(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut
 
             // Next, push the result(s) back
             for return_type in func_type.results.iter() {
-                stack_sizes.push(writer.get_size_valtype(return_type));
                 result_types.push(return_type);
             }
         },
@@ -748,7 +735,7 @@ pub fn emit_call_indirect(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut
            curr_fn_name != f_name &&
            func_type_index == call_indirect_type_index {
             result += &format!("\t\t{}\n", format!("case {}:", key));
-            result += &format!("{}", emit_fn_call(writer, stack_ctx, curr_fn_name.clone(), **value, call_ret_map, call_ret_idx, &function_id_map, stack_sizes, true, true, result_register.clone(), stack_params.clone(), debug));
+            result += &format!("{}", emit_fn_call(writer, stack_ctx, curr_fn_name.clone(), **value, call_ret_map, call_ret_idx, &function_id_map, true, true, result_register.clone(), stack_params.clone(), debug));
             result += &format!("\t\t\t{}\n", format!("break;"));
         }
         */
@@ -820,7 +807,7 @@ pub fn emit_call_indirect(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut
         // emit the function call here!
         if func_type_index == call_indirect_type_index {
             result += &format!("\t\t{}\n", format!("case {}:", key));
-            result += &format!("{}", emit_fn_call(writer, stack_ctx, curr_fn_name.clone(), **value, call_ret_map, call_ret_idx, &function_id_map, stack_sizes, true, false, String::from(""), vec![], debug));
+            result += &format!("{}", emit_fn_call(writer, stack_ctx, curr_fn_name.clone(), **value, call_ret_map, call_ret_idx, &function_id_map, true, false, String::from(""), vec![], debug));
             result += &format!("\t\t\t{}\n", format!("break;"));
         }
     }

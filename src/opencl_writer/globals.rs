@@ -12,14 +12,12 @@ pub fn emit_global_get(_writer: &opencl_writer::OpenCLCWriter,
                        stack_ctx: &mut StackCtx,
                        global_id: &str,
                        global_mappings: &HashMap<String, (u32, u32)>,
-                       stack_sizes: &mut Vec<u32>,
                        _debug: bool) -> String {
     let mut ret_str = String::from("");
     let (offset, size) = global_mappings.get(global_id).unwrap();
 
     match size {
         1 => {
-            stack_sizes.push(1);
             let result_register = stack_ctx.vstack_alloc(StackType::i32);
             let global_read = emit_read_u32(&format!("(ulong)((global char*)globals_buffer+{})", offset*4),
                                             "(ulong)(globals_buffer)",
@@ -27,7 +25,6 @@ pub fn emit_global_get(_writer: &opencl_writer::OpenCLCWriter,
             ret_str += &format!("\t{} = {};\n", result_register, global_read);
         },
         2 => {
-            stack_sizes.push(2);
             let result_register = stack_ctx.vstack_alloc(StackType::i64);
             let global_read = emit_read_u64(&format!("(ulong)((global char*)globals_buffer+{})", offset*4),
                                             "(ulong)(globals_buffer)",
@@ -46,11 +43,9 @@ pub fn emit_global_set(_writer: &opencl_writer::OpenCLCWriter,
                        stack_ctx: &mut StackCtx,
                        global_id: &str,
                        global_mappings: &HashMap<String, (u32, u32)>,
-                       stack_sizes: &mut Vec<u32>,
                        _debug: bool) -> String {
     let mut ret_str = String::from("");
     let (offset, size) = global_mappings.get(global_id).unwrap();
-    stack_sizes.pop().unwrap();
 
     // TODO: provide better support for non-i32/i64 global types
     // so far not needed for any benchmarks
