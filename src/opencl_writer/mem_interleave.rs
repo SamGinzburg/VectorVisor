@@ -446,7 +446,7 @@ fn emit_read_u16_body(interleave: u32, local_work_group: usize, mexec: usize, em
                                 "return *((global ushort*)((global uchar*)read_addr));");
                 result += &format!("\t{}\n",
                                 "}");
-                result += &format!("\t\t{}\n",
+                result += &format!("\t{}\n",
                                 "return read_u16(addr, mem_start, warp_id, read_idx, thread_idx, scratch_space);");
             } else if emit_aligned {
                 result += &format!("\t{}\n",
@@ -579,7 +579,7 @@ fn emit_read_u32_body(interleave: u32, local_work_group: usize, mexec: usize, em
                                 "return *((global uint*)((global uchar*)read_addr));");
                 result += &format!("\t{}\n",
                                 "}");
-                result += &format!("\t\t{}\n",
+                result += &format!("\t{}\n",
                                 "return read_u32(addr, mem_start, warp_id, read_idx, thread_idx, scratch_space);");
             } else if emit_aligned {
                 result += &format!("\t{}\n",
@@ -756,7 +756,7 @@ fn emit_read_u64_body(interleave: u32, local_work_group: usize, mexec: usize, em
                                 "return *((global ulong*)((global uchar*)read_addr));");
                 result += &format!("\t{}\n",
                                 "}");
-                result += &format!("\t\t{}\n",
+                result += &format!("\t{}\n",
                                 "return read_u64(addr, mem_start, warp_id, read_idx, thread_idx, scratch_space);");
             } else if emit_aligned {
                 result += &format!("\t{}\n",
