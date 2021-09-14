@@ -160,7 +160,14 @@ impl VectorizedVM {
 
         let engine = Engine::default();
         let store = Store::new(&engine);
-        let memory_ty = MemoryType::new(Limits::new(1, None));
+
+         let num_vm_pages = if hcall_buf_size >= (1024 * 64) {
+            hcall_buf_size / (1024 * 64)
+        } else {
+            1
+        };
+
+        let memory_ty = MemoryType::new(Limits::new(num_vm_pages, None));
         let memory = Memory::new(&store, memory_ty);
 
         VectorizedVM {
