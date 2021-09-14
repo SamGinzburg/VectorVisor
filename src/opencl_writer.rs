@@ -1920,6 +1920,9 @@ r#"
   : ((y) != (y)) ? NAN                            \
   : ((x) == 0 && (y) == 0) ? (signbit(x) ? y : x) \
   : (x > y) ? x : y)
+
+#define IS_ALIGNED_POW2(addr, align) \
+    !((addr - (addr & ~(align-1))) > 0)
 "#).unwrap();
 
         // generate the read/write functions

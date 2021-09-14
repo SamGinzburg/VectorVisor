@@ -91,7 +91,7 @@ fn emit_write_u16_body(interleave: u32, local_work_group: usize, mexec: usize, e
                 result += &format!("\t{}\n",
                             "write_addr += (addr-mem_start) % 8;");
                 result += &format!("\t{}\n",
-                            "if ((ulong)write_addr % 2 == 0) {");
+                            "if (IS_ALIGNED_POW2((ulong)write_addr, 2)) {");
                 result += &format!("\t\t{}\n",
                             "*((global ushort*)((global uchar*)write_addr)) = value;");
                 result += &format!("\t{}\n",
@@ -187,7 +187,7 @@ fn emit_write_u32_body(interleave: u32, local_work_group: usize, mexec: usize, e
                 result += &format!("\t{}\n",
                             "write_addr += (addr-mem_start) % 8;");
                 result += &format!("\t{}\n",
-                            "if ((ulong)write_addr % 4 == 0) {");
+                            "if (IS_ALIGNED_POW2((ulong)write_addr, 4)) {");
                 result += &format!("\t\t{}\n",
                             "*((global uint*)((global uchar*)write_addr)) = value;");
                 result += &format!("\t{}\n",
@@ -310,7 +310,7 @@ fn emit_write_u64_body(interleave: u32, local_work_group: usize, mexec: usize, e
                 result += &format!("\t{}\n",
                             "write_addr += (addr-mem_start) % 8;");
                 result += &format!("\t{}\n",
-                            "if ((ulong)write_addr % 8 == 0) {");
+                            "if (IS_ALIGNED_POW2((ulong)write_addr, 8)) {");
                 result += &format!("\t\t{}\n",
                             "*((global ulong*)((global uchar*)write_addr)) = value;");
                 result += &format!("\t{}\n",
@@ -441,7 +441,7 @@ fn emit_read_u16_body(interleave: u32, local_work_group: usize, mexec: usize, em
                 result += &format!("\t{}\n",
                                 "read_addr += (addr-mem_start) % 8;");
                 result += &format!("\t{}\n",
-                                "if ((ulong)read_addr % 2 == 0) {");
+                                "if (IS_ALIGNED_POW2((ulong)read_addr, 2)) {");
                 result += &format!("\t\t{}\n",
                                 "return *((global ushort*)((global uchar*)read_addr));");
                 result += &format!("\t{}\n",
@@ -574,7 +574,7 @@ fn emit_read_u32_body(interleave: u32, local_work_group: usize, mexec: usize, em
                 result += &format!("\t{}\n",
                                 "read_addr += (addr-mem_start) % 8;");
                 result += &format!("\t{}\n",
-                                "if ((ulong)read_addr % 4 == 0) {");
+                                "if (IS_ALIGNED_POW2((ulong)read_addr, 4)) {");
                 result += &format!("\t\t{}\n",
                                 "return *((global uint*)((global uchar*)read_addr));");
                 result += &format!("\t{}\n",
@@ -751,7 +751,7 @@ fn emit_read_u64_body(interleave: u32, local_work_group: usize, mexec: usize, em
                 result += &format!("\t{}\n",
                                 "read_addr += (addr-mem_start) % 8;");
                 result += &format!("\t{}\n",
-                                "if ((ulong)read_addr % 8 == 0) {");
+                                "if (IS_ALIGNED_POW2((ulong)read_addr, 8)) {");
                 result += &format!("\t\t{}\n",
                                 "return *((global ulong*)((global uchar*)read_addr));");
                 result += &format!("\t{}\n",
