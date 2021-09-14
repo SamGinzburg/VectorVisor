@@ -461,21 +461,13 @@ fn emit_read_u16_body(interleave: u32, local_work_group: usize, mexec: usize, em
                 result += &format!("\t{}\n",
                                 "ulong cell_offset = (addr-mem_start) % 8;");
                 result += &format!("\t{}\n",
-                                "ushort tmp_vec = 0;");
-                result += &format!("\t{}\n",
-                                "uchar *tmp = &tmp_vec;");
-                result += &format!("\t{}\n",
                                 "scratch_space[thread_idx].lo = (ulong)*((global ulong*)read_addr);");
                 result += &format!("\t{}\n",
                                 "scratch_space[thread_idx].hi = (ulong)*((global ulong*)read_addr+(NUM_THREADS));");
                 result += &format!("\t{}\n",
-                                "local uchar *combined = &scratch_space[thread_idx];");
+                                "scratch_space[thread_idx] = (ulong2)shuffle((uchar16)scratch_space[thread_idx], (uchar16)(cell_offset, cell_offset+1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0));");
                 result += &format!("\t{}\n",
-                                "tmp[0] = combined[cell_offset];");
-                result += &format!("\t{}\n",
-                                "tmp[1] = combined[cell_offset+1];");
-                result += &format!("\t{}\n",
-                                "return tmp_vec;");
+                                "return (ushort)scratch_space[thread_idx].lo;");
             }
         },
         _ => panic!("Unsupported read/write interleave"),
@@ -594,25 +586,13 @@ fn emit_read_u32_body(interleave: u32, local_work_group: usize, mexec: usize, em
                 result += &format!("\t{}\n",
                                 "ulong cell_offset = (addr-mem_start) % 8;");
                 result += &format!("\t{}\n",
-                                "uint tmp_vec = 0;");
-                result += &format!("\t{}\n",
-                                "uchar *tmp = &tmp_vec;");
-                result += &format!("\t{}\n",
                                 "scratch_space[thread_idx].lo = (ulong)*((global ulong*)read_addr);");
                 result += &format!("\t{}\n",
                                 "scratch_space[thread_idx].hi = (ulong)*((global ulong*)read_addr+(NUM_THREADS));");
                 result += &format!("\t{}\n",
-                                "local uchar *combined = &scratch_space[thread_idx];");
+                                "scratch_space[thread_idx] = (ulong2)shuffle((uchar16)scratch_space[thread_idx], (uchar16)(cell_offset, cell_offset+1, cell_offset+2, cell_offset+3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0));");
                 result += &format!("\t{}\n",
-                                "tmp[0] = combined[cell_offset];");
-                result += &format!("\t{}\n",
-                                "tmp[1] = combined[cell_offset+1];");
-                result += &format!("\t{}\n",
-                                "tmp[2] = combined[cell_offset+2];");
-                result += &format!("\t{}\n",
-                                "tmp[3] = combined[cell_offset+3];");
-                result += &format!("\t{}\n",
-                                "return tmp_vec;");
+                                "return (uint)scratch_space[thread_idx].lo;");
             }
         },
         _ => panic!("Unsupported read/write interleave"),
@@ -771,33 +751,13 @@ fn emit_read_u64_body(interleave: u32, local_work_group: usize, mexec: usize, em
                 result += &format!("\t{}\n",
                                 "ulong cell_offset = (addr-mem_start) % 8;");
                 result += &format!("\t{}\n",
-                                "ulong tmp_vec = 0;");
-                result += &format!("\t{}\n",
-                                "uchar *tmp = &tmp_vec;");
-                result += &format!("\t{}\n",
                                 "scratch_space[thread_idx].lo = (ulong)*((global ulong*)read_addr);");
                 result += &format!("\t{}\n",
                                 "scratch_space[thread_idx].hi = (ulong)*((global ulong*)read_addr+(NUM_THREADS));");
                 result += &format!("\t{}\n",
-                                "local uchar *combined = &scratch_space[thread_idx];");
+                                "scratch_space[thread_idx] = (ulong2)shuffle((uchar16)scratch_space[thread_idx], (uchar16)(cell_offset, cell_offset+1, cell_offset+2, cell_offset+3, cell_offset+4, cell_offset+5, cell_offset+6, cell_offset+7, 0, 0, 0, 0, 0, 0, 0, 0));");
                 result += &format!("\t{}\n",
-                                "tmp[0] = combined[cell_offset];");
-                result += &format!("\t{}\n",
-                                "tmp[1] = combined[cell_offset+1];");
-                result += &format!("\t{}\n",
-                                "tmp[2] = combined[cell_offset+2];");
-                result += &format!("\t{}\n",
-                                "tmp[3] = combined[cell_offset+3];");
-                result += &format!("\t{}\n",
-                                "tmp[4] = combined[cell_offset+4];");
-                result += &format!("\t{}\n",
-                                "tmp[5] = combined[cell_offset+5];");
-                result += &format!("\t{}\n",
-                                "tmp[6] = combined[cell_offset+6];");
-                result += &format!("\t{}\n",
-                                "tmp[7] = combined[cell_offset+7];");
-                result += &format!("\t{}\n",
-                                "return tmp_vec;");
+                                "return (ulong)scratch_space[thread_idx].lo;");
             }
         },
         _ => panic!("Unsupported read/write interleave"),
