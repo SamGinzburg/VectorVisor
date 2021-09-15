@@ -293,19 +293,19 @@ impl OpenCLRunner {
 
         let globals_buffer = unsafe {
             if global_buffers_size > 0 {
-                size_tracker += (global_buffers_size * 8 * self.num_vms) as u64;
+                size_tracker += (global_buffers_size * 8 * self.num_vms * 2) as u64;
                 ocl::core::create_buffer::<_, u8>(context,
                     ocl::core::MEM_READ_WRITE,
                     // global_buffers_size is in increments of 8 bytes
-                    (global_buffers_size * 8 * self.num_vms) as usize,
+                    (global_buffers_size * 8 * self.num_vms * 2) as usize,
                     None).unwrap()
             } else {
-                size_tracker += (8) as u64;
+                size_tracker += (1) as u64;
                 // just to get by, create a buffer of size 1 that we will never use
                 ocl::core::create_buffer::<_, u8>(context,
                     ocl::core::MEM_READ_WRITE,
                     // global_buffers_size is in increments of 8 bytes
-                    8,
+                    1,
                     None).unwrap()
             }
         };
@@ -403,7 +403,7 @@ impl OpenCLRunner {
                                               (self.num_vms * mexec) as usize,
                                               None).unwrap()
         };
-        size_tracker += (self.num_vms) as u64;
+        size_tracker += (self.num_vms * mexec) as u64;
 
         let hcall_size = unsafe {
             ocl::core::create_buffer::<_, u8>(context,
