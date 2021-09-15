@@ -1420,9 +1420,9 @@ impl<'a> OpenCLCWriter<'_> {
                     uint   *current_mem_size,
                     uint   *max_mem_size,
                     uchar  *is_calling,
-                    ulong  warp_idx,
-                    ulong  thread_idx,
-                    ulong  read_idx,
+                    uint   warp_idx,
+                    uint   thread_idx,
+                    uint   read_idx,
                     uchar  *scratch_space,
                     uint   hcall_size,
                     uint   *entry_point,
@@ -1444,9 +1444,9 @@ impl<'a> OpenCLCWriter<'_> {
                     uint   *current_mem_size,
                     uint   *max_mem_size,
                     uchar  *is_calling,
-                    ulong  warp_idx,
-                    ulong  thread_idx,
-                    ulong  read_idx,
+                    uint   warp_idx,
+                    uint   thread_idx,
+                    uint   read_idx,
                     uchar  *scratch_space,
                     uint   hcall_size,
                     uint   *entry_point,
@@ -1487,9 +1487,9 @@ impl<'a> OpenCLCWriter<'_> {
             // TODO: for the openCL launcher, pass the memory stride as a function parameter
             if interleave > 0 && mexec > 1 {
                 write!(output, "\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\n\t{}\n",
-                format!("ulong warp_idx = get_global_id(0) / {};",  mexec),
-                format!("ulong thread_idx = get_local_id(0) / {};",  mexec),
-                format!("ulong read_idx = get_local_id(0) % {};",  mexec),
+                format!("uint warp_idx = get_global_id(0) / {};",  mexec),
+                format!("uint thread_idx = get_local_id(0) / {};",  mexec),
+                format!("uint read_idx = get_local_id(0) % {};",  mexec),
                 format!("local ulong scratch_space[{}];", (local_work_group)),
                 "global uint  *stack_u32    = (global uint*)stack_u32_global;",
                 "global ulong *stack_u64    = (global ulong*)stack_u32;",
@@ -1516,9 +1516,9 @@ impl<'a> OpenCLCWriter<'_> {
                 "global uint  *hcall_size = (global uint*)hcall_size_global+warp_idx;").unwrap();
             } else if interleave > 0 {
                 write!(output, "\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\n\t{}\n",
-                "ulong warp_idx = get_global_id(0);",
-                "ulong thread_idx = get_local_id(0);",
-                format!("ulong read_idx = 0;"), // dummy value here, isn't used
+                "uint warp_idx = get_global_id(0);",
+                "uint thread_idx = get_local_id(0);",
+                format!("uint read_idx = 0;"), // dummy value here, isn't used
                 format!("local ulong2 scratch_space[{}];", (local_work_group)),
                 "global uint  *stack_u32    = (global uint*)stack_u32_global;",
                 "global ulong *stack_u64    = (global ulong*)stack_u32;",
@@ -1568,9 +1568,9 @@ impl<'a> OpenCLCWriter<'_> {
                 "global uint *max_mem_size = (global uint *)max_mem_size_global+(get_global_id(0));",
                 "global uchar *is_calling = (global uchar *)is_calling_global+(get_global_id(0));",
                 "global uint  *entry_point   = (global uint *)entry_point_global+get_global_id(0);",
-                "ulong warp_idx = get_global_id(0);",
-                "ulong thread_idx = get_local_id(0);",
-                format!("ulong read_idx = 0;"), // dummy value here, isn't used
+                "uint warp_idx = get_global_id(0);",
+                "uint thread_idx = get_local_id(0);",
+                format!("uint read_idx = 0;"), // dummy value here, isn't used
                 format!("local uchar scratch_space[{}];", 0), // dummy value here, isn't used
                 "global uint  *hcall_ret_val = (global uint*)hcall_ret_val_global+get_global_id(0);").unwrap();
             }
@@ -1593,9 +1593,9 @@ __attribute__((always_inline)) void {}(global uint   *stack_u32,
     global uint   *current_mem_size,
     global uint   *max_mem_size,
     global uchar  *is_calling,
-    ulong  warp_idx,
-    ulong  thread_idx,
-    ulong  read_idx,
+    uint  warp_idx,
+    uint  thread_idx,
+    uint  read_idx,
     local uchar *scratch_space,
     uint   hcall_size,
     global uint   *entry_point,
