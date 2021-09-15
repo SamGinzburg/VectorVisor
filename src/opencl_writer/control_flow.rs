@@ -1,6 +1,6 @@
 use crate::opencl_writer;
 use crate::opencl_writer::Regex;
-use crate::opencl_writer::mem_interleave::emit_write_u64;
+use crate::opencl_writer::mem_interleave::emit_write_u64_aligned;
 use crate::opencl_writer::StackCtx;
 use crate::opencl_writer::StackType;
 use crate::opencl_writer::function_unwind;
