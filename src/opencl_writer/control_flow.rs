@@ -97,9 +97,9 @@ pub fn emit_br(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx,
                                 "*sfp += 1;");
             // increment the stack frame pointer & save the label of the loop header so we return to it
             ret_str += &format!("\t{}\n", &format!("{};",
-                        emit_write_u64("(ulong)(call_stack+*sfp)",
-                                        "(ulong)(call_stack)",
-                                        &format!("{}", *loop_header_reentry), "warp_idx")));
+                        emit_write_u64_aligned("(ulong)(call_stack+*sfp)",
+                                               "(ulong)(call_stack)",
+                                               &format!("{}", *loop_header_reentry), "warp_idx")));
 
             // set our re-entry target to ourself
             ret_str += &format!("\t{}\n",

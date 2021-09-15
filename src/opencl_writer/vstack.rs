@@ -1680,7 +1680,8 @@ impl<'a> StackCtx {
         // pop the first entry, set it as the starting max
         let (mut max_offset, mut max_offset_type_size): (u32, u32) = match cloned_local_offsets.pop() {
             Some ((name, offset)) => {
-                (offset, writer_ctx.get_size_valtype(&local_param_types.get(&name).unwrap()))
+                //(offset, writer_ctx.get_size_valtype(&local_param_types.get(&name).unwrap()))
+                (offset, 2)
             },
             None => {
                 (0, 0)
@@ -1697,7 +1698,7 @@ impl<'a> StackCtx {
             if !param_found {
                 if *offsets > max_offset {
                     max_offset = *offsets;
-                    max_offset_type_size = writer_ctx.get_size_valtype(&local_param_types.get(name).unwrap());
+                    max_offset_type_size = 2; //writer_ctx.get_size_valtype(&local_param_types.get(name).unwrap());
                 }
             }
         }

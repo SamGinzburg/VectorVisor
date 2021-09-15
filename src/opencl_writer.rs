@@ -1154,7 +1154,7 @@ impl<'a> OpenCLCWriter<'_> {
                     write!(final_string, "\t{}\n", "if (!*is_calling) {").unwrap();
                     if num_function_calls > 0 {
                         write!(final_string, "\t\t{}\n",
-                            format!("switch ({}) {{", emit_read_u64("(ulong)(call_stack+*sfp)", "(ulong)(call_stack)", "warp_idx"))).unwrap();
+                            format!("switch ({}) {{", emit_read_u64_aligned("(ulong)(call_stack+*sfp)", "(ulong)(call_stack)", "warp_idx"))).unwrap();
                         for count in 0..num_function_calls {
                             write!(final_string, "\t\t\tcase {}:\n", count).unwrap();
                             write!(final_string, "\t\t\t\t*sfp -= 1;\n").unwrap();
@@ -1414,7 +1414,7 @@ impl<'a> OpenCLCWriter<'_> {
                     ulong  *sp,
                     ulong  *sfp,
                     ulong  *call_stack,
-                    uint   *call_return_stack,
+                    ulong  *call_return_stack,
                     int    *hypercall_number,
                     uint   *hypercall_continuation,
                     uint   *current_mem_size,
@@ -1423,7 +1423,7 @@ impl<'a> OpenCLCWriter<'_> {
                     ulong  warp_idx,
                     ulong  thread_idx,
                     ulong  read_idx,
-                    uchar *scratch_space,
+                    uchar  *scratch_space,
                     uint   hcall_size,
                     uint   *entry_point,
                     uint   *hcall_ret_val)", fn_name)).unwrap();
@@ -1438,7 +1438,7 @@ impl<'a> OpenCLCWriter<'_> {
                     ulong  *sp,
                     ulong  *sfp,
                     ulong  *call_stack,
-                    ulong   *call_return_stack,
+                    ulong  *call_return_stack,
                     int    *hypercall_number,
                     uint   *hypercall_continuation,
                     uint   *current_mem_size,
@@ -1447,7 +1447,7 @@ impl<'a> OpenCLCWriter<'_> {
                     ulong  warp_idx,
                     ulong  thread_idx,
                     ulong  read_idx,
-                    uchar *scratch_space,
+                    uchar  *scratch_space,
                     uint   hcall_size,
                     uint   *entry_point,
                     uint   hcall_ret_val)", fn_name)).unwrap();
@@ -1472,7 +1472,7 @@ impl<'a> OpenCLCWriter<'_> {
                                     "ulong  *sp_global,",
                                     "ulong  *sfp_global,",
                                     "ulong  *call_stack_global,",
-                                    "ulong   *call_return_stack_global,",
+                                    "ulong  *call_return_stack_global,",
                                     "int    *hypercall_number_global,",
                                     "uint   *hypercall_continuation_global,",
                                     "uint   *current_mem_size_global,",
