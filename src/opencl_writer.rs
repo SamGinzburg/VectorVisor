@@ -2243,7 +2243,7 @@ r#"
                  * on the device.
                  *
                  */
-                let reduction_size: &mut u32 = &mut (4096 / local_work_group as u32);
+                let reduction_size: &mut u32 = &mut (2048 / local_work_group as u32);
 
                 // We want to emit the largest function first, so we can move more of its locals to
                 // smem.

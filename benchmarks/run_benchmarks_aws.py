@@ -5,8 +5,8 @@ import time
 
 target_rps = 5000
 TIMEOUT_MINUTES = 120
-local_group_size = 16
-interleave = 8
+local_group_size = 64
+interleave = 1
 #local_group_size = 999999
 
 CFLAGS="-cl-nv-verbose"
@@ -715,14 +715,14 @@ while True:
 ssm_client = boto3.client('ssm')
 
 # run pbkdf2 bench
-run_pbkdf2_bench(True)
+#run_pbkdf2_bench(True)
 
-cleanup()
+#cleanup()
 
 # run lz4 bench
-run_lz4_bench()
+#run_lz4_bench()
 
-cleanup()
+#cleanup()
 
 # run NLP bench
 #run_nlp_count_bench()
