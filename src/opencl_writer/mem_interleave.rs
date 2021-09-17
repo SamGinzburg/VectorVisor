@@ -933,9 +933,9 @@ fn emit_read_u32_body(interleave: u32, local_work_group: usize, mexec: usize, em
                 result += &format!("\t{}\n",
                                 "temp[0] = (ulong)*((global ulong*)cell1);");
                 result += &format!("\t{}\n",
-                                "temp[0] = (temp[0] >> (cell_offset*8)) & ((0x1 << ((8-cell_offset)*8)) - 1);");
+                                "temp[0] = (temp[0] >> (cell_offset*8));");
                 result += &format!("\t{}\n",
-                                "return (ulong)(temp[0]);");
+                                "return (uint)(temp[0]);");
                 result += &format!("{}\n",
                                 "offset_2:");
                 result += &format!("\t{}\n",
