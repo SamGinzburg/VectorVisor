@@ -1125,6 +1125,8 @@ fn emit_read_u64_body(interleave: u32, local_work_group: usize, mexec: usize, em
                 result += &format!("\t{}\n",
                                 "uchar *combined = (uchar*)&temp;");
                 result += &format!("\t{}\n",
+                                "ulong opt_temp = 0;");
+                result += &format!("\t{}\n",
                                 "switch (cell_offset) {");
                 result += &format!("\t\t{}\n",
                                 "case 0: goto offset_0;");
@@ -1140,11 +1142,13 @@ fn emit_read_u64_body(interleave: u32, local_work_group: usize, mexec: usize, em
                 result += &format!("{}\n",
                                 "offset_0:");
                 result += &format!("\t{}\n",
-                                "temp[0] = (uint)*((global uint*)cell1);");
+                                "opt_temp += *((global uint*)((global uint*)cell1+NUM_THREADS));");
                 result += &format!("\t{}\n",
-                                "temp[1] = (uint)*((global uint*)cell1+(NUM_THREADS));");
+                                "opt_temp  = opt_temp << 32;");
                 result += &format!("\t{}\n",
-                                "return (ulong)temp;");
+                                "opt_temp += *((global uint*)((global uint*)cell1));");
+                result += &format!("\t{}\n",
+                                "return opt_temp;");
                 result += &format!("{}\n",
                                 "offset_1:");
                 result += &format!("{}\n",
