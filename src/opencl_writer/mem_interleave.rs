@@ -645,25 +645,48 @@ fn emit_read_u16_body(interleave: u32, local_work_group: usize, mexec: usize, em
                                 "return *((global ushort*)((global uchar*)read_addr));");
             } else {
                 result += &format!("\t{}\n",
-                                "global uchar *read_addr = ((global uchar*)(((addr-mem_start)/4)*(NUM_THREADS*4) + (warp_id*4) + mem_start));");
+                                "global uchar *cell1 = ((global uchar*)(((addr-mem_start)/4)*(NUM_THREADS*4) + (warp_id*4) + mem_start));");
                 result += &format!("\t{}\n",
                                 "ulong cell_offset = GET_POW2_OFFSET((addr-mem_start), 4);");
                 result += &format!("\t{}\n",
-                                "uint temp[2];");
+                                "global uchar *cell2;");
                 result += &format!("\t{}\n",
-                                "uchar *combined = (uchar*)&temp;");
+                                "uint temp[2] = { 0 };");
                 result += &format!("\t{}\n",
-                                "uchar result[2];");
+                                "switch (cell_offset) {");
+                result += &format!("\t\t{}\n",
+                                "case 0: goto offset_0;");
+                result += &format!("\t\t{}\n",
+                                "case 1: goto offset_1;");
+                result += &format!("\t\t{}\n",
+                                "case 2: goto offset_2;");
+                result += &format!("\t\t{}\n",
+                                "case 3: goto offset_3;");
                 result += &format!("\t{}\n",
-                                "temp[0] = (uint)*((global uint*)read_addr);");
+                                "}");
+
+                result += &format!("{}\n",
+                                "offset_0:");
                 result += &format!("\t{}\n",
-                                "temp[1] = (uint)*((global uint*)read_addr+(NUM_THREADS));");
+                                "return *((global ushort*)((global ushort*)cell1));");
+                result += &format!("{}\n",
+                                "offset_2:");
                 result += &format!("\t{}\n",
-                                "result[0] = combined[cell_offset];");
+                                "return *((global ushort*)((global ushort*)((global uchar*)cell1+cell_offset)));");
+                result += &format!("{}\n",
+                                "offset_1:");
+                result += &format!("{}\n",
+                                "offset_3:");
                 result += &format!("\t{}\n",
-                                "result[1] = combined[cell_offset+1];");
+                                "temp[0] = (uint)*((global uint*)cell1);");
                 result += &format!("\t{}\n",
-                                "return *(ushort*)result;");
+                                "temp[1] = (uint)*((global uint*)cell1+(NUM_THREADS));");
+                result += &format!("\t{}\n",
+                                "temp[0] = (temp[0] >> (cell_offset*8)) & ((0x1 << ((4-cell_offset)*8)) - 1);");
+                result += &format!("\t{}\n",
+                                "temp[1] = (temp[1] << ((4-cell_offset)*8)) & (((0x1 << ((cell_offset)*8)) - 1) << ((4-cell_offset)*8));");
+                result += &format!("\t{}\n",
+                                "return (ushort)(temp[0] + temp[1]);");
             }
         },
         8 => {
@@ -832,7 +855,6 @@ fn emit_read_u32_body(interleave: u32, local_work_group: usize, mexec: usize, em
                 result += &format!("\t{}\n",
                                 "}");
 
-
                 result += &format!("{}\n",
                                 "offset_0:");
                 result += &format!("\t{}\n",
@@ -853,29 +875,6 @@ fn emit_read_u32_body(interleave: u32, local_work_group: usize, mexec: usize, em
                                 "temp[1] = (temp[1] << ((4-cell_offset)*8)) & (((0x1 << ((cell_offset)*8)) - 1) << ((4-cell_offset)*8));");
                 result += &format!("\t{}\n",
                                 "return (uint)(temp[0] + temp[1]);");
-
-                /*
-                result += &format!("\t{}\n",
-                                "uint temp[2];");
-                result += &format!("\t{}\n",
-                                "uchar *combined = (uchar*)temp;");
-                result += &format!("\t{}\n",
-                                "uchar result[4];");
-                result += &format!("\t{}\n",
-                                "temp[0] = (uint)*((global uint*)cell1);");
-                result += &format!("\t{}\n",
-                                "temp[1] = (uint)*((global uint*)cell1+(NUM_THREADS));");
-                result += &format!("\t{}\n",
-                                "result[0] = combined[cell_offset];");
-                result += &format!("\t{}\n",
-                                "result[1] = combined[cell_offset+1];");
-                result += &format!("\t{}\n",
-                                "result[2] = combined[cell_offset+2];");
-                result += &format!("\t{}\n",
-                                "result[3] = combined[cell_offset+3];");
-                result += &format!("\t{}\n",
-                                "return *(uint*)result;");
-                */
             }
         },
         8 => {
@@ -1080,21 +1079,50 @@ fn emit_read_u64_body(interleave: u32, local_work_group: usize, mexec: usize, em
                                 "return temp;");
             } else {
                 result += &format!("\t{}\n",
-                                "global uchar *read_addr = ((global uchar*)(((addr-mem_start)/4)*(NUM_THREADS*4) + (warp_id*4) + mem_start));");
+                                "global uchar *cell1 = ((global uchar*)(((addr-mem_start)/4)*(NUM_THREADS*4) + (warp_id*4) + mem_start));");
                 result += &format!("\t{}\n",
                                 "ulong cell_offset = GET_POW2_OFFSET((addr-mem_start), 4);");
                 result += &format!("\t{}\n",
-                                "uint temp[3];");
+                                "global uchar *cell2;");
                 result += &format!("\t{}\n",
-                                "uchar *combined = (uchar*)&temp;");
+                                "uint temp[3] = { 0 };");
                 result += &format!("\t{}\n",
                                 "uchar result[8];");
                 result += &format!("\t{}\n",
-                                "temp[0] = (uint)*((global uint*)read_addr);");
+                                "uchar *combined = (uchar*)&temp;");
                 result += &format!("\t{}\n",
-                                "temp[1] = (uint)*((global uint*)read_addr+(NUM_THREADS));");
+                                "switch (cell_offset) {");
+                result += &format!("\t\t{}\n",
+                                "case 0: goto offset_0;");
+                result += &format!("\t\t{}\n",
+                                "case 1: goto offset_1;");
+                result += &format!("\t\t{}\n",
+                                "case 2: goto offset_2;");
+                result += &format!("\t\t{}\n",
+                                "case 3: goto offset_3;");
                 result += &format!("\t{}\n",
-                                "temp[2] = (uint)*((global uint*)read_addr+(NUM_THREADS*2));");
+                                "}");
+
+                result += &format!("{}\n",
+                                "offset_0:");
+                result += &format!("\t{}\n",
+                                "temp[0] = (uint)*((global uint*)cell1);");
+                result += &format!("\t{}\n",
+                                "temp[1] = (uint)*((global uint*)cell1+(NUM_THREADS));");
+                result += &format!("\t{}\n",
+                                "return (ulong)temp;");
+                result += &format!("{}\n",
+                                "offset_1:");
+                result += &format!("{}\n",
+                                "offset_2:");
+                result += &format!("{}\n",
+                                "offset_3:");
+                result += &format!("\t{}\n",
+                                "temp[0] = (uint)*((global uint*)cell1);");
+                result += &format!("\t{}\n",
+                                "temp[1] = (uint)*((global uint*)cell1+(NUM_THREADS));");
+                result += &format!("\t{}\n",
+                                "temp[2] = (uint)*((global uint*)cell1+(NUM_THREADS*2));");
                 result += &format!("\t{}\n",
                                 "result[0] = combined[cell_offset];");
                 result += &format!("\t{}\n",
