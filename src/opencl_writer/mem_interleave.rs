@@ -901,19 +901,53 @@ fn emit_read_u32_body(interleave: u32, local_work_group: usize, mexec: usize, em
                                 "return *((global uint*)((global uchar*)read_addr));");
             } else {
                 result += &format!("\t{}\n",
-                                "global uchar *read_addr = ((global uchar*)(((addr-mem_start)/8)*(NUM_THREADS*8) + (warp_id*8) + mem_start));");
+                                "global uchar *cell1 = ((global uchar*)(((addr-mem_start)/8)*(NUM_THREADS*8) + (warp_id*8) + mem_start));");
                 result += &format!("\t{}\n",
                                 "ulong cell_offset = GET_POW2_OFFSET((addr-mem_start), 8);");
                 result += &format!("\t{}\n",
-                                "ulong2 temp;");
+                                "global uchar *cell2;");
                 result += &format!("\t{}\n",
-                                "temp.lo = (ulong)*((global ulong*)read_addr);");
+                                "ulong temp[2] = { 0 };");
                 result += &format!("\t{}\n",
-                                "temp.hi = (ulong)*((global ulong*)read_addr+(NUM_THREADS));");
+                                "switch (cell_offset) {");
+                result += &format!("\t\t{}\n",
+                                "case 0: goto offset_0;");
+                result += &format!("\t\t{}\n",
+                                "case 1:");
+                result += &format!("\t\t{}\n",
+                                "case 2:");
+                result += &format!("\t\t{}\n",
+                                "case 3:");
+                result += &format!("\t\t{}\n",
+                                "case 4: goto offset_1;");
+                result += &format!("\t\t{}\n",
+                                "default: goto offset_2;");
                 result += &format!("\t{}\n",
-                                "temp = as_ulong2(shuffle(as_uchar16(temp), (uchar16)(cell_offset, cell_offset+1, cell_offset+2, cell_offset+3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)));");
+                                "}");
+                result += &format!("{}\n",
+                                "offset_0:");
                 result += &format!("\t{}\n",
-                                "return (uint)temp.lo;");
+                                "return *((global uint*)((global uint*)cell1));");
+                result += &format!("{}\n",
+                                "offset_1:");
+                result += &format!("\t{}\n",
+                                "temp[0] = (ulong)*((global ulong*)cell1);");
+                result += &format!("\t{}\n",
+                                "temp[0] = (temp[0] >> (cell_offset*8)) & ((0x1 << ((8-cell_offset)*8)) - 1);");
+                result += &format!("\t{}\n",
+                                "return (ulong)(temp[0]);");
+                result += &format!("{}\n",
+                                "offset_2:");
+                result += &format!("\t{}\n",
+                                "temp[0] = (ulong)*((global ulong*)cell1);");
+                result += &format!("\t{}\n",
+                                "temp[1] = (ulong)*((global ulong*)cell1+(NUM_THREADS));");
+                result += &format!("\t{}\n",
+                                "temp[0] = (temp[0] >> (cell_offset*8)) & ((0x1 << ((8-cell_offset)*8)) - 1);");
+                result += &format!("\t{}\n",
+                                "temp[1] = (temp[1] << ((8-cell_offset)*8)) & (((0x1 << ((cell_offset)*8)) - 1) << ((8-cell_offset)*8));");
+                result += &format!("\t{}\n",
+                                "return (ulong)(temp[0] + temp[1]);");
             }
         },
         _ => panic!("Unsupported read/write interleave"),
@@ -1167,19 +1201,37 @@ fn emit_read_u64_body(interleave: u32, local_work_group: usize, mexec: usize, em
                                 "return *((global ulong*)((global uchar*)read_addr));");
             } else {
                 result += &format!("\t{}\n",
-                                "global uchar *read_addr = ((global uchar*)(((addr-mem_start)/8)*(NUM_THREADS*8) + (warp_id*8) + mem_start));");
+                                "global uchar *cell1 = ((global uchar*)(((addr-mem_start)/8)*(NUM_THREADS*8) + (warp_id*8) + mem_start));");
                 result += &format!("\t{}\n",
                                 "ulong cell_offset = GET_POW2_OFFSET((addr-mem_start), 8);");
                 result += &format!("\t{}\n",
-                                "ulong2 temp;");
+                                "global uchar *cell2;");
                 result += &format!("\t{}\n",
-                                "temp.lo = (ulong)*((global ulong*)read_addr);");
+                                "ulong temp[2] = { 0 };");
                 result += &format!("\t{}\n",
-                                "temp.hi = (ulong)*((global ulong*)read_addr+(NUM_THREADS));");
+                                "switch (cell_offset) {");
+                result += &format!("\t\t{}\n",
+                                "case 0: goto offset_0;");
+                result += &format!("\t\t{}\n",
+                                "default: goto offset_1;");
                 result += &format!("\t{}\n",
-                                "temp = as_ulong2(shuffle(as_uchar16(temp), (uchar16)(cell_offset, cell_offset+1, cell_offset+2, cell_offset+3, cell_offset+4, cell_offset+5, cell_offset+6, cell_offset+7, 0, 0, 0, 0, 0, 0, 0, 0)));");
+                                "}");
+                result += &format!("{}\n",
+                                "offset_0:");
                 result += &format!("\t{}\n",
-                                "return (ulong)temp.lo;");
+                                "return *((global ulong*)((global ulong*)cell1));");
+                result += &format!("{}\n",
+                                "offset_1:");
+                result += &format!("\t{}\n",
+                                "temp[0] = (ulong)*((global ulong*)cell1);");
+                result += &format!("\t{}\n",
+                                "temp[1] = (ulong)*((global ulong*)cell1+(NUM_THREADS));");
+                result += &format!("\t{}\n",
+                                "temp[0] = (temp[0] >> (cell_offset*8)) & ((0x1 << ((8-cell_offset)*8)) - 1);");
+                result += &format!("\t{}\n",
+                                "temp[1] = (temp[1] << ((8-cell_offset)*8)) & (((0x1 << ((cell_offset)*8)) - 1) << ((8-cell_offset)*8));");
+                result += &format!("\t{}\n",
+                                "return (ulong)(temp[0] + temp[1]);");
             }
         },
         _ => panic!("Unsupported read/write interleave"),
