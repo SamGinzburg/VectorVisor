@@ -28,11 +28,7 @@ pub fn emit_memload_i32_16u(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &
     let i_load = stack_ctx.vstack_pop(StackType::i32);
     let result_register = stack_ctx.vstack_alloc(StackType::i32);
 
-    let read = if args.align >= 2 {
-        format!("(uint)({})", emit_read_u16_aligned_checked(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load), "(ulong)(heap_u32)", "warp_idx"))
-    } else {
-        format!("(uint)({})", emit_read_u16(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load), "(ulong)(heap_u32)", "warp_idx"))
-    };
+    let read = format!("(uint)({})", emit_read_u16_aligned_checked(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load), "(ulong)(heap_u32)", "warp_idx"));
 
     ret_str += &format!("\t{} = ({});\n", result_register, read);
 
@@ -45,12 +41,7 @@ pub fn emit_memload_i32_16s(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &
     let i_load = stack_ctx.vstack_pop(StackType::i32);
     let result_register = stack_ctx.vstack_alloc(StackType::i32);
 
-    let read = if args.align >= 2 {
-        format!("(int)({})", emit_read_u16_aligned_checked(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load), "(ulong)(heap_u32)", "warp_idx"))
-    } else {
-        format!("(int)({})", emit_read_u16(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load), "(ulong)(heap_u32)", "warp_idx"))
-    };
-
+    let read = format!("(int)({})", emit_read_u16_aligned_checked(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load), "(ulong)(heap_u32)", "warp_idx"));
 
     ret_str += &format!("\t{} = (uint)({});\n", result_register, read);
 
@@ -77,11 +68,7 @@ pub fn emit_memload_i32(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut 
     let i_load = stack_ctx.vstack_pop(StackType::i32);
     let result_register = stack_ctx.vstack_alloc(StackType::i32);
 
-    let read = if args.align >= 4 {
-        format!("({})", emit_read_u32_aligned_checked(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load), "(ulong)(heap_u32)", "warp_idx"))
-    } else {
-        format!("({})", emit_read_u32(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load), "(ulong)(heap_u32)", "warp_idx"))
-    };
+    let read = format!("({})", emit_read_u32_aligned_checked(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load), "(ulong)(heap_u32)", "warp_idx"));
 
     ret_str += &format!("\t{} = {};\n", result_register, read);
 
@@ -94,11 +81,7 @@ pub fn emit_memload_i64(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut 
     let i_load = stack_ctx.vstack_pop(StackType::i32);
     let result_register = stack_ctx.vstack_alloc(StackType::i64);
 
-    let read = if args.align >= 8 {
-        format!("({})", emit_read_u64_aligned_checked(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load), "(ulong)(heap_u32)", "warp_idx"))
-    } else {
-        format!("({})", emit_read_u64(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load), "(ulong)(heap_u32)", "warp_idx"))
-    };
+    let read = format!("({})", emit_read_u64_aligned_checked(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load), "(ulong)(heap_u32)", "warp_idx"));
 
     ret_str += &format!("\t{} = {};\n", result_register, read);
 
@@ -111,11 +94,7 @@ pub fn emit_memload_f64(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut 
     let i_load = stack_ctx.vstack_pop(StackType::i32);
     let result_register = stack_ctx.vstack_alloc(StackType::f64);
 
-    let read = if args.align >= 8 {
-        format!("({})", emit_read_u64_aligned_checked(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load), "(ulong)(heap_u32)", "warp_idx"))
-    } else {
-        format!("({})", emit_read_u64(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load), "(ulong)(heap_u32)", "warp_idx"))
-    };
+    let read = format!("({})", emit_read_u64_aligned_checked(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load), "(ulong)(heap_u32)", "warp_idx"));
 
     ret_str += &format!("\t{{\n"); 
     ret_str += &format!("\t\tulong temp = {};\n", read);
@@ -131,11 +110,7 @@ pub fn emit_memload_f32(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut 
     let i_load = stack_ctx.vstack_pop(StackType::i32);
     let result_register = stack_ctx.vstack_alloc(StackType::f32);
 
-    let read = if args.align >= 4 {
-        format!("({})", emit_read_u32_aligned_checked(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load), "(ulong)(heap_u32)", "warp_idx"))
-    } else {
-        format!("({})", emit_read_u32(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load), "(ulong)(heap_u32)", "warp_idx"))
-    };
+    let read = format!("({})", emit_read_u32_aligned_checked(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load), "(ulong)(heap_u32)", "warp_idx"));
 
     ret_str += &format!("\t{{\n");
     ret_str += &format!("\t\tuint temp = {};\n", read);
@@ -164,11 +139,7 @@ pub fn emit_memload_i64_32u(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &
     let i_load = stack_ctx.vstack_pop(StackType::i32);
     let result_register = stack_ctx.vstack_alloc(StackType::i64);
 
-    let read = if args.align >= 4 {
-        format!("({})", emit_read_u32_aligned_checked(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load), "(ulong)(heap_u32)", "warp_idx"))
-    } else {
-        format!("({})", emit_read_u32(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load), "(ulong)(heap_u32)", "warp_idx"))
-    };
+    let read = format!("({})", emit_read_u32_aligned_checked(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load), "(ulong)(heap_u32)", "warp_idx"));
 
     ret_str += &format!("\t{} = {};\n", result_register, read);
 
@@ -181,11 +152,7 @@ pub fn emit_memload_i64_32s(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &
     let i_load = stack_ctx.vstack_pop(StackType::i32);
     let result_register = stack_ctx.vstack_alloc(StackType::i64);
 
-    let read = if args.align >= 4 {
-        format!("(long)({})", &emit_read_u32_aligned_checked(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load), "(ulong)(heap_u32)", "warp_idx"))
-    } else {
-        format!("(long)({})", &emit_read_u32(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load), "(ulong)(heap_u32)", "warp_idx"))
-    };
+    let read = format!("(long)({})", &emit_read_u32_aligned_checked(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load), "(ulong)(heap_u32)", "warp_idx"));
 
     ret_str += &format!("\t{} = {};\n", result_register, read);
 
@@ -198,11 +165,7 @@ pub fn emit_memload_i64_16u(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &
     let i_load = stack_ctx.vstack_pop(StackType::i32);
     let result_register = stack_ctx.vstack_alloc(StackType::i64);
 
-    let read = if args.align >= 2 {
-        format!("(ulong)({})", &emit_read_u16_aligned_checked(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load), "(ulong)(heap_u32)", "warp_idx"))
-    } else {
-        format!("(ulong)({})", &emit_read_u16(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load), "(ulong)(heap_u32)", "warp_idx"))
-    };
+    let read = format!("(ulong)({})", &emit_read_u16_aligned_checked(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load), "(ulong)(heap_u32)", "warp_idx"));
 
     ret_str += &format!("\t{} = {};\n", result_register, read);
 
@@ -217,17 +180,10 @@ pub fn emit_memstore_i32(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut
     let stored_val = stack_ctx.vstack_pop(StackType::i32);
     let i_load = stack_ctx.vstack_pop(StackType::i32);
 
-    if args.align >= 4 {
-        ret_str += &format!("\t{};\n", &emit_write_u32_aligned_checked(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load),
-                            "(ulong)(heap_u32)",
-                            &stored_val,
-                            "warp_idx"));
-    } else {
-        ret_str += &format!("\t{};\n", &emit_write_u32(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load),
-                            "(ulong)(heap_u32)",
-                            &stored_val,
-                            "warp_idx"));
-    };
+    ret_str += &format!("\t{};\n", &emit_write_u32_aligned_checked(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load),
+                        "(ulong)(heap_u32)",
+                        &stored_val,
+                        "warp_idx"));
 
     ret_str
 }
@@ -267,17 +223,10 @@ pub fn emit_memstore16_i64(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &m
     let stored_val = stack_ctx.vstack_pop(StackType::i64);
     let i_load = stack_ctx.vstack_pop(StackType::i32);
 
-    if args.align >= 2 {
-        ret_str += &format!("\t{};\n", &emit_write_u16_aligned_checked(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load),
-                            "(ulong)(heap_u32)",
-                            &format!("(short)({})", stored_val),
-                            "warp_idx"));
-    } else {
-        ret_str += &format!("\t{};\n", &emit_write_u16(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load),
-                            "(ulong)(heap_u32)",
-                            &format!("(short)({})", stored_val),
-                            "warp_idx"));
-    }
+    ret_str += &format!("\t{};\n", &emit_write_u16_aligned_checked(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load),
+                        "(ulong)(heap_u32)",
+                        &format!("(short)({})", stored_val),
+                        "warp_idx"));
 
     ret_str
 }
@@ -288,17 +237,10 @@ pub fn emit_memstore16_i32(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &m
     let stored_val = stack_ctx.vstack_pop(StackType::i32);
     let i_load = stack_ctx.vstack_pop(StackType::i32);
 
-    if args.align >= 2 {
-        ret_str += &format!("\t{};\n", &emit_write_u16_aligned_checked(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load),
-                            "(ulong)(heap_u32)",
-                            &format!("(short)({})", stored_val),
-                            "warp_idx"));
-    } else {
-        ret_str += &format!("\t{};\n", &emit_write_u16(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load),
-                            "(ulong)(heap_u32)",
-                            &format!("(short)({})", stored_val),
-                            "warp_idx"));
-    }
+    ret_str += &format!("\t{};\n", &emit_write_u16_aligned_checked(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load),
+                        "(ulong)(heap_u32)",
+                        &format!("(short)({})", stored_val),
+                        "warp_idx"));
 
     ret_str
 }
@@ -309,17 +251,10 @@ pub fn emit_memstore_i64(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut
     let stored_val = stack_ctx.vstack_pop(StackType::i64);
     let i_load = stack_ctx.vstack_pop(StackType::i32);
 
-    if args.align >= 8 {
-        ret_str += &format!("\t{};\n", &emit_write_u64_aligned_checked(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load),
-                            "(ulong)(heap_u32)",
-                            &stored_val,
-                            "warp_idx"));
-    } else {
-        ret_str += &format!("\t{};\n", &emit_write_u64(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load),
-                            "(ulong)(heap_u32)",
-                            &stored_val,
-                            "warp_idx"));
-    }
+    ret_str += &format!("\t{};\n", &emit_write_u64_aligned_checked(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load),
+                        "(ulong)(heap_u32)",
+                        &stored_val,
+                        "warp_idx"));
 
     ret_str
 }
@@ -332,17 +267,10 @@ pub fn emit_memstore_f64(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut
     ret_str += &format!("\t{{\n");
     ret_str += &format!("\t\tulong temp = 0;\n");
     ret_str += &format!("\t\t___private_memcpy_nonmmu(&temp, &{}, sizeof(double));\n", stored_val);
-    if args.align >= 8 {
-        ret_str += &format!("\t\t{};\n", &emit_write_u64_aligned_checked(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load),
-                            "(ulong)(heap_u32)",
-                            "temp",
-                            "warp_idx"));
-    } else {
-        ret_str += &format!("\t\t{};\n", &emit_write_u64(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load),
-                            "(ulong)(heap_u32)",
-                            "temp",
-                            "warp_idx"));
-    }
+    ret_str += &format!("\t\t{};\n", &emit_write_u64_aligned_checked(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load),
+                        "(ulong)(heap_u32)",
+                        "temp",
+                        "warp_idx"));
     ret_str += &format!("\t}}\n");
 
 
@@ -357,17 +285,10 @@ pub fn emit_memstore_f32(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut
     ret_str += &format!("\t{{\n");
     ret_str += &format!("\t\tuint temp = 0;\n");
     ret_str += &format!("\t\t___private_memcpy_nonmmu(&temp, &{}, sizeof(float));\n", stored_val);
-    if args.align >= 4 {
-        ret_str += &format!("\t\t{};\n", &emit_write_u32_aligned_checked(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load),
-                            "(ulong)(heap_u32)",
-                            "temp",
-                            "warp_idx"));
-    } else {
-        ret_str += &format!("\t\t{};\n", &emit_write_u32(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load),
-                            "(ulong)(heap_u32)",
-                            "temp",
-                            "warp_idx"));
-    }
+    ret_str += &format!("\t\t{};\n", &emit_write_u32_aligned_checked(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load),
+                        "(ulong)(heap_u32)",
+                        "temp",
+                        "warp_idx"));
     ret_str += &format!("\t}}\n");
 
 
@@ -380,18 +301,10 @@ pub fn emit_memstore32_i64(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &m
     let stored_val = stack_ctx.vstack_pop(StackType::i64);
     let i_load = stack_ctx.vstack_pop(StackType::i32);
 
-    if args.align >= 4 {
-        ret_str += &format!("\t{};\n", &emit_write_u32_aligned_checked(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load),
-                            "(ulong)(heap_u32)",
-                            &format!("(int)({})", stored_val),
-                            "warp_idx"));
-    } else {
-        ret_str += &format!("\t{};\n", &emit_write_u32(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load),
-                            "(ulong)(heap_u32)",
-                            &format!("(int)({})", stored_val),
-                            "warp_idx"));
-    }
-
+    ret_str += &format!("\t{};\n", &emit_write_u32_aligned_checked(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load),
+                        "(ulong)(heap_u32)",
+                        &format!("(int)({})", stored_val),
+                        "warp_idx"));
     ret_str
 }
 

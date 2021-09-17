@@ -5,8 +5,8 @@ import time
 
 target_rps = 5000
 TIMEOUT_MINUTES = 120
-local_group_size = 64
-interleave = 1
+local_group_size = 16
+interleave = 4
 #local_group_size = 999999
 
 CFLAGS="-cl-nv-verbose"
