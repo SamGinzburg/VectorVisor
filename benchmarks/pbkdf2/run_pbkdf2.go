@@ -89,7 +89,7 @@ func IssueRequests(ip string, port int, req [][]byte, exec_time chan<-float64, l
 			continue
 		} else {
 			//fmt.Printf("E2E req time: %s\n", read_secs)
-			fmt.Printf("%s\n", body)
+			//fmt.Printf("%s\n", body)
 		}
 		m := map[string]interface{}{}
 		err = json.Unmarshal(body, &m)
