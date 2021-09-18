@@ -947,7 +947,7 @@ fn emit_read_u32_body(interleave: u32, local_work_group: usize, mexec: usize, em
                 result += &format!("\t{}\n",
                                 "temp[1] = (temp[1] << ((8-cell_offset)*8)) & (((0x1 << ((cell_offset)*8)) - 1) << ((8-cell_offset)*8));");
                 result += &format!("\t{}\n",
-                                "return (ulong)(temp[0] + temp[1]);");
+                                "return (uint)(temp[0] + temp[1]);");
             }
         },
         _ => panic!("Unsupported read/write interleave"),

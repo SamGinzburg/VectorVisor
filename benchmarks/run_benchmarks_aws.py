@@ -456,7 +456,7 @@ def run_image_bench():
     x=$(cloud-init status)
     done
 
-    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/imageblur/target/wasm32-wasi/release/imageblur-opt.wasm --ip=0.0.0.0 --heap=4194304 --stack=262144 --hcallsize=524288 --partition=true --serverless=true --vmcount=3072 --vmgroups=1 --maxdup=3 --disablefastcalls=false --partitions=50 --maxloc=2000000 --lgroup={lgroup} --cflags={cflags} --interleave={interleave} &> /tmp/imageblur.log &
+    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/imageblur/target/wasm32-wasi/release/imageblur-opt.wasm --ip=0.0.0.0 --heap=4194304 --stack=262144 --hcallsize=524288 --partition=true --serverless=true --vmcount=3072 --vmgroups=1 --maxdup=3 --disablefastcalls=false --partitions=50 --maxloc=1000000 --lgroup={lgroup} --cflags={cflags} --interleave={interleave} &> /tmp/imageblur.log &
     """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave)
 
     run_command(run_image_command, "run_imageblur_gpu_command", gpu_instance[0].id)
