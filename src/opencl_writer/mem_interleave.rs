@@ -761,60 +761,19 @@ fn emit_read_u32_body(interleave: u32, local_work_group: usize, mexec: usize, em
         },
         1 => {
             result += &format!("\t{}\n",
-                               "addr = (ulong)((global uchar*)((addr-mem_start)*(NUM_THREADS) + warp_id + mem_start));");
-
-            // use a local variable to store the result as we perform the reads
+                                "addr = (ulong)((global uchar*)((addr-mem_start)*(NUM_THREADS) + warp_id + mem_start));");
             result += &format!("\t{}\n",
-                                "uint temp = 0;");
-            match mexec {
-                /*
-                2 => {
-                    result += &format!("\t{}\n",
-                                       "local uint *read_temp = (local uint*)scratch_space;");
-                    result += &format!("\t{}\n",
-                                       "local uchar *read_temp_uchar = (local uchar*)scratch_space;");
-                    result += &format!("\t{}\n",
-                                       "read_idx = read_idx * 2;");
-                    result += &format!("\tread_temp_uchar[(thread_idx * 4) + {}] = fast_read_u8((ulong)(((char*)addr)+(NUM_THREADS*{})), mem_start, warp_id);\n",
-                                       "read_idx", "read_idx");
-                    result += &format!("\tread_temp_uchar[(thread_idx * 4) + {}] = fast_read_u8((ulong)(((char*)addr)+(NUM_THREADS*({}))), mem_start, warp_id);\n",
-                                       "read_idx+1", "read_idx+1");
-                    result += &format!("\t{}\n",
-                                       "temp = (uint)read_temp[thread_idx];");
-                },
-                4 => {
-                    result += &format!("\t{}\n",
-                                       "local uint *read_temp = (local uint*)scratch_space;");
-                    result += &format!("\t{}\n",
-                                       "local uchar *read_temp_uchar = (local uchar*)scratch_space;");
-                    result += &format!("\tread_temp_uchar[(thread_idx * 4) + {}] = fast_read_u8((ulong)(((char*)addr)+(NUM_THREADS*{})), mem_start, warp_id);\n",
-                                       "read_idx", "read_idx");
-                    result += &format!("\t{}\n",
-                                       "temp = (uint)read_temp[thread_idx];");
-                },
-                */
-                _ => {
-                    result += &format!("\t{}\n",
-                                "temp += fast_read_u8((ulong)(((char*)addr)+NUM_THREADS*3), mem_start, warp_id);");
-                    // bitshift over to make room for the next byte
-                    result += &format!("\t{}\n",
-                                "temp = temp << 8;");
-                    result += &format!("\t{}\n",
-                                "temp += fast_read_u8((ulong)(((char*)addr)+NUM_THREADS*2), mem_start, warp_id);");
-                    result += &format!("\t{}\n",
-                                "temp = temp << 8;");
-                    result += &format!("\t{}\n",
-                                "temp += fast_read_u8((ulong)(((char*)addr)+NUM_THREADS), mem_start, warp_id);");
-                    // bitshift over to make room for the next byte
-                    result += &format!("\t{}\n",
-                                "temp = temp << 8;");
-                    result += &format!("\t{}\n",
-                                "temp += fast_read_u8((ulong)(((char*)addr)), mem_start, warp_id);");
-                }
-            }
-            
+                                "uchar4 temp = (uchar4)(0);");
+            result += &format!("\t{}\n",
+                                "temp.s3 = fast_read_u8((ulong)(((char*)addr)+(NUM_THREADS*3)), mem_start, warp_id);");
+            result += &format!("\t{}\n",
+                                "temp.s2 = fast_read_u8((ulong)(((char*)addr)+(NUM_THREADS*2)), mem_start, warp_id);");
+            result += &format!("\t{}\n",
+                                "temp.s1 = fast_read_u8((ulong)(((char*)addr)+(NUM_THREADS)), mem_start, warp_id);");
+            result += &format!("\t{}\n",
+                                "temp.s0 = fast_read_u8((ulong)(((char*)addr)), mem_start, warp_id);");
             result += &format!("\t{}",
-                                "return temp;");
+                                "return as_uint(temp);");
         },
         4 => {
             if emit_aligned && emit_checked {
