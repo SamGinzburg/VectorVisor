@@ -1,8 +1,8 @@
 use serde_json::{json, Value, to_string};
+use rmp_serde::decode;
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-use serde_cbor::from_slice;
 
 #[cfg(any(target_arch = "x86_64", target_arch = "x86"))]
 pub mod server;
@@ -25,7 +25,12 @@ type Error = Box<dyn std::error::Error + Send + Sync + 'static>;
 
 enum FuncReturn {
     None,
+}
 
+#[derive(Clone, Copy)]
+pub enum SerializationFormat {
+    Json,
+    MsgPack,
 }
 
 pub struct WasmHandler<T1: 'static, T2: 'static> {
@@ -57,7 +62,7 @@ where
     unsafe { end_accelerate() };
 }
 
-impl<'a, T1: Deserialize<'a>, T2: Serialize> WasmHandler<T1, T2> {
+impl<'a, T1: DeserializeOwned, T2: Serialize> WasmHandler<T1, T2> {
 
     pub fn new(func: &'static (dyn Fn(T1) -> T2 + Send + Sync)) -> WasmHandler<T1, T2> {
         WasmHandler {
@@ -73,8 +78,14 @@ impl<'a, T1: Deserialize<'a>, T2: Serialize> WasmHandler<T1, T2> {
         mut_ptr
     }
 
-    #[cfg(target_arch = "wasm32")]
+
+    // The default serialization format is JSON
     pub fn run(self, hcall_buf_size: usize) -> () {
+        self.run_with_format(hcall_buf_size, SerializationFormat::Json);
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub fn run_with_format(self, hcall_buf_size: usize, serializiation_format: SerializationFormat) -> () {
         // main run loop of the runtime
         // First, allocate a buffer to store json input
         let mut buffer: &mut Vec<u8> = Box::leak(Box::new(vec![0u8; hcall_buf_size]));
@@ -99,10 +110,24 @@ impl<'a, T1: Deserialize<'a>, T2: Serialize> WasmHandler<T1, T2> {
             };
             */
 
-            let parsed_func_input = {
-                serde_json::from_slice(&buffer[..incoming_req_size as usize])
+            let parsed_func_input: T1 = {
+                match serializiation_format {
+                    SerializationFormat::Json => {
+                        serde_json::from_slice(&buffer[..incoming_req_size as usize]).unwrap()
+                    },
+                    SerializationFormat::MsgPack => {
+                        decode::from_read(&buffer[..incoming_req_size as usize]).unwrap()
+                    }
+                }
             };
 
+            func_ret_val = (self.function)(parsed_func_input);
+            let mut func_ret_val_as_buffer = to_string(&func_ret_val).unwrap();
+            unsafe {
+                serverless_response(func_ret_val_as_buffer.as_mut_ptr(), func_ret_val_as_buffer.len() as u32);
+            }
+
+            /*
             match parsed_func_input {
                 Ok(json) => {
                     // run the function, get the response
@@ -123,12 +148,13 @@ impl<'a, T1: Deserialize<'a>, T2: Serialize> WasmHandler<T1, T2> {
                     }
                 },
             };
+            */
         }
     }
     
     // Compile a modified version of the run function for running x86 versions of benchmarks
     #[cfg(any(target_arch = "x86_64", target_arch = "x86"))]
-    pub fn run(self, hcall_buf_size: usize) -> () {
+    pub fn run_with_format(self, hcall_buf_size: usize, serializiation_format: SerializationFormat) -> () {
         // Start webserver
         let num_cpu_threads = num_cpus::get();
         // create channels for threads, copied from main VMM
@@ -190,17 +216,31 @@ impl<'a, T1: Deserialize<'a>, T2: Serialize> WasmHandler<T1, T2> {
                     let msg_ref = unsafe { WasmHandler::<T1, T2>::get_unsafe_mut_ref(&msg) };
                     let final_msg = unsafe { std::slice::from_raw_parts(msg_ref, msg_len) };
 
-                    let response: Vec<u8> = match serde_json::from_slice(&final_msg[..msg_len as usize]) {
-                        Ok(json) => {
-                            // run the function, get the response
-                            let func_ret_val = (func_ptr)(json);
+                    let parsed_func_input = {
+                        match serializiation_format {
+                            SerializationFormat::Json => {
+                                serde_json::from_slice(&final_msg[..msg_len as usize]).unwrap()
+                            },
+                            SerializationFormat::MsgPack => {
+                                decode::from_read(&final_msg[..msg_len as usize]).unwrap()
+                            }
+                        }
+                    };
+                    
+                    let func_ret_val = (func_ptr)(parsed_func_input);
+                    let response = to_string(&func_ret_val).unwrap().into_bytes();
+
+                    /*
+                    let response = match parsed_func_input {
+                        Ok(input) => {
+                            let func_ret_val = (func_ptr)(input);
                             to_string(&func_ret_val).unwrap().into_bytes()
                         },
-                        Err(_) => {
-                            // return an empty response if we were unable to parse the input properly
-                            String::from("err").into_bytes()
-                        },
+                        Err(e) => {
+                            String::from("Error occured during parsing of input").into_bytes()
+                        }
                     };
+                    */
 
                     // Respond
                     let tsc = curr_time_response.clone();
