@@ -647,7 +647,9 @@ p3.2xlarge   => 1 V100, 16 GiB memory, 8 vCPU, $3.06 / hr
 
 """
 # AMIs specific to us-east-2
-gpu_instance = ec2.create_instances(ImageId='ami-00339339e800db52e',
+# ami-01463836f7041cd10  ==> OpenCL 3.0 driver (470.57.02)
+# ami-00339339e800db52e  ==> OpenCL 1.2 driver (460.X)
+gpu_instance = ec2.create_instances(ImageId='ami-01463836f7041cd10',
                                 InstanceType="g4dn.2xlarge",
                                 MinCount=1,
                                 MaxCount=1,
@@ -716,14 +718,14 @@ while True:
 ssm_client = boto3.client('ssm')
 
 # run pbkdf2 bench
-run_pbkdf2_bench(True)
+#run_pbkdf2_bench(True)
 
-cleanup()
+#cleanup()
 
 # run lz4 bench
-run_lz4_bench()
+#run_lz4_bench()
 
-cleanup()
+#cleanup()
 
 # run NLP bench
 #run_nlp_count_bench()
@@ -731,9 +733,9 @@ cleanup()
 #cleanup()
 
 # run average bench
-run_average_bench()
+#run_average_bench()
 
-cleanup()
+#cleanup()
 
 # run image bench
 run_image_bench()
