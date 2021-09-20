@@ -68,9 +68,10 @@ userdata_ubuntu = """#cloud-config
      - sudo apt install -y git
      - sudo apt install -y htop
      - sudo apt install -y gcc
-     - sudo apt install -y golang-go
      - sudo apt install -y curl
      - sudo apt install -y clinfo
+     - wget https://golang.org/dl/go1.17.1.linux-amd64.tar.gz
+     - rm -rf /usr/local/go && tar -C /usr/local -xzf go1.17.1.linux-amd64.tar.gz
      - sudo curl https://sh.rustup.rs -sSf | sh -s -- -y
      - . $HOME/.cargo/env
      - sudo ~/.cargo/bin/rustup target add wasm32-wasi
@@ -188,8 +189,10 @@ def run_pbkdf2_bench(run_x86):
     sudo su
     ulimit -n 65536
     mkdir -p ~/gocache/
+    mkdir -p ~/gopath/
     mkdir -p ~/xdg/
     export GOCACHE=~/gocache/
+    export GOPATH=~/gopath/
     export XDG_CACHE_HOME=~/xdg/
 
     x=$(cloud-init status)
@@ -198,9 +201,9 @@ def run_pbkdf2_bench(run_x86):
     x=$(cloud-init status)
     done
 
-    go run /tmp/wasm2opencl/benchmarks/pbkdf2/run_pbkdf2.go {addr} 8000 {target_rps} 1 120
+    /usr/local/go run /tmp/wasm2opencl/benchmarks/pbkdf2/run_pbkdf2.go {addr} 8000 {target_rps} 1 120
 
-    go run /tmp/wasm2opencl/benchmarks/pbkdf2/run_pbkdf2.go {addr} 8000 {target_rps} 1 120
+    /usr/local/go run /tmp/wasm2opencl/benchmarks/pbkdf2/run_pbkdf2.go {addr} 8000 {target_rps} 1 120
     """.format(addr=gpu_instance[0].private_dns_name, target_rps=target_rps)
 
     command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
@@ -219,8 +222,10 @@ def run_pbkdf2_bench(run_x86):
     sudo su
     ulimit -n 65536
     mkdir -p ~/gocache/
+    mkdir -p ~/gopath/
     mkdir -p ~/xdg/
     export GOCACHE=~/gocache/
+    export GOPATH=~/gopath/
     export XDG_CACHE_HOME=~/xdg/
 
     x=$(cloud-init status)
@@ -229,9 +234,9 @@ def run_pbkdf2_bench(run_x86):
     x=$(cloud-init status)
     done
 
-    go run /tmp/wasm2opencl/benchmarks/pbkdf2/run_pbkdf2.go {addr} 8000 {target_rps} 1 120
+    /usr/local/go run /tmp/wasm2opencl/benchmarks/pbkdf2/run_pbkdf2.go {addr} 8000 {target_rps} 1 120
 
-    go run /tmp/wasm2opencl/benchmarks/pbkdf2/run_pbkdf2.go {addr} 8000 {target_rps} 1 120
+    /usr/local/go run /tmp/wasm2opencl/benchmarks/pbkdf2/run_pbkdf2.go {addr} 8000 {target_rps} 1 120
     """.format(addr=cpu_bench_instance[0].private_dns_name, target_rps=target_rps)
 
     command_id = run_command(run_invoker_cpu, "run invoker for cpu", invoker_instance[0].id)
@@ -281,8 +286,10 @@ def run_lz4_bench():
     sudo su
     ulimit -n 65536
     mkdir -p ~/gocache/
+    mkdir -p ~/gopath/
     mkdir -p ~/xdg/
     export GOCACHE=~/gocache/
+    export GOPATH=~/gopath/
     export XDG_CACHE_HOME=~/xdg/
 
     x=$(cloud-init status)
@@ -291,9 +298,9 @@ def run_lz4_bench():
     x=$(cloud-init status)
     done
 
-    go run /tmp/wasm2opencl/benchmarks/json-compression/run_json_lz4.go {addr} 8000 {target_rps} 1 60 {input_size}
+    /usr/local/go run /tmp/wasm2opencl/benchmarks/json-compression/run_json_lz4.go {addr} 8000 {target_rps} 1 60 {input_size}
 
-    go run /tmp/wasm2opencl/benchmarks/json-compression/run_json_lz4.go {addr} 8000 {target_rps} 1 60 {input_size}
+    /usr/local/go run /tmp/wasm2opencl/benchmarks/json-compression/run_json_lz4.go {addr} 8000 {target_rps} 1 60 {input_size}
     """.format(addr=gpu_instance[0].private_dns_name, input_size=100, target_rps=target_rps)
 
 
@@ -313,8 +320,10 @@ def run_lz4_bench():
     sudo su
     ulimit -n 65536
     mkdir -p ~/gocache/
+    mkdir -p ~/gopath/
     mkdir -p ~/xdg/
     export GOCACHE=~/gocache/
+    export GOPATH=~/gopath/
     export XDG_CACHE_HOME=~/xdg/
 
     x=$(cloud-init status)
@@ -323,9 +332,9 @@ def run_lz4_bench():
     x=$(cloud-init status)
     done
 
-    go run /tmp/wasm2opencl/benchmarks/json-compression/run_json_lz4.go {addr} 8000 {target_rps} 1 60 {input_size}
+    /usr/local/go run /tmp/wasm2opencl/benchmarks/json-compression/run_json_lz4.go {addr} 8000 {target_rps} 1 60 {input_size}
 
-    go run /tmp/wasm2opencl/benchmarks/json-compression/run_json_lz4.go {addr} 8000 {target_rps} 1 60 {input_size}
+    /usr/local/go run /tmp/wasm2opencl/benchmarks/json-compression/run_json_lz4.go {addr} 8000 {target_rps} 1 60 {input_size}
     """.format(addr=cpu_bench_instance[0].private_dns_name, input_size=100, target_rps=target_rps)
 
     command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
@@ -374,8 +383,10 @@ def run_average_bench():
     sudo su
     ulimit -n 65536
     mkdir -p ~/gocache/
+    mkdir -p ~/gopath/
     mkdir -p ~/xdg/
     export GOCACHE=~/gocache/
+    export GOPATH=~/gopath/
     export XDG_CACHE_HOME=~/xdg/
 
     x=$(cloud-init status)
@@ -384,9 +395,9 @@ def run_average_bench():
     x=$(cloud-init status)
     done
 
-    go run /tmp/wasm2opencl/benchmarks/average/run_average_bench.go {addr} 8000 {target_rps} 1 60 {input_size}
+    /usr/local/go run /tmp/wasm2opencl/benchmarks/average/run_average_bench.go {addr} 8000 {target_rps} 1 60 {input_size}
 
-    go run /tmp/wasm2opencl/benchmarks/average/run_average_bench.go {addr} 8000 {target_rps} 1 60 {input_size}
+    /usr/local/go run /tmp/wasm2opencl/benchmarks/average/run_average_bench.go {addr} 8000 {target_rps} 1 60 {input_size}
     """.format(addr=gpu_instance[0].private_dns_name, input_size=15, target_rps=target_rps)
 
 
@@ -406,8 +417,10 @@ def run_average_bench():
     sudo su
     ulimit -n 65536
     mkdir -p ~/gocache/
+    mkdir -p ~/gopath/
     mkdir -p ~/xdg/
     export GOCACHE=~/gocache/
+    export GOPATH=~/gopath/
     export XDG_CACHE_HOME=~/xdg/
 
     x=$(cloud-init status)
@@ -416,9 +429,9 @@ def run_average_bench():
     x=$(cloud-init status)
     done
 
-    go run /tmp/wasm2opencl/benchmarks/average/run_average_bench.go {addr} 8000 {target_rps} 1 60 {input_size}
+    /usr/local/go run /tmp/wasm2opencl/benchmarks/average/run_average_bench.go {addr} 8000 {target_rps} 1 60 {input_size}
 
-    go run /tmp/wasm2opencl/benchmarks/average/run_average_bench.go {addr} 8000 {target_rps} 1 60 {input_size}
+    /usr/local/go run /tmp/wasm2opencl/benchmarks/average/run_average_bench.go {addr} 8000 {target_rps} 1 60 {input_size}
     """.format(addr=cpu_bench_instance[0].private_dns_name, input_size=15, target_rps=target_rps)
 
     command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
@@ -468,8 +481,10 @@ def run_image_bench():
     sudo su
     ulimit -n 65536
     mkdir -p ~/gocache/
+    mkdir -p ~/gopath/
     mkdir -p ~/xdg/
     export GOCACHE=~/gocache/
+    export GOPATH=~/gopath/
     export XDG_CACHE_HOME=~/xdg/
 
     x=$(cloud-init status)
@@ -480,9 +495,9 @@ def run_image_bench():
 
     cd /tmp/wasm2opencl/benchmarks/imageblur/
 
-    go run run_image_blur.go {addr} 8000 {target_rps} 1 60
+    /usr/local/go run run_image_blur.go {addr} 8000 {target_rps} 1 60
 
-    go run run_image_blur.go {addr} 8000 {target_rps} 1 60
+    /usr/local/go run run_image_blur.go {addr} 8000 {target_rps} 1 60
     """.format(addr=gpu_instance[0].private_dns_name, input_size=1000, target_rps=target_rps)
 
 
@@ -502,8 +517,10 @@ def run_image_bench():
     sudo su
     ulimit -n 65536
     mkdir -p ~/gocache/
+    mkdir -p ~/gopath/
     mkdir -p ~/xdg/
     export GOCACHE=~/gocache/
+    export GOPATH=~/gopath/
     export XDG_CACHE_HOME=~/xdg/
 
     x=$(cloud-init status)
@@ -514,9 +531,9 @@ def run_image_bench():
 
     cd /tmp/wasm2opencl/benchmarks/imageblur/
 
-    go run run_image_blur.go {addr} 8000 {target_rps} 1 60
+    /usr/local/go run run_image_blur.go {addr} 8000 {target_rps} 1 60
 
-    go run run_image_blur.go {addr} 8000 {target_rps} 1 60
+    /usr/local/go run run_image_blur.go {addr} 8000 {target_rps} 1 60
     """.format(addr=cpu_bench_instance[0].private_dns_name, input_size=1000, target_rps=target_rps)
 
     command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
@@ -566,8 +583,10 @@ def run_nlp_count_bench():
     sudo su
     ulimit -n 65536
     mkdir -p ~/gocache/
+    mkdir -p ~/gopath/
     mkdir -p ~/xdg/
     export GOCACHE=~/gocache/
+    export GOPATH=~/gopath/
     export XDG_CACHE_HOME=~/xdg/
 
     x=$(cloud-init status)
@@ -576,9 +595,9 @@ def run_nlp_count_bench():
     x=$(cloud-init status)
     done
 
-    go run /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/run_nlp.go {addr} 8000 {target_rps} 1 60 /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/smaller_tweets.txt {input_size}
+    /usr/local/go run /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/run_nlp.go {addr} 8000 {target_rps} 1 60 /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/smaller_tweets.txt {input_size}
 
-    go run /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/run_nlp.go {addr} 8000 {target_rps} 1 60 /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/smaller_tweets.txt {input_size}
+    /usr/local/go run /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/run_nlp.go {addr} 8000 {target_rps} 1 60 /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/smaller_tweets.txt {input_size}
     """.format(addr=gpu_instance[0].private_dns_name, input_size=1000, target_rps=target_rps)
 
 
@@ -598,8 +617,10 @@ def run_nlp_count_bench():
     sudo su
     ulimit -n 65536
     mkdir -p ~/gocache/
+    mkdir -p ~/gopath/
     mkdir -p ~/xdg/
     export GOCACHE=~/gocache/
+    export GOPATH=~/gopath/
     export XDG_CACHE_HOME=~/xdg/
 
     x=$(cloud-init status)
@@ -608,9 +629,9 @@ def run_nlp_count_bench():
     x=$(cloud-init status)
     done
 
-    go run /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/run_nlp.go {addr} 8000 {target_rps} 1 60 /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/smaller_tweets.txt {input_size}
+    /usr/local/go run /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/run_nlp.go {addr} 8000 {target_rps} 1 60 /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/smaller_tweets.txt {input_size}
 
-    go run /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/run_nlp.go {addr} 8000 {target_rps} 1 60 /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/smaller_tweets.txt {input_size}
+    /usr/local/go run /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/run_nlp.go {addr} 8000 {target_rps} 1 60 /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/smaller_tweets.txt {input_size}
     """.format(addr=cpu_bench_instance[0].private_dns_name, input_size=1000, target_rps=target_rps)
 
     command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
