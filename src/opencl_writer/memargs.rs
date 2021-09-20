@@ -157,6 +157,19 @@ pub fn emit_memload_i64_8u(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &m
     ret_str
 }
 
+pub fn emit_memload_i64_8s(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, args: &MemArg, _debug: bool) -> String {
+    let mut ret_str = String::from("");
+
+    let i_load = stack_ctx.vstack_pop(StackType::i32);
+    let result_register = stack_ctx.vstack_alloc(StackType::i64);
+
+    let read = format!("(long)({})", &emit_read_u8(&format!("(ulong)((global char*)heap_u32+{}+(int)({}))", args.offset, i_load), "(ulong)(heap_u32)", "warp_idx"));
+
+    ret_str += &format!("\t{} = {};\n", result_register, read);
+
+    ret_str
+}
+
 pub fn emit_memload_i64_32u(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, args: &MemArg, _debug: bool) -> String {
     let mut ret_str = String::from("");
 
