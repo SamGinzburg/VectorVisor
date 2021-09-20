@@ -3,7 +3,7 @@ import time
 
 # Benchmark constants
 
-target_rps = 5000
+target_rps = 3072
 TIMEOUT_MINUTES = 120
 local_group_size = 64
 interleave = 4
@@ -358,7 +358,7 @@ def run_average_bench():
     x=$(cloud-init status)
     done
 
-    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/average/target/wasm32-wasi/release/average-opt.wasm --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=141072 --partition=true --serverless=true --vmcount=4096 --wasmtime=true &> /tmp/average.log &
+    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/average/target/wasm32-wasi/release/average-opt.wasm --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=1000000 --partition=true --serverless=true --vmcount=4096 --wasmtime=true &> /tmp/average.log &
     """
 
     run_command(run_average_command_wasmtime, "run_average_command_wasmtime", cpu_bench_instance[0].id)
@@ -372,7 +372,7 @@ def run_average_bench():
     x=$(cloud-init status)
     done
 
-    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/average/target/wasm32-wasi/release/average-opt.wasm --ip=0.0.0.0 --heap=3145728 --stack=131072 --hcallsize=300000 --partition=true --serverless=true --vmcount=4096 --wasmtime=false --maxdup=3 --lgroup={lgroup} --partitions=200 --maxloc=1000000 --cflags={cflags} --interleave={interleave} --pinput={is_pretty} &> /tmp/average.log &
+    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/average/target/wasm32-wasi/release/average-opt.wasm --ip=0.0.0.0 --heap=4194304 --stack=131072 --hcallsize=1000000 --partition=true --serverless=true --vmcount=2048 --wasmtime=false --maxdup=3 --lgroup={lgroup} --partitions=200 --maxloc=1000000 --cflags={cflags} --interleave={interleave} --pinput={is_pretty} &> /tmp/average.log &
     """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty)
 
     run_command(run_average_command, "run_average_command", gpu_instance[0].id)
@@ -395,10 +395,10 @@ def run_average_bench():
     x=$(cloud-init status)
     done
 
-    /usr/local/go run /tmp/wasm2opencl/benchmarks/average/run_average_bench.go {addr} 8000 {target_rps} 1 60 {input_size}
+    /usr/local/go run /tmp/wasm2opencl/benchmarks/average/run_average_bench.go {addr} 8000 {target_rps} 1 120 {input_size}
 
-    /usr/local/go run /tmp/wasm2opencl/benchmarks/average/run_average_bench.go {addr} 8000 {target_rps} 1 60 {input_size}
-    """.format(addr=gpu_instance[0].private_dns_name, input_size=15, target_rps=target_rps)
+    /usr/local/go run /tmp/wasm2opencl/benchmarks/average/run_average_bench.go {addr} 8000 {target_rps} 1 120 {input_size}
+    """.format(addr=gpu_instance[0].private_dns_name, input_size=50, target_rps=target_rps)
 
 
     command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
@@ -429,10 +429,10 @@ def run_average_bench():
     x=$(cloud-init status)
     done
 
-    /usr/local/go run /tmp/wasm2opencl/benchmarks/average/run_average_bench.go {addr} 8000 {target_rps} 1 60 {input_size}
+    /usr/local/go run /tmp/wasm2opencl/benchmarks/average/run_average_bench.go {addr} 8000 {target_rps} 1 120 {input_size}
 
-    /usr/local/go run /tmp/wasm2opencl/benchmarks/average/run_average_bench.go {addr} 8000 {target_rps} 1 60 {input_size}
-    """.format(addr=cpu_bench_instance[0].private_dns_name, input_size=15, target_rps=target_rps)
+    /usr/local/go run /tmp/wasm2opencl/benchmarks/average/run_average_bench.go {addr} 8000 {target_rps} 1 120 {input_size}
+    """.format(addr=cpu_bench_instance[0].private_dns_name, input_size=50, target_rps=target_rps)
 
     command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
 
@@ -670,6 +670,7 @@ p3.2xlarge   => 1 V100, 16 GiB memory, 8 vCPU, $3.06 / hr
 # AMIs specific to us-east-2
 # ami-01463836f7041cd10  ==> OpenCL 3.0 driver (470.57.02)
 # ami-00339339e800db52e  ==> OpenCL 1.2 driver (460.X)
+# ami-0748c95fd9dd9f42a  ==> OpenCL 1.2 driver (450.X)
 gpu_instance = ec2.create_instances(ImageId='ami-01463836f7041cd10',
                                 InstanceType="g4dn.2xlarge",
                                 MinCount=1,
