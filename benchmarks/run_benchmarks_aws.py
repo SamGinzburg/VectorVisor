@@ -201,9 +201,9 @@ def run_pbkdf2_bench(run_x86):
     x=$(cloud-init status)
     done
 
-    /usr/local/go run /tmp/wasm2opencl/benchmarks/pbkdf2/run_pbkdf2.go {addr} 8000 {target_rps} 1 120
+    /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/pbkdf2/run_pbkdf2.go {addr} 8000 {target_rps} 1 120
 
-    /usr/local/go run /tmp/wasm2opencl/benchmarks/pbkdf2/run_pbkdf2.go {addr} 8000 {target_rps} 1 120
+    /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/pbkdf2/run_pbkdf2.go {addr} 8000 {target_rps} 1 120
     """.format(addr=gpu_instance[0].private_dns_name, target_rps=target_rps)
 
     command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
@@ -234,9 +234,9 @@ def run_pbkdf2_bench(run_x86):
     x=$(cloud-init status)
     done
 
-    /usr/local/go run /tmp/wasm2opencl/benchmarks/pbkdf2/run_pbkdf2.go {addr} 8000 {target_rps} 1 120
+    /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/pbkdf2/run_pbkdf2.go {addr} 8000 {target_rps} 1 120
 
-    /usr/local/go run /tmp/wasm2opencl/benchmarks/pbkdf2/run_pbkdf2.go {addr} 8000 {target_rps} 1 120
+    /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/pbkdf2/run_pbkdf2.go {addr} 8000 {target_rps} 1 120
     """.format(addr=cpu_bench_instance[0].private_dns_name, target_rps=target_rps)
 
     command_id = run_command(run_invoker_cpu, "run invoker for cpu", invoker_instance[0].id)
@@ -298,9 +298,9 @@ def run_lz4_bench():
     x=$(cloud-init status)
     done
 
-    /usr/local/go run /tmp/wasm2opencl/benchmarks/json-compression/run_json_lz4.go {addr} 8000 {target_rps} 1 60 {input_size}
+    /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/json-compression/run_json_lz4.go {addr} 8000 {target_rps} 1 60 {input_size}
 
-    /usr/local/go run /tmp/wasm2opencl/benchmarks/json-compression/run_json_lz4.go {addr} 8000 {target_rps} 1 60 {input_size}
+    /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/json-compression/run_json_lz4.go {addr} 8000 {target_rps} 1 60 {input_size}
     """.format(addr=gpu_instance[0].private_dns_name, input_size=100, target_rps=target_rps)
 
 
@@ -332,9 +332,9 @@ def run_lz4_bench():
     x=$(cloud-init status)
     done
 
-    /usr/local/go run /tmp/wasm2opencl/benchmarks/json-compression/run_json_lz4.go {addr} 8000 {target_rps} 1 60 {input_size}
+    /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/json-compression/run_json_lz4.go {addr} 8000 {target_rps} 1 60 {input_size}
 
-    /usr/local/go run /tmp/wasm2opencl/benchmarks/json-compression/run_json_lz4.go {addr} 8000 {target_rps} 1 60 {input_size}
+    /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/json-compression/run_json_lz4.go {addr} 8000 {target_rps} 1 60 {input_size}
     """.format(addr=cpu_bench_instance[0].private_dns_name, input_size=100, target_rps=target_rps)
 
     command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
@@ -395,9 +395,9 @@ def run_average_bench():
     x=$(cloud-init status)
     done
 
-    /usr/local/go run /tmp/wasm2opencl/benchmarks/average/run_average_bench.go {addr} 8000 {target_rps} 1 120 {input_size}
+    /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/average/run_average_bench.go {addr} 8000 {target_rps} 1 120 {input_size}
 
-    /usr/local/go run /tmp/wasm2opencl/benchmarks/average/run_average_bench.go {addr} 8000 {target_rps} 1 120 {input_size}
+    /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/average/run_average_bench.go {addr} 8000 {target_rps} 1 120 {input_size}
     """.format(addr=gpu_instance[0].private_dns_name, input_size=50, target_rps=target_rps)
 
 
@@ -429,9 +429,9 @@ def run_average_bench():
     x=$(cloud-init status)
     done
 
-    /usr/local/go run /tmp/wasm2opencl/benchmarks/average/run_average_bench.go {addr} 8000 {target_rps} 1 120 {input_size}
+    /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/average/run_average_bench.go {addr} 8000 {target_rps} 1 120 {input_size}
 
-    /usr/local/go run /tmp/wasm2opencl/benchmarks/average/run_average_bench.go {addr} 8000 {target_rps} 1 120 {input_size}
+    /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/average/run_average_bench.go {addr} 8000 {target_rps} 1 120 {input_size}
     """.format(addr=cpu_bench_instance[0].private_dns_name, input_size=50, target_rps=target_rps)
 
     command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
@@ -495,9 +495,9 @@ def run_image_bench():
 
     cd /tmp/wasm2opencl/benchmarks/imageblur/
 
-    /usr/local/go run run_image_blur.go {addr} 8000 {target_rps} 1 60
+    /usr/local/go/bin/go run run_image_blur.go {addr} 8000 {target_rps} 1 60
 
-    /usr/local/go run run_image_blur.go {addr} 8000 {target_rps} 1 60
+    /usr/local/go/bin/go run run_image_blur.go {addr} 8000 {target_rps} 1 60
     """.format(addr=gpu_instance[0].private_dns_name, input_size=1000, target_rps=target_rps)
 
 
@@ -531,9 +531,9 @@ def run_image_bench():
 
     cd /tmp/wasm2opencl/benchmarks/imageblur/
 
-    /usr/local/go run run_image_blur.go {addr} 8000 {target_rps} 1 60
+    /usr/local/go/bin/go run run_image_blur.go {addr} 8000 {target_rps} 1 60
 
-    /usr/local/go run run_image_blur.go {addr} 8000 {target_rps} 1 60
+    /usr/local/go/bin/go run run_image_blur.go {addr} 8000 {target_rps} 1 60
     """.format(addr=cpu_bench_instance[0].private_dns_name, input_size=1000, target_rps=target_rps)
 
     command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
@@ -595,9 +595,9 @@ def run_nlp_count_bench():
     x=$(cloud-init status)
     done
 
-    /usr/local/go run /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/run_nlp.go {addr} 8000 {target_rps} 1 60 /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/smaller_tweets.txt {input_size}
+    /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/run_nlp.go {addr} 8000 {target_rps} 1 60 /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/smaller_tweets.txt {input_size}
 
-    /usr/local/go run /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/run_nlp.go {addr} 8000 {target_rps} 1 60 /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/smaller_tweets.txt {input_size}
+    /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/run_nlp.go {addr} 8000 {target_rps} 1 60 /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/smaller_tweets.txt {input_size}
     """.format(addr=gpu_instance[0].private_dns_name, input_size=1000, target_rps=target_rps)
 
 
@@ -629,9 +629,9 @@ def run_nlp_count_bench():
     x=$(cloud-init status)
     done
 
-    /usr/local/go run /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/run_nlp.go {addr} 8000 {target_rps} 1 60 /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/smaller_tweets.txt {input_size}
+    /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/run_nlp.go {addr} 8000 {target_rps} 1 60 /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/smaller_tweets.txt {input_size}
 
-    /usr/local/go run /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/run_nlp.go {addr} 8000 {target_rps} 1 60 /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/smaller_tweets.txt {input_size}
+    /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/run_nlp.go {addr} 8000 {target_rps} 1 60 /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/smaller_tweets.txt {input_size}
     """.format(addr=cpu_bench_instance[0].private_dns_name, input_size=1000, target_rps=target_rps)
 
     command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
