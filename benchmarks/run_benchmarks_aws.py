@@ -3,9 +3,9 @@ import time
 
 # Benchmark constants
 
-target_rps = 3072
+target_rps = 5000
 TIMEOUT_MINUTES = 120
-local_group_size = 64
+local_group_size = 16
 interleave = 4
 #local_group_size = 999999
 is_pretty = "true"

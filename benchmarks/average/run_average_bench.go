@@ -11,10 +11,11 @@ import (
 	"strconv"
 	"math/rand"
 	b64 "encoding/base64"
+	msgpack "github.com/vmihailenco/msgpack/v5"
 )
 
 type payload struct {
-	Text []float64 `json:"numbers"`
+	Text []float64 `msgpack:"numbers"`
 }
 
 type Message struct {
@@ -166,7 +167,7 @@ func main() {
 	reqs := make([][]byte, NUM_PARAMS)
 	for i := 0; i < NUM_PARAMS; i++ {
 		p := payload{Text: RandIntSlice(1024*input_size)}
-		request_body, _ := json.Marshal(p)
+		request_body, _ := msgpack.Marshal(p)
 		reqs[i] = request_body
 	}
 
