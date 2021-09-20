@@ -1,5 +1,5 @@
-use serde_json::{json, Value, to_string};
-use rmp_serde::decode;
+use serde_json::{json, Value, to_vec};
+use rmp_serde::{decode, encode};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -122,7 +122,15 @@ impl<'a, T1: DeserializeOwned, T2: Serialize> WasmHandler<T1, T2> {
             };
 
             func_ret_val = (self.function)(parsed_func_input);
-            let mut func_ret_val_as_buffer = to_string(&func_ret_val).unwrap();
+            let mut func_ret_val_as_buffer = match serializiation_format { 
+                SerializationFormat::Json => {
+                    to_vec(&func_ret_val).unwrap()
+                },
+                SerializationFormat::MsgPack => {
+                    encode::to_vec(&func_ret_val).unwrap()
+                },
+            };
+
             unsafe {
                 serverless_response(func_ret_val_as_buffer.as_mut_ptr(), func_ret_val_as_buffer.len() as u32);
             }
@@ -228,7 +236,14 @@ impl<'a, T1: DeserializeOwned, T2: Serialize> WasmHandler<T1, T2> {
                     };
                     
                     let func_ret_val = (func_ptr)(parsed_func_input);
-                    let response = to_string(&func_ret_val).unwrap().into_bytes();
+                    let response = match serializiation_format { 
+                        SerializationFormat::Json => {
+                            to_vec(&func_ret_val).unwrap()
+                        },
+                        SerializationFormat::MsgPack => {
+                            encode::to_vec(&func_ret_val).unwrap()
+                        },
+                    };
 
                     /*
                     let response = match parsed_func_input {
