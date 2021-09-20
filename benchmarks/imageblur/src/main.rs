@@ -1,5 +1,6 @@
 use wasm_serverless_invoke::wasm_handler;
 use wasm_serverless_invoke::wasm_handler::WasmHandler;
+use wasm_serverless_invoke::wasm_handler::SerializationFormat::MsgPack;
 use serde_json::Value;
 use serde_json::json;
 use serde::Deserialize;
@@ -47,5 +48,5 @@ fn image_blur(event: FuncInput) -> FuncResponse {
 
 fn main() {
     let handler = WasmHandler::new(&image_blur);
-    handler.run(1024*1024);
+    handler.run_with_format(1024*1024, MsgPack);
 }

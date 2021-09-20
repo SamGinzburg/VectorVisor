@@ -15,7 +15,7 @@ pub struct FunctionServer {}
 
 #[derive(Debug, Serialize)]
 struct BatchReply {
-    response: String,
+    response: Vec<u8>,
     on_device_execution_time_ns: u64,
     device_queue_overhead_time_ns: u64,
     queue_submit_count: u64,
@@ -40,7 +40,7 @@ impl FunctionServer {
         };
 
         let final_response = BatchReply {
-            response: from_utf8(&resp[0..len]).unwrap().to_string(),
+            response: resp[0..len].to_vec(),
             on_device_execution_time_ns: on_dev_time,
             device_queue_overhead_time_ns: queue_submit_time,
             queue_submit_count: num_queue_submits,
