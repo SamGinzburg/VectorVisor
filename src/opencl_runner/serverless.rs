@@ -51,9 +51,10 @@ impl Serverless {
     pub fn hypercall_serverless_response(_ctx: &WasiCtx, vm_ctx: &VectorizedVM, hypercall: &mut HyperCall, sender: &Sender<HyperCallResult>) -> () {
         let mut hcall_buf: &[u8] = unsafe { *hypercall.hypercall_buffer.buf.get() };
         let hcall_buf_size: u32 = vm_ctx.hcall_buf_size;
-        hcall_buf = &hcall_buf[(hypercall.vm_id * hcall_buf_size) as usize..((hypercall.vm_id+1) * hcall_buf_size) as usize];
+        let vm_idx = vm_ctx.vm_id;
+        hcall_buf = &hcall_buf[(vm_idx * hcall_buf_size) as usize..((vm_idx+1) * hcall_buf_size) as usize];
 
-        let send_chan = (vm_ctx.vm_sender).get(hypercall.vm_id as usize).unwrap();
+        let send_chan = (vm_ctx.vm_sender).get(vm_idx as usize).unwrap();
         // the first 4 bytes are the length as a u32, the remainder is the buffer containing the json
 
         let msg_len = LittleEndian::read_u32(&hcall_buf[0..4]);

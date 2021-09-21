@@ -3,9 +3,9 @@ import time
 
 # Benchmark constants
 
-target_rps = 5000
+target_rps = 4096 * 2
 TIMEOUT_MINUTES = 120
-local_group_size = 16
+local_group_size = 64
 interleave = 4
 #local_group_size = 999999
 is_pretty = "true"
@@ -756,9 +756,9 @@ while True:
 ssm_client = boto3.client('ssm')
 
 # run pbkdf2 bench
-#run_pbkdf2_bench(True)
+run_pbkdf2_bench(True)
 
-#cleanup()
+cleanup()
 
 # run lz4 bench
 run_lz4_bench()
@@ -773,10 +773,10 @@ cleanup()
 # run average bench
 run_average_bench()
 
-cleanup()
+#cleanup()
 
 # run image bench
-run_image_bench()
+#run_image_bench()
 
 
 # clean up all instances at end
