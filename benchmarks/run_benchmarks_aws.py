@@ -279,7 +279,7 @@ def run_lz4_bench():
     x=$(cloud-init status)
     done
 
-    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/json-compression/target/wasm32-wasi/release/json-compression-opt.wasm --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=141072 --partition=true --serverless=true --vmcount=4096 --vmgroups=1 --maxdup=3 --lgroup={lgroup} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} &> /tmp/json-compression.log &
+    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/json-compression/target/wasm32-wasi/release/json-compression-opt.wasm --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=141072 --partition=true --serverless=true --vmcount=4096 --vmgroups=1 --maxdup=3 --partitions=50 --lgroup={lgroup} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} &> /tmp/json-compression.log &
     """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty)
 
     run_command(run_json_lz4_command, "run_json_lz4_command", gpu_instance[0].id)
@@ -761,9 +761,9 @@ ssm_client = boto3.client('ssm')
 #cleanup()
 
 # run lz4 bench
-#run_lz4_bench()
+run_lz4_bench()
 
-#cleanup()
+cleanup()
 
 # run NLP bench
 #run_nlp_count_bench()

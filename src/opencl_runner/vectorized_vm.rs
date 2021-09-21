@@ -140,13 +140,13 @@ pub struct VectorizedVM {
     pub queue_submit_qty: Arc<u64>,
     pub called_fns_set: Arc<HashSet<u32>>,
     pub vm_sender: Arc<Vec<Mutex<Sender<(Vec<u8>, usize, u64, u64, u64, u64)>>>>,
-    pub vm_recv: Arc<Vec<Mutex<Receiver<(Vec<u8>, usize)>>>>,
+    pub vm_recv: Arc<Vec<Mutex<Receiver<(bytes::Bytes, usize)>>>>,
     pub ready_for_input: AtomicBool,
     pub input_msg_len: usize,
 }
 
 impl VectorizedVM {
-    pub fn new(vm_id: u32, hcall_buf_size: u32, _num_total_vms: u32, vm_sender: Arc<Vec<Mutex<Sender<(Vec<u8>, usize, u64, u64, u64, u64)>>>>, vm_recv: Arc<Vec<Mutex<Receiver<(Vec<u8>, usize)>>>>) -> VectorizedVM {
+    pub fn new(vm_id: u32, hcall_buf_size: u32, _num_total_vms: u32, vm_sender: Arc<Vec<Mutex<Sender<(Vec<u8>, usize, u64, u64, u64, u64)>>>>, vm_recv: Arc<Vec<Mutex<Receiver<(bytes::Bytes, usize)>>>>) -> VectorizedVM {
         // default context with no args yet - we can inherit arguments from the CLI if we want
         // or we can pass them in some other config file
 
@@ -202,7 +202,7 @@ impl VectorizedVM {
         self.ready_for_input.load(Ordering::Relaxed).clone()
     }
 
-    pub fn queue_request(&mut self, msg: Vec<u8>, hcall_buf: &mut [u8]) -> () {
+    pub fn queue_request(&mut self, msg: bytes::Bytes, hcall_buf: &mut [u8]) -> () {
         let hcall_buf_size: u32 = self.hcall_buf_size;
         let vm_hcall_buf = &mut hcall_buf[(self.vm_id * hcall_buf_size) as usize..((self.vm_id+1) * hcall_buf_size) as usize];
         vm_hcall_buf[0..msg.len()].copy_from_slice(&msg);

@@ -28,8 +28,8 @@ struct BatchInput {
 }
 
 #[derive(Debug, Serialize)]
-struct BatchReply {
-    response: Vec<u8>,
+struct BatchReply<'a> {
+    response: &'a [u8],
     on_device_execution_time_ns: u64,
     device_queue_overhead_time_ns: u64,
     queue_submit_count: u64,
@@ -37,8 +37,8 @@ struct BatchReply {
 }
 
 #[derive(Debug, Serialize)]
-struct BatchResponse {
-    requests: HashMap<u32, BatchReply>
+struct BatchResponse<'a> {
+    requests: HashMap<u32, BatchReply<'a>>
 }
 
 type VmQueue = deadqueue::limited::Queue<usize>;
@@ -50,11 +50,11 @@ impl warp::reject::Reject for NoVmAvailable {}
 
 impl BatchSubmitServer {
 
-    async fn response(body: bytes::Bytes, vm_idx: usize, vm_queue: Arc<VmQueue>, sender: Arc<Vec<Mutex<Sender<(Vec<u8>, usize)>>>>, receiver: Arc<Vec<Mutex<Receiver<(Vec<u8>, usize, u64, u64, u64, u64)>>>>) -> Result<impl warp::Reply, warp::Rejection> {
+    async fn response(body: bytes::Bytes, vm_idx: usize, vm_queue: Arc<VmQueue>, sender: Arc<Vec<Mutex<Sender<(bytes::Bytes, usize)>>>>, receiver: Arc<Vec<Mutex<Receiver<(Vec<u8>, usize, u64, u64, u64, u64)>>>>) -> Result<impl warp::Reply, warp::Rejection> {
 
         //dbg!(&vm_idx);
         // Get an available VM first
-        let tx: &Mutex<Sender<(Vec<u8>, usize)>> = (*sender).get(vm_idx).unwrap();
+        let tx: &Mutex<Sender<(bytes::Bytes, usize)>> = (*sender).get(vm_idx).unwrap();
         let rx: &Mutex<Receiver<(Vec<u8>, usize, u64, u64, u64, u64)>> = (*receiver).get(vm_idx).unwrap();
 
         /*
@@ -70,7 +70,7 @@ impl BatchSubmitServer {
         // Send the request body to the selected VM
         // We can't await on the send because we have the mutex acquired here
         let sender = tx.lock().await;
-        sender.send((body.to_vec(), body.len())).await.unwrap();
+        sender.send((body.clone(), body.len())).await.unwrap();
 
         // Wait on response from the VM
         let (resp, len, on_dev_time, queue_submit_time, num_queue_submits, num_unique_fns) = match rx.lock().await.recv().await {
@@ -79,7 +79,7 @@ impl BatchSubmitServer {
         };
 
         let final_response = BatchReply {
-            response: resp[0..len].to_vec(),
+            response: &resp[0..len],
             on_device_execution_time_ns: on_dev_time,
             device_queue_overhead_time_ns: queue_submit_time,
             queue_submit_count: num_queue_submits,
@@ -89,7 +89,7 @@ impl BatchSubmitServer {
         Ok(warp::reply::json(&final_response).into_response())
     }
 
-    pub fn start_server(_hcall_buf_size: usize, is_active: Arc<SyncMutex<bool>>, sender: Arc<Vec<Mutex<Sender<(Vec<u8>, usize)>>>>, receiver: Arc<Vec<Mutex<Receiver<(Vec<u8>, usize, u64, u64, u64, u64)>>>>, num_vms: u32, server_ip: String, server_port: String) -> () {
+    pub fn start_server(_hcall_buf_size: usize, is_active: Arc<SyncMutex<bool>>, sender: Arc<Vec<Mutex<Sender<(bytes::Bytes, usize)>>>>, receiver: Arc<Vec<Mutex<Receiver<(Vec<u8>, usize, u64, u64, u64, u64)>>>>, num_vms: u32, server_ip: String, server_port: String) -> () {
         
         tokio::runtime::Builder::new_multi_thread()
             //.worker_threads(4)

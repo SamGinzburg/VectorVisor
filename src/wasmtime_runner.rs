@@ -12,12 +12,12 @@ use chrono::prelude::*;
 pub struct WasmtimeRunner {
     vm_idx: usize,
     vm_sender: Arc<Vec<Mutex<Sender<(Vec<u8>, usize, u64, u64, u64, u64)>>>>,
-    vm_recv: Arc<Vec<Mutex<Receiver<(Vec<u8>, usize)>>>>
+    vm_recv: Arc<Vec<Mutex<Receiver<(bytes::Bytes, usize)>>>>
 }
 
 impl WasmtimeRunner {
     pub fn new(vm_idx: usize, vm_sender: Arc<Vec<Mutex<Sender<(Vec<u8>, usize, u64, u64, u64, u64)>>>>,
-               vm_recv: Arc<Vec<Mutex<Receiver<(Vec<u8>, usize)>>>>) -> WasmtimeRunner {
+               vm_recv: Arc<Vec<Mutex<Receiver<(bytes::Bytes, usize)>>>>) -> WasmtimeRunner {
             WasmtimeRunner {
                 vm_idx: vm_idx,
                 vm_sender: vm_sender,

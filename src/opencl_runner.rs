@@ -206,7 +206,7 @@ impl OpenCLRunner {
                local_work_group: usize,
                mexec: usize,
                vm_sender: Arc<Vec<Mutex<Sender<(Vec<u8>, usize, u64, u64, u64, u64)>>>>,
-               vm_recv: Arc<Vec<Mutex<Receiver<(Vec<u8>, usize)>>>>,
+               vm_recv: Arc<Vec<Mutex<Receiver<(bytes::Bytes, usize)>>>>,
                _compile_flags: String,
                _link_flags: String,
                print_return: bool) -> JoinHandle<()> {
@@ -763,7 +763,7 @@ impl OpenCLRunner {
                          ctx: &ocl::core::Context,
                          print_return: bool,
                          vm_sender: Arc<Vec<Mutex<Sender<(Vec<u8>, usize, u64, u64, u64, u64)>>>>,
-                         vm_recv: Arc<Vec<Mutex<Receiver<(Vec<u8>, usize)>>>>) -> VMMRuntimeStatus {
+                         vm_recv: Arc<Vec<Mutex<Receiver<(bytes::Bytes, usize)>>>>) -> VMMRuntimeStatus {
         // we have the compiled program & context, we now can set up the kernels...
         let data_kernel = ocl::core::create_kernel(&program, "data_init").unwrap();
         let start_kernel = ocl::core::create_kernel(&program, "wasm_entry").unwrap();
@@ -1222,7 +1222,7 @@ impl OpenCLRunner {
                                     ctx: &ocl::core::Context,
                                     print_return: bool,
                                     vm_sender: Arc<Vec<Mutex<Sender<(Vec<u8>, usize, u64, u64, u64, u64)>>>>,
-                                    vm_recv: Arc<Vec<Mutex<Receiver<(Vec<u8>, usize)>>>>) -> VMMRuntimeStatus {
+                                    vm_recv: Arc<Vec<Mutex<Receiver<(bytes::Bytes, usize)>>>>) -> VMMRuntimeStatus {
         let mut kernels: HashMap<u32, ocl::core::Kernel> = HashMap::new();
 
         // setup the data kernel

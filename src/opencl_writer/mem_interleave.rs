@@ -886,7 +886,7 @@ fn emit_read_u32_body(interleave: u32, local_work_group: usize, mexec: usize, em
                 result += &format!("{}\n",
                                 "offset_0:");
                 result += &format!("\t{}\n",
-                                "return *((global uint*)((global uint*)cell1));");
+                                "return *((global uint*)((global uchar*)cell1+cell_offset));");
                 result += &format!("{}\n",
                                 "offset_1:");
                 result += &format!("\t{}\n",
