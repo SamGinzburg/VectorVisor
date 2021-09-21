@@ -34,3 +34,4 @@ indicatif = "0.15.0"
 tokio = { version = "1", features = ["full"] }
 warp = "0.3"
 deadqueue = "0.2.0"
+futures = "0.3"

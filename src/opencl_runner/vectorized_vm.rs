@@ -22,7 +22,7 @@ use crossbeam::channel::Sender as SyncSender;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::collections::HashSet;
-
+use std::convert::TryInto;
 use std::fs::File;
 use std::path::Path;
 
@@ -132,7 +132,7 @@ pub struct VectorizedVM {
     pub wasm_memory: WasmtimeGuestMemory,
     pub enviroment_size: Option<u32>,
     pub environment_str_size: Option<u32>,
-    vm_id: u32,
+    pub vm_id: u32,
     pub hcall_buf_size: u32,
     pub timestamp_counter: Arc<u64>,
     pub queue_submit_counter: Arc<u64>,
@@ -140,6 +140,8 @@ pub struct VectorizedVM {
     pub called_fns_set: Arc<HashSet<u32>>,
     pub vm_sender: Arc<Vec<Mutex<Sender<(Vec<u8>, usize, u64, u64, u64, u64)>>>>,
     pub vm_recv: Arc<Vec<Mutex<Receiver<(Vec<u8>, usize)>>>>,
+    ready_for_input: bool,
+    pub input_msg_len: usize,
 }
 
 impl VectorizedVM {
@@ -190,7 +192,21 @@ impl VectorizedVM {
             called_fns_set: Arc::new(HashSet::new()),
             vm_sender: vm_sender,
             vm_recv: vm_recv,
+            ready_for_input: true,
+            input_msg_len: 0,
         }
+    }
+
+    pub fn is_avail(&mut self) -> bool {
+        self.ready_for_input.clone()
+    }
+
+    pub fn queue_request(&mut self, msg: Vec<u8>, hcall_buf: &mut [u8]) -> () {
+        let hcall_buf_size: u32 = self.hcall_buf_size;
+        let vm_hcall_buf = &mut hcall_buf[(self.vm_id * hcall_buf_size) as usize..((self.vm_id+1) * hcall_buf_size) as usize];
+        vm_hcall_buf[0..msg.len()].copy_from_slice(&msg);
+        self.ready_for_input = false;
+        self.input_msg_len = msg.len();
     }
 
     /*
@@ -229,6 +245,7 @@ impl VectorizedVM {
             },
             WasiSyscalls::ServerlessResponse => {
                 Serverless::hypercall_serverless_response(&self.ctx, self, hypercall, sender);
+                self.ready_for_input = true;
             },
             WasiSyscalls::RandomGet => {
                 Random::hypercall_random_get(&self.ctx, self, hypercall, sender);

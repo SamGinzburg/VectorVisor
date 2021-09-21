@@ -20,26 +20,6 @@ pub struct Serverless {}
 
 impl Serverless {
     pub fn hypercall_serverless_invoke(vm_ctx: &mut VectorizedVM, hypercall: &mut HyperCall, sender: &Sender<HyperCallResult>) -> () {
-        let mut hcall_buf: &mut [u8] = unsafe { *hypercall.hypercall_buffer.buf.get() };
-        let hcall_buf_size: u32 = vm_ctx.hcall_buf_size;
-        hcall_buf = &mut hcall_buf[(hypercall.vm_id * hcall_buf_size) as usize..((hypercall.vm_id+1) * hcall_buf_size) as usize];
-
-        // block until we get an incoming request
-        let recv_chan = (vm_ctx.vm_recv).get(hypercall.vm_id as usize).unwrap();
-
-        let (msg, _) = recv_chan.lock().unwrap().blocking_recv().unwrap();
-
-        /*
-        // Parse the incoming JSON to a Value object
-        let incoming_json_obj: Value = serde_json::from_slice(&msg).unwrap();
-        // Serialize parsed json
-        let serialized_json = serde_cbor::ser::to_vec_packed(&incoming_json_obj).unwrap();
-
-        hcall_buf[0..serialized_json.len()].copy_from_slice(&serialized_json);
-        */
-
-        hcall_buf[0..msg.len()].copy_from_slice(&msg);
-
         // store this in the vmctx for when we return
         *Arc::make_mut(&mut vm_ctx.timestamp_counter) = hypercall.timestamp_counter;
         *Arc::make_mut(&mut vm_ctx.queue_submit_counter) = hypercall.queue_submit_delta;
@@ -54,7 +34,7 @@ impl Serverless {
 
         // return the length of the incoming message
         sender.send({
-            HyperCallResult::new(msg.len().try_into().unwrap(), hypercall.vm_id, WasiSyscalls::ServerlessInvoke)
+            HyperCallResult::new(vm_ctx.input_msg_len.try_into().unwrap(), hypercall.vm_id, WasiSyscalls::ServerlessInvoke)
         }).unwrap();
     }
 
