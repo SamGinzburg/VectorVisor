@@ -201,6 +201,8 @@ def run_pbkdf2_bench(run_x86):
     x=$(cloud-init status)
     done
 
+    cd /tmp/wasm2opencl/benchmarks/pbkdf2/
+
     /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/pbkdf2/run_pbkdf2.go {addr} 8000 {target_rps} 1 120
 
     /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/pbkdf2/run_pbkdf2.go {addr} 8000 {target_rps} 1 120
@@ -233,6 +235,8 @@ def run_pbkdf2_bench(run_x86):
     sleep 10
     x=$(cloud-init status)
     done
+
+    cd /tmp/wasm2opencl/benchmarks/pbkdf2/
 
     /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/pbkdf2/run_pbkdf2.go {addr} 8000 {target_rps} 1 120
 
@@ -298,6 +302,8 @@ def run_lz4_bench():
     x=$(cloud-init status)
     done
 
+    cd /tmp/wasm2opencl/benchmarks/json-compression/
+
     /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/json-compression/run_json_lz4.go {addr} 8000 {target_rps} 1 60 {input_size}
 
     /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/json-compression/run_json_lz4.go {addr} 8000 {target_rps} 1 60 {input_size}
@@ -331,6 +337,8 @@ def run_lz4_bench():
     sleep 10
     x=$(cloud-init status)
     done
+
+    cd /tmp/wasm2opencl/benchmarks/json-compression/
 
     /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/json-compression/run_json_lz4.go {addr} 8000 {target_rps} 1 60 {input_size}
 
@@ -395,6 +403,8 @@ def run_average_bench():
     x=$(cloud-init status)
     done
 
+    cd /tmp/wasm2opencl/benchmarks/average/
+
     /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/average/run_average_bench.go {addr} 8000 {target_rps} 1 120 {input_size}
 
     /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/average/run_average_bench.go {addr} 8000 {target_rps} 1 120 {input_size}
@@ -428,6 +438,8 @@ def run_average_bench():
     sleep 10
     x=$(cloud-init status)
     done
+
+    cd /tmp/wasm2opencl/benchmarks/average/
 
     /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/average/run_average_bench.go {addr} 8000 {target_rps} 1 120 {input_size}
 
@@ -595,6 +607,8 @@ def run_nlp_count_bench():
     x=$(cloud-init status)
     done
 
+    cd /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/
+
     /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/run_nlp.go {addr} 8000 {target_rps} 1 60 /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/smaller_tweets.txt {input_size}
 
     /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/run_nlp.go {addr} 8000 {target_rps} 1 60 /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/smaller_tweets.txt {input_size}
@@ -628,6 +642,8 @@ def run_nlp_count_bench():
     sleep 10
     x=$(cloud-init status)
     done
+
+    cd /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/
 
     /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/run_nlp.go {addr} 8000 {target_rps} 1 60 /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/smaller_tweets.txt {input_size}
 
@@ -755,9 +771,9 @@ ssm_client = boto3.client('ssm')
 #cleanup()
 
 # run average bench
-#run_average_bench()
+run_average_bench()
 
-#cleanup()
+cleanup()
 
 # run image bench
 run_image_bench()

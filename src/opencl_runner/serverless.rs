@@ -14,7 +14,9 @@ use std::convert::TryInto;
 use std::sync::Arc;
 
 use serde_json::Value;
-
+use std::time;
+use std::thread;
+use std::sync::atomic::Ordering;
 
 pub struct Serverless {}
 
@@ -32,7 +34,14 @@ impl Serverless {
             }
         }
 
+        /*
+        let sleep_time = time::Duration::from_millis(10);
         // return the length of the incoming message
+        while vm_ctx.ready_for_input.load(Ordering::Relaxed) == true {
+            thread::sleep(sleep_time);
+        }
+        */
+
         sender.send({
             HyperCallResult::new(vm_ctx.input_msg_len.try_into().unwrap(), hypercall.vm_id, WasiSyscalls::ServerlessInvoke)
         }).unwrap();

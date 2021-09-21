@@ -21,6 +21,7 @@ use crossbeam::channel::Sender as SyncSender;
 
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::collections::HashSet;
 use std::convert::TryInto;
 use std::fs::File;
@@ -140,7 +141,7 @@ pub struct VectorizedVM {
     pub called_fns_set: Arc<HashSet<u32>>,
     pub vm_sender: Arc<Vec<Mutex<Sender<(Vec<u8>, usize, u64, u64, u64, u64)>>>>,
     pub vm_recv: Arc<Vec<Mutex<Receiver<(Vec<u8>, usize)>>>>,
-    ready_for_input: bool,
+    pub ready_for_input: AtomicBool,
     pub input_msg_len: usize,
 }
 
@@ -192,20 +193,20 @@ impl VectorizedVM {
             called_fns_set: Arc::new(HashSet::new()),
             vm_sender: vm_sender,
             vm_recv: vm_recv,
-            ready_for_input: true,
+            ready_for_input: AtomicBool::new(true),
             input_msg_len: 0,
         }
     }
 
     pub fn is_avail(&mut self) -> bool {
-        self.ready_for_input.clone()
+        self.ready_for_input.load(Ordering::Relaxed).clone()
     }
 
     pub fn queue_request(&mut self, msg: Vec<u8>, hcall_buf: &mut [u8]) -> () {
         let hcall_buf_size: u32 = self.hcall_buf_size;
         let vm_hcall_buf = &mut hcall_buf[(self.vm_id * hcall_buf_size) as usize..((self.vm_id+1) * hcall_buf_size) as usize];
         vm_hcall_buf[0..msg.len()].copy_from_slice(&msg);
-        self.ready_for_input = false;
+        self.ready_for_input.store(false, Ordering::Relaxed);
         self.input_msg_len = msg.len();
     }
 
@@ -245,7 +246,7 @@ impl VectorizedVM {
             },
             WasiSyscalls::ServerlessResponse => {
                 Serverless::hypercall_serverless_response(&self.ctx, self, hypercall, sender);
-                self.ready_for_input = true;
+                self.ready_for_input.store(true, Ordering::Relaxed);
             },
             WasiSyscalls::RandomGet => {
                 Random::hypercall_random_get(&self.ctx, self, hypercall, sender);
