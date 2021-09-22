@@ -11,6 +11,7 @@ import (
 	"os"
 	"strconv"
 	"time"
+
 	msgpack "github.com/vmihailenco/msgpack/v5"
 )
 
@@ -52,7 +53,12 @@ func RandImage(n int) string {
 func IssueRequests(ip string, port int, req [][]byte, exec_time chan<- float64, latency chan<- float64, queue_time chan<- float64, submit_count chan<- float64, unique_fns chan<- float64, end_chan chan bool) {
 	addr := fmt.Sprintf("http://%s:%d/batch_submit/", ip, port)
 	http_request, _ := http.NewRequest("GET", addr, nil)
-	http_request.Header.Add("Content-Type", "application/octet-stream; charset=utf-8")
+	http_request.Header.Add("Content-Type", "application/json; charset=utf-8")
+
+	on_device_compute_time := 0.0
+	device_queue_overhead := 0.0
+	queue_submit_count := 0.0
+	num_unique_fns_called := 0.0
 
 	for {
 		http_request.Body = ioutil.NopCloser(bytes.NewReader(req[rand.Intn(NUM_PARAMS)]))
@@ -85,13 +91,15 @@ func IssueRequests(ip string, port int, req [][]byte, exec_time chan<- float64, 
 		}
 		m := map[string]interface{}{}
 		err = json.Unmarshal(body, &m)
-		if err != nil {
-			panic(err)
+		if err == nil {
+			if m["on_device_execution_time_ns"] != nil {
+				on_device_compute_time = m["on_device_execution_time_ns"].(float64)
+				device_queue_overhead = m["device_queue_overhead_time_ns"].(float64)
+				queue_submit_count = m["queue_submit_count"].(float64)
+				num_unique_fns_called = m["num_unique_fns_called"].(float64)
+			}
 		}
-		on_device_compute_time := m["on_device_execution_time_ns"].(float64)
-		device_queue_overhead := m["device_queue_overhead_time_ns"].(float64)
-		queue_submit_count := m["queue_submit_count"].(float64)
-		num_unique_fns_called := m["num_unique_fns_called"].(float64)
+
 		select {
 		case exec_time <- on_device_compute_time:
 		default:
