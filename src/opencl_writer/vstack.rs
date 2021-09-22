@@ -729,6 +729,12 @@ impl<'a> StackCtx {
                     current_f64_count -= 1;
                     update_counter(&mut current_i32_count, &mut max_i32_count);
                 },
+                wast::Instruction::I64TruncF64U => {
+                    stack_sizes.pop();
+                    stack_sizes.push(StackType::i64);
+                    current_f64_count -= 1;
+                    update_counter(&mut current_i64_count, &mut max_i64_count);
+                },
                 wast::Instruction::I64Ne => {
                     stack_sizes.pop();
                     stack_sizes.pop();
@@ -1396,10 +1402,10 @@ impl<'a> StackCtx {
                     current_i64_count -= 1;
                     update_counter(&mut current_f64_count, &mut max_f64_count);
                 },
-                wast::Instruction::F32Abs => {
+                wast::Instruction::F64Sqrt | wast::Instruction::F32Sqrt => {
                     // no-op
                 },
-                wast::Instruction::F64Abs => {
+                wast::Instruction::F32Abs | wast::Instruction::F64Abs => {
                     // no-op
                 },
                 wast::Instruction::I32Clz => {

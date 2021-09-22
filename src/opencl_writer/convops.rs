@@ -68,6 +68,12 @@ pub fn emit_i32_trunc_f64_u(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &
     format!("\t{} = (uint)({});\n", result_register, reg)
 }
 
+pub fn emit_i64_trunc_f64_u(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _debug: bool) -> String {
+    let reg = stack_ctx.vstack_pop(StackType::f64);
+    let result_register = stack_ctx.vstack_alloc(StackType::i64);
+    format!("\t{} = (ulong)({});\n", result_register, reg)
+}
+
 pub fn emit_i64_reinterpret_f64(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, _debug: bool) -> String {
     let reg = stack_ctx.vstack_pop(StackType::f64);
     let result_register = stack_ctx.vstack_alloc(StackType::i64);

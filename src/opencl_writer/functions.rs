@@ -550,69 +550,47 @@ pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut St
                     if sp_counter > 0 {
                         let read_sfp = emit_read_u32_aligned("(ulong)(stack_frames+*sfp)", "(ulong)(stack_frames)", "warp_idx");
                         let write_u32 = emit_write_u32_aligned(&format!("(ulong)(stack_u32-{}+{})", parameter_offset, read_sfp), "(ulong)stack_u32", &format!("temp"), "warp_idx");
-                        /*
-                        offset = format!("write_u32((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), warp_idx, read_idx, thread_idx, scratch_space)),
-                                                    (ulong)stack_u32,
-                                                    {},
-                                                    warp_idx, read_idx, scratch_space);", parameter_offset, reg);
-                        */
                         offset = write_u32;
                     } else {
                         let read_sfp = emit_read_u32_aligned("(ulong)(stack_frames+*sfp)", "(ulong)(stack_frames)", "warp_idx");
                         let write_u32 = emit_write_u32_aligned(&format!("(ulong)(stack_u32-{}+{})", parameter_offset, read_sfp), "(ulong)stack_u32", &format!("temp"), "warp_idx");
-                        /*
-                        offset = format!("write_u32((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx, read_idx, thread_idx, scratch_space)),
-                                                    (ulong)stack_u32,
-                                                    {},
-                                                    warp_idx, read_idx, thread_idx, scratch_space);", parameter_offset, reg);
-                        */
                         offset = write_u32;
                     }
 
                     final_str += &format!("\t{{\n");
-                    final_str += &format!("\t\tuint temp = 0;\n");
-                    final_str += &format!("\t\t___private_memcpy_nonmmu(&temp, &{}, sizeof(float));\n", reg);
+                    if !stack_ctx.vstack_is_empty(StackType::f32) {
+                        let reg = stack_ctx.vstack_pop(StackType::f32);
+                        final_str += &format!("\t\tuint temp = 0;\n");
+                        final_str += &format!("\t\t___private_memcpy_nonmmu(&temp, &{}, sizeof(float));\n", reg);
+                    } else {
+                        final_str += &format!("\t\tuint temp = -1.0f;\n");
+                    }
                     final_str += &format!("\t\t{};\n", offset);
                     final_str += &format!("\t}}\n");
                     sp_counter += 2;
                 },
                 wast::ValType::F64 => {
                     // compute the offset to read from the bottom of the stack
-                    // compute the offset to read from the bottom of the stack
-                    let reg = if !stack_ctx.vstack_is_empty(StackType::f64) {
-                        stack_ctx.vstack_pop(StackType::f64)
-                    } else {
-                        String::from("(uint)(-1)")
-                    };
-    
                     if sp_counter > 0 {
                         let read_sfp = emit_read_u32_aligned("(ulong)(stack_frames+*sfp)", "(ulong)(stack_frames)", "warp_idx");
                         let write_u64 = emit_write_u64_aligned(&format!("(ulong)(stack_u32-{}+{})", parameter_offset, read_sfp), "(ulong)stack_u32", &format!("temp"), "warp_idx");
-                        /*
-                        offset = format!("write_u64((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx, read_idx, thread_idx, scratch_space)),
-                                                    (ulong)stack_u32,
-                                                    {},
-                                                    warp_idx, read_idx);", parameter_offset, reg);
-                        */
                         offset = write_u64;
                     } else {
                         let read_sfp = emit_read_u32_aligned("(ulong)(stack_frames+*sfp)", "(ulong)(stack_frames)", "warp_idx");
                         let write_u64 = emit_write_u64_aligned(&format!("(ulong)(stack_u32-{}+{})", parameter_offset, read_sfp), "(ulong)stack_u32", &format!("temp"), "warp_idx");
-                        /*
-                        offset = format!("write_u64((ulong)(stack_u32-{}+read_u32((ulong)(stack_frames+*sfp), (ulong)stack_frames, warp_idx, read_idx, thread_idx, scratch_space)),
-                                                    (ulong)stack_u32,
-                                                    {},
-                                                    warp_idx, read_idx);", parameter_offset, reg);
-                        */
                         offset = write_u64;
                     }
 
                     final_str += &format!("\t{{\n");
-                    final_str += &format!("\t\tulong temp = 0;\n");
-                    final_str += &format!("\t\t___private_memcpy_nonmmu(&temp, &{}, sizeof(double));\n", &reg);
+                    if !stack_ctx.vstack_is_empty(StackType::f64) {
+                        let reg = stack_ctx.vstack_pop(StackType::f64);
+                        final_str += &format!("\t\tulong temp = 0;\n");
+                        final_str += &format!("\t\t___private_memcpy_nonmmu(&temp, &{}, sizeof(double));\n", reg);
+                    } else {
+                        final_str += &format!("\t\tulong temp = -1.0f;\n");
+                    }
                     final_str += &format!("\t\t{};\n", offset);
                     final_str += &format!("\t}}\n");
-    
                     sp_counter += 2;
                 },
                 _ => panic!("Unimplemented function return type!!!"),

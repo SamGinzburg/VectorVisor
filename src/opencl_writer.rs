@@ -537,6 +537,12 @@ impl<'a> OpenCLCWriter<'_> {
             wast::Instruction::F64Abs => {
                 emit_f64_abs(self, stack_ctx, debug)
             },
+            wast::Instruction::F64Sqrt => {
+                emit_f64_sqrt(self, stack_ctx, debug)
+            },
+            wast::Instruction::F32Sqrt => {
+                emit_f32_sqrt(self, stack_ctx, debug)
+            },
             wast::Instruction::F64Ne => {
                 emit_f64_ne(self, stack_ctx, debug)
             },
@@ -581,6 +587,9 @@ impl<'a> OpenCLCWriter<'_> {
             },
             wast::Instruction::I32TruncF64U => {
                 emit_i32_trunc_f64_u(self, stack_ctx, debug)
+            },
+            wast::Instruction::I64TruncF64U => {
+                emit_i64_trunc_f64_u(self, stack_ctx, debug)
             },
             wast::Instruction::I64Ne => {
                 emit_i64_ne(self, stack_ctx, debug)
