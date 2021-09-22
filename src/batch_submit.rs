@@ -13,6 +13,8 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use warp::{Filter, Reply};
+use warp::http::{Response, StatusCode};
+use hyper::Body;
 
 pub struct BatchSubmitServer {}
 
@@ -50,7 +52,14 @@ impl warp::reject::Reject for NoVmAvailable {}
 
 impl BatchSubmitServer {
 
-    async fn response(body: bytes::Bytes, vm_idx: usize, vm_queue: Arc<VmQueue>, sender: Arc<Vec<Mutex<Sender<(bytes::Bytes, usize)>>>>, receiver: Arc<Vec<Mutex<Receiver<(Vec<u8>, usize, u64, u64, u64, u64)>>>>) -> Result<impl warp::Reply, warp::Rejection> {
+    fn create_response(resp: Vec<u8>, resp_len: usize) -> warp::http::Response<Body> {
+       Response::builder()
+        .status(StatusCode::OK)
+        .body(Body::from(resp[0..resp_len].to_vec())).unwrap() 
+    }
+
+
+    async fn response(body: bytes::Bytes, fast_reply: bool, vm_idx: usize, vm_queue: Arc<VmQueue>, sender: Arc<Vec<Mutex<Sender<(bytes::Bytes, usize)>>>>, receiver: Arc<Vec<Mutex<Receiver<(Vec<u8>, usize, u64, u64, u64, u64)>>>>) -> Result<impl warp::Reply, warp::Rejection> {
 
         //dbg!(&vm_idx);
         // Get an available VM first
@@ -78,22 +87,26 @@ impl BatchSubmitServer {
             None => panic!("A VM died while processing a request, vm_idx: {}", vm_idx),
         };
 
-        let final_response = BatchReply {
-            response: &resp[0..len],
-            on_device_execution_time_ns: on_dev_time,
-            device_queue_overhead_time_ns: queue_submit_time,
-            queue_submit_count: num_queue_submits,
-            num_unique_fns_called: num_unique_fns,
-        };
+        if fast_reply {
+            Ok(BatchSubmitServer::create_response(resp, len))
+        } else {
+            let final_response = BatchReply {
+                response: &resp[0..len],
+                on_device_execution_time_ns: on_dev_time,
+                device_queue_overhead_time_ns: queue_submit_time,
+                queue_submit_count: num_queue_submits,
+                num_unique_fns_called: num_unique_fns,
+            };
 
-        Ok(warp::reply::json(&final_response).into_response())
+            Ok(warp::reply::json(&final_response).into_response())
+        }
     }
 
-    pub fn start_server(_hcall_buf_size: usize, is_active: Arc<SyncMutex<bool>>, sender: Arc<Vec<Mutex<Sender<(bytes::Bytes, usize)>>>>, receiver: Arc<Vec<Mutex<Receiver<(Vec<u8>, usize, u64, u64, u64, u64)>>>>, num_vms: u32, server_ip: String, server_port: String) -> () {
+    pub fn start_server(_hcall_buf_size: usize, fast_reply: bool, is_active: Arc<SyncMutex<bool>>, sender: Arc<Vec<Mutex<Sender<(bytes::Bytes, usize)>>>>, receiver: Arc<Vec<Mutex<Receiver<(Vec<u8>, usize, u64, u64, u64, u64)>>>>, num_vms: u32, server_ip: String, server_port: String) -> () {
         
         tokio::runtime::Builder::new_multi_thread()
             //.worker_threads(4)
-            .worker_threads(num_cpus::get() * 2)
+            .worker_threads(num_cpus::get())
             .thread_stack_size(1024 * 256) // 256KiB per thread should be enough
             .enable_all()
             .build()
@@ -105,6 +118,7 @@ impl BatchSubmitServer {
                         queue.push(i.try_into().unwrap()).await;
                     }
 
+                    let fast_reply_bool = warp::any().map(move || fast_reply);
                     let warp_queue = warp::any().map(move || Arc::clone(&queue));
                     let warp_senders = warp::any().map(move || Arc::clone(&sender));
                     let warp_receivers = warp::any().map(move || Arc::clone(&receiver));
@@ -119,7 +133,7 @@ impl BatchSubmitServer {
                     });
 
                     let batch_submit = warp::path!("batch_submit")
-                                        .and(warp::body::bytes()).and(warp_scheduler).and(warp_queue).and(warp_senders).and(warp_receivers).and_then(BatchSubmitServer::response);
+                                        .and(warp::body::bytes()).and(fast_reply_bool).and(warp_scheduler).and(warp_queue).and(warp_senders).and(warp_receivers).and_then(BatchSubmitServer::response);
 
 
                     let is_active_param = warp::any().map(move || Arc::clone(&is_active));

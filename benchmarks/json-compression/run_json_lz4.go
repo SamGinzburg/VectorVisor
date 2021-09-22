@@ -62,6 +62,11 @@ func IssueRequests(ip string, port int, req [][]byte, exec_time chan<-float64, l
 	http_request, _ := http.NewRequest("GET", addr, nil)
 	http_request.Header.Add("Content-Type", "application/json; charset=utf-8")
 
+	on_device_compute_time := 0.0
+	device_queue_overhead := 0.0
+	queue_submit_count := 0.0
+	num_unique_fns_called := 0.0
+
 	for {
 		http_request.Body = ioutil.NopCloser(bytes.NewReader(req[rand.Intn(NUM_PARAMS)]))
 		start_read := time.Now()
@@ -93,13 +98,15 @@ func IssueRequests(ip string, port int, req [][]byte, exec_time chan<-float64, l
 		}
 		m := map[string]interface{}{}
 		err = json.Unmarshal(body, &m)
-		if err != nil {
-			panic(err)
+		if err == nil {
+			if m["on_device_execution_time_ns"] != nil {
+				on_device_compute_time = m["on_device_execution_time_ns"].(float64)
+				device_queue_overhead = m["device_queue_overhead_time_ns"].(float64)
+				queue_submit_count = m["queue_submit_count"].(float64)
+				num_unique_fns_called = m["num_unique_fns_called"].(float64)
+			}
 		}
-		on_device_compute_time := m["on_device_execution_time_ns"].(float64)
-		device_queue_overhead := m["device_queue_overhead_time_ns"].(float64)
-		queue_submit_count := m["queue_submit_count"].(float64)
-		num_unique_fns_called := m["num_unique_fns_called"].(float64)
+
 		select {
 			case exec_time <- on_device_compute_time:
 			default:

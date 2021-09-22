@@ -286,6 +286,14 @@ fn main() {
             .multiple(false)
             .number_of_values(1)
             .takes_value(true))
+        .arg(Arg::with_name("fastreply")
+            .long("fastreply")
+            .value_name("Reply with only the function response and no debugging data")
+            .default_value("false")
+            .help("")
+            .multiple(false)
+            .number_of_values(1)
+            .takes_value(true))
         .get_matches();
 
     dbg!(matches.clone());
@@ -319,6 +327,7 @@ fn main() {
     let local_work_group = value_t!(matches.value_of("localworkgroup"), usize).unwrap_or_else(|e| e.exit());
     let mexec = value_t!(matches.value_of("mexec"), usize).unwrap_or_else(|e| e.exit());
     let pinput = value_t!(matches.value_of("pinput"), bool).unwrap_or_else(|e| e.exit());
+    let fastreply = value_t!(matches.value_of("fastreply"), bool).unwrap_or_else(|e| e.exit());
 
     if mexec > 1 && interleave == 0 {
         panic!("Multi-Execution is only enabled for interleaved workloads!");
@@ -678,7 +687,7 @@ fn main() {
                 let batch_submit_ip_clone = batch_submit_ip.clone();
                 let port = (batch_submit_port + idx).to_string();
                 thread::spawn(move || {
-                    BatchSubmitServer::start_server(hcall_size, is_active, server_sender_vec_arc, server_recv_vec_arc, num_vms, batch_submit_ip_clone.clone(), port.clone());
+                    BatchSubmitServer::start_server(hcall_size, fastreply, is_active, server_sender_vec_arc, server_recv_vec_arc, num_vms, batch_submit_ip_clone.clone(), port.clone());
                 });
             }
 
@@ -735,7 +744,7 @@ fn main() {
         if serverless {
             println!("Starting server on: {}:{}/batch_submit", batch_submit_ip.clone(), batch_submit_port.to_string());
             thread_pool.spawn(move || {
-                BatchSubmitServer::start_server(hcall_size, is_active, server_sender_vec_arc, server_recv_vec_arc, num_threads.try_into().unwrap(), batch_submit_ip, batch_submit_port.to_string());
+                BatchSubmitServer::start_server(hcall_size, fastreply, is_active, server_sender_vec_arc, server_recv_vec_arc, num_threads.try_into().unwrap(), batch_submit_ip, batch_submit_port.to_string());
             });
         }
 
