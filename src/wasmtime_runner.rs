@@ -25,7 +25,7 @@ impl WasmtimeRunner {
             }
     }
     // this is run once for each thread/VM
-    pub fn run(&'static self, program: String, hcall_buf_size: usize, _heap_size: u32) -> Result<(), Box<dyn Error>> {
+    pub fn run(&'static self, program: String, hcall_buf_size: usize, heap_size: u32) -> Result<(), Box<dyn Error>> {
 
         let curr_time = Arc::new(Mutex::<i64>::new(0));
 
@@ -123,14 +123,12 @@ impl WasmtimeRunner {
         let module = Module::new(store.engine(), program)?;
         let instance = linker.instantiate(&module)?;
 
-        /*
         let memory = instance.get_memory("memory").unwrap();
         let current_mem_size = memory.size();
         if current_mem_size < heap_size {
             memory.grow(heap_size - current_mem_size)?;
         }
-        dbg!(&memory.size());
-        */
+        //dbg!(&memory.size());
 
         let entry_point = instance.get_func("_start").unwrap().get0::<()>()?;
 

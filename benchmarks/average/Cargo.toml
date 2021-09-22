@@ -9,4 +9,5 @@ edition = "2018"
 [dependencies]
 wasm-serverless-invoke = { path = "../../wasm-serverless-invoke" }
 serde_json = "1.0.62"
+hdrhistogram = "7.3.0"
 serde = { version = "1.0.62", features = ["derive"] }

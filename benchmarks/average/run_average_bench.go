@@ -16,7 +16,7 @@ import (
 )
 
 type payload struct {
-	Text []float64 `msgpack:"numbers"`
+	Text []uint64 `msgpack:"numbers"`
 }
 
 type Message struct {
@@ -40,10 +40,10 @@ var NUM_PARAMS = 256
 
 var client = &http.Client{}
 
-func RandIntSlice(n int) []float64 {
-	b := make([]float64, n)
+func RandIntSlice(n int) []uint64 {
+	b := make([]uint64, n)
 	for i := range b {
-		b[i] = rand.Float64() * 10000
+		b[i] = rand.Uint64() / 10000
 	}
 	return b
 }
