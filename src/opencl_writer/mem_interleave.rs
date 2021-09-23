@@ -1459,7 +1459,7 @@ pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interle
             result += &format!("\t{}\n",
                                 "if (buf_len_bytes > 4 && IS_ALIGNED_POW2((ulong)src, 4)) {");
             result += &format!("\t\t{}\n",
-                                "for (; counter < buf_len_bytes; counter+=4) {");
+                                "for (; counter < (buf_len_bytes-GET_POW2_OFFSET(buf_len_bytes, 4)); counter+=4) {");
 
             result += &format!("\t\t\t{} = {};\n",
                                 "*dst_tmp_uint++",
@@ -1495,7 +1495,7 @@ pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interle
     result += &format!("\t{}\n",
                        "if (buf_len_bytes > 8) {");
     result += &format!("\t\t{}\n",
-                       "for (; counter < buf_len_bytes; counter+=8) {");
+                       "for (; counter < (buf_len_bytes-GET_POW2_OFFSET(buf_len_bytes, 8)); counter+=8) {");
 
     result += &format!("\t\t{};\n",
                        emit_write_u64_aligned("(ulong)(dst+counter)", "(ulong)(mem_start_dst)",
