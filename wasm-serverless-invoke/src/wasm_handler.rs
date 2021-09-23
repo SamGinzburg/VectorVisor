@@ -3,7 +3,6 @@ use rmp_serde::{decode, encode};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-use safe_transmute::to_bytes::transmute_to_bytes_vec;
 
 #[cfg(any(target_arch = "x86_64", target_arch = "x86"))]
 pub mod server;
@@ -90,8 +89,21 @@ impl<'a, T1: DeserializeOwned, T2: Serialize> WasmHandler<T1, T2> {
         // main run loop of the runtime
         // First, allocate a buffer to store json input
         let buf_size = (hcall_buf_size + 8) / 8;
+        let mut u64_vec = vec![0u64; buf_size];
         // We want to ensure an 8-byte alignment, so we alloc with 8-byte types, then transmute
-        let mut buffer: &mut Vec<u8> = &mut transmute_to_bytes_vec(vec![0u64; buf_size]).unwrap();
+        let ptr = u64_vec.as_mut_ptr();
+        // https://doc.rust-lang.org/std/vec/struct.Vec.html#method.from_raw_parts
+        // This API is pretty bad, but we manage the unsafety here:
+        // - the ptr is guaranteed to be safe here, as it was alloc'd via vec![]
+        // - length == capacity
+        // - We don't have to worry about proper deallocation, since these buffers live for the
+        //   duration of the application.
+        let mut buffer: &mut Vec<u8> = &mut unsafe {
+            let ptr = ptr as *mut u8;
+            Vec::from_raw_parts(ptr, buf_size*8, buf_size*8) 
+        };
+
+        std::mem::forget(u64_vec);
 
         let mut func_ret_val: T2;
         // if this is the first invocation, then we skip sending the buffer back

@@ -7,7 +7,6 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-safe-transmute = "0.11.2"
 serde_json = "1.0.62"
 rmp-serde = "0.15.5"
 serde = { version = "1.0.62", features = ["derive"] }
