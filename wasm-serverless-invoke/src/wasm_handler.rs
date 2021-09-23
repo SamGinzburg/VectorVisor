@@ -3,6 +3,7 @@ use rmp_serde::{decode, encode};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use safe_transmute::to_bytes::transmute_to_bytes_vec;
 
 #[cfg(any(target_arch = "x86_64", target_arch = "x86"))]
 pub mod server;
@@ -88,7 +89,9 @@ impl<'a, T1: DeserializeOwned, T2: Serialize> WasmHandler<T1, T2> {
     pub fn run_with_format(self, hcall_buf_size: usize, serializiation_format: SerializationFormat) -> () {
         // main run loop of the runtime
         // First, allocate a buffer to store json input
-        let mut buffer: &mut Vec<u8> = Box::leak(Box::new(vec![0u8; hcall_buf_size]));
+        let buf_size = (hcall_buf_size + 8) / 8;
+        // We want to ensure an 8-byte alignment, so we alloc with 8-byte types, then transmute
+        let mut buffer: &mut Vec<u8> = &mut transmute_to_bytes_vec(vec![0u64; buf_size]).unwrap();
 
         let mut func_ret_val: T2;
         // if this is the first invocation, then we skip sending the buffer back

@@ -369,7 +369,7 @@ def run_average_bench():
     x=$(cloud-init status)
     done
 
-    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/average/target/wasm32-wasi/release/average-opt.wasm --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=524288 --partition=true --serverless=true --vmcount=3072 --wasmtime=true --fastreply={fastreply} &> /tmp/average.log &
+    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/average/target/wasm32-wasi/release/average-opt.wasm --ip=0.0.0.0 --heap=3145728 --stack=131072 --hcallsize=524288 --partition=true --serverless=true --vmcount=4096 --wasmtime=true --fastreply={fastreply} &> /tmp/average.log &
     """.format(fastreply=fastreply)
 
     run_command(run_average_command_wasmtime, "run_average_command_wasmtime", cpu_bench_instance[0].id)
@@ -383,7 +383,7 @@ def run_average_bench():
     x=$(cloud-init status)
     done
 
-    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/average/target/wasm32-wasi/release/average-opt.wasm --ip=0.0.0.0 --heap=3145728 --stack=131072 --hcallsize=524288 --partition=true --serverless=true --vmcount=3072 --wasmtime=false --maxdup=3 --lgroup={lgroup} --partitions=200 --maxloc=1000000 --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} &> /tmp/average.log &
+    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/average/target/wasm32-wasi/release/average-opt.wasm --ip=0.0.0.0 --heap=3145728 --stack=131072 --hcallsize=524288 --partition=true --serverless=true --vmcount=4096 --wasmtime=false --maxdup=3 --lgroup={lgroup} --partitions=200 --maxloc=1000000 --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} &> /tmp/average.log &
     """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply)
 
     run_command(run_average_command, "run_average_command", gpu_instance[0].id)
@@ -574,7 +574,7 @@ def run_nlp_count_bench():
     done
 
     /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/target/wasm32-wasi/release/nlp-count-vectorizer-opt.wasm --ip=0.0.0.0 --heap=4194304 --stack=262144 --hcallsize=524288 --partition=true --serverless=true --vmcount=3072 --wasmtime=true --fastreply={fastreply} &> /tmp/nlp-count-vectorizer.log &
-    """.format(fastreply)
+    """.format(fastreply=fastreply)
 
     run_command(run_nlp_command_wasmtime, "run_nlp_command_wasmtime", cpu_bench_instance[0].id)
 
@@ -767,7 +767,7 @@ ssm_client = boto3.client('ssm')
 #cleanup()
 
 # run lz4 bench
-#run_lz4_bench()
+run_lz4_bench()
 
 #cleanup()
 
@@ -777,7 +777,7 @@ ssm_client = boto3.client('ssm')
 #cleanup()
 
 # run average bench
-run_average_bench()
+#run_average_bench()
 
 #cleanup()
 

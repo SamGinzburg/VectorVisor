@@ -1340,7 +1340,6 @@ impl OpenCLRunner {
                 let mut avail_vm_count = number_vms/num_threads;
                 let mut counter = 0;
                 let mut recv_reqs = 0;
-                let mut prev_recv_reqs = 0;
                 let mut dispatchable_hcalls = vec![];
                 let mut block_on_inputs = false;
                 let sleep_time = time::Duration::from_millis(10);
@@ -1352,18 +1351,20 @@ impl OpenCLRunner {
                     // We will only poll if we know we have open slots in our group of VMs
                         // for each VM that we have, check if we have a request waiting
                     for vm_idx in &vm_id_vec {
-                        match vm_recv_copy[*vm_idx as usize].lock().unwrap().poll_recv(&mut cx) {
-                            Poll::Ready(Some((msg, _))) => {
-                                // Find the corresponding VM
-                                let worker_vm_idx = *vm_id_mapping.get(vm_idx).unwrap() as usize;
-                                let wasi_context = &mut worker_vms[worker_vm_idx];
-                                // Queue the input in the VM
-                                let buffer = async_buffer.clone();
-                                let deref_buf = unsafe { &mut *buffer.buf.get() };
-                                wasi_context.queue_request(msg, *deref_buf);
-                                recv_reqs += 1;
-                            },
-                            _ => (),
+                        if recv_reqs < avail_vm_count {
+                            match vm_recv_copy[*vm_idx as usize].lock().unwrap().poll_recv(&mut cx) {
+                                Poll::Ready(Some((msg, _))) => {
+                                    // Find the corresponding VM
+                                    let worker_vm_idx = *vm_id_mapping.get(vm_idx).unwrap() as usize;
+                                    let wasi_context = &mut worker_vms[worker_vm_idx];
+                                    // Queue the input in the VM
+                                    let buffer = async_buffer.clone();
+                                    let deref_buf = unsafe { &mut *buffer.buf.get() };
+                                    wasi_context.queue_request(msg, *deref_buf);
+                                    recv_reqs += 1;
+                                },
+                                _ => (),
+                            }
                         }
                     }
 
@@ -1380,9 +1381,9 @@ impl OpenCLRunner {
                         },
                     };
 
-                   if recv_reqs > 0 && (recv_reqs - prev_recv_reqs) >= avail_vm_count && block_on_inputs {
+                   if recv_reqs > 0 && recv_reqs >= avail_vm_count && block_on_inputs {
                         block_on_inputs = false;
-                        prev_recv_reqs = recv_reqs;
+                        recv_reqs = 0;
                    }
 
                     // If serverless invoke, block until no vms available

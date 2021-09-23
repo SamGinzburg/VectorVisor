@@ -682,9 +682,9 @@ fn emit_read_u16_body(interleave: u32, local_work_group: usize, mexec: usize, em
                 result += &format!("\t{}\n",
                                 "temp[1] = (uint)*((global uint*)cell1+(NUM_THREADS));");
                 result += &format!("\t{}\n",
-                                "temp[0] = (temp[0] >> (cell_offset*8)) & ((0x1 << ((4-cell_offset)*8)) - 1);");
+                                "temp[0] = (temp[0] >> (cell_offset*8));");
                 result += &format!("\t{}\n",
-                                "temp[1] = (temp[1] << ((4-cell_offset)*8)) & (((0x1 << ((cell_offset)*8)) - 1) << ((4-cell_offset)*8));");
+                                "temp[1] = (temp[1] << ((4-cell_offset)*8));");
                 result += &format!("\t{}\n",
                                 "return (ushort)(temp[0] + temp[1]);");
             }
@@ -717,15 +717,17 @@ fn emit_read_u16_body(interleave: u32, local_work_group: usize, mexec: usize, em
                 result += &format!("\t{}\n",
                                 "ulong cell_offset = GET_POW2_OFFSET((addr-mem_start), 8);");
                 result += &format!("\t{}\n",
-                                "ulong2 temp;");
+                                "ulong temp[2];");
                 result += &format!("\t{}\n",
-                                "temp.lo = (ulong)*((global ulong*)read_addr);");
+                                "temp[0] = (ulong)*((global ulong*)read_addr);");
                 result += &format!("\t{}\n",
-                                "temp.hi = (ulong)*((global ulong*)read_addr+(NUM_THREADS));");
+                                "temp[1] = (ulong)*((global ulong*)read_addr+(NUM_THREADS));");
                 result += &format!("\t{}\n",
-                                "temp = as_ulong2(shuffle(as_uchar16(temp), (uchar16)(cell_offset, cell_offset+1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)));");
+                                "temp[0] = (temp[0] >> (cell_offset*8));");
                 result += &format!("\t{}\n",
-                                "return (ushort)temp.lo;");
+                                "temp[1] = (temp[1] << ((8-cell_offset)*8));");
+                result += &format!("\t{}\n",
+                                "return (ushort)(temp[0] + temp[1]);");
             }
         },
         _ => panic!("Unsupported read/write interleave"),
@@ -829,9 +831,9 @@ fn emit_read_u32_body(interleave: u32, local_work_group: usize, mexec: usize, em
                 result += &format!("\t{}\n",
                                 "temp[1] = (uint)*((global uint*)cell1+(NUM_THREADS));");
                 result += &format!("\t{}\n",
-                                "temp[0] = (temp[0] >> (cell_offset*8)) & ((0x1 << ((4-cell_offset)*8)) - 1);");
+                                "temp[0] = (temp[0] >> (cell_offset*8));");
                 result += &format!("\t{}\n",
-                                "temp[1] = (temp[1] << ((4-cell_offset)*8)) & (((0x1 << ((cell_offset)*8)) - 1) << ((4-cell_offset)*8));");
+                                "temp[1] = (temp[1] << ((4-cell_offset)*8));");
                 result += &format!("\t{}\n",
                                 "return (uint)(temp[0] + temp[1]);");
             }
@@ -902,9 +904,9 @@ fn emit_read_u32_body(interleave: u32, local_work_group: usize, mexec: usize, em
                 result += &format!("\t{}\n",
                                 "temp[1] = (ulong)*((global ulong*)cell1+(NUM_THREADS));");
                 result += &format!("\t{}\n",
-                                "temp[0] = (temp[0] >> (cell_offset*8)) & ((0x1 << ((8-cell_offset)*8)) - 1);");
+                                "temp[0] = (temp[0] >> (cell_offset*8));");
                 result += &format!("\t{}\n",
-                                "temp[1] = (temp[1] << ((8-cell_offset)*8)) & (((0x1 << ((cell_offset)*8)) - 1) << ((8-cell_offset)*8));");
+                                "temp[1] = (temp[1] << ((8-cell_offset)*8));");
                 result += &format!("\t{}\n",
                                 "return (uint)(temp[0] + temp[1]);");
             }
@@ -1190,9 +1192,9 @@ fn emit_read_u64_body(interleave: u32, local_work_group: usize, mexec: usize, em
                 result += &format!("\t{}\n",
                                 "temp[1] = (ulong)*((global ulong*)cell1+(NUM_THREADS));");
                 result += &format!("\t{}\n",
-                                "temp[0] = (temp[0] >> (cell_offset*8)) & ((0x1 << ((8-cell_offset)*8)) - 1);");
+                                "temp[0] = (temp[0] >> (cell_offset*8));");
                 result += &format!("\t{}\n",
-                                "temp[1] = (temp[1] << ((8-cell_offset)*8)) & (((0x1 << ((cell_offset)*8)) - 1) << ((8-cell_offset)*8));");
+                                "temp[1] = (temp[1] << ((8-cell_offset)*8));");
                 result += &format!("\t{}\n",
                                 "return (ulong)(temp[0] + temp[1]);");
             }
@@ -1414,9 +1416,10 @@ pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interle
                        "}");
 
 
-    // emit a special de-interleave memcpy, that reads interleaved memory, and writes to linear
-    // memory
-
+    // write from the GPU (interleaved) back to the CPU (non-interleaved)
+    // The destination is always >> 16 byte aligned.
+    // The source is a u8 vec so it doesn't have alignment guarantees.
+    // We check the alignment to see if we get lucky though
     result += &format!("\n{}\n",
         "void ___private_memcpy_gpu2cpu(ulong src, ulong mem_start_src, ulong dst, ulong mem_start_dst, ulong buf_len_bytes, uint warp_id, uint read_idx, uint thread_idx, local ulong2 *scratch_space) {");
     result += &format!("\t{}\n",
@@ -1450,13 +1453,30 @@ pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interle
         },
         4 | 8 => {
             result += &format!("\t{}\n",
-                               "for (uint idx = 0; idx < buf_len_bytes; idx++) {");
-
-            result += &format!("\t\t{} = {};\n",
-                               "*dst_tmp++",
-                               &emit_read_u8("(ulong)(src+idx)", "(ulong)(mem_start_src)", "warp_id"));
+                                "uint *dst_tmp_uint = (uint*)(dst);");
             result += &format!("\t{}\n",
-                               "}");
+                                "uint counter = 0;");
+            result += &format!("\t{}\n",
+                                "if (buf_len_bytes > 4 && IS_ALIGNED_POW2((ulong)src, 4)) {");
+            result += &format!("\t\t{}\n",
+                                "for (; counter < buf_len_bytes; counter+=4) {");
+
+            result += &format!("\t\t\t{} = {};\n",
+                                "*dst_tmp_uint++",
+                                 &emit_read_u32_aligned("(ulong)(src+counter)", "(ulong)(mem_start_src)", "warp_id"));
+            result += &format!("\t\t{}\n",
+                                "}");
+            result += &format!("\t{}\n",
+                                "}");
+            result += &format!("\t{}\n",
+                                "dst_tmp = (uchar*)(dst_tmp_uint);");
+            result += &format!("\t{}\n",
+                                "for (; counter < buf_len_bytes; counter++) {");
+            result += &format!("\t\t{} = {};\n",
+                                "*dst_tmp++",
+                                 &emit_read_u8("(ulong)(src+counter)", "(ulong)(mem_start_src)", "warp_id"));
+            result += &format!("\t{}\n",
+                                "}");
         }
         _ => panic!("Unsupported read/write interleave"),
     }
@@ -1464,23 +1484,41 @@ pub fn generate_read_write_calls(_writer: &opencl_writer::OpenCLCWriter, interle
     result += &format!("\n{}\n",
                        "}");   
 
-    // emit another de-interleave memcpy, that reads linear memory and writes to interleaved
-    // memory
+    // emit another de-interleave memcpy, that reads linear memory and writes to interleaved memory
+    // dst is always 8-aligned, so we just have to check buf_len_bytes
     result += &format!("\n{}\n",
-        "void ___private_memcpy_cpu2gpu(ulong src, ulong mem_start_src, ulong dst, ulong mem_start_dst, ulong buf_len_bytes, uint warp_id, uint read_idx) {");
+        "void ___private_memcpy_cpu2gpu(ulong src, ulong mem_start_src, ulong dst, ulong mem_start_dst, ulong buf_len_bytes, uint warp_id, uint read_idx, uint thread_idx, local ulong2 *scratch_space) {");
     result += &format!("\t{}\n",
-                       "char *src_tmp = (char*)(src);");
- 
+                       "ulong *src_tmp = (ulong*)(src);");
     result += &format!("\t{}\n",
-                       "for (uint idx = 0; idx < buf_len_bytes; idx++) {");
+                       "uint counter = 0;");
+    result += &format!("\t{}\n",
+                       "if (buf_len_bytes > 8) {");
+    result += &format!("\t\t{}\n",
+                       "for (; counter < buf_len_bytes; counter+=8) {");
+
+    result += &format!("\t\t{};\n",
+                       emit_write_u64_aligned("(ulong)(dst+counter)", "(ulong)(mem_start_dst)",
+                       "*src_tmp++", "warp_id"));
+
+    result += &format!("\t\t{}\n",
+                       "}");
+    result += &format!("\t{}\n",
+                       "}");
+    result += &format!("\t{}\n",
+                       "uchar *src_tmp_remaining = (uchar*)(src_tmp);");
+    // finish the remaining bytes
+    result += &format!("\t{}\n",
+                       "for (; counter < buf_len_bytes; counter++) {");
 
     result += &format!("\t{};\n",
-                       emit_write_u8("(ulong)(dst+idx)", "(ulong)(mem_start_dst)",
-                       "*src_tmp++", "warp_id"));
+                       emit_write_u8("(ulong)(dst+counter)", "(ulong)(mem_start_dst)",
+                       "*src_tmp_remaining++", "warp_id"));
 
     result += &format!("\t{}\n",
                        "}");
-    
+
+
     result += &format!("\n{}\n",
                        "}");   
 
