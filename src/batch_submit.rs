@@ -16,6 +16,8 @@ use warp::{Filter, Reply};
 use warp::http::{Response, StatusCode};
 use hyper::Body;
 
+use crate::opencl_runner::vectorized_vm::VmSenderType;
+
 pub struct BatchSubmitServer {}
 
 #[derive(Debug, Deserialize)]
@@ -59,12 +61,12 @@ impl BatchSubmitServer {
     }
 
 
-    async fn response(body: bytes::Bytes, fast_reply: bool, vm_idx: usize, vm_queue: Arc<VmQueue>, sender: Arc<Vec<Mutex<Sender<(bytes::Bytes, usize)>>>>, receiver: Arc<Vec<Mutex<Receiver<(Vec<u8>, usize, u64, u64, u64, u64)>>>>) -> Result<impl warp::Reply, warp::Rejection> {
+    async fn response(body: bytes::Bytes, fast_reply: bool, vm_idx: usize, vm_queue: Arc<VmQueue>, sender: Arc<Vec<Mutex<Sender<(bytes::Bytes, usize)>>>>, receiver: Arc<Vec<Mutex<Receiver<VmSenderType>>>>) -> Result<impl warp::Reply, warp::Rejection> {
 
         //dbg!(&vm_idx);
         // Get an available VM first
         let tx: &Mutex<Sender<(bytes::Bytes, usize)>> = (*sender).get(vm_idx).unwrap();
-        let rx: &Mutex<Receiver<(Vec<u8>, usize, u64, u64, u64, u64)>> = (*receiver).get(vm_idx).unwrap();
+        let rx: &Mutex<Receiver<VmSenderType>> = (*receiver).get(vm_idx).unwrap();
 
         /*
         let (tx, rx, vm_idx) = match vm_queue.try_pop() {
@@ -77,9 +79,21 @@ impl BatchSubmitServer {
         */
 
         // Send the request body to the selected VM
-        // We can't await on the send because we have the mutex acquired here
-        let sender = tx.lock().await;
-        sender.send((body.clone(), body.len())).await.unwrap();
+        // We want to drop 
+        {
+            let sender = tx.lock().await;
+            sender.send((body.clone(), body.len())).await.unwrap();
+        }
+
+        /*
+         * Tokio locks operate in a FIFO order, so the first request to send will also
+         * subsequenly be the first to receive.
+         * see: https://docs.rs/tokio/1.12.0/tokio/sync/struct.Mutex.html
+         *
+         * This means that the first person to acquire the previous lock on 'sender' will be the
+         * first to acquire the lock on recv before yielding to the tokio scheduler. So reqs will
+         * line up properly. This also allows multiple requests to queue up on VMs.
+         */
 
         // Wait on response from the VM
         let (resp, len, on_dev_time, queue_submit_time, num_queue_submits, num_unique_fns) = match rx.lock().await.recv().await {
@@ -102,7 +116,7 @@ impl BatchSubmitServer {
         }
     }
 
-    pub fn start_server(_hcall_buf_size: usize, fast_reply: bool, is_active: Arc<SyncMutex<bool>>, sender: Arc<Vec<Mutex<Sender<(bytes::Bytes, usize)>>>>, receiver: Arc<Vec<Mutex<Receiver<(Vec<u8>, usize, u64, u64, u64, u64)>>>>, num_vms: u32, server_ip: String, server_port: String) -> () {
+    pub fn start_server(_hcall_buf_size: usize, fast_reply: bool, is_active: Arc<SyncMutex<bool>>, sender: Arc<Vec<Mutex<Sender<(bytes::Bytes, usize)>>>>, receiver: Arc<Vec<Mutex<Receiver<VmSenderType>>>>, num_vms: u32, server_ip: String, server_port: String) -> () {
         
         tokio::runtime::Builder::new_multi_thread()
             //.worker_threads(4)

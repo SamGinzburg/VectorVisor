@@ -114,40 +114,36 @@ impl<'a, T1: DeserializeOwned, T2: Serialize> WasmHandler<T1, T2> {
                 let buf_ptr = WasmHandler::<T1, T2>::get_unsafe_mut_ref(buffer);
                 serverless_invoke(buf_ptr, buffer.len() as u32)
             };
+            
+            if incoming_req_size > 0 {
+                let parsed_func_input: T1 = {
+                    match serializiation_format {
+                        SerializationFormat::Json => {
+                            serde_json::from_slice(&buffer[..incoming_req_size as usize]).unwrap()
+                        },
+                        SerializationFormat::MsgPack => {
+                            decode::from_read(&buffer[..incoming_req_size as usize]).unwrap()
+                        }
+                    }
+                };
 
-            /*
-            let parsed_func_input = {
-                // Deserialize the pre-parsed JSON here...
-                let function_input: Value = from_slice(&buffer[..incoming_req_size as usize]).unwrap();
-
-                // now that we have the input in the buffer, parse the json
-                T1::deserialize(function_input)
-            };
-            */
-
-            let parsed_func_input: T1 = {
-                match serializiation_format {
+                func_ret_val = (self.function)(parsed_func_input);
+                let mut func_ret_val_as_buffer = match serializiation_format { 
                     SerializationFormat::Json => {
-                        serde_json::from_slice(&buffer[..incoming_req_size as usize]).unwrap()
+                        to_vec(&func_ret_val).unwrap()
                     },
                     SerializationFormat::MsgPack => {
-                        decode::from_read(&buffer[..incoming_req_size as usize]).unwrap()
-                    }
+                        encode::to_vec(&func_ret_val).unwrap()
+                    },
+                };
+
+                unsafe {
+                    serverless_response(func_ret_val_as_buffer.as_mut_ptr(), func_ret_val_as_buffer.len() as u32);
                 }
-            };
-
-            func_ret_val = (self.function)(parsed_func_input);
-            let mut func_ret_val_as_buffer = match serializiation_format { 
-                SerializationFormat::Json => {
-                    to_vec(&func_ret_val).unwrap()
-                },
-                SerializationFormat::MsgPack => {
-                    encode::to_vec(&func_ret_val).unwrap()
-                },
-            };
-
-            unsafe {
-                serverless_response(func_ret_val_as_buffer.as_mut_ptr(), func_ret_val_as_buffer.len() as u32);
+            } else {
+                unsafe {
+                    serverless_response(0 as *mut u8, 0 as u32);
+                }
             }
 
             /*

@@ -124,6 +124,8 @@ impl HyperCallResult {
     }
 }
 
+pub type VmSenderType = (Vec<u8>, usize, u64, u64, u64, u64);
+
 pub struct VectorizedVM {
     // each VM has its own WASI state tracking object
     ctx: WasiCtx,
@@ -139,14 +141,15 @@ pub struct VectorizedVM {
     pub queue_submit_counter: Arc<u64>,
     pub queue_submit_qty: Arc<u64>,
     pub called_fns_set: Arc<HashSet<u32>>,
-    pub vm_sender: Arc<Vec<Mutex<Sender<(Vec<u8>, usize, u64, u64, u64, u64)>>>>,
+    pub vm_sender: Arc<Vec<Mutex<Sender<VmSenderType>>>>,
     pub vm_recv: Arc<Vec<Mutex<Receiver<(bytes::Bytes, usize)>>>>,
     pub ready_for_input: AtomicBool,
     pub input_msg_len: usize,
+    pub no_resp: bool,
 }
 
 impl VectorizedVM {
-    pub fn new(vm_id: u32, hcall_buf_size: u32, _num_total_vms: u32, vm_sender: Arc<Vec<Mutex<Sender<(Vec<u8>, usize, u64, u64, u64, u64)>>>>, vm_recv: Arc<Vec<Mutex<Receiver<(bytes::Bytes, usize)>>>>) -> VectorizedVM {
+    pub fn new(vm_id: u32, hcall_buf_size: u32, _num_total_vms: u32, vm_sender: Arc<Vec<Mutex<Sender<VmSenderType>>>>, vm_recv: Arc<Vec<Mutex<Receiver<(bytes::Bytes, usize)>>>>) -> VectorizedVM {
         // default context with no args yet - we can inherit arguments from the CLI if we want
         // or we can pass them in some other config file
 
@@ -195,6 +198,7 @@ impl VectorizedVM {
             vm_recv: vm_recv,
             ready_for_input: AtomicBool::new(true),
             input_msg_len: 0,
+            no_resp: true,
         }
     }
 

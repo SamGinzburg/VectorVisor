@@ -23,6 +23,7 @@ use clap::{Arg, App, value_t};
 use opencl_runner::InputProgram;
 use opencl_runner::SeralizedProgram;
 use opencl_runner::PartitionedSeralizedProgram;
+use opencl_runner::vectorized_vm::VmSenderType;
 use ocl::core::ContextProperties;
 use batch_submit::BatchSubmitServer;
 use wasmtime_runner::WasmtimeRunner;
@@ -659,7 +660,7 @@ fn main() {
             let mut server_sender_vec = vec![];
             let mut vm_recv_vec = vec![];
             for _ in 0..num_vms.clone() {
-                let (sender, recv): (tokio::sync::mpsc::Sender<(bytes::Bytes, usize)>, tokio::sync::mpsc::Receiver<(bytes::Bytes, usize)>) = mpsc::channel(16384);
+                let (sender, recv): (tokio::sync::mpsc::Sender<(bytes::Bytes, usize)>, tokio::sync::mpsc::Receiver<(bytes::Bytes, usize)>) = mpsc::channel(1);
                 server_sender_vec.push(AsyncMutex::new(sender));
                 vm_recv_vec.push(Mutex::new(recv));
             }
@@ -670,7 +671,7 @@ fn main() {
             let mut vm_sender_vec = vec![];
             let mut server_recv_vec = vec![];
             for _ in 0..num_vms.clone() {
-                let (sender, recv): (tokio::sync::mpsc::Sender<(Vec<u8>, usize, u64, u64, u64, u64)>, tokio::sync::mpsc::Receiver<(Vec<u8>, usize, u64, u64, u64, u64)>) = mpsc::channel(16384);
+                let (sender, recv): (tokio::sync::mpsc::Sender<VmSenderType>, tokio::sync::mpsc::Receiver<VmSenderType>) = mpsc::channel(1);
                 vm_sender_vec.push(Mutex::new(sender));
                 server_recv_vec.push(AsyncMutex::new(recv));
             }
@@ -730,7 +731,7 @@ fn main() {
         let mut vm_sender_vec = vec![];
         let mut server_recv_vec = vec![];
         for _ in 0..num_threads {
-            let (sender, recv): (tokio::sync::mpsc::Sender<(Vec<u8>, usize, u64, u64, u64, u64)>, tokio::sync::mpsc::Receiver<(Vec<u8>, usize, u64, u64, u64, u64)>) = mpsc::channel(16384);
+            let (sender, recv): (tokio::sync::mpsc::Sender<VmSenderType>, tokio::sync::mpsc::Receiver<VmSenderType>) = mpsc::channel(16384);
             vm_sender_vec.push(Mutex::new(sender));
             server_recv_vec.push(AsyncMutex::new(recv));
         }
