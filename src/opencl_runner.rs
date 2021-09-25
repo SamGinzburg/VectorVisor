@@ -1087,7 +1087,7 @@ impl OpenCLRunner {
             }
 
             // now it is time to dispatch hypercalls
-            vm_slice.as_slice().par_iter().for_each(|vm_id| {
+            vm_slice.as_slice().iter().for_each(|vm_id| {
                 let hypercall_id = match hypercall_num_temp[*vm_id as usize] as i64 {
                     0 => WasiSyscalls::FdWrite,
                     1 => WasiSyscalls::ProcExit,
@@ -1405,32 +1405,29 @@ impl OpenCLRunner {
                     }
 
                     if (recv_reqs > 0 && recv_reqs >= avail_vm_count && block_on_inputs) || 
-                        (ellapsed_time >= buffer_timeout && block_on_inputs) {
+                        (ellapsed_time >= buffer_timeout) {
                         block_on_inputs = false;
                     }
-
-
-                    match invoke_blocker_rx[thread_idx as usize].lock().unwrap().try_recv() {
-                        Ok(true) => {
-                            recv_reqs = 0;
-                            ellapsed_time = 0;
-                            is_empty_vm.clear();
-                        },
-                        _ => (),
-                    }
-
                     // If serverless invoke, block until no vms available
                     // else, we just dispatch
                     if !block_on_inputs {
-                        while dispatchable_hcalls.len() > 0 {
-                            match dispatchable_hcalls.pop() {
-                                Some(mut incoming_call) => {
-                                    let worker_vm_idx = *vm_id_mapping.get(&incoming_call.vm_id).unwrap() as usize;
-                                    let wasi_context = &mut worker_vms[worker_vm_idx];
-                                    wasi_context.dispatch_hypercall(&mut incoming_call, &sender_copy.clone());
-                                },
-                                None => (),
-                            }
+                        for mut incoming_call in &mut dispatchable_hcalls {
+                            let worker_vm_idx = *vm_id_mapping.get(&incoming_call.vm_id).unwrap() as usize;
+                            let wasi_context = &mut worker_vms[worker_vm_idx];
+                            wasi_context.dispatch_hypercall(&mut incoming_call, &sender_copy.clone());
+                        }
+                        dispatchable_hcalls.clear();
+                    }
+
+                    // Now block until we have written the requests to the GPU
+                    if !block_on_inputs {
+                        match invoke_blocker_rx[thread_idx as usize].lock().unwrap().try_recv() {
+                            Ok(true) => {
+                                recv_reqs = 0;
+                                ellapsed_time = 0;
+                                is_empty_vm.clear();
+                            },
+                            _ => (),
                         }
                     }
                 }
@@ -1828,6 +1825,7 @@ impl OpenCLRunner {
             // now block until all of the hypercalls have been successfully dispatched
             // first, check for how many hcalls we have to wait on
             let mut number_hcalls_blocking = 0;
+            // count how many serverless response calls we get
             for hypercall_idx in 0..hypercall_num_temp.len() / mexec {
                 match hypercall_num_temp[hypercall_idx * mexec] {
                     // We are performing async responses for all serverless_response calls
@@ -1844,7 +1842,6 @@ impl OpenCLRunner {
             }
             
             
-            let mut no_resp_counter = 0;
             let mut total_recv = 0;
             for _idx in 0..number_hcalls_blocking {
                 let start_recv = std::time::Instant::now();
@@ -1861,7 +1858,7 @@ impl OpenCLRunner {
                         }
                     },
                     WasiSyscalls::ServerlessInvoke => is_serverless_invoke = true,
-                    WasiSyscalls::ServerlessResponse => no_resp_counter += 1,
+                    WasiSyscalls::ServerlessResponse => (),
                     _ => (),
                 }
                 // after all of the hypercalls are finished, we should update all of the stack pointers
@@ -1911,37 +1908,31 @@ impl OpenCLRunner {
             // also don't forget to write the hcall buf back
             let write_start = std::time::Instant::now();
             unsafe {
-                if no_resp_counter != self.num_vms {
+                // if number_hcalls_blocking == 0, then that means every hcall was a response,
+                // and we can skip writing this buffer back to the VM
+                if number_hcalls_blocking > 0 {
                     let hcall_buf = if is_serverless_invoke {
-                        is_serverless_invoke = false;
                         &*hcall_async_buffer.buf.get()
                     } else {
                         &*hcall_read_buffer.buf.get()
                     };
-                    /*
-                    map_event = ocl::Event::empty();
-                    let mut mapped_hcall_buf: MemMap<u8> = ocl::core::enqueue_map_buffer(&queue,
-                                                                                         &hypercall_buffer,
-                                                                                         false,
-                                                                                         MapFlags::WRITE_INVALIDATE_REGION,
-                                                                                         0,
-                                                                                         hcall_buf.len(),
-                                                                                         None::<Event>, Some(&mut map_event)).unwrap();
-
-                    ocl::core::wait_for_event(&map_event).unwrap();
-                    mapped_hcall_buf.as_slice_mut(hcall_buf.len())[0..hcall_buf.len()].copy_from_slice(&hcall_buf[0..hcall_buf.len()]);
-
-                    map_event = ocl::Event::empty();
-                    ocl::core::enqueue_unmap_mem_object(&queue, &hypercall_buffer, &mapped_hcall_buf, None::<Event>, Some(&mut map_event)).unwrap();
-                    ocl::core::wait_for_event(&map_event).unwrap();
-                    */
-                    ocl::core::enqueue_write_buffer(&queue, &hypercall_buffer, true, 0, hcall_buf, None::<Event>, None::<&mut Event>).unwrap();
-                    invoke_complete.broadcast(true);
+ 
+                    ocl::core::enqueue_write_buffer(&queue,
+                                                    &hypercall_buffer,
+                                                    true,
+                                                    0,
+                                                    hcall_buf,
+                                                    None::<Event>,
+                                                    None::<&mut Event>).unwrap();
+                    if is_serverless_invoke {
+                        invoke_complete.broadcast(true);
+                    }
                 }
                 if set_entry_point {
                     ocl::core::enqueue_write_buffer(&queue, &buffers.entry, true, 0, &mut entry_point_temp, None::<Event>, None::<&mut Event>).unwrap();
                     set_entry_point = false;
                 }
+                is_serverless_invoke = false;
                 ocl::core::enqueue_write_buffer(&queue, &buffers.hypercall_num, true, 0, &mut hypercall_num_temp, None::<Event>, None::<&mut Event>).unwrap();
                 ocl::core::enqueue_write_buffer(&queue, &hcall_retval_buffer, true, 0, &mut hypercall_retval_temp, None::<Event>, None::<&mut Event>).unwrap();
             }

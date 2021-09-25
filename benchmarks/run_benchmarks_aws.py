@@ -767,7 +767,7 @@ ssm_client = boto3.client('ssm')
 #cleanup()
 
 # run lz4 bench
-run_lz4_bench()
+#run_lz4_bench()
 
 #cleanup()
 
@@ -782,7 +782,7 @@ run_lz4_bench()
 #cleanup()
 
 # run image bench
-#run_image_bench()
+run_image_bench()
 
 
 # clean up all instances at end
