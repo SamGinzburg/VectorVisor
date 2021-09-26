@@ -101,7 +101,7 @@ impl BatchSubmitServer {
             None => panic!("A VM died while processing a request, vm_idx: {}", vm_idx),
         };
         let req_end = std::time::Instant::now();
-        //println!("req time: {:?}", (req_end - req_start).as_nanos());
+        //println!("req time: {:?}, vm_idx: {:?}", (req_end - req_start).as_nanos(), vm_idx);
 
         if fast_reply {
             Ok(BatchSubmitServer::create_response(resp))

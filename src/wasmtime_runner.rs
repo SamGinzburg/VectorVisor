@@ -88,8 +88,8 @@ impl WasmtimeRunner {
                     let chan = self.vm_sender.get(self.vm_idx).unwrap();
                     unsafe {
                         let arr = memory.data_unchecked_mut();
-                        let mut resp_buf = vec![0u8; hcall_buf_size];
                         let resp_buf_len: usize = buf_len.try_into().unwrap();
+                        let mut resp_buf = vec![0u8; resp_buf_len];
                         let main_mem_start = buf_ptr.try_into().unwrap();
 
                         let resp_buf_as_slice: &mut [u8] = resp_buf.as_mut_slice();
