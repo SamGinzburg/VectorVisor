@@ -62,7 +62,7 @@ impl Serverless {
             let msg_len = LittleEndian::read_u32(&hcall_buf[0..4]);
             let resp_buf_len: usize = msg_len.try_into().unwrap();
 
-            let mut resp_buf = vec![0u8; (resp_buf_len+4).try_into().unwrap()];
+            let mut resp_buf = vec![0u8; resp_buf_len.try_into().unwrap()];
 
             // copy the data from the hcall_buffer
             resp_buf[0..resp_buf_len].copy_from_slice(&hcall_buf[4..4+resp_buf_len]);
@@ -80,6 +80,11 @@ impl Serverless {
 
             send_chan.lock().unwrap().blocking_send((resp_buf, resp_buf_len, on_device_time, queue_submit_time, queue_submit_count, count)).unwrap();
         }
+
+        sender.send({
+            HyperCallResult::new(0, vm_idx, WasiSyscalls::ServerlessResponse)
+        }).unwrap();
+
         // Perform async replies, no need to block in the critical path
         /*
         sender.send({

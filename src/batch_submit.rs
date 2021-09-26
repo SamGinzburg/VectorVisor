@@ -54,10 +54,10 @@ impl warp::reject::Reject for NoVmAvailable {}
 
 impl BatchSubmitServer {
 
-    fn create_response(resp: Vec<u8>, resp_len: usize) -> warp::http::Response<Body> {
+    fn create_response(resp: Vec<u8>) -> warp::http::Response<Body> {
        Response::builder()
         .status(StatusCode::OK)
-        .body(Body::from(resp[0..resp_len].to_vec())).unwrap() 
+        .body(Body::from(resp)).unwrap() 
     }
 
 
@@ -79,7 +79,7 @@ impl BatchSubmitServer {
         */
 
         // Send the request body to the selected VM
-        // We want to drop 
+        let req_start = std::time::Instant::now();
         {
             let sender = tx.lock().await;
             sender.send((body.clone(), body.len())).await.unwrap();
@@ -100,12 +100,14 @@ impl BatchSubmitServer {
             Some(val) => val,
             None => panic!("A VM died while processing a request, vm_idx: {}", vm_idx),
         };
+        let req_end = std::time::Instant::now();
+        //println!("req time: {:?}", (req_end - req_start).as_nanos());
 
         if fast_reply {
-            Ok(BatchSubmitServer::create_response(resp, len))
+            Ok(BatchSubmitServer::create_response(resp))
         } else {
             let final_response = BatchReply {
-                response: &resp[0..len],
+                response: &resp,
                 on_device_execution_time_ns: on_dev_time,
                 device_queue_overhead_time_ns: queue_submit_time,
                 queue_submit_count: num_queue_submits,
