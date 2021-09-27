@@ -11,7 +11,7 @@ local_group_size = 64
 interleave = 4
 #local_group_size = 999999
 is_pretty = "true"
-fastreply = "true"
+fastreply = "false"
 
 CFLAGS="-cl-nv-verbose"
 OPT_LEVEL="-O3"
@@ -510,9 +510,9 @@ def run_image_bench():
 
     cd /tmp/wasm2opencl/benchmarks/imageblur/
 
-    /usr/local/go/bin/go run run_image_blur.go {addr} 8000 {target_rps} 1 60
+    /usr/local/go/bin/go run run_image_blur.go {addr} 8000 {target_rps} 1 120
 
-    /usr/local/go/bin/go run run_image_blur.go {addr} 8000 {target_rps} 1 60
+    /usr/local/go/bin/go run run_image_blur.go {addr} 8000 {target_rps} 1 120
     """.format(addr=gpu_instance[0].private_dns_name, input_size=1000, target_rps=target_rps)
 
 
@@ -546,9 +546,9 @@ def run_image_bench():
 
     cd /tmp/wasm2opencl/benchmarks/imageblur/
 
-    /usr/local/go/bin/go run run_image_blur.go {addr} 8000 {target_rps} 1 60
+    /usr/local/go/bin/go run run_image_blur.go {addr} 8000 {target_rps} 1 120
 
-    /usr/local/go/bin/go run run_image_blur.go {addr} 8000 {target_rps} 1 60
+    /usr/local/go/bin/go run run_image_blur.go {addr} 8000 {target_rps} 1 120
     """.format(addr=cpu_bench_instance[0].private_dns_name, input_size=1000, target_rps=target_rps_cpu)
 
     command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
@@ -691,7 +691,7 @@ p3.2xlarge   => 1 V100, 16 GiB memory, 8 vCPU, $3.06 / hr
 # ami-00339339e800db52e  ==> OpenCL 1.2 driver (460.X)
 # ami-0748c95fd9dd9f42a  ==> OpenCL 1.2 driver (450.X)
 gpu_instance = ec2.create_instances(ImageId='ami-01463836f7041cd10',
-                                InstanceType="g4dn.2xlarge",
+                                InstanceType="p3.2xlarge",
                                 MinCount=1,
                                 MaxCount=1,
                                 UserData=userdata_ubuntu,

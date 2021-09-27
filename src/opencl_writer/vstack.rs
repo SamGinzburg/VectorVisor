@@ -2506,6 +2506,7 @@ impl<'a> StackCtx {
                         ret_str += &format!("\t}}\n");
                     }
                 }
+                ret_str += &format!("\tlocal_cache[{}] = 0;\n", cache_idx);
             }    
         }
 

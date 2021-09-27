@@ -1289,13 +1289,15 @@ impl OpenCLRunner {
          * 
          */
 
+
         let num_threads = if num_cpus::get() as u32 > self.num_vms {
             self.num_vms as u32
         } else {
             num_cpus::get() as u32
         };
 
-        //let num_threads = 4;
+
+        //let num_threads = 1;
         //let num_threads = num_cpus::get() as u32;
         let thread_pool = rayon::ThreadPoolBuilder::new().num_threads(num_threads.try_into().unwrap()).stack_size(1024*256).build().unwrap();
 
@@ -1371,20 +1373,22 @@ impl OpenCLRunner {
                     // Each thread polls a set of VMs to see if we can write to the hcall buf yet
                     // We will only poll if we know we have open slots in our group of VMs
                     // for each VM that we have, check if we have a request waiting
-                    for vm_idx in &vm_id_vec {
-                        let worker_vm_idx = *vm_id_mapping.get(vm_idx).unwrap() as usize;
-                        if recv_reqs < avail_vm_count && !is_empty_vm.contains(&worker_vm_idx) {
-                            match vm_recv_copy[*vm_idx as usize].lock().unwrap().poll_recv(&mut cx) {
-                                Poll::Ready(Some((msg, _))) => {
-                                    let wasi_context = &mut worker_vms[worker_vm_idx];
-                                    // Queue the input in the VM
-                                    let buffer = async_buffer.clone();
-                                    let deref_buf = unsafe { &mut *buffer.buf.get() };
-                                    wasi_context.queue_request(msg, *deref_buf);
-                                    recv_reqs += 1;
-                                    is_empty_vm.insert(worker_vm_idx);
-                                },
-                                _ => (),
+                    if recv_reqs < avail_vm_count {
+                        for vm_idx in &vm_id_vec {
+                            let worker_vm_idx = *vm_id_mapping.get(vm_idx).unwrap() as usize;
+                            if !is_empty_vm.contains(&worker_vm_idx) {
+                                match vm_recv_copy[*vm_idx as usize].lock().unwrap().poll_recv(&mut cx) {
+                                    Poll::Ready(Some((msg, _))) => {
+                                        let wasi_context = &mut worker_vms[worker_vm_idx];
+                                        // Queue the input in the VM
+                                        let buffer = async_buffer.clone();
+                                        let deref_buf = unsafe { &mut *buffer.buf.get() };
+                                        wasi_context.queue_request(msg, *deref_buf);
+                                        recv_reqs += 1;
+                                        is_empty_vm.insert(worker_vm_idx);
+                                    },
+                                    _ => (),
+                                }
                             }
                         }
                     }
@@ -1414,7 +1418,6 @@ impl OpenCLRunner {
                     // If serverless invoke, block until no vms available
                     // else, we just dispatch
                     if !block_on_inputs {
-                        let hcall_start = std::time::Instant::now();
                         for mut incoming_call in &mut dispatchable_hcalls {
                             let worker_vm_idx = *vm_id_mapping.get(&incoming_call.vm_id).unwrap() as usize;
                             let wasi_context = &mut worker_vms[worker_vm_idx];
