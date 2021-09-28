@@ -1,18 +1,20 @@
 [package]
-name = "nlp-count-vectorizer"
+name = "imagehash"
 version = "0.1.0"
-authors = ["Sam Ginzburg <ginzburg.sam@gmail.com>"]
+authors = ["SamGinzburg <ginzburg.sam@gmail.com>"]
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 wasm-serverless-invoke = { path = "../../wasm-serverless-invoke" }
+serde_json = "1.0.62"
 serde = { version = "1.0.62", features = ["derive"] }
-vtext = "0.2.0"
+image = { version = "*", default-features = false, features = ["jpeg"] } 
+base64 = "0.13.0"
+img_hash = "3.2.0"
 
 [profile.release]
 lto = true
 codegen-units = 1 # better optimizations
 opt-level = 3
-

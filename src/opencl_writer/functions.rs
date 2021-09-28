@@ -540,13 +540,6 @@ pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut St
                     sp_counter += 2;
                 },
                 wast::ValType::F32 => {
-                    // compute the offset to read from the bottom of the stack
-                    let reg = if !stack_ctx.vstack_is_empty(StackType::f32) {
-                        stack_ctx.vstack_pop(StackType::f32)
-                    } else {
-                        String::from("(uint)(-1)")
-                    };
-    
                     if sp_counter > 0 {
                         let read_sfp = emit_read_u32_aligned("(ulong)(stack_frames+*sfp)", "(ulong)(stack_frames)", "warp_idx");
                         let write_u32 = emit_write_u32_aligned(&format!("(ulong)(stack_u32-{}+{})", parameter_offset, read_sfp), "(ulong)stack_u32", &format!("temp"), "warp_idx");
@@ -570,7 +563,6 @@ pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut St
                     sp_counter += 2;
                 },
                 wast::ValType::F64 => {
-                    // compute the offset to read from the bottom of the stack
                     if sp_counter > 0 {
                         let read_sfp = emit_read_u32_aligned("(ulong)(stack_frames+*sfp)", "(ulong)(stack_frames)", "warp_idx");
                         let write_u64 = emit_write_u64_aligned(&format!("(ulong)(stack_u32-{}+{})", parameter_offset, read_sfp), "(ulong)stack_u32", &format!("temp"), "warp_idx");

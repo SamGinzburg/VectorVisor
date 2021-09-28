@@ -1,5 +1,6 @@
 use vtext::tokenize::{VTextTokenizerParams,Tokenizer};
 use wasm_serverless_invoke::wasm_handler::WasmHandler;
+use wasm_serverless_invoke::wasm_handler::SerializationFormat::MsgPack;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize)]
@@ -13,7 +14,6 @@ struct FuncResponse {
 }
 
 fn tokenize(inputs: Vec<String>, tok: &Tokenizer) -> Vec<Vec<String>> {
-    print!("");
     let mut results = vec![];
     for tweet in inputs {
         let mut str_vec: Vec<String> = vec![];
@@ -32,5 +32,5 @@ fn tokenize_inputs(event: FuncInput) -> FuncResponse {
 
 fn main() {
     let handler = WasmHandler::new(&tokenize_inputs);
-    handler.run(1024*1024);
+    handler.run_with_format(1024*1024, MsgPack);
 }

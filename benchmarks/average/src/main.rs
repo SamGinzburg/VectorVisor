@@ -23,14 +23,13 @@ struct FuncResponse {
 
 // Take in a list of numbers and compute the average
 fn histogram(event: FuncInput) -> FuncResponse {
-    println!("");
     let mut histogram = Histogram::<u64>::new(2).unwrap();
 
     for item in &event.numbers {
         histogram.record(*item);
     }
 
-    let resp = FuncResponse { 
+    FuncResponse { 
         min: histogram.min(),
         max: histogram.max(),
         mean: histogram.mean(),
@@ -38,11 +37,7 @@ fn histogram(event: FuncInput) -> FuncResponse {
         p50: histogram.value_at_percentile(50.0),
         p99: histogram.value_at_percentile(99.0),
         p999: histogram.value_at_percentile(99.9),
-    };
-
-    println!("");
-
-    resp
+    }
 }
 
 fn main() {
