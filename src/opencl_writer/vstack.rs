@@ -735,6 +735,18 @@ impl<'a> StackCtx {
                     current_f64_count -= 1;
                     update_counter(&mut current_i64_count, &mut max_i64_count);
                 },
+                wast::Instruction::I32TruncF64S => {
+                    stack_sizes.pop();
+                    stack_sizes.push(StackType::i32);
+                    current_f64_count -= 1;
+                    update_counter(&mut current_i32_count, &mut max_i32_count);
+                },
+                wast::Instruction::I64TruncF64S => {
+                    stack_sizes.pop();
+                    stack_sizes.push(StackType::i64);
+                    current_f64_count -= 1;
+                    update_counter(&mut current_i64_count, &mut max_i64_count);
+                },
                 wast::Instruction::I64Ne => {
                     stack_sizes.pop();
                     stack_sizes.pop();
@@ -1030,6 +1042,7 @@ impl<'a> StackCtx {
                                                         },
                                                         _ => panic!("vstack missing valtype check in func call")
                                                     }
+                                                    stack_sizes.pop();
                                                 }
                                                 // push the results back
                                                 for ty in ft.results.iter() {
@@ -1096,7 +1109,6 @@ impl<'a> StackCtx {
                                         fastcall_opt += 1;
                                     }
                                 }
-
                             }
 
                             // Track the number of function call stubs to generate
@@ -1104,8 +1116,11 @@ impl<'a> StackCtx {
                             //num_fn_calls += matching_types - fastcall_opt;
                             num_fn_calls += matching_types;
 
-                            // First, pop off the parameters
+                            // Pop the CallIndirect index
+                            stack_sizes.pop();
+                            // Then, pop off the parameters
                             for (_, _, param_type) in indirect_func_type.params.iter() {
+                                stack_sizes.pop();
                                 match param_type {
                                     ValType::I32 => {
                                         current_i32_count -= 1;
@@ -1125,6 +1140,7 @@ impl<'a> StackCtx {
                 
                             // Next, push the result(s) back
                             for return_type in indirect_func_type.results.iter() {
+                                stack_sizes.push(StackCtx::convert_wast_types(&return_type));
                                 update_by_valtype(return_type,
                                     &mut current_i32_count, &mut max_i32_count,
                                     &mut current_i64_count, &mut max_i64_count,
@@ -1381,6 +1397,13 @@ impl<'a> StackCtx {
                     current_i32_count -= 1;
                     update_counter(&mut current_f32_count, &mut max_f32_count);
                 },
+                wast::Instruction::F32ConvertI64U => {
+                    stack_sizes.pop();
+                    stack_sizes.push(StackType::f32);
+
+                    current_i64_count -= 1;
+                    update_counter(&mut current_f32_count, &mut max_f32_count);
+                },
                 wast::Instruction::F32ConvertI32S => {
                     stack_sizes.pop();
                     stack_sizes.push(StackType::f32);
@@ -1599,7 +1622,7 @@ impl<'a> StackCtx {
                     let arg1 = stack_sizes.pop().unwrap();
                     let arg2 = stack_sizes.pop().unwrap();
                     if arg1 != arg2 {
-                        panic!("Select must operate on two args of the same type (vstack): {:?}, {:?}", arg1, arg2);
+                        panic!("Select must operate on two args of the same type (vstack): c: {:?}, {:?}, {:?} in {:?}", _c, arg1, arg2, curr_fn_name);
                     }
                     current_i32_count -= 1;
                     // depending on the arg1, arg2 vals we pop different types

@@ -7,15 +7,13 @@
   )
   (func $_start (param $p0 i32) (result i32)
     (local $l2 i32)
-    (i32.const 11)
-    (i32.const 5)
-    (i32.const 0) ;; the indirect call table index
-    (call_indirect (type $t0) $T0)
-    (local.set $l2)
-    (local.get $l2)
+    (i32.const 100)
     (i32.const 100)
     (i32.const 0) ;; the indirect call table index
     (call_indirect (type $t0) $T0)
+    (i32.const 100)
+    (i32.const 1)
+    (select)
   )
   (table $T0 5 5 funcref)
   (elem $e0 0 (i32.const 0) $_add2) ;; the first param is the table index

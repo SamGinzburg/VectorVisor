@@ -839,6 +839,9 @@ impl<'a> OpenCLCWriter<'_> {
             wast::Instruction::F32ConvertI32U => {
                 emit_f32_convert_i32u(self, stack_ctx, debug)
             },
+            wast::Instruction::F32ConvertI64U => {
+                emit_f32_convert_i64u(self, stack_ctx, debug)
+            },
             wast::Instruction::F32ConvertI32S => {
                 emit_f32_convert_i32s(self, stack_ctx, debug)
             },
@@ -859,6 +862,12 @@ impl<'a> OpenCLCWriter<'_> {
             },
             wast::Instruction::I32TruncF32S => {
                 emit_i32_trunc_f32_s(self, stack_ctx, debug)
+            },
+            wast::Instruction::I64TruncF64S => {
+                emit_i64_trunc_f64_s(self, stack_ctx, debug)
+            },
+            wast::Instruction::I32TruncF64S => {
+                emit_i32_trunc_f64_s(self, stack_ctx, debug)
             },
             wast::Instruction::I32Clz => {
                 emit_i32_clz(self, stack_ctx, debug)
