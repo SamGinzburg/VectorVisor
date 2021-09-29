@@ -48,5 +48,5 @@ fn image_blur(event: FuncInput) -> FuncResponse {
 
 fn main() {
     let handler = WasmHandler::new(&image_blur);
-    handler.run_with_format(1024*1024, MsgPack);
+    handler.run_with_format(1024*512, MsgPack);
 }
