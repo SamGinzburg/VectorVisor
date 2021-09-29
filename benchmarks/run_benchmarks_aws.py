@@ -886,12 +886,12 @@ ssm_client = boto3.client('ssm')
 #cleanup()
 
 # run average bench
-#run_average_bench()
+run_average_bench()
 
 #cleanup()
 
 # run image blue bench
-run_image_blur_bench()
+#run_image_blur_bench()
 
 #cleanup()
 

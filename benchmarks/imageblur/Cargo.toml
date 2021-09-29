@@ -13,7 +13,7 @@ serde = { version = "1.0.62", features = ["derive"] }
 image = { version = "*", default-features = false, features = ["jpeg"] } 
 base64 = "0.13.0"
 
-[profile.release]
-lto = true
-codegen-units = 1 # better optimizations
-opt-level = 3
+#[profile.release]
+#lto = true
+#codegen-units = 1 # better optimizations
+#opt-level = 3
