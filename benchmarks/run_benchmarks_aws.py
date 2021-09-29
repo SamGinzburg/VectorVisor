@@ -491,7 +491,7 @@ def run_image_hash_bench():
     x=$(cloud-init status)
     done
 
-    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/imagehash/target/wasm32-wasi/release/imagehash-opt.wasm --ip=0.0.0.0 --heap=4194304 --stack=262144 --hcallsize=524288 --partition=true --serverless=true --vmcount=3072 --vmgroups=1 --maxdup=3 --disablefastcalls=false --partitions=50 --maxloc=2000000 --lgroup={lgroup} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} &> /tmp/imagehash.log &
+    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/imagehash/target/wasm32-wasi/release/imagehash-opt.wasm --ip=0.0.0.0 --heap=4194304 --stack=262144 --hcallsize=524288 --partition=true --serverless=true --vmcount=3072 --vmgroups=1 --maxdup=3 --disablefastcalls=false --partitions=50 --maxloc=1000000 --lgroup={lgroup} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} &> /tmp/imagehash.log &
     """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply)
 
     run_command(run_image_command, "run_imagehash_gpu_command", gpu_instance[0].id)

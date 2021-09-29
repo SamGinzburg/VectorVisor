@@ -36,7 +36,7 @@ type VmmResponse struct {
 	num_unique_fns_called         float64
 }
 
-var NUM_PARAMS = 256
+var NUM_PARAMS = 64
 
 var client = &http.Client{}
 
@@ -159,7 +159,7 @@ func main() {
 
 	reqs := make([][]byte, NUM_PARAMS)
 	for i := 0; i < NUM_PARAMS; i++ {
-		p := Payload{Text: RandImage(0)}
+		p := Payload{Text: RandImage(i)}
 		request_body, _ := msgpack.Marshal(p)
 		reqs[i] = request_body
 	}
