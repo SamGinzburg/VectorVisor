@@ -886,17 +886,17 @@ ssm_client = boto3.client('ssm')
 #cleanup()
 
 # run average bench
-#run_average_bench()
+run_average_bench()
 
-#cleanup()
+cleanup()
 
 # run image blue bench
 run_image_blur_bench()
 
-#cleanup()
+cleanup()
 
 # run image hash bench
-#run_image_hash_bench()
+run_image_hash_bench()
 
 # clean up all instances at end
 ec2.instances.filter(InstanceIds = instance_id_list).terminate()
