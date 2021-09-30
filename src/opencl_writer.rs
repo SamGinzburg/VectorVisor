@@ -1891,6 +1891,7 @@ __attribute__((always_inline)) void {}(global uint   *stack_u32,
                              max_partitions: u32,
                              max_loc_in_partition: u32,
                              max_duplicate_funcs: u32,
+                             max_smem_reg_demo_space: u32,
                              local_work_group: usize,
                              mexec: usize,
                              disable_fastcalls: bool,
@@ -2268,8 +2269,7 @@ r#"
                  */
                 
                 let reduction_size: &mut u32 = &mut match sum_partition_reg_usage {
-                    val if val < 10000  => (1024  / local_work_group as u32),
-                    val if val >= 10000 => (3072 / local_work_group as u32),
+                    val => (max_smem_reg_demo_space / local_work_group as u32),
                     _ => 0,
                 };
 

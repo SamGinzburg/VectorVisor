@@ -295,6 +295,14 @@ fn main() {
             .multiple(false)
             .number_of_values(1)
             .takes_value(true))
+        .arg(Arg::with_name("max_smem_demo_space")
+            .long("maxdemospace")
+            .value_name("Specifies the amount of shared memory to allocate for register demotion for large kernels")
+            .default_value("0")
+            .help("")
+            .multiple(false)
+            .number_of_values(1)
+            .takes_value(true))
         .get_matches();
 
     dbg!(matches.clone());
@@ -329,6 +337,7 @@ fn main() {
     let mexec = value_t!(matches.value_of("mexec"), usize).unwrap_or_else(|e| e.exit());
     let pinput = value_t!(matches.value_of("pinput"), bool).unwrap_or_else(|e| e.exit());
     let fastreply = value_t!(matches.value_of("fastreply"), bool).unwrap_or_else(|e| e.exit());
+    let maxdemospace = value_t!(matches.value_of("max_smem_demo_space"), u32).unwrap_or_else(|e| e.exit());
 
     if mexec > 1 && interleave == 0 {
         panic!("Multi-Execution is only enabled for interleaved workloads!");
@@ -371,6 +380,7 @@ fn main() {
                                                                     max_part,
                                                                     max_loc,
                                                                     max_dup,
+                                                                    maxdemospace,
                                                                     local_work_group,
                                                                     mexec,
                                                                     disable_fastcalls,
@@ -436,6 +446,7 @@ fn main() {
                                                                         max_part,
                                                                         max_loc,
                                                                         max_dup,
+                                                                        maxdemospace,
                                                                         local_work_group,
                                                                         mexec,
                                                                         disable_fastcalls,
@@ -478,6 +489,7 @@ fn main() {
                                                                         max_part,
                                                                         max_loc,
                                                                         max_dup,
+                                                                        maxdemospace,
                                                                         local_work_group,
                                                                         mexec,
                                                                         disable_fastcalls,
@@ -523,6 +535,7 @@ fn main() {
                                                                         max_part,
                                                                         max_loc,
                                                                         max_dup,
+                                                                        maxdemospace,
                                                                         local_work_group,
                                                                         mexec,
                                                                         disable_fastcalls,
@@ -565,6 +578,7 @@ fn main() {
                                                                         max_part,
                                                                         max_loc,
                                                                         max_dup,
+                                                                        maxdemospace,
                                                                         local_work_group,
                                                                         mexec,
                                                                         disable_fastcalls,

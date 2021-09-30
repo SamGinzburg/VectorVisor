@@ -4,17 +4,16 @@ import time
 # Benchmark constants
 # target rps is really just the number of concurrent invokers
 # this affects the *possible* max RPS and bandwidth/mem/cpu consumption of the invoker
-target_rps = 3072 * 2
+target_rps = 3072
 target_rps_cpu = 1024
 TIMEOUT_MINUTES = 120
 local_group_size = 64
 interleave = 4
 #local_group_size = 999999
 is_pretty = "true"
-fastreply = "false"
+fastreply = "true"
 CFLAGS="-cl-nv-verbose"
 OPT_LEVEL="-O3"
-max_loc = 2000000
 
 ec2 = boto3.resource('ec2')
 ec2_client = boto3.client('ec2')
@@ -871,9 +870,9 @@ while True:
 ssm_client = boto3.client('ssm')
 
 # run pbkdf2 bench
-#run_pbkdf2_bench(True)
+run_pbkdf2_bench(True)
 
-#cleanup()
+cleanup()
 
 # run lz4 bench
 run_lz4_bench()
@@ -886,17 +885,17 @@ cleanup()
 #cleanup()
 
 # run average bench
-#run_average_bench()
+run_average_bench()
 
-#cleanup()
+cleanup()
 
 # run image blue bench
-#run_image_blur_bench()
+run_image_blur_bench()
 
 #cleanup()
 
 # run image hash bench
-run_image_hash_bench()
+#run_image_hash_bench()
 
 # clean up all instances at end
 ec2.instances.filter(InstanceIds = instance_id_list).terminate()
