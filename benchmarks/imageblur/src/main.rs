@@ -38,11 +38,17 @@ fn image_blur(event: FuncInput) -> FuncResponse {
     let mut output_buf = vec![];
     let mut jpeg_encoder = JpegEncoder::new(&mut output_buf);
 
+    match jpeg_encoder.encode_image(&mut blurred) {
+        Ok(_) => (),
+        Err(err) => println!("Unable to encode image to PNG: {:?}", err),
+    }
+    /*
     let (nwidth, nheight) = blurred.dimensions();
     match jpeg_encoder.encode(&mut blurred.as_bytes(), nwidth, nheight, ColorType::Rgba8) {
         Ok(_) => (),
         Err(err) => println!("Unable to encode image to PNG: {:?}", err),
     }
+    */
     FuncResponse { image: encode(output_buf) }
 }
 

@@ -2253,12 +2253,12 @@ r#"
             }
 
             // Check the partition size to see if we need to regenerate registers with constraints
-            let max_partition_reg_usage = partition_intermediate_size.iter().max().unwrap();
+            let max_partition_reg_usage: u32 = *partition_intermediate_size.iter().max().unwrap();
             let sum_partition_reg_usage = partition_intermediate_size.iter().sum::<u32>();
             println!("max size: {}, sum size: {}, part_idx: {}", &max_partition_reg_usage, &sum_partition_reg_usage, partition_idx);
 
             // If constraint exceeded, regenerate the partition with constraints
-            if sum_partition_reg_usage > 5000 {
+            if max_partition_reg_usage > 400 {
                 /*
                  * Compute size to reduce kernel by:
                  * 
@@ -2266,7 +2266,16 @@ r#"
                  * on the device.
                  *
                  */
-                let reduction_size: &mut u32 = &mut (2048 / local_work_group as u32);
+                
+                let reduction_size: &mut u32 = &mut match max_partition_reg_usage {
+                    val if val < 500  => (128  / local_work_group as u32),
+                    val if val < 600  => (256  / local_work_group as u32),
+                    val if val < 700  => (512  / local_work_group as u32),
+                    val if val < 800  => (1024 / local_work_group as u32),
+                    val if val < 900  => (2048 / local_work_group as u32),
+                    val if val < 1000 => (3072 / local_work_group as u32),
+                    _ => 0,
+                };
 
                 // We want to emit the largest function first, so we can move more of its locals to
                 // smem.
