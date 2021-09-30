@@ -2273,7 +2273,7 @@ r#"
                     val if val < 700  => (512  / local_work_group as u32),
                     val if val < 800  => (1024 / local_work_group as u32),
                     val if val < 900  => (2048 / local_work_group as u32),
-                    val if val >= 1000 => (3072 / local_work_group as u32),
+                    val if val >= 1000 => (2304 / local_work_group as u32),
                     _ => 0,
                 };
 
