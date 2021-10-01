@@ -2205,6 +2205,9 @@ r#"
             *fast_func_size.entry(fastfunc.to_string()).or_insert(0) += max;
         }
 
+        // We have limited smem space available.
+        let mut remaining_smem_alloc = 4096;
+
         // Compute the function groups, we will then enumerate the groups to emit the functions
         // kernel_partition_mapping get the partition ID from a function idx
         let partitions = form_partitions(&self, max_partitions, max_loc_in_partition, max_duplicate_funcs, self.func_names.clone(), &fast_function_set, &func_mapping, &self.imports_map, &mut kernel_compile_stats, indirect_call_mapping);
@@ -2259,7 +2262,7 @@ r#"
             println!("max size: {}, sum size: {}, part_idx: {}", &max_partition_reg_usage, &sum_partition_reg_usage, partition_idx);
 
             // If constraint exceeded, regenerate the partition with constraints
-            if sum_partition_reg_usage > 5000 {
+            if sum_partition_reg_usage > 5000 && remaining_smem_alloc > 0 {
                 /*
                  * Compute size to reduce kernel by:
                  * 
@@ -2272,6 +2275,8 @@ r#"
                     val => (max_smem_reg_demo_space / local_work_group as u32),
                     _ => 0,
                 };
+
+                remaining_smem_alloc -= reduction_size * local_work_group ;
 
                 // We want to emit the largest function first, so we can move more of its locals to
                 // smem.
