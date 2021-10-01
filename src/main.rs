@@ -298,7 +298,7 @@ fn main() {
         .arg(Arg::with_name("max_smem_demo_space")
             .long("maxdemospace")
             .value_name("Specifies the amount of shared memory to allocate for register demotion for large kernels")
-            .default_value("0")
+            .default_value("2048")
             .help("")
             .multiple(false)
             .number_of_values(1)
