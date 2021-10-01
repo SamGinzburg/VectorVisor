@@ -2276,7 +2276,7 @@ r#"
                     _ => 0,
                 };
 
-                remaining_smem_alloc -= reduction_size * local_work_group ;
+                remaining_smem_alloc -= *reduction_size * local_work_group as u32;
 
                 // We want to emit the largest function first, so we can move more of its locals to
                 // smem.
