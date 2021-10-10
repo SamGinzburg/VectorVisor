@@ -112,6 +112,12 @@ pub struct StackCtx {
     num_hypercalls: u32,
     called_fastcalls: HashSet<String>,
     max_emitted_context: u32,
+    // Track how many optimized loops we have currently open
+    // This is used to track when we should emit stack saves/restores
+    opt_loop_tracking: Vec<bool>,
+    // Track if we encounter any hcalls / call_indirects / non-opt calls
+    // If we don't, then we don't have to emit any context saving/restoring at all
+    fastcall_opt_possible: bool,
 }
 
 type ControlStackType = Vec<(String, Option<StackType>, ControlStackVStackTypes, Vec<StackType>, u32, u32, u32, u32)>;
@@ -123,7 +129,8 @@ impl<'a> StackCtx {
      */
     pub fn initialize_context(writer_ctx: &OpenCLCWriter, instructions: &Box<[Instruction<'a>]>, local_param_types: &HashMap<String, ValType>, local_offsets: &HashMap<String, u32>, is_param: &HashMap<String, bool>, fastcalls: HashSet<String>, param_offset: i32, indirect_call_mapping: &HashMap<u32, &wast::Index>, curr_fn_name: String, reduction_size: &mut u32, local_work_group: usize, is_gpu: bool) -> StackCtx {
         let mut stack_sizes: Vec<StackType> = vec![];
-        
+        let mut is_fastcall = true;
+
         // Track which loops we can optimize for later
         // (is_loop, tainted), is_loop needed since we are also tracking blocks
         // We also track the current i32, i64, f32, f64 values and reset them at the end of blocks
@@ -178,6 +185,11 @@ impl<'a> StackCtx {
          */
         let mut restore_context_map: HashMap<u32, HashSet<String>> = HashMap::new();
         let mut save_context_map: HashMap<u32, HashSet<String>> = HashMap::new();
+
+        // A mapping of the range of nested blocks for a loop
+        let mut loop_nested_context_map: HashMap<u32, u32> = HashMap::new();
+        // Map each nested loop to its idx in the tainted loop tracking structure
+        let mut context_map_tainted_loop_map: HashMap<u32, u32> = HashMap::new();
 
         // Track the active stack frames
         let mut curr_ctx = vec![];
@@ -928,37 +940,44 @@ impl<'a> StackCtx {
                                     (_, Some(true)) => {
                                         // Taint loops that perform hypercalls
                                         taint_open_loops(&mut tainted_loops, open_loop_stack.clone());
-
                                         // Track how many hypercalls we perform
                                         num_hypercalls += 1;
 
                                         match wasi_fn_name {
                                             &"fd_write"               => {
                                                 current_i32_count -= 3;
+                                                is_fastcall = false;
                                             },
                                             &"proc_exit"              => {
                                                 current_i32_count -= 1;
                                             },
                                             &"environ_sizes_get"      => {
                                                 current_i32_count -= 1;
+                                                is_fastcall = false;
                                             },
                                             &"environ_get"            => {
                                                 current_i32_count -= 1;
+                                                is_fastcall = false;
                                             },
                                             &"fd_prestat_get"         => {
                                                 current_i32_count -= 1;
+                                                is_fastcall = false;
                                             },
                                             &"fd_prestat_dir_name"    => {
                                                 current_i32_count -= 2;
+                                                is_fastcall = false;
                                             },
                                             &"random_get"             => {
                                                 current_i32_count -= 1;
+                                                is_fastcall = false;
                                             },
                                             &"serverless_invoke"      => {
                                                 current_i32_count -= 1;
+                                                is_fastcall = false;
                                             },
                                             &"serverless_response"    => {
                                                 current_i32_count -= 2;
+                                                is_fastcall = false;
                                             },
                                             _ => panic!("Unidentified WASI fn name: {:?} (vstack)", wasi_fn_name),
                                         }
@@ -973,6 +992,7 @@ impl<'a> StackCtx {
                         // We only taint non-fastcalls
                         if !fastcalls.contains(&id) {
                             taint_open_loops(&mut tainted_loops, open_loop_stack.clone());
+                            is_fastcall = false;
                             // Track how many regular function calls we perform
                             num_fn_calls += 1;
                         } else {
@@ -1070,6 +1090,7 @@ impl<'a> StackCtx {
                 wast::Instruction::CallIndirect(call_indirect) => {
                     // Taint open loops
                     taint_open_loops(&mut tainted_loops, open_loop_stack.clone());
+                    is_fastcall = false;
 
                     // Check for types
                     match (call_indirect.ty.index.as_ref(), call_indirect.ty.inline.as_ref()) {
@@ -1531,6 +1552,7 @@ impl<'a> StackCtx {
                     curr_ctx_idx += 1;
                 },
                 wast::Instruction::Loop(b) => {
+                    context_map_tainted_loop_map.insert(curr_ctx_idx, tainted_loops.len().try_into().unwrap());
                     tainted_loops.push(false);
                     open_loop_stack.push(loop_idx);
                     loop_idx += 1;
@@ -1592,6 +1614,7 @@ impl<'a> StackCtx {
                             // save the read locals for this stack frame
                             restore_context_map.insert(idx, read_locals.clone());
                             save_context_map.insert(idx, write_locals.clone());
+                            loop_nested_context_map.insert(idx, curr_ctx_idx);
                             read_locals = read_locals_stack.pop().unwrap();
                             write_locals = write_locals_stack.pop().unwrap();
 
@@ -1881,6 +1904,26 @@ impl<'a> StackCtx {
             *reduction_size = 0;
         }
 
+        for (key, val) in loop_nested_context_map {
+            // For each nested loop, if it is not tainted, we want to add all of the nested stack
+            // frame local contexts to it
+            let tainted_loops_idx = *context_map_tainted_loop_map.get(&key).unwrap() as usize;
+            if !tainted_loops[tainted_loops_idx] {
+                let mut new_read_hs: HashSet<String> = HashSet::new();
+                //let mut new_write_hs: HashSet<String> = HashSet::new();
+                // process stack frames in the range: [key, val)
+                // i.e. the blocks/loops that come after the topmost loop
+                for idx in key..val {
+                    let read_set: HashSet<String> = restore_context_map.get(&idx).unwrap().clone();
+                    //let write_set: HashSet<String> = save_context_map.get(&idx).unwrap().clone();
+                    new_read_hs.extend(read_set);
+                    //new_write_hs.extend(write_set);
+                }
+                restore_context_map.insert(key, new_read_hs);
+                //save_context_map.insert(key, new_write_hs);
+            }
+        }
+
         StackCtx {
             stack_frame_idx: 1,
             stack_frame_stack: vec![0],
@@ -1913,6 +1956,8 @@ impl<'a> StackCtx {
             is_param: is_param.clone(),
             called_fastcalls: called_fastcalls,
             max_emitted_context: 0,
+            opt_loop_tracking: vec![],
+            fastcall_opt_possible: is_fastcall,
         }
     }
 
@@ -1925,6 +1970,17 @@ impl<'a> StackCtx {
      */
     pub fn is_loop_tainted(&mut self, loop_idx: usize) -> bool {
         self.tainted_loops[loop_idx]
+    }
+
+    /*
+     * Track when we enter an optimized loop, to avoid emitting extra context saves
+     */
+    pub fn open_opt_loop(&mut self) -> () {
+        self.opt_loop_tracking.push(true);
+    }
+
+    pub fn close_opt_loop(&mut self) -> () {
+        self.opt_loop_tracking.pop();
     }
 
     /*
@@ -2456,6 +2512,7 @@ impl<'a> StackCtx {
      * Generate the code to save the context of the current function
      * We can statically determine the minimum
      */
+
     pub fn save_context(&mut self, save_locals_only: bool, save_intermediate_only: bool) -> String {
         let mut ret_str = String::from("");
 
@@ -2466,6 +2523,10 @@ impl<'a> StackCtx {
                                             &emit_read_u32("(ulong)(stack_frames+*sfp)", "(ulong)stack_frames", "warp_idx"));
         ret_str += &format!("\tsave_local_cache((uchar*)local_cache, {}, {}, (ulong)stack_u32, warp_idx);\n", self.local_cache_size, local_cache_start_offset);
         */
+
+        if self.fastcall_opt_possible {
+            return ret_str;
+        }
 
         let map_idx = self.stack_frame_stack.last().unwrap();
         let locals_set = self.save_context_map.get(map_idx).unwrap().clone();
@@ -2611,6 +2672,14 @@ impl<'a> StackCtx {
     pub fn restore_context(&mut self, restore_locals_only: bool, restore_intermediates_only: bool) -> String {
         let mut ret_str = String::from("");
 
+        if self.fastcall_opt_possible {
+            return ret_str;
+        }
+
+        //if self.opt_loop_tracking.len() > 0 || self.encountered_first_restore_point {
+        if self.opt_loop_tracking.len() > 0 {
+            return ret_str;
+        }
 
         // First, load all locals from memory
         if !restore_intermediates_only {

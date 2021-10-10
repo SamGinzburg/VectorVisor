@@ -7,6 +7,7 @@ use crate::opencl_writer::mem_interleave::emit_write_u64_aligned;
 use crate::opencl_writer::StackCtx;
 use crate::opencl_writer::StackType;
 use crate::opencl_writer::trap::{emit_trap, TrapCode};
+use crate::opencl_writer::format_fn_name;
 
 use wast::Index::*;
 use wast::TypeDef::*;
@@ -278,7 +279,7 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stack
         format!("{}", "*is_calling = 1;"),
         // return to the control function
         "return;",
-        format!("{}_call_return_stub_{}:", format!("{}{}", "__", fn_name.replace(".", "")), *call_ret_idx),
+        format!("{}_call_return_stub_{}:", format!("{}{}", "__", format_fn_name(&fn_name)), *call_ret_idx),
         format!("*sp += {};", return_size),
         format!("*sp -= {};", parameter_offset))
     } else if return_size <= 0 && !is_fastcall {
@@ -303,7 +304,7 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stack
                 format!("{}", "*is_calling = 1;"),
                 // return to the control function
                 "return;",
-                format!("{}_call_return_stub_{}:", format!("{}{}", "__", fn_name.replace(".", "")), *call_ret_idx),
+                format!("{}_call_return_stub_{}:", format!("{}{}", "__", format_fn_name(&fn_name)), *call_ret_idx),
                 format!("*sp -= {};", parameter_offset))
     } else {
         // No-op for fastcalls
@@ -364,7 +365,7 @@ pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stack
 
     // Insert the code for fastcalls here
     if is_fastcall {
-        let calling_func_name = format!("{}{}", "__", id.replace(".", ""));
+        let calling_func_name = format!("{}{}", "__", format_fn_name(&id));
         let mut parameter_list = String::from("");
 
         if is_indirect {

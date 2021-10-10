@@ -490,7 +490,7 @@ def run_image_hash_bench():
     x=$(cloud-init status)
     done
 
-    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/imagehash/target/wasm32-wasi/release/imagehash-opt.wasm --ip=0.0.0.0 --heap=4194304 --stack=262144 --hcallsize=524288 --partition=true --serverless=true --vmcount=3072 --vmgroups=1 --maxdup=3 --disablefastcalls=false --partitions=50 --maxloc=2000000 --lgroup={lgroup} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} &> /tmp/imagehash.log &
+    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/imagehash/target/wasm32-wasi/release/imagehash-opt.wasm --ip=0.0.0.0 --heap=4194304 --stack=262144 --hcallsize=524288 --partition=true --serverless=true --vmcount=3072 --vmgroups=1 --maxdup=3 --disablefastcalls=false --partitions=50 --maxloc=1000000 --lgroup={lgroup} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} &> /tmp/imagehash.log &
     """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply)
 
     run_command(run_image_command, "run_imagehash_gpu_command", gpu_instance[0].id)
@@ -799,7 +799,7 @@ p3.2xlarge   => 1 V100, 16 GiB memory, 8 vCPU, $3.06 / hr
 # ami-00339339e800db52e  ==> OpenCL 1.2 driver (460.X)
 # ami-0748c95fd9dd9f42a  ==> OpenCL 1.2 driver (450.X)
 gpu_instance = ec2.create_instances(ImageId='ami-01463836f7041cd10',
-                                InstanceType="g4dn.2xlarge",
+                                InstanceType="g4dn.xlarge",
                                 MinCount=1,
                                 MaxCount=1,
                                 UserData=userdata_ubuntu,
@@ -870,7 +870,7 @@ while True:
 ssm_client = boto3.client('ssm')
 
 # run pbkdf2 bench
-run_pbkdf2_bench(True)
+#run_pbkdf2_bench(True)
 
 #cleanup()
 
@@ -895,7 +895,7 @@ run_pbkdf2_bench(True)
 #cleanup()
 
 # run image hash bench
-#run_image_hash_bench()
+run_image_hash_bench()
 
 # clean up all instances at end
 ec2.instances.filter(InstanceIds = instance_id_list).terminate()

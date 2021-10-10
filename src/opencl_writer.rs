@@ -16,6 +16,7 @@ mod fastcalls;
 mod compile_stats;
 mod cfg_optimizer;
 mod trap;
+mod util;
 
 use relops::*;
 use mem_interleave::*;
@@ -35,6 +36,7 @@ use fastcalls::*;
 use compile_stats::*;
 use cfg_optimizer::*;
 use trap::*;
+use util::*;
 
 use wast::Wat;
 use wast::parser::{self, ParseBuffer};
@@ -219,7 +221,7 @@ impl<'a> OpenCLCWriter<'_> {
         // proc_exit in _start is special cased since we add it ourselves
         if !is_proc_exit_start {
             // insert return label, the VMM will return to right after the return
-            ret_str += &format!("{}_hypercall_return_stub_{}:\n", format!("{}{}", "__", fn_name.replace(".", "")), hypercall_id_count);
+            ret_str += &format!("{}_hypercall_return_stub_{}:\n", format!("{}{}", "__", format_fn_name(&fn_name)), hypercall_id_count);
             // increment hypercall_id_count, IFF we are counting it
             *hypercall_id_count += 1;
         }
@@ -690,7 +692,18 @@ impl<'a> OpenCLCWriter<'_> {
                                 (_, Some(true)) => {
                                     match wasi_fn_name {
                                         &"fd_write"               => self.emit_hypercall(WasmHypercallId::fd_write, stack_ctx, hypercall_id_count, fn_name.to_string(), false, debug),
-                                        &"proc_exit"              => self.emit_hypercall(WasmHypercallId::proc_exit, stack_ctx, hypercall_id_count, fn_name.to_string(), false, debug),
+                                        &"proc_exit"              => {
+                                            if !is_fastcall {
+                                            self.emit_hypercall(WasmHypercallId::proc_exit,
+                                                                stack_ctx,
+                                                                hypercall_id_count,
+                                                                fn_name.to_string(),
+                                                                is_fastcall,
+                                                                debug)
+                                            } else {
+                                                emit_trap(TrapCode::TrapUnreachable, true)
+                                            }
+                                        },
                                         &"environ_sizes_get"      => self.emit_hypercall(WasmHypercallId::environ_sizes_get, stack_ctx, hypercall_id_count, fn_name.to_string(), false, debug),
                                         &"environ_get"            => self.emit_hypercall(WasmHypercallId::environ_get, stack_ctx, hypercall_id_count, fn_name.to_string(), false, debug),
                                         &"fd_prestat_get"         => self.emit_hypercall(WasmHypercallId::fd_prestat_get, stack_ctx, hypercall_id_count, fn_name.to_string(), false, debug),
@@ -1084,7 +1097,7 @@ impl<'a> OpenCLCWriter<'_> {
 
                 if !is_fastcall {
                     final_string += &format!("{}{} {{\n", inline,
-                    self.generate_function_prelude(&format!("{}{}", "__", fn_name.replace(".", "")),
+                    self.generate_function_prelude(&format!("{}{}", "__", format_fn_name(&fn_name)),
                                                     0,
                                                     0,
                                                     0,
@@ -1119,7 +1132,7 @@ impl<'a> OpenCLCWriter<'_> {
                         _ => String::from("void"),
                     };
 
-                    let func_name_demangle = format!("{}{}", "__", fn_name.replace(".", ""));
+                    let func_name_demangle = format!("{}{}", "__", format_fn_name(&fn_name));
                     final_string += &format!("{} {}_fastcall{}", ret_signature, func_name_demangle, stack_ctx.emit_fastcall_header());
                 }
 
@@ -1161,9 +1174,9 @@ impl<'a> OpenCLCWriter<'_> {
                         for count in 0..num_hypercalls {
                             write!(final_string, "\t\t\tcase {}:\n", count).unwrap();
                             if debug_call_print {
-                                write!(final_string, "\t\t\t\tprintf(\"goto: {}_hypercall_return_stub_{}\\n\");\n", format!("{}{}", "__", fn_name.replace(".", "")), count).unwrap();
+                                write!(final_string, "\t\t\t\tprintf(\"goto: {}_hypercall_return_stub_{}\\n\");\n", format!("{}{}", "__", format_fn_name(&fn_name)), count).unwrap();
                             }
-                            write!(final_string, "\t\t\t\tgoto {}_hypercall_return_stub_{};\n", format!("{}{}", "__", fn_name.replace(".", "")), count).unwrap();
+                            write!(final_string, "\t\t\t\tgoto {}_hypercall_return_stub_{};\n", format!("{}{}", "__", format_fn_name(&fn_name)), count).unwrap();
                             write!(final_string, "\t\t\t\tbreak;\n").unwrap();
                         }
                         write!(final_string, "\t\t}}\n").unwrap();
@@ -1182,9 +1195,9 @@ impl<'a> OpenCLCWriter<'_> {
                             write!(final_string, "\t\t\tcase {}:\n", count).unwrap();
                             write!(final_string, "\t\t\t\t*sfp -= 1;\n").unwrap();
                             if debug_call_print {
-                                write!(final_string, "\t\t\t\tprintf(\"goto: {}_call_return_stub_{}\\n\");\n", format!("{}{}", "__", fn_name.replace(".", "")), count).unwrap();
+                                write!(final_string, "\t\t\t\tprintf(\"goto: {}_call_return_stub_{}\\n\");\n", format!("{}{}", "__", format_fn_name(&fn_name)), count).unwrap();
                             }
-                            write!(final_string, "\t\t\t\tgoto {}_call_return_stub_{};\n", format!("{}{}", "__", fn_name.replace(".", "")), count).unwrap();
+                            write!(final_string, "\t\t\t\tgoto {}_call_return_stub_{};\n", format!("{}{}", "__", format_fn_name(&fn_name)), count).unwrap();
                             //write!(final_string, "\t\t\t\tbreak;\n");
                         }
                         write!(final_string, "\t\t}}\n").unwrap();
@@ -1834,11 +1847,11 @@ __attribute__((always_inline)) void {}(global uint   *stack_u32,
         for key in function_idx_label.keys() {
             write!(ret_str, "\t\tcase {}:\n", function_idx_label.get(key).unwrap()).unwrap();
             if debug_print_function_calls {
-                write!(ret_str, "\t\tprintf(\"{}\\n\");\n", format!("{}{}", "__", key.replace(".", ""))).unwrap();
+                write!(ret_str, "\t\tprintf(\"{}\\n\");\n", format!("{}{}", "__", format_fn_name(&key))).unwrap();
             }
             // strip illegal chars from function names
             write!(ret_str, "\t\t\t{}({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {});\n",
-                            format!("{}{}", "__", key.replace(".", "")),
+                            format!("{}{}", "__", format_fn_name(&key)),
                             "stack_u32",
                             "stack_u64",
                             "heap_u32",
@@ -2092,7 +2105,6 @@ r#"
         };
 
         // Generate the fastcall header
-
         // first generate the function declarations
         for fastfunc in fast_function_set.iter() {
             let func = self.func_map.get(&fastfunc.to_string()).unwrap();
@@ -2123,8 +2135,10 @@ r#"
                     format!("void")
                 }
             };
-            let calling_func_name = format!("{}{}", "__", fastfunc.to_string().replace(".", ""));
+            let calling_func_name = format!("{}{}", "__", format_fn_name(fastfunc));
+
             let func_declaration = format!("{} {}_fastcall({}global uint *, global uint *, global uint *, global uint *, uint, uint, uint, local uchar*);\n", func_ret_val, calling_func_name, parameter_list);
+
             write!(fastcall_header, "{}", func_declaration).unwrap();
         }
 
@@ -2262,7 +2276,8 @@ r#"
             println!("max size: {}, sum size: {}, part_idx: {}", &max_partition_reg_usage, &sum_partition_reg_usage, partition_idx);
 
             // If constraint exceeded, regenerate the partition with constraints
-            if sum_partition_reg_usage > 5000 && remaining_smem_alloc > 0 {
+            //if sum_partition_reg_usage > 5000 && remaining_smem_alloc > 0 {
+            if max_partition_reg_usage > 400 {
                 /*
                  * Compute size to reduce kernel by:
                  * 
@@ -2271,7 +2286,7 @@ r#"
                  *
                  */
                 
-                let reduction_size: &mut u32 = &mut match sum_partition_reg_usage {
+                let reduction_size: &mut u32 = &mut match max_partition_reg_usage {
                     val => (max_smem_reg_demo_space / local_work_group as u32),
                     _ => 0,
                 };
@@ -2431,11 +2446,11 @@ r#"
         for key in function_idx_label.keys() {
             write!(output, "\t\tcase {}:\n", function_idx_label.get(key).unwrap()).unwrap();
             if debug_print_function_calls {
-                write!(output, "\t\tprintf(\"{}\\n\");\n", format!("{}{}", "__", key.replace(".", ""))).unwrap();
+                write!(output, "\t\tprintf(\"{}\\n\");\n", format!("{}{}", "__", format_fn_name(&key))).unwrap();
             }
             // strip illegal chars from function names
             write!(output, "\t\t\t{}({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {});\n",
-                            format!("{}{}", "__", key.replace(".", "")),
+                            format!("{}{}", "__", format_fn_name(&key)),
                             "stack_u32",
                             "stack_u64",
                             "heap_u32",

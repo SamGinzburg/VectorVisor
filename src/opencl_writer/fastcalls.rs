@@ -14,6 +14,7 @@ use std::collections::{HashSet, HashMap};
  * - Fastcalls may not perform indirect calls
  * - Fastcalls can only call other fastcalls
  * - Fastcalls may not perform recursion
+ * - Fastcalls may not exceed register usage threshold
  * 
  * During the search functions may be in one of three states:
  * - Known to be possible to emit as a fastcall
@@ -48,7 +49,54 @@ pub enum FastcallPassStatus {
         (wast::FuncKind::Import(_), _, _) => {
             panic!("InlineImport functions not yet implemented (fastcall pass)");
         },
-        (wast::FuncKind::Inline{locals, expression}, _, _typeuse) => {
+        (wast::FuncKind::Inline{locals, expression}, _, typeuse) => {
+
+            let mut local_type_info: HashMap<String, wast::ValType> = HashMap::new();
+            let mut param_idx = 0;
+			match typeuse.clone().inline {
+				Some(params) => {
+					for parameter in params.params.to_vec() {
+						match parameter {
+							(Some(id), _, t) => {
+								local_type_info.insert(id.name().to_string(), t.clone());
+							},
+							// if there is no id, we have to name the parameter ourselves!
+							(None, _, t) => {
+								local_type_info.insert(format!("p{}", param_idx), t.clone());
+							},
+							_ => panic!("Unhandled parameter type")
+						}
+						param_idx += 1;
+					}
+	
+				},
+				None => {
+					()
+				},
+			}
+			for local in locals {
+				let local_id = match local.id {
+					Some(name) => name.name().to_string(),
+					None => format!("l{}", param_idx),
+				};
+				local_type_info.insert(local_id.clone(), local.ty.clone());
+                param_idx += 1;
+			}
+
+			let mut size = 0;
+			for (_, t) in local_type_info {
+				size += match t {
+					wast::ValType::I32 => 4,
+					wast::ValType::I64 => 8,
+					wast::ValType::F32 => 4,
+					wast::ValType::F64 => 8,
+					_ => panic!("Unimplemented type in fastcall pass"),
+				};
+			}
+
+            if size > 128 {
+                return FastcallPassStatus::fastcall_false(String::from("local/param size too large to convert to fastcall"))
+            }
 
             // Is this function the start function?
             if func_name == start_func {
@@ -81,8 +129,16 @@ pub enum FastcallPassStatus {
                             Some((wasi_api, Some(wasi_fn_name), _)) => {    
                                 match (wasi_api, WASI_SNAPSHOT_PREVIEW1.get(wasi_fn_name)) {
                                     (_, Some(true)) => {
-                                        // if we found a WASI hypercall...
-                                        return FastcallPassStatus::fastcall_false(String::from("performs hypercall"))
+                                        match wasi_fn_name {
+                                            &"proc_exit" => {
+                                                // proc_exit is special cased, since we don't
+                                                // actually need to return
+                                            },
+                                            _ => {
+                                                // if we found a WASI hypercall...
+                                                return FastcallPassStatus::fastcall_false(String::from("performs hypercall"))
+                                            },
+                                        }
                                     },
                                     _ => (),
                                 }

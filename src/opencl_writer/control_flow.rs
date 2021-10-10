@@ -6,6 +6,7 @@ use crate::opencl_writer::StackType;
 use crate::opencl_writer::function_unwind;
 use crate::opencl_writer::WasmHypercallId;
 use crate::opencl_writer::get_func_result;
+use crate::opencl_writer::format_fn_name;
 
 use std::collections::HashMap;
 use std::convert::TryInto;
@@ -77,9 +78,9 @@ pub fn emit_br(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx,
             if !from_br_table {
                 ret_str += &stack_ctx.save_context(true, false);
             }
-            ret_str += &format!("\t{}\n", format!("goto {}_{};", format!("{}{}", "__", fn_name.replace(".", "")), block_name));
+            ret_str += &format!("\t{}\n", format!("goto {}_{};", format!("{}{}", "__", format_fn_name(&fn_name)), block_name));
         } else {
-            ret_str += &format!("\t{}\n", format!("goto {}_{}_fastcall;", format!("{}{}", "__", fn_name.replace(".", "")), block_name));
+            ret_str += &format!("\t{}\n", format!("goto {}_{}_fastcall;", format!("{}{}", "__", format_fn_name(&fn_name)), block_name));
         }
 
     } else {
@@ -111,9 +112,9 @@ pub fn emit_br(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx,
             ret_str += &format!("\t{}\n",
                                 "return;");
         } else if !is_loop_tainted && !is_fastcall {
-            ret_str += &format!("\t{}\n", format!("goto {}_{}_loop;", format!("{}{}", "__", fn_name.replace(".", "")), block_name));
+            ret_str += &format!("\t{}\n", format!("goto {}_{}_loop;", format!("{}{}", "__", format_fn_name(&fn_name)), block_name));
         } else {
-            ret_str += &format!("\t{}\n", format!("goto {}_{}_fastcall;", format!("{}{}", "__", fn_name.replace(".", "")), block_name));
+            ret_str += &format!("\t{}\n", format!("goto {}_{}_fastcall;", format!("{}{}", "__", format_fn_name(&fn_name)), block_name));
         }
     }
     
@@ -139,14 +140,11 @@ pub fn emit_end<'a>(_writer: &opencl_writer::OpenCLCWriter<'a>, stack_ctx: &mut 
     let mut result = String::from("");
 
     // after a block ends, we need to unwind the stack!
-    let re = Regex::new(r"\d+").unwrap();
+    // let re = Regex::new(r"\d+").unwrap();
     // we can use the branch index to save to global state
 
-    let branch_idx: &str = re.captures(label).unwrap().get(0).map_or("", |m| m.as_str());
-    let branch_idx_u32 = branch_idx.parse::<u32>().unwrap();
-    if branch_idx_u32 > 1024 {
-        panic!("Only up to 1024 branches per function are supported");
-    }
+    //let branch_idx: &str = re.captures(label).unwrap().get(0).map_or("", |m| m.as_str());
+    //let branch_idx_u32 = branch_idx.parse::<u32>().unwrap();
 
     // This check has to happen before we pop the stack frame
     // We also have to pop the return value here, before the pop the whole stack frame!
@@ -164,9 +162,19 @@ pub fn emit_end<'a>(_writer: &opencl_writer::OpenCLCWriter<'a>, stack_ctx: &mut 
     };
 
     // before unwinding the stack frame, save the current locals for blocks & loops
-    if !is_fastcall && (block_type == 0 || block_type == 1) {
-        // we do this for tainted loops as well
+    if !is_fastcall && block_type == 0 {
         result += &stack_ctx.save_context(true, false);
+    } else if !is_fastcall && block_type == 1 {
+        // For loops that are tainted, we emit a normal save ctx, for optimized loops we want to
+        // save everything that would have been saved while nested
+        let is_tainted = stack_ctx.is_loop_tainted((loop_idx).try_into().unwrap());
+        if is_tainted {
+            result += &stack_ctx.save_context(true, false);
+        } else {
+            // If we are closing an optimized loop, we have to decrement the counter here
+            stack_ctx.close_opt_loop();
+            result += &stack_ctx.save_context(true, false);
+        }
     }
 
     // unwind the stack frame
@@ -200,14 +208,14 @@ pub fn emit_end<'a>(_writer: &opencl_writer::OpenCLCWriter<'a>, stack_ctx: &mut 
     // 2 -> if statement (insert closing bracket)
     if block_type == 0 {
         if !is_fastcall {
-            result += &format!("\n{}_{}:\n", format!("{}{}", "__", fn_name.replace(".", "")), label);
+            result += &format!("\n{}_{}:\n", format!("{}{}", "__", format_fn_name(&fn_name)), label);
         } else {
-            result += &format!("\n{}_{}_fastcall:\n", format!("{}{}", "__", fn_name.replace(".", "")), label);
+            result += &format!("\n{}_{}_fastcall:\n", format!("{}{}", "__", format_fn_name(&fn_name)), label);
         }
     } else if block_type == 1 {
-        result += &format!("\t/* END (loop: {}_{}) */\n", format!("{}{}", "__", fn_name.replace(".", "")), label);
+        result += &format!("\t/* END (loop: {}_{}) */\n", format!("{}{}", "__", format_fn_name(&fn_name)), label);
     } else if block_type == 2 {
-        result += &format!("\t{}_{}_end:\n", fn_name.replace(".", ""), label);
+        result += &format!("\t{}_{}_end:\n", format_fn_name(&fn_name), label);
     }
 
     if !is_fastcall && block_type == 1 {
@@ -260,7 +268,7 @@ pub fn emit_loop(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx
         stack_ctx.vstack_push_stack_info(stack_ctx.stack_frame_size().try_into().unwrap());
 
         // we convert our loop into a recursive call here - the loop header is treated as a function call re-entry point
-        result += &format!("{}_call_return_stub_{}:\n", format!("{}{}", "__", fn_name.replace(".", "")), *call_ret_idx);
+        result += &format!("{}_call_return_stub_{}:\n", format!("{}{}", "__", format_fn_name(&fn_name)), *call_ret_idx);
 
         // We have to issue a restore here because on subsequent invocations the state will have changed
         // only restore locals here
@@ -281,11 +289,15 @@ pub fn emit_loop(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx
 
         // emit just the loop header for GOTOs during fastcalls or for non-tainted loops
         if is_fastcall {
-            result += &format!("{}\n", format!("{}_{}_fastcall:", format!("{}{}", "__", fn_name.replace(".", "")), label));
+            result += &format!("{}\n", format!("{}_{}_fastcall:", format!("{}{}", "__", format_fn_name(&fn_name)), label));
         } else {
             // Emit optimized loops for non-tainted cases
+            // We want to load all the values we could need, so we disable liveness analysis here
             result += &stack_ctx.restore_context(true, false);
-            result += &format!("{}\n", format!("{}_{}_loop:", format!("{}{}", "__", fn_name.replace(".", "")), label));
+            result += &format!("{}\n", format!("{}_{}_loop:", format!("{}{}", "__", format_fn_name(&fn_name)), label));
+            // Set the vstack internal tracking state so we don't emit save/restore points inside
+            // of the optimized loop
+            stack_ctx.open_opt_loop();
         }
     }
 
@@ -319,10 +331,10 @@ pub fn emit_if(writer: &opencl_writer::OpenCLCWriter, label: String, fn_name: St
     result += &format!("\tif (!{}) {{\n", stack_ctx.vstack_pop(StackType::i32));
     // If jump to the else block (if we have one)
     if stack_ctx.if_has_else((*if_name_count).try_into().unwrap()) {
-        result += &format!("\t\tgoto {}_{}_else;\n", fn_name.replace(".", ""), label);
+        result += &format!("\t\tgoto {}_{}_else;\n", format_fn_name(&fn_name), label);
     } else {
         // if we don't have an else block, jump to end
-        result += &format!("\t\tgoto {}_{}_end;\n", fn_name.replace(".", ""), label);
+        result += &format!("\t\tgoto {}_{}_end;\n", format_fn_name(&fn_name), label);
     }
 
     result += &format!("\t}}\n");
@@ -387,9 +399,9 @@ pub fn emit_else(_writer: &opencl_writer::OpenCLCWriter, fn_name: String, contro
     match else_label {
         Some(label) => {
             // If we just ran the first code block of the If block, then jump to the end
-            result +=&format!("\tgoto {}_{}_end;\n", fn_name.replace(".", ""), label);
+            result +=&format!("\tgoto {}_{}_end;\n", format_fn_name(&fn_name), label);
             // Else, put a label here for the header of the If block to jump to the second code block
-            result +=&format!("\t{}_{}_else:\n", fn_name.replace(".", ""), label);
+            result +=&format!("\t{}_{}_else:\n", format_fn_name(&fn_name), label);
         },
         None => (),
     }
