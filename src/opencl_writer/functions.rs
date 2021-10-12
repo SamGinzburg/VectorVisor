@@ -129,7 +129,7 @@ pub fn get_func_result(writer: &opencl_writer::OpenCLCWriter, ty: &wast::TypeUse
 pub fn emit_fn_call(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, fn_name: String, idx: wast::Index, call_ret_map: &mut HashMap<&str, u32>, call_ret_idx: &mut u32, function_id_map: &HashMap<&str, u32>, is_indirect: bool, is_fastcall: bool, indirect_fastcall_param: String, indirect_fastcall_stack_params: Vec<String>, _debug: bool) -> String {
     let mut ret_str = String::from("");
     let id = &match idx {
-        wast::Index::Id(id) => id.name().to_string(),
+        wast::Index::Id(id) => format_fn_name(id.name()),
         wast::Index::Num(val, _) => format!("func_{}", val),
     };
 
@@ -689,7 +689,7 @@ pub fn emit_call_indirect(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut
      */ 
     for (_key, value) in table {
         let f_name = match **value {
-            wast::Index::Id(id) => id.name().to_string(),
+            wast::Index::Id(id) => format_fn_name(id.name()),
             wast::Index::Num(val, _) => format!("func_{}", val),
         };
         let func_type_signature = &writer.func_map.get(&f_name).unwrap().ty;
@@ -765,7 +765,7 @@ pub fn emit_call_indirect(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut
     // generate all of the cases in the table, all uninitialized values will trap to the default case
     for (key, value) in table {
         let f_name = match **value {
-            wast::Index::Id(id) => id.name().to_string(),
+            wast::Index::Id(id) => format_fn_name(id.name()),
             wast::Index::Num(val, _) => format!("func_{}", val),
         };
         let func_type_signature = &writer.func_map.get(&f_name).unwrap().ty;

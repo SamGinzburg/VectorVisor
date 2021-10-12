@@ -12,9 +12,9 @@ use std::convert::TryInto;
 use std::collections::HashSet;
 use std::collections::HashMap;
 use crate::opencl_writer::OpenCLCWriter;
+use crate::opencl_writer::format_fn_name;
 
-
-pub fn function_stats(writer_ctx: &OpenCLCWriter, curr_fn_name: String, func: &wast::Func, fastcalls: &HashSet<String>, func_map: &HashMap<String, &wast::Func>, indirect_call_mapping: &HashMap<u32, &wast::Index>) -> (u32, u32, u32, u32, u32, u32) {
+pub fn function_stats(writer_ctx: &OpenCLCWriter, curr_fn_name: String, func: &wast::Func, fastcalls: &HashSet<String>, func_map: &HashMap<String, wast::Func>, indirect_call_mapping: &HashMap<u32, &wast::Index>) -> (u32, u32, u32, u32, u32, u32) {
 
     let mut total_instr_count: u32;
     let mut total_func_count: u32 = 0;
@@ -35,7 +35,7 @@ pub fn function_stats(writer_ctx: &OpenCLCWriter, curr_fn_name: String, func: &w
                 match instr {
                     wast::Instruction::Call(idx) => {
                         let id: &str = &match idx {
-                            wast::Index::Id(id) => id.name().to_string(),
+                            wast::Index::Id(id) => format_fn_name(id.name()),
                             wast::Index::Num(val, _) => format!("func_{}", val),
                         };
 
@@ -74,7 +74,7 @@ pub fn function_stats(writer_ctx: &OpenCLCWriter, curr_fn_name: String, func: &w
                                 // We only need to call functions with matching type signatures, the rest would trap
                                 for func_id in indirect_call_mapping.values() {
                                     let f_name = match func_id {
-                                        wast::Index::Id(id) => id.name().to_string(),
+                                        wast::Index::Id(id) => format_fn_name(id.name()),
                                         wast::Index::Num(val, _) => format!("func_{}", val),
                                     };
                                     let func_type_signature = &writer_ctx.func_map.get(&f_name).unwrap().ty;

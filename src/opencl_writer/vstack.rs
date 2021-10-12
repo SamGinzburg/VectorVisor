@@ -25,6 +25,7 @@ use std::collections::{HashMap, HashSet};
 use std::cmp::Ord;
 use core::ops::Range;
 use std::convert::TryInto;
+use crate::opencl_writer::format_fn_name;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum StackType {
@@ -928,7 +929,7 @@ impl<'a> StackCtx {
                 },
                 wast::Instruction::Call(idx) => {
                     let id = match idx {
-                        wast::Index::Id(id) => id.name().to_string(),
+                        wast::Index::Id(id) => format_fn_name(id.name()),
                         wast::Index::Num(val, _) => format!("func_{}", val),
                     };
 
@@ -1002,7 +1003,6 @@ impl<'a> StackCtx {
                         match writer_ctx.func_map.get(&id) {
                             Some(_) => {
                                 let func_type_signature = &writer_ctx.func_map.get(&id).unwrap().ty;
-
                                 match &func_type_signature.inline {
                                     // if we can find the type signature
                                     Some(res) => {
@@ -1082,7 +1082,7 @@ impl<'a> StackCtx {
                             },
                             // we have an import that isn't a system call...
                             None => {
-                                panic!("Unknown import (vstack)");
+                                panic!("Unknown import (vstack) id: {:?}", id);
                             }
                         }
                     }
@@ -1113,7 +1113,7 @@ impl<'a> StackCtx {
                             // We only need to call functions with matching type signatures, the rest would trap
                             for func_id in indirect_call_mapping.values() {
                                 let f_name = match func_id {
-                                    wast::Index::Id(id) => id.name().to_string(),
+                                    wast::Index::Id(id) => format_fn_name(id.name()),
                                     wast::Index::Num(val, _) => format!("func_{}", val),
                                 };
                                 let func_type_signature = &writer_ctx.func_map.get(&f_name).unwrap().ty;

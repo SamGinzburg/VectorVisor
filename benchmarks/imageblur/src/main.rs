@@ -17,6 +17,8 @@ use image::load_from_memory_with_format;
 use image::ImageFormat;
 use image::ImageOutputFormat;
 use image::ColorType;
+use image::ImageBuffer;
+use image::Rgba;
 
 #[derive(Debug, Deserialize)]
 struct FuncInput<'a> {
@@ -29,11 +31,16 @@ struct FuncResponse {
     image: String
 }
 
-fn image_blur(event: FuncInput) -> FuncResponse {
+#[inline(never)]
+fn blur_inline(event: FuncInput) -> ImageBuffer<Rgba<u8>, Vec<u8>> {
     let mut image = decode(event.image.as_bytes()).unwrap();
     let mut decoded_image = load_from_memory_with_format(&image, ImageFormat::Jpeg).unwrap();
+    return imageops::blur(&decoded_image, 4.0);
+}
 
-    let mut blurred = imageops::blur(&mut decoded_image, 4.0);
+#[inline(never)]
+fn image_blur(event: FuncInput) -> FuncResponse {
+    let mut blurred = blur_inline(event);
 
     let mut output_buf = vec![];
     let mut jpeg_encoder = JpegEncoder::new(&mut output_buf);

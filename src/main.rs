@@ -20,6 +20,7 @@ use tokio::sync::mpsc;
 use wast::parser::{ParseBuffer};
 use rayon::prelude::*;
 use clap::{Arg, App, value_t};
+use opencl_writer::bpatch;
 use opencl_runner::InputProgram;
 use opencl_runner::SeralizedProgram;
 use opencl_runner::PartitionedSeralizedProgram;
@@ -360,9 +361,10 @@ fn main() {
         };
 
         let pb = ParseBuffer::new(&filedata).unwrap();
+        let pb_bpatch = ParseBuffer::new(&bpatch::PATCH_FILE).unwrap();
         let pb_debug = ParseBuffer::new(&filedata).unwrap();
-        let mut ast = opencl_writer::OpenCLCWriter::new(&pb, pinput);
-        let mut ast_debug = opencl_writer::OpenCLCWriter::new(&pb_debug, pinput);
+        let mut ast = opencl_writer::OpenCLCWriter::new(&pb, &pb_bpatch, pinput);
+        let mut ast_debug = opencl_writer::OpenCLCWriter::new(&pb_debug, &pb_bpatch, pinput);
         let _result = ast.parse_file().unwrap();
         let _result_debug = ast_debug.parse_file().unwrap();
         let (compiled_kernel,
@@ -421,9 +423,10 @@ fn main() {
                     Err(e) => panic_any(e),
                 };
                 let pb = ParseBuffer::new(&filedata).unwrap();
+                let pb_bpatch = ParseBuffer::new(&bpatch::PATCH_FILE).unwrap();
                 let pb_debug = ParseBuffer::new(&filedata).unwrap();
-                let mut ast = opencl_writer::OpenCLCWriter::new(&pb, pinput);
-                let mut ast_debug = opencl_writer::OpenCLCWriter::new(&pb_debug, pinput);
+                let mut ast = opencl_writer::OpenCLCWriter::new(&pb, &pb_bpatch, pinput);
+                let mut ast_debug = opencl_writer::OpenCLCWriter::new(&pb_debug, &pb_bpatch, pinput);
                 let _result = ast.parse_file().unwrap();
                 let _result_debug = ast_debug.parse_file().unwrap();
             
@@ -464,9 +467,10 @@ fn main() {
             ("wasm", false) => {
                 let filedata_text = wasmprinter::print_file(file_path.clone()).unwrap();
                 let pb = ParseBuffer::new(&filedata_text).unwrap();
+                let pb_bpatch = ParseBuffer::new(&bpatch::PATCH_FILE).unwrap();
                 let pb_debug = ParseBuffer::new(&filedata_text).unwrap();
-                let mut ast = opencl_writer::OpenCLCWriter::new(&pb, pinput);
-                let mut ast_debug = opencl_writer::OpenCLCWriter::new(&pb_debug, pinput);
+                let mut ast = opencl_writer::OpenCLCWriter::new(&pb, &pb_bpatch, pinput);
+                let mut ast_debug = opencl_writer::OpenCLCWriter::new(&pb_debug, &pb_bpatch, pinput);
                 let _result = ast.parse_file().unwrap();
                 let _result_debug = ast_debug.parse_file().unwrap();
             
@@ -510,9 +514,10 @@ fn main() {
                     Err(e) => panic_any(e),
                 };
                 let pb = ParseBuffer::new(&filedata).unwrap();
+                let pb_bpatch = ParseBuffer::new(&bpatch::PATCH_FILE).unwrap();
                 let pb_debug = ParseBuffer::new(&filedata).unwrap();
-                let mut ast = opencl_writer::OpenCLCWriter::new(&pb, pinput);
-                let mut ast_debug = opencl_writer::OpenCLCWriter::new(&pb_debug, pinput);
+                let mut ast = opencl_writer::OpenCLCWriter::new(&pb, &pb_bpatch, pinput);
+                let mut ast_debug = opencl_writer::OpenCLCWriter::new(&pb_debug, &pb_bpatch, pinput);
                 let _result = ast.parse_file().unwrap();
                 let _result_debug = ast_debug.parse_file().unwrap();
             
@@ -553,9 +558,10 @@ fn main() {
             ("wasm", true) => {
                 let filedata_text = wasmprinter::print_file(file_path.clone()).unwrap();
                 let pb = ParseBuffer::new(&filedata_text).unwrap();
+                let pb_bpatch = ParseBuffer::new(&bpatch::PATCH_FILE).unwrap();
                 let pb_debug = ParseBuffer::new(&filedata_text).unwrap();
-                let mut ast = opencl_writer::OpenCLCWriter::new(&pb, pinput);
-                let mut ast_debug = opencl_writer::OpenCLCWriter::new(&pb_debug, pinput);
+                let mut ast = opencl_writer::OpenCLCWriter::new(&pb, &pb_bpatch, pinput);
+                let mut ast_debug = opencl_writer::OpenCLCWriter::new(&pb_debug, &pb_bpatch, pinput);
                 let _result = ast.parse_file().unwrap();
                 let _result_debug = ast_debug.parse_file().unwrap();
 

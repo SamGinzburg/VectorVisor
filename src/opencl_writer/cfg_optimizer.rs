@@ -4,18 +4,18 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::iter::FromIterator;
 use std::convert::TryInto;
+use crate::opencl_writer::format_fn_name;
 
 /*
  * Get the names of:
  * - Called functions inside loops, Called functions
  */
-pub fn get_called_funcs(writer_ctx: &OpenCLCWriter, indirect_call_mapping: &HashMap<u32, &wast::Index>, func: &wast::Func, fastcalls: &HashSet<String>, func_map: &HashMap<String, &wast::Func>, imports_map: &HashMap<String, (&str, Option<&str>, wast::ItemSig)>, visited_funcs: &mut HashSet<String>) -> (Vec<String>, Vec<String>) {
+pub fn get_called_funcs(writer_ctx: &OpenCLCWriter, indirect_call_mapping: &Vec<String>, func: &wast::Func, fastcalls: &HashSet<String>, func_map: &HashMap<String, wast::Func>, imports_map: &HashMap<String, (&str, Option<&str>, wast::ItemSig)>, visited_funcs: &mut HashSet<String>) -> (Vec<String>, Vec<String>) {
     let mut fn_call_in_loop: Vec<String> = vec![];
     let mut fn_call: Vec<String> = vec![];
 
     let mut control_stack: Vec<bool> = vec![];
     let mut nested_loop_count = 0;
-
     match (&func.kind, &func.id, &func.ty) {
         (wast::FuncKind::Import(_), _, _) => {
             // In this case, we have an InlineImport of the form:
@@ -27,7 +27,7 @@ pub fn get_called_funcs(writer_ctx: &OpenCLCWriter, indirect_call_mapping: &Hash
                 match instr {
                     wast::Instruction::Call(idx) => {
                         let id: &str = &match idx {
-                            wast::Index::Id(id) => id.name().to_string(),
+                            wast::Index::Id(id) => format_fn_name(id.name()),
                             wast::Index::Num(val, _) => format!("func_{}", val),
                         };
 
@@ -85,12 +85,8 @@ pub fn get_called_funcs(writer_ctx: &OpenCLCWriter, indirect_call_mapping: &Hash
                                     _ => panic!("Indirect call cannot have a type of something other than a func"),
                                 };
 
-                                for func_id in indirect_call_mapping.values() {
-                                    let f_name = match func_id {
-                                        wast::Index::Id(id) => id.name().to_string(),
-                                        wast::Index::Num(val, _) => format!("func_{}", val),
-                                    };
-                                    let func_type_signature = &writer_ctx.func_map.get(&f_name).unwrap().ty;
+                                for f_name in indirect_call_mapping {
+                                    let func_type_signature = &writer_ctx.func_map.get(&f_name as &str).unwrap().ty;
 
                                     let func_type_index = match func_type_signature.index {
                                         Some(wast::Index::Id(id)) => id.name().to_string(),
@@ -103,7 +99,7 @@ pub fn get_called_funcs(writer_ctx: &OpenCLCWriter, indirect_call_mapping: &Hash
                                     // of noise.
                                     // We explicitly allow non-fastcalls to be targeted here
                                     if func_type_index == type_index {
-                                        if !imports_map.contains_key(&f_name) {
+                                        if !imports_map.contains_key(&f_name as &str) {
                                             if nested_loop_count > 0 {
                                                 fn_call_in_loop.push(f_name.to_string());
                                             } else {
@@ -141,11 +137,21 @@ pub fn get_called_funcs(writer_ctx: &OpenCLCWriter, indirect_call_mapping: &Hash
  * each other into the same OpenCL kernel.
  */
 
-pub fn form_partitions(writer_ctx: &OpenCLCWriter, num_funcs_in_partition: u32, instr_count_limit: u32, func_copy_limit: u32, func_names: Vec<String>, fastcalls: &HashSet<String>, func_map: &HashMap<String, &wast::Func>, imports_map: &HashMap<String, (&str, Option<&str>, wast::ItemSig)>, kernel_compile_stats: &mut HashMap<u32, (u32, u32, u32, u32, u32, u32)>, indirect_call_mapping: &HashMap<u32, &wast::Index>) -> Vec<(u32, HashSet<String>)> {
+pub fn form_partitions(writer_ctx: &OpenCLCWriter, num_funcs_in_partition: u32, instr_count_limit: u32, func_copy_limit: u32, func_names: Vec<String>, fastcalls: &HashSet<String>, func_map: &HashMap<String, wast::Func>, imports_map: &HashMap<String, (&str, Option<&str>, wast::ItemSig)>, kernel_compile_stats: &mut HashMap<u32, (u32, u32, u32, u32, u32, u32)>, indirect_call_mapping: &HashMap<u32, &wast::Index>) -> Vec<(u32, HashSet<String>)> {
 
     let mut func_set = HashSet::<String>::from_iter(func_names.clone());
     let mut partitions: Vec<(u32, HashSet<String>)> = vec![];
     let mut partition_idx = 0;
+
+    let mut indirect_call_mapping_formatted: Vec<String> = vec![];
+    for func_id in indirect_call_mapping.values() {
+        let f_name = match func_id {
+            wast::Index::Id(id) => format_fn_name(id.name()),
+            wast::Index::Num(val, _) => format!("func_{}", val),
+        };
+        indirect_call_mapping_formatted.push(f_name);
+    };
+
     /*
      * 1) Create a set of all functions in the program (global BTreeSet G)
      * 2) Pop a function (F) out of the global set of functions
@@ -174,7 +180,7 @@ pub fn form_partitions(writer_ctx: &OpenCLCWriter, num_funcs_in_partition: u32, 
 
         current_partition.insert(String::from(f_name.clone()));
 
-        let (loop_called_fns, called_fns) = get_called_funcs(writer_ctx, indirect_call_mapping, func_map.get(&f_name.clone()).unwrap(), fastcalls, func_map, imports_map, &mut HashSet::new());
+        let (loop_called_fns, called_fns) = get_called_funcs(writer_ctx, &indirect_call_mapping_formatted, func_map.get(&f_name.clone()).unwrap(), fastcalls, func_map, imports_map, &mut HashSet::new());
 
         let mut current_partition_count = 0;
         let mut current_instruction_count = 0;

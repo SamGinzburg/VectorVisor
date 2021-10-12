@@ -1,6 +1,6 @@
 use crate::opencl_writer;
 use crate::opencl_writer::WASI_SNAPSHOT_PREVIEW1;
-
+use crate::opencl_writer::format_fn_name;
 use std::collections::{HashSet, HashMap};
 
 /*
@@ -114,7 +114,7 @@ pub enum FastcallPassStatus {
                 match instruction {
                     wast::Instruction::Call(idx) => {
                         let id = match idx {
-                            wast::Index::Id(id) => id.name().to_string(),
+                            wast::Index::Id(id) => format_fn_name(id.name()),
                             wast::Index::Num(val, _) => format!("func_{}", val),
                             _ => panic!("Unable to get Id for function call: {:?}", idx),
                         };
