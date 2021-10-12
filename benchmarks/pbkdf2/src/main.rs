@@ -18,6 +18,7 @@ lazy_static! {
     static ref PBKDF2_PARAMS: pbkdf2::Params = Params { rounds: 100100, output_length: 32 }; 
 }
 
+#[inline(never)]
 fn hash_input_password(event: Value) -> Value {
     let response = match event.get("password") {
         Some(Value::String(password)) => {

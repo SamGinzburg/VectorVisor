@@ -14,6 +14,8 @@ is_pretty = "true"
 fastreply = "true"
 CFLAGS="-cl-nv-verbose"
 OPT_LEVEL="-O3"
+WASM_SNIP_ARGS="--snip-rust-panicking-code"
+WASM_SNIP_CUSTOM="rust_oom __rg_oom"
 
 ec2 = boto3.resource('ec2')
 ec2_client = boto3.client('ec2')
@@ -85,6 +87,7 @@ userdata_ubuntu = """#cloud-config
      - cd binaryen/
      - sudo cmake .
      - sudo make install
+     - cargo install wasm-snip
      - cd /tmp/wasm2opencl/
      - sudo ~/.cargo/bin/cargo build --release
      - cd benchmarks/
@@ -94,28 +97,34 @@ userdata_ubuntu = """#cloud-config
      - cd ..
      - cd json-compression/
      - sudo ~/.cargo/bin/cargo build --release
+     - ~/.cargo/bin/wasm-snip target/wasm32-wasi/release/json-compression.wasm {snip_args} -o target/wasm32-wasi/release/json-compression.wasm -p {snip_custom}
      - wasm-opt target/wasm32-wasi/release/json-compression.wasm {opt} -c -o target/wasm32-wasi/release/json-compression-opt.wasm
      - cd ..
      - cd average/
      - sudo ~/.cargo/bin/cargo build --release
+     - ~/.cargo/bin/wasm-snip target/wasm32-wasi/release/average.wasm {snip_args} -o target/wasm32-wasi/release/average.wasm -p {snip_custom}
      - wasm-opt target/wasm32-wasi/release/average.wasm {opt} -c -o target/wasm32-wasi/release/average-opt.wasm
      - cd ..
      - cd pbkdf2/
      - sudo ~/.cargo/bin/cargo build --release
+     - ~/.cargo/bin/wasm-snip target/wasm32-wasi/release/pbkdf2.wasm {snip_args} -o target/wasm32-wasi/release/pbkdf2.wasm -p {snip_custom}
      - wasm-opt target/wasm32-wasi/release/pbkdf2.wasm {opt} -c -o target/wasm32-wasi/release/pbkdf2-opt.wasm
      - cd ..
      - cd nlp-count-vectorizer/
      - sudo ~/.cargo/bin/cargo build --release
+     - ~/.cargo/bin/wasm-snip target/wasm32-wasi/release/nlp-count-vectorizer.wasm {snip_args} -o target/wasm32-wasi/release/nlp-count-vectorizer.wasm -p {snip_custom}
      - wasm-opt target/wasm32-wasi/release/nlp-count-vectorizer.wasm {opt} -c -o target/wasm32-wasi/release/nlp-count-vectorizer-opt.wasm
      - cd ..
      - cd imageblur/
      - sudo ~/.cargo/bin/cargo build --release
+     - ~/.cargo/bin/wasm-snip target/wasm32-wasi/release/imageblur.wasm {snip_args} --snip-rust-fmt-code -o target/wasm32-wasi/release/imageblur.wasm -p {snip_custom}
      - wasm-opt target/wasm32-wasi/release/imageblur.wasm {opt} -c -o target/wasm32-wasi/release/imageblur-opt.wasm
      - cd ..
      - cd imagehash/
      - sudo ~/.cargo/bin/cargo build --release
+     - ~/.cargo/bin/wasm-snip target/wasm32-wasi/release/imagehash.wasm {snip_args} --snip-rust-fmt-code -o target/wasm32-wasi/release/imagehash.wasm -p {snip_custom}
      - wasm-opt target/wasm32-wasi/release/imagehash.wasm {opt} -c -o target/wasm32-wasi/release/imagehash-opt.wasm
-""".format(opt=OPT_LEVEL)
+""".format(opt=OPT_LEVEL, snip_args=WASM_SNIP_ARGS, snip_custom=WASM_SNIP_CUSTOM)
 
 
 def run_command(command, command_name, instance_id):

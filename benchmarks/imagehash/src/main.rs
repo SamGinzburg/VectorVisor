@@ -29,7 +29,8 @@ struct FuncResponse {
     hash: Vec<u8> 
 }
 
-fn image_blur(event: FuncInput) -> FuncResponse {
+#[inline(never)]
+fn image_hash(event: FuncInput) -> FuncResponse {
     let mut image = decode(event.image.as_bytes()).unwrap();
     let mut decoded_image = load_from_memory_with_format(&image, ImageFormat::Jpeg).unwrap();
     let hasher = HasherConfig::new().to_hasher();
@@ -39,6 +40,6 @@ fn image_blur(event: FuncInput) -> FuncResponse {
 }
 
 fn main() {
-    let handler = WasmHandler::new(&image_blur);
+    let handler = WasmHandler::new(&image_hash);
     handler.run_with_format(1024*512, MsgPack);
 }
