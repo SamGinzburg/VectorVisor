@@ -879,9 +879,9 @@ while True:
 ssm_client = boto3.client('ssm')
 
 # run pbkdf2 bench
-#run_pbkdf2_bench(True)
+run_pbkdf2_bench(True)
 
-#cleanup()
+cleanup()
 
 # run lz4 bench
 #run_lz4_bench()
@@ -899,9 +899,9 @@ ssm_client = boto3.client('ssm')
 #cleanup()
 
 # run image blue bench
-#run_image_blur_bench()
+run_image_blur_bench()
 
-#cleanup()
+cleanup()
 
 # run image hash bench
 run_image_hash_bench()

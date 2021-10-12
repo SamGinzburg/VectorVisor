@@ -22,6 +22,7 @@ struct FuncResponse {
     encoded_resp: String
 }
 
+#[inline(never)]
 fn compress_json(event: FuncInput) -> FuncResponse {
     let mut decoded_str = decode(event.encoded_str.as_bytes()).unwrap();
     let mut encoder = Encoder::new(BufWriter::new(Vec::new()));
