@@ -14,7 +14,7 @@ use std::collections::HashMap;
 use crate::opencl_writer::OpenCLCWriter;
 use crate::opencl_writer::format_fn_name;
 
-pub fn function_stats(writer_ctx: &OpenCLCWriter, curr_fn_name: String, func: &wast::Func, fastcalls: &HashSet<String>, func_map: &HashMap<String, wast::Func>, indirect_call_mapping: &HashMap<u32, &wast::Index>) -> (u32, u32, u32, u32, u32, u32) {
+pub fn function_stats(writer_ctx: &OpenCLCWriter, curr_fn_name: String, func: &wast::Func, fastcalls: &HashSet<String>, func_map: &HashMap<String, wast::Func>, indirect_call_mapping: &HashMap<u32, &wast::Index>) -> (u32, u32, u32, u32, u32, u32, u32) {
 
     let mut total_instr_count: u32;
     let mut total_func_count: u32 = 0;
@@ -22,6 +22,7 @@ pub fn function_stats(writer_ctx: &OpenCLCWriter, curr_fn_name: String, func: &w
     let mut total_indirect_count: u32 = 0;
     let mut total_block_count: u32 = 0;
     let mut total_loop_count: u32 = 0;
+    let mut total_local_size: u32 = 0;
 
     match (&func.kind, &func.id, &func.ty) {
         (wast::FuncKind::Import(_), _, _) => {
@@ -30,6 +31,17 @@ pub fn function_stats(writer_ctx: &OpenCLCWriter, curr_fn_name: String, func: &w
             panic!("InlineImport functions not yet implemented");
         },
         (wast::FuncKind::Inline{locals, expression}, _, _) => {
+
+            for local in locals {
+                    total_local_size += match local.ty {
+                        wast::ValType::I32 => 4,
+                        wast::ValType::F32 => 4,
+                        wast::ValType::I64 => 8,
+                        wast::ValType::F64 => 8,
+                        _ => panic!("Unknown stack type (compile_stats)"),
+                    };
+            }
+
             total_instr_count = expression.instrs.len().try_into().unwrap();
             for instr in expression.instrs.iter() {
                 match instr {
@@ -44,13 +56,14 @@ pub fn function_stats(writer_ctx: &OpenCLCWriter, curr_fn_name: String, func: &w
                             // get the func
                             let func = func_map.get(id).unwrap();
                             // Look up the compile stats for the fastcall and add it to our own
-                            let (nested_total_instr_count, nested_total_func_count, nested_total_fastcall_count, nested_total_indirect_count, nested_total_block_count, nested_total_loop_count) = function_stats(writer_ctx, curr_fn_name.clone(), func, fastcalls, func_map, indirect_call_mapping);
+                            let (nested_total_instr_count, nested_total_func_count, nested_total_fastcall_count, nested_total_indirect_count, nested_total_block_count, nested_total_loop_count, nested_total_local_size) = function_stats(writer_ctx, curr_fn_name.clone(), func, fastcalls, func_map, indirect_call_mapping);
                             total_instr_count += nested_total_instr_count;
                             total_func_count += nested_total_func_count;
                             total_indirect_count += nested_total_indirect_count;
                             total_loop_count += nested_total_loop_count;
                             total_block_count += nested_total_block_count;
                             total_fastcall_count += nested_total_fastcall_count;
+                            total_local_size += nested_total_local_size;
                         } else {
                             total_func_count += 1;
                         }
@@ -120,5 +133,5 @@ pub fn function_stats(writer_ctx: &OpenCLCWriter, curr_fn_name: String, func: &w
         _ => panic!("Unknown function type in function_stats"),
     };
 
-    (total_instr_count, total_func_count, total_fastcall_count, total_indirect_count, total_block_count, total_loop_count)
+    (total_instr_count, total_func_count, total_fastcall_count, total_indirect_count, total_block_count, total_loop_count, total_local_size)
 }

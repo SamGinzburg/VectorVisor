@@ -19,12 +19,16 @@ lazy_static! {
 }
 
 #[inline(never)]
+fn perform_hash(password: &[u8], salt: Salt) -> String {
+    Pbkdf2.hash_password(password, None, None, *PBKDF2_PARAMS, salt).unwrap().to_string()
+}
+
+#[inline(never)]
 fn hash_input_password(event: Value) -> Value {
     let response = match event.get("password") {
         Some(Value::String(password)) => {
             let salt = Salt::new(&*SALT.as_ref()).unwrap();
-            let password_hash = Pbkdf2.hash_password(password.as_bytes(), None, None, *PBKDF2_PARAMS, salt).unwrap().to_string();
-
+            let password_hash = perform_hash(password.as_bytes(), salt);
             json!(password_hash)
         },
         _ => {

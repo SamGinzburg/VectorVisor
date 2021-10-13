@@ -16,6 +16,7 @@ CFLAGS="-cl-nv-verbose"
 OPT_LEVEL="-O1 -g"
 WASM_SNIP_ARGS="--snip-rust-panicking-code"
 WASM_SNIP_CUSTOM="rust_oom __rg_oom"
+maxdemospace = 3072
 
 ec2 = boto3.resource('ec2')
 ec2_client = boto3.client('ec2')
@@ -83,45 +84,46 @@ userdata_ubuntu = """#cloud-config
      - . $HOME/.cargo/env
      - sudo ~/.cargo/bin/rustup target add wasm32-wasi
      - git clone https://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:x-oauth-basic@github.com/SamGinzburg/wasm2opencl.git
-     - wget https://github.com/WebAssembly/binaryen/releases/download/version_101/binaryen-version_101-x86_64-linux.tar.gz
-     - tar -xzvf binaryen-version_101-x86_64-linux.tar.gz
+     - wget https://github.com/WebAssembly/binaryen/releases/download/version_100/binaryen-version_100-x86_64-linux.tar.gz
+     - tar -xzvf binaryen-version_100-x86_64-linux.tar.gz
      - cargo install wasm-snip
      - cd /tmp/wasm2opencl/
      - sudo ~/.cargo/bin/cargo build --release
      - cd benchmarks/
      - cd json-compression-lz4/
-     - sudo ~/.cargo/bin/cargo build --release
-     - /tmp/binaryen-version_101/bin/wasm-opt target/wasm32-wasi/release/json-compression.wasm {opt} -c -o target/wasm32-wasi/release/json-compression-opt.wasm
+     - ~/.cargo/bin/cargo build --release
+     - ~/.cargo/bin/wasm-snip target/wasm32-wasi/release/json-compression.wasm {snip_args} -o target/wasm32-wasi/release/json-compression.wasm -p {snip_custom}
+     - /tmp/binaryen-version_100/bin/wasm-opt target/wasm32-wasi/release/json-compression.wasm {opt} -c -o target/wasm32-wasi/release/json-compression-opt.wasm
      - cd ..
      - cd json-compression/
-     - sudo ~/.cargo/bin/cargo build --release
+     - ~/.cargo/bin/cargo build --release
      - ~/.cargo/bin/wasm-snip target/wasm32-wasi/release/json-compression.wasm {snip_args} -o target/wasm32-wasi/release/json-compression.wasm -p {snip_custom}
-     - /tmp/binaryen-version_101/bin/wasm-opt target/wasm32-wasi/release/json-compression.wasm {opt} -c -o target/wasm32-wasi/release/json-compression-opt.wasm
+     - /tmp/binaryen-version_100/bin/wasm-opt target/wasm32-wasi/release/json-compression.wasm {opt} -c -o target/wasm32-wasi/release/json-compression-opt.wasm
      - cd ..
      - cd average/
-     - sudo ~/.cargo/bin/cargo build --release
+     - ~/.cargo/bin/cargo build --release
      - ~/.cargo/bin/wasm-snip target/wasm32-wasi/release/average.wasm {snip_args} -o target/wasm32-wasi/release/average.wasm -p {snip_custom}
-     - /tmp/binaryen-version_101/bin/wasm-opt target/wasm32-wasi/release/average.wasm {opt} -c -o target/wasm32-wasi/release/average-opt.wasm
+     - /tmp/binaryen-version_100/bin/wasm-opt target/wasm32-wasi/release/average.wasm {opt} -c -o target/wasm32-wasi/release/average-opt.wasm
      - cd ..
      - cd pbkdf2/
-     - sudo ~/.cargo/bin/cargo build --release
+     - ~/.cargo/bin/cargo build --release
      - ~/.cargo/bin/wasm-snip target/wasm32-wasi/release/pbkdf2.wasm {snip_args} -o target/wasm32-wasi/release/pbkdf2.wasm -p {snip_custom}
-     - /tmp/binaryen-version_101/bin/wasm-opt target/wasm32-wasi/release/pbkdf2.wasm {opt} -c -o target/wasm32-wasi/release/pbkdf2-opt.wasm
+     - /tmp/binaryen-version_100/bin/wasm-opt target/wasm32-wasi/release/pbkdf2.wasm {opt} -c -o target/wasm32-wasi/release/pbkdf2-opt.wasm
      - cd ..
      - cd nlp-count-vectorizer/
      - sudo ~/.cargo/bin/cargo build --release
      - ~/.cargo/bin/wasm-snip target/wasm32-wasi/release/nlp-count-vectorizer.wasm {snip_args} -o target/wasm32-wasi/release/nlp-count-vectorizer.wasm -p {snip_custom}
-     - /tmp/binaryen-version_101/bin/wasm-opt target/wasm32-wasi/release/nlp-count-vectorizer.wasm {opt} -c -o target/wasm32-wasi/release/nlp-count-vectorizer-opt.wasm
+     - /tmp/binaryen-version_100/bin/wasm-opt target/wasm32-wasi/release/nlp-count-vectorizer.wasm {opt} -c -o target/wasm32-wasi/release/nlp-count-vectorizer-opt.wasm
      - cd ..
      - cd imageblur/
      - sudo ~/.cargo/bin/cargo build --release
      - ~/.cargo/bin/wasm-snip target/wasm32-wasi/release/imageblur.wasm {snip_args} --snip-rust-fmt-code -o target/wasm32-wasi/release/imageblur.wasm -p {snip_custom}
-     - /tmp/binaryen-version_101/bin/wasm-opt target/wasm32-wasi/release/imageblur.wasm {opt} -c -o target/wasm32-wasi/release/imageblur-opt.wasm
+     - /tmp/binaryen-version_100/bin/wasm-opt target/wasm32-wasi/release/imageblur.wasm {opt} -c -o target/wasm32-wasi/release/imageblur-opt.wasm
      - cd ..
      - cd imagehash/
      - sudo ~/.cargo/bin/cargo build --release
      - ~/.cargo/bin/wasm-snip target/wasm32-wasi/release/imagehash.wasm {snip_args} --snip-rust-fmt-code -o target/wasm32-wasi/release/imagehash.wasm -p {snip_custom}
-     - /tmp/binaryen-version_101/bin/wasm-opt target/wasm32-wasi/release/imagehash.wasm {opt} -c -o target/wasm32-wasi/release/imagehash-opt.wasm
+     - /tmp/binaryen-version_100/bin/wasm-opt target/wasm32-wasi/release/imagehash.wasm {opt} -c -o target/wasm32-wasi/release/imagehash-opt.wasm
 """.format(opt=OPT_LEVEL, snip_args=WASM_SNIP_ARGS, snip_custom=WASM_SNIP_CUSTOM)
 
 
@@ -194,10 +196,9 @@ def run_pbkdf2_bench(run_x86):
     sleep 10
     x=$(cloud-init status)
     done
-    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/pbkdf2/pbkdf2-opt-prebuilt.wasm --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=131072 --partition=true --partitions=50 --maxloc=1000000 --serverless=true --vmcount=4096 --vmgroups=1 --maxdup=3 --lgroup={lgroup} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} &> /tmp/pbkdf2.log &
 
-    #/tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/pbkdf2/target/wasm32-wasi/release/pbkdf2-opt.wasm --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=131072 --partition=true --partitions=50 --maxloc=1000000 --serverless=true --vmcount=4096 --vmgroups=1 --maxdup=3 --lgroup={lgroup} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} &> /tmp/pbkdf2.log &
-    """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply)
+    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/pbkdf2/target/wasm32-wasi/release/pbkdf2-opt.wasm --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=131072 --partition=true --partitions=50 --maxloc=1000000 --serverless=true --vmcount=4096 --vmgroups=1 --maxdup=3 --lgroup={lgroup} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} &> /tmp/pbkdf2.log &
+    """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace)
 
     run_command(run_pbkdf2_command, "pbkdf2_gpu", gpu_instance[0].id)
 
@@ -296,8 +297,8 @@ def run_lz4_bench():
     x=$(cloud-init status)
     done
 
-    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/json-compression/target/wasm32-wasi/release/json-compression-opt.wasm --ip=0.0.0.0 --heap=4194304 --stack=131072 --hcallsize=524288 --partition=true --serverless=true --vmcount=3072 --vmgroups=1 --maxdup=3 --partitions=50 --lgroup={lgroup} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} &> /tmp/json-compression.log &
-    """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply)
+    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/json-compression/target/wasm32-wasi/release/json-compression-opt.wasm --ip=0.0.0.0 --heap=4194304 --stack=131072 --hcallsize=524288 --partition=true --serverless=true --vmcount=3072 --vmgroups=1 --maxdup=3 --partitions=50 --lgroup={lgroup} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} &> /tmp/json-compression.log &
+    """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace)
 
     run_command(run_json_lz4_command, "run_json_lz4_command", gpu_instance[0].id)
 
@@ -397,8 +398,8 @@ def run_average_bench():
     x=$(cloud-init status)
     done
 
-    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/average/target/wasm32-wasi/release/average-opt.wasm --ip=0.0.0.0 --heap=3145728 --stack=131072 --hcallsize=524288 --partition=true --serverless=true --vmcount=4096 --wasmtime=false --maxdup=3 --lgroup={lgroup} --partitions=50 --maxloc=1000000 --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} &> /tmp/average.log &
-    """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply)
+    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/average/target/wasm32-wasi/release/average-opt.wasm --ip=0.0.0.0 --heap=3145728 --stack=131072 --hcallsize=524288 --partition=true --serverless=true --vmcount=4096 --wasmtime=false --maxdup=3 --lgroup={lgroup} --partitions=50 --maxloc=1000000 --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} &> /tmp/average.log &
+    """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace)
 
     run_command(run_average_command, "run_average_command", gpu_instance[0].id)
 
@@ -498,8 +499,8 @@ def run_image_hash_bench():
     x=$(cloud-init status)
     done
 
-    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/imagehash/target/wasm32-wasi/release/imagehash-opt.wasm --ip=0.0.0.0 --heap=4194304 --stack=262144 --hcallsize=524288 --partition=true --serverless=true --vmcount=3072 --vmgroups=1 --maxdup=3 --disablefastcalls=false --partitions=50 --maxloc=1000000 --lgroup={lgroup} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} &> /tmp/imagehash.log &
-    """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply)
+    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/imagehash/target/wasm32-wasi/release/imagehash-opt.wasm --ip=0.0.0.0 --heap=4194304 --stack=262144 --hcallsize=524288 --partition=true --serverless=true --vmcount=3072 --vmgroups=1 --maxdup=3 --disablefastcalls=false --partitions=50 --maxloc=1000000 --lgroup={lgroup} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} &> /tmp/imagehash.log &
+    """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace)
 
     run_command(run_image_command, "run_imagehash_gpu_command", gpu_instance[0].id)
 
@@ -601,8 +602,8 @@ def run_image_blur_bench():
     x=$(cloud-init status)
     done
 
-    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/imageblur/target/wasm32-wasi/release/imageblur-opt.wasm --ip=0.0.0.0 --heap=4194304 --stack=262144 --hcallsize=524288 --partition=true --serverless=true --vmcount=3072 --vmgroups=1 --maxdup=3 --disablefastcalls=false --partitions=50 --maxloc=2000000 --lgroup={lgroup} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} &> /tmp/imageblur.log &
-    """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply)
+    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/imageblur/target/wasm32-wasi/release/imageblur-opt.wasm --ip=0.0.0.0 --heap=4194304 --stack=262144 --hcallsize=524288 --partition=true --serverless=true --vmcount=3072 --vmgroups=1 --maxdup=3 --disablefastcalls=false --partitions=50 --maxloc=2000000 --lgroup={lgroup} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} &> /tmp/imageblur.log &
+    """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace)
 
     run_command(run_image_command, "run_imageblur_gpu_command", gpu_instance[0].id)
 
@@ -626,9 +627,9 @@ def run_image_blur_bench():
 
     cd /tmp/wasm2opencl/benchmarks/imageblur/
 
-    /usr/local/go/bin/go run run_image_blur.go {addr} 8000 {target_rps} 1 120
+    /usr/local/go/bin/go run run_image_blur.go {addr} 8000 {target_rps} 1 300
 
-    /usr/local/go/bin/go run run_image_blur.go {addr} 8000 {target_rps} 1 120
+    /usr/local/go/bin/go run run_image_blur.go {addr} 8000 {target_rps} 1 300
     """.format(addr=gpu_instance[0].private_dns_name, input_size=1000, target_rps=target_rps)
 
 
@@ -703,8 +704,8 @@ def run_nlp_count_bench():
     x=$(cloud-init status)
     done
 
-    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/target/wasm32-wasi/release/nlp-count-vectorizer-opt.wasm --ip=0.0.0.0 --heap=4194304 --stack=262144 --hcallsize=524288 --partition=true --serverless=true --vmcount=3072 --vmgroups=1 --maxdup=3 --disablefastcalls=false --lgroup={lgroup} --maxloc=1000000 --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} &> /tmp/nlp-count-vectorizer.log &
-    """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply)
+    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/target/wasm32-wasi/release/nlp-count-vectorizer-opt.wasm --ip=0.0.0.0 --heap=4194304 --stack=262144 --hcallsize=524288 --partition=true --serverless=true --vmcount=3072 --vmgroups=1 --maxdup=3 --disablefastcalls=false --lgroup={lgroup} --maxloc=1000000 --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} &> /tmp/nlp-count-vectorizer.log &
+    """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace)
 
     run_command(run_nlp_command, "run_nlp_command", gpu_instance[0].id)
 
@@ -880,7 +881,7 @@ ssm_client = boto3.client('ssm')
 # run pbkdf2 bench
 run_pbkdf2_bench(True)
 
-cleanup()
+#cleanup()
 
 # run lz4 bench
 #run_lz4_bench()
@@ -898,12 +899,12 @@ cleanup()
 #cleanup()
 
 # run image blue bench
-run_image_blur_bench()
+#run_image_blur_bench()
 
-cleanup()
+#cleanup()
 
 # run image hash bench
-run_image_hash_bench()
+#run_image_hash_bench()
 
 # clean up all instances at end
 ec2.instances.filter(InstanceIds = instance_id_list).terminate()

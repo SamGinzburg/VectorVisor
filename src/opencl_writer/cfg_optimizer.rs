@@ -137,7 +137,7 @@ pub fn get_called_funcs(writer_ctx: &OpenCLCWriter, indirect_call_mapping: &Vec<
  * each other into the same OpenCL kernel.
  */
 
-pub fn form_partitions(writer_ctx: &OpenCLCWriter, num_funcs_in_partition: u32, instr_count_limit: u32, func_copy_limit: u32, func_names: Vec<String>, fastcalls: &HashSet<String>, func_map: &HashMap<String, wast::Func>, imports_map: &HashMap<String, (&str, Option<&str>, wast::ItemSig)>, kernel_compile_stats: &mut HashMap<u32, (u32, u32, u32, u32, u32, u32)>, indirect_call_mapping: &HashMap<u32, &wast::Index>) -> Vec<(u32, HashSet<String>)> {
+pub fn form_partitions(writer_ctx: &OpenCLCWriter, num_funcs_in_partition: u32, instr_count_limit: u32, func_copy_limit: u32, local_size_limit: u32, func_names: Vec<String>, fastcalls: &HashSet<String>, func_map: &HashMap<String, wast::Func>, imports_map: &HashMap<String, (&str, Option<&str>, wast::ItemSig)>, kernel_compile_stats: &mut HashMap<u32, (u32, u32, u32, u32, u32, u32, u32)>, indirect_call_mapping: &HashMap<u32, &wast::Index>) -> Vec<(u32, HashSet<String>)> {
 
     let mut func_set = HashSet::<String>::from_iter(func_names.clone());
     let mut partitions: Vec<(u32, HashSet<String>)> = vec![];
@@ -184,14 +184,15 @@ pub fn form_partitions(writer_ctx: &OpenCLCWriter, num_funcs_in_partition: u32, 
 
         let mut current_partition_count = 0;
         let mut current_instruction_count = 0;
+        let mut current_local_size = 0;
 
-        let (instr_count, _, _, _, _, _) = function_stats(writer_ctx, f_name.clone(), func_map.get(&f_name.clone()).unwrap(), fastcalls, func_map, indirect_call_mapping);
+        let (instr_count, _, _, _, _, _, local_size) = function_stats(writer_ctx, f_name.clone(), func_map.get(&f_name.clone()).unwrap(), fastcalls, func_map, indirect_call_mapping);
         current_instruction_count += instr_count;
+        current_local_size += local_size;
 
         // Now we can form the partition itself
-
-         for func in loop_called_fns {
-             let (instr_count, _, _, _, _, _) = function_stats(writer_ctx, func.clone(), func_map.get(&func.clone()).unwrap(), fastcalls, func_map, indirect_call_mapping);
+        for func in loop_called_fns {
+            let (instr_count, _, _, _, _, _, local_size) = function_stats(writer_ctx, func.clone(), func_map.get(&func.clone()).unwrap(), fastcalls, func_map, indirect_call_mapping);
              /*
               * If the func is the following:
               * - Func is below inclusion limit
@@ -202,6 +203,7 @@ pub fn form_partitions(writer_ctx: &OpenCLCWriter, num_funcs_in_partition: u32, 
               let func_copies = include_limit.get(&func).cloned().unwrap_or(0);
               if current_partition_count < num_funcs_in_partition &&
                  current_instruction_count + instr_count <= instr_count_limit &&
+                 current_local_size + local_size <= local_size_limit &&
                  func_copies < func_copy_limit {
                     // add the func to the set
                     current_partition.insert(String::from(&func));
@@ -209,7 +211,7 @@ pub fn form_partitions(writer_ctx: &OpenCLCWriter, num_funcs_in_partition: u32, 
                     include_limit.insert(func.clone(), func_copies + 1);
                     current_partition_count += 1;
                     current_instruction_count += instr_count;
-
+                    current_local_size += local_size;
                     // Track duplicated code across partitions whenever we insert a function
                     let mut temp = HashSet::new();
                     temp.insert(partition_idx);
@@ -220,7 +222,7 @@ pub fn form_partitions(writer_ctx: &OpenCLCWriter, num_funcs_in_partition: u32, 
          }
 
          for func in called_fns {
-            let (instr_count, _, _, _, _, _) = function_stats(writer_ctx, func.clone(), func_map.get(&func.clone()).unwrap(), fastcalls, func_map, indirect_call_mapping);
+            let (instr_count, _, _, _, _, _, local_size) = function_stats(writer_ctx, func.clone(), func_map.get(&func.clone()).unwrap(), fastcalls, func_map, indirect_call_mapping);
             /*
              * If the func is the following:
              * - Func is below inclusion limit
@@ -231,6 +233,7 @@ pub fn form_partitions(writer_ctx: &OpenCLCWriter, num_funcs_in_partition: u32, 
             let func_copies = include_limit.get(&func).cloned().unwrap_or(0);
             if current_partition_count < num_funcs_in_partition &&
                current_instruction_count + instr_count <= instr_count_limit &&
+               current_local_size + local_size <= local_size_limit &&
                func_copies < func_copy_limit {
                 // add the func to the set
                 current_partition.insert(String::from(&func));
@@ -238,6 +241,7 @@ pub fn form_partitions(writer_ctx: &OpenCLCWriter, num_funcs_in_partition: u32, 
                 include_limit.insert(func.clone(), func_copies + 1);
                 current_partition_count += 1;
                 current_instruction_count += instr_count;
+                current_local_size += local_size;
 
                 // Track duplicated code across partitions whenever we insert a function
                 let mut temp = HashSet::new();
@@ -288,16 +292,17 @@ pub fn form_partitions(writer_ctx: &OpenCLCWriter, num_funcs_in_partition: u32, 
             if *prior_partition != partition_idx {
                 let (prev_partition_idx, prev_partition_set) = &partitions[*prior_partition as usize].clone();
                 // get prev instruction count
-                let (prev_instr_count, _, _, _, _, _) = kernel_compile_stats.get(prev_partition_idx).unwrap();
+                let (prev_instr_count, _, _, _, _, _, prev_local_size) = kernel_compile_stats.get(prev_partition_idx).unwrap();
                 let part_size: u32 = prev_partition_set.len().try_into().unwrap();
                 if current_partition_count + part_size < num_funcs_in_partition &&
-                   current_instruction_count + prev_instr_count <= instr_count_limit  {
+                   current_instruction_count + prev_instr_count <= instr_count_limit &&
+                   current_local_size + prev_local_size <= local_size_limit {
                     // we can merge the partitions!
                     // Combine the hashsets
                     current_partition.extend(prev_partition_set.clone());
                     // update partitions & update kernel compile stats 
                     partitions[*prior_partition as usize] = (*prev_partition_idx, current_partition.clone());
-                    let stats = (current_instruction_count + prev_instr_count, 0, 0, 0, 0, 0);
+                    let stats = (current_instruction_count + prev_instr_count, 0, 0, 0, 0, 0, current_local_size + prev_local_size);
                     kernel_compile_stats.insert(*prev_partition_idx, stats);
                     modified_prior_part = true;
                     break;
@@ -308,7 +313,7 @@ pub fn form_partitions(writer_ctx: &OpenCLCWriter, num_funcs_in_partition: u32, 
         if !modified_prior_part {
             partitions.push((partition_idx, current_partition.clone()));
             // update the kernel compile stats tracking object
-            kernel_compile_stats.insert(partition_idx, (current_instruction_count, 0, 0, 0, 0, 0));
+            kernel_compile_stats.insert(partition_idx, (current_instruction_count, 0, 0, 0, 0, 0, current_local_size));
             partition_idx += 1;
         } else {
             // cleanup include_limit & dc_partitions
@@ -336,9 +341,9 @@ pub fn form_partitions(writer_ctx: &OpenCLCWriter, num_funcs_in_partition: u32, 
         set.insert(func.clone());
         partitions.push((partition_idx, set));
 
-        let (instr_count, _, _, _, _, _) = function_stats(writer_ctx, func.clone(), func_map.get(&func.clone()).unwrap(), fastcalls, func_map, indirect_call_mapping);
+        let (instr_count, _, _, _, _, _, local_size) = function_stats(writer_ctx, func.clone(), func_map.get(&func.clone()).unwrap(), fastcalls, func_map, indirect_call_mapping);
 
-        kernel_compile_stats.insert(partition_idx, (instr_count, 0, 0, 0, 0, 0));
+        kernel_compile_stats.insert(partition_idx, (instr_count, 0, 0, 0, 0, 0, local_size));
         partition_idx += 1;
     }
 

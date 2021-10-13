@@ -159,7 +159,7 @@ pub struct PartitionedSeralizedProgram {
 pub enum InputProgram {
     Binary(Vec<u8>),
     Text(String, String),
-    Partitioned(HashMap<u32, String>, String, HashMap<u32, (u32, u32, u32, u32, u32, u32)>, HashMap<u32, u32>),
+    Partitioned(HashMap<u32, String>, String, HashMap<u32, (u32, u32, u32, u32, u32, u32, u32)>, HashMap<u32, u32>),
     PartitionedBinary(HashMap<u32, Vec<u8>>, HashMap<u32, u32>),
 }
 
@@ -663,19 +663,22 @@ impl OpenCLRunner {
                     // Don't record build times for data_init
                     if key != 99999 {
                         //dbg!(time_to_compile, compile_stats_map.get(&key).unwrap());
-                        let (total_instr_count, total_func_count, total_fastcall_count, total_indirect_count, total_block_count, total_loop_count) = compile_stats_map.get(&key).unwrap();
+                        let (total_instr_count, total_func_count, total_fastcall_count, total_indirect_count, total_block_count, total_loop_count, total_local_count) = compile_stats_map.get(&key).unwrap();
                         let mut file = OpenOptions::new()
                                                     .write(true)
                                                     .append(true)
                                                     .create(true)
                                                     .open("compile-times-log.csv")
                                                     .unwrap();
-                        if let Err(e) = writeln!(file, "{}", format!("{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t", key, total_instr_count,
+                        if let Err(e) = writeln!(file, "{}", format!("{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+                                                                                key,
+                                                                                total_instr_count,
                                                                                 total_func_count,
                                                                                 total_fastcall_count,
                                                                                 total_indirect_count,
                                                                                 total_block_count,
                                                                                 total_loop_count,
+                                                                                total_local_count,
                                                                                 time_to_compile)) {
                             eprintln!("Couldn't write to file: {}", e);
                         }

@@ -1914,11 +1914,11 @@ __attribute__((always_inline)) void {}(global uint   *stack_u32,
                              debug_print_function_calls: bool,
                              force_inline: bool,
                              is_gpu: bool,
-                             debug: bool) -> (String, String, u32, u32, u32, HashMap<u32, String>, HashMap<u32, (u32, u32, u32, u32, u32, u32)>, HashMap<u32, u32>) {
+                             debug: bool) -> (String, String, u32, u32, u32, HashMap<u32, String>, HashMap<u32, (u32, u32, u32, u32, u32, u32, u32)>, HashMap<u32, u32>) {
         let mut output = String::new();
         let mut header = String::new();
         let mut kernel_hashmap: HashMap<u32, String> = HashMap::new();
-        let mut kernel_compile_stats: HashMap<u32, (u32, u32, u32, u32, u32, u32)> = HashMap::new();
+        let mut kernel_compile_stats: HashMap<u32, (u32, u32, u32, u32, u32, u32, u32)> = HashMap::new();
         let mut kernel_partition_mappings: HashMap<u32, u32> = HashMap::new();
 
         // First, before doing anything, apply any binary patches that we can
@@ -2146,7 +2146,25 @@ r#"
             };
             let calling_func_name = format!("{}{}", "__", format_fn_name(fastfunc));
 
-            let func_declaration = format!("{} {}_fastcall({}global uint *, global uint *, global uint *, global uint *, uint, uint, uint, local uchar*);\n", func_ret_val, calling_func_name, parameter_list);
+            // Compute whether the function is small enough to be inlined
+            let instr_count = match (&func.kind) {
+                (wast::FuncKind::Import(_)) => {
+                    // In this case, we have an InlineImport of the form:
+                    // (func (type 3) (import "foo" "bar"))
+                    panic!("InlineImport functions not yet implemented");
+                },
+                (wast::FuncKind::Inline{locals, expression}) => {
+                    expression.instrs.len()
+                }
+            };
+
+            let is_inline = if instr_count < 10 {
+                String::from("__attribute__((always_inline))")
+            } else {
+                String::from("")
+            };
+
+            let func_declaration = format!("{} {} {}_fastcall({}global uint *, global uint *, global uint *, global uint *, uint, uint, uint, local uchar*);\n", is_inline, func_ret_val, calling_func_name, parameter_list);
 
             write!(fastcall_header, "{}", func_declaration).unwrap();
         }
@@ -2233,7 +2251,8 @@ r#"
 
         // Compute the function groups, we will then enumerate the groups to emit the functions
         // kernel_partition_mapping get the partition ID from a function idx
-        let partitions = form_partitions(&self, max_partitions, max_loc_in_partition, max_duplicate_funcs, self.func_names.clone(), &fast_function_set, &self.func_map, &self.imports_map, &mut kernel_compile_stats, indirect_call_mapping);
+        let local_size_limit = 1000000;
+        let partitions = form_partitions(&self, max_partitions, max_loc_in_partition, max_duplicate_funcs, local_size_limit, self.func_names.clone(), &fast_function_set, &self.func_map, &self.imports_map, &mut kernel_compile_stats, indirect_call_mapping);
 
         for (partition_idx, partition) in partitions.clone() {
             let mut function_idx_label_temp: HashMap<String, u32> = HashMap::new();

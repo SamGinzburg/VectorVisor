@@ -18,3 +18,7 @@ img_hash = "3.2.0"
 lto = true
 codegen-units = 1 # better optimizations
 opt-level = 3
+
+#rustflags = [
+#  "-C", "inline-threshold=50",
+#]
