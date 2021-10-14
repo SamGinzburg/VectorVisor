@@ -111,12 +111,17 @@ userdata_ubuntu = """#cloud-config
      - /tmp/binaryen-version_100/bin/wasm-opt target/wasm32-wasi/release/pbkdf2.wasm {opt} -c -o target/wasm32-wasi/release/pbkdf2-opt.wasm
      - cd ..
      - cd nlp-count-vectorizer/
-     - sudo ~/.cargo/bin/cargo build --release
+     - ~/.cargo/bin/cargo build --release
      - ~/.cargo/bin/wasm-snip target/wasm32-wasi/release/nlp-count-vectorizer.wasm {snip_args} -o target/wasm32-wasi/release/nlp-count-vectorizer.wasm -p {snip_custom}
      - /tmp/binaryen-version_100/bin/wasm-opt target/wasm32-wasi/release/nlp-count-vectorizer.wasm {opt} -c -o target/wasm32-wasi/release/nlp-count-vectorizer-opt.wasm
      - cd ..
      - cd imageblur/
      - sudo ~/.cargo/bin/cargo build --release
+     - ~/.cargo/bin/wasm-snip target/wasm32-wasi/release/imageblur.wasm {snip_args} --snip-rust-fmt-code -o target/wasm32-wasi/release/imageblur.wasm -p {snip_custom}
+     - /tmp/binaryen-version_100/bin/wasm-opt target/wasm32-wasi/release/imageblur.wasm {opt} -c -o target/wasm32-wasi/release/imageblur-opt.wasm
+     - cd ..
+     - cd imageblur-bmp/
+     - ~/.cargo/bin/cargo build --release
      - ~/.cargo/bin/wasm-snip target/wasm32-wasi/release/imageblur.wasm {snip_args} --snip-rust-fmt-code -o target/wasm32-wasi/release/imageblur.wasm -p {snip_custom}
      - /tmp/binaryen-version_100/bin/wasm-opt target/wasm32-wasi/release/imageblur.wasm {opt} -c -o target/wasm32-wasi/release/imageblur-opt.wasm
      - cd ..
@@ -914,7 +919,7 @@ ssm_client = boto3.client('ssm')
 #cleanup()
 
 # run image blue bench
-run_image_blur_bench()
+run_image_blur_bench(run_bmp = True)
 
 #cleanup()
 
