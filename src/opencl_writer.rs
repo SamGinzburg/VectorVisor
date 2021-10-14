@@ -2115,6 +2115,7 @@ r#"
 
         // Generate the fastcall header
         // first generate the function declarations
+		let mut heavy_fastcalls: HashMap<String, bool> = HashMap::new();
         for fastfunc in fast_function_set.iter() {
             let func = self.func_map.get(&fastfunc.to_string()).unwrap();
             // Get parameters & return type of the function
@@ -2145,29 +2146,11 @@ r#"
                 }
             };
             let calling_func_name = format!("{}{}", "__", format_fn_name(fastfunc));
-
-            // Compute whether the function is small enough to be inlined
-            let instr_count = match (&func.kind) {
-                (wast::FuncKind::Import(_)) => {
-                    // In this case, we have an InlineImport of the form:
-                    // (func (type 3) (import "foo" "bar"))
-                    panic!("InlineImport functions not yet implemented");
-                },
-                (wast::FuncKind::Inline{locals, expression}) => {
-                    expression.instrs.len()
-                }
-            };
-
-            let is_inline = if instr_count < 10 {
-                String::from("__attribute__((always_inline))")
-            } else {
-                String::from("")
-            };
-
-            let func_declaration = format!("{} {} {}_fastcall({}global uint *, global uint *, global uint *, global uint *, uint, uint, uint, local uchar*);\n", is_inline, func_ret_val, calling_func_name, parameter_list);
+            let func_declaration = format!("{} {}_fastcall({}global uint *, global uint *, global uint *, global uint *, uint, uint, uint, local uchar*);\n", func_ret_val, calling_func_name, parameter_list);
 
             write!(fastcall_header, "{}", func_declaration).unwrap();
         }
+
 
         // emit functions
         // Each fastcall has a stack frame size (size of intermediate values) + list of funcs it calls
@@ -2175,7 +2158,6 @@ r#"
         let mut fast_func_size: HashMap<String, u32> = HashMap::new();
         let mut fast_func_called: HashMap<String, HashSet<String>> = HashMap::new();
         let mut fastcall_called_func_sizes: HashMap<String, Vec<u32>> = HashMap::new();
-
         for fastfunc in fast_function_set.iter() {
             let (func, func_size, func_called) = self.emit_function(self.func_map.get(&fastfunc.to_string()).unwrap(),
                                             fastfunc.to_string(),
@@ -2197,9 +2179,9 @@ r#"
                                             debug);
             fast_func_size.insert(fastfunc.to_string(), func_size);
             fast_func_called.insert(fastfunc.to_string(), func_called);
-
-            write!(fastcall_header, "{}", func).unwrap();
         }
+
+
 
         // Compute how many instructions each fastcall contains (necessary for packing functions)
         // This is needed for the function packing
@@ -2245,6 +2227,61 @@ r#"
             let max = fastcall_called_func_sizes.get(fastfunc).unwrap_or(&tmp).iter().max().unwrap();
             *fast_func_size.entry(fastfunc.to_string()).or_insert(0) += max;
         }
+
+        // Finish fastcall register demotion pass
+        for fastfunc in fast_function_set.iter() {
+            let (func, func_size, func_called) = self.emit_function(self.func_map.get(&fastfunc.to_string()).unwrap(),
+                                            fastfunc.to_string(),
+                                            call_ret_map,
+                                            &mut call_ret_idx,
+                                            function_idx_label.clone(),
+                                            hypercall_id_count,
+                                            local_work_group,
+                                            mexec,
+                                            indirect_call_mapping,
+                                            &global_mappings,
+                                            fast_function_set.clone(),
+                                            force_inline,
+                                            debug_print_function_calls,
+                                            start_func.clone(),
+                                            is_gpu,
+                                            &mut 0,
+                                            true,
+                                            debug);
+
+            let mut fastcall_size_vec = vec![0];
+            for fastcall in func_called.iter() {
+                let fsize = fast_func_size.get(fastcall).unwrap();
+                fastcall_size_vec.push(*fsize);
+            }
+            let final_size = func_size + fastcall_size_vec.iter().max().unwrap();
+            if final_size > 300 && false {
+                //println!("register demotion for fastcall: {:?}", fastfunc.to_string());
+                // THIS IS DISABLED FOR NOW
+                let (func, func_size, func_called) = self.emit_function(self.func_map.get(&fastfunc.to_string()).unwrap(),
+                                                fastfunc.to_string(),
+                                                call_ret_map,
+                                                &mut call_ret_idx,
+                                                function_idx_label.clone(),
+                                                hypercall_id_count,
+                                                local_work_group,
+                                                mexec,
+                                                indirect_call_mapping,
+                                                &global_mappings,
+                                                fast_function_set.clone(),
+                                                force_inline,
+                                                debug_print_function_calls,
+                                                start_func.clone(),
+                                                is_gpu,
+                                                &mut 16,
+                                                true,
+                                                debug);
+                write!(fastcall_header, "{}", func).unwrap();
+            } else {
+                write!(fastcall_header, "{}", func).unwrap();
+            }
+        }
+
 
         // We have limited smem space available.
         let mut remaining_smem_alloc = 4096;

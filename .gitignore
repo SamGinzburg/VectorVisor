@@ -14,6 +14,7 @@ benchmarks/json-compression/target/*
 benchmarks/json-compression-lz4/target/*
 benchmarks/pbkdf2/target/*
 benchmarks/imageblur/target/*
+benchmarks/imageblur-bmp/target/*
 benchmarks/imagehash/target/*
 benchmarks/*/target/*
 *.rlib

@@ -16,7 +16,7 @@ CFLAGS="-cl-nv-verbose"
 OPT_LEVEL="-O1 -g"
 WASM_SNIP_ARGS="--snip-rust-panicking-code"
 WASM_SNIP_CUSTOM="rust_oom __rg_oom"
-maxdemospace = 3072
+maxdemospace = 0
 
 ec2 = boto3.resource('ec2')
 ec2_client = boto3.client('ec2')
@@ -896,15 +896,15 @@ run_pbkdf2_bench(True)
 # run average bench
 #run_average_bench()
 
-#cleanup()
+cleanup()
 
 # run image blue bench
-#run_image_blur_bench()
+run_image_blur_bench()
 
-#cleanup()
+cleanup()
 
 # run image hash bench
-#run_image_hash_bench()
+run_image_hash_bench()
 
 # clean up all instances at end
 ec2.instances.filter(InstanceIds = instance_id_list).terminate()

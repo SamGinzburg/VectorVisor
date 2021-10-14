@@ -2225,7 +2225,7 @@ impl<'a> StackCtx {
 
         let mut idx = 0;
         for intermediate in &self.i32_stack.clone() {
-            if self.demoted_intermediates.contains(intermediate) && !is_fastcall {
+            if self.demoted_intermediates.contains(intermediate) {
                                 ret_str += &format!("\t__local uint {}[{}];\n",
                                                     intermediate.replace("[thread_idx]", ""),
                                                     local_work_group);
@@ -2236,7 +2236,7 @@ impl<'a> StackCtx {
 
         idx = 0;
         for intermediate in &self.i64_stack.clone() {
-            if self.demoted_intermediates.contains(intermediate) && !is_fastcall {
+            if self.demoted_intermediates.contains(intermediate) {
                                 ret_str += &format!("\t__local ulong {}[{}];\n",
                                                     intermediate.replace("[thread_idx]", ""),
                                                     local_work_group);
