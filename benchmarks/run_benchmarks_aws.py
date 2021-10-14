@@ -578,7 +578,14 @@ def run_image_hash_bench():
 
 
 
-def run_image_blur_bench():
+def run_image_blur_bench(run_bmp = False):
+    if not run_bmp:
+        bin_path = "/tmp/wasm2opencl/benchmarks/imageblur/target/wasm32-wasi/release/imageblur-opt.wasm"
+        exe_path = "/tmp/wasm2opencl/benchmarks/imageblur/"
+    else:
+        bin_path = "/tmp/wasm2opencl/benchmarks/imageblur-bmp/target/wasm32-wasi/release/imageblur-opt.wasm"
+        exe_path = "/tmp/wasm2opencl/benchmarks/imageblur-bmp/"
+
     run_image_command_wasmtime = """#!/bin/bash
     sudo su
     ulimit -n 65536
@@ -588,8 +595,8 @@ def run_image_blur_bench():
     x=$(cloud-init status)
     done
 
-    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/imageblur/target/wasm32-wasi/release/imageblur-opt.wasm --ip=0.0.0.0 --heap=4194304 --stack=262144 --hcallsize=524288 --partition=true --serverless=true --vmcount=3072 --wasmtime=true --fastreply={fastreply} &> /tmp/imageblur.log &
-    """.format(fastreply=fastreply)
+    /tmp/wasm2opencl/target/release/wasm2opencl --input {bin_path} --ip=0.0.0.0 --heap=4194304 --stack=262144 --hcallsize=524288 --partition=true --serverless=true --vmcount=3072 --wasmtime=true --fastreply={fastreply} &> /tmp/imageblur.log &
+    """.format(fastreply=fastreply, bin_path=bin_path)
 
     run_command(run_image_command_wasmtime, "run_imageblur_command_wasmtime", cpu_bench_instance[0].id)
 
@@ -602,8 +609,8 @@ def run_image_blur_bench():
     x=$(cloud-init status)
     done
 
-    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/imageblur/target/wasm32-wasi/release/imageblur-opt.wasm --ip=0.0.0.0 --heap=4194304 --stack=262144 --hcallsize=524288 --partition=true --serverless=true --vmcount=3072 --vmgroups=1 --maxdup=3 --disablefastcalls=false --partitions=50 --maxloc=2000000 --lgroup={lgroup} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} &> /tmp/imageblur.log &
-    """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace)
+    /tmp/wasm2opencl/target/release/wasm2opencl --input {bin_path} --ip=0.0.0.0 --heap=4194304 --stack=262144 --hcallsize=524288 --partition=true --serverless=true --vmcount=3072 --vmgroups=1 --maxdup=3 --disablefastcalls=false --partitions=50 --maxloc=2000000 --lgroup={lgroup} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} &> /tmp/imageblur.log &
+    """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, bin_path=bin_path)
 
     run_command(run_image_command, "run_imageblur_gpu_command", gpu_instance[0].id)
 
@@ -625,12 +632,12 @@ def run_image_blur_bench():
     x=$(cloud-init status)
     done
 
-    cd /tmp/wasm2opencl/benchmarks/imageblur/
+    cd {exe_path}
 
     /usr/local/go/bin/go run run_image_blur.go {addr} 8000 {target_rps} 1 300
 
     /usr/local/go/bin/go run run_image_blur.go {addr} 8000 {target_rps} 1 300
-    """.format(addr=gpu_instance[0].private_dns_name, input_size=1000, target_rps=target_rps)
+    """.format(addr=gpu_instance[0].private_dns_name, input_size=1000, target_rps=target_rps, exe_path=exe_path)
 
 
     command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
@@ -642,8 +649,12 @@ def run_image_blur_bench():
     print (output)
 
     # save output
-    with open("gpu_bench_imageblur.txt", "w") as text_file:
-        text_file.write(str(output))
+    if not run_bmp:
+        with open("gpu_bench_imageblur.txt", "w") as text_file:
+            text_file.write(str(output))
+    else:
+        with open("gpu_bench_imageblur_bmp.txt", "w") as text_file:
+            text_file.write(str(output))
 
     run_invoker_wasmtime = """#!/bin/bash
     sudo su
@@ -661,12 +672,12 @@ def run_image_blur_bench():
     x=$(cloud-init status)
     done
 
-    cd /tmp/wasm2opencl/benchmarks/imageblur/
+    cd {exe_path}
 
     /usr/local/go/bin/go run run_image_blur.go {addr} 8000 {target_rps} 1 120
 
     /usr/local/go/bin/go run run_image_blur.go {addr} 8000 {target_rps} 1 120
-    """.format(addr=cpu_bench_instance[0].private_dns_name, input_size=1000, target_rps=target_rps_cpu)
+    """.format(addr=cpu_bench_instance[0].private_dns_name, input_size=1000, target_rps=target_rps_cpu, exe_path=exe_path)
 
     command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
 
@@ -676,8 +687,12 @@ def run_image_blur_bench():
     output = block_on_command(command_id, invoker_instance[0].id)
     print (output)
     # save output
-    with open("cpu_bench_imageblur.txt", "w") as text_file:
-        text_file.write(str(output))
+    if not run_bmp:
+        with open("cpu_bench_imageblur.txt", "w") as text_file:
+            text_file.write(str(output))
+    else:
+        with open("cpu_bench_imageblur_bmp.txt", "w") as text_file:
+            text_file.write(str(output))
 
 
 def run_nlp_count_bench():
@@ -879,7 +894,7 @@ while True:
 ssm_client = boto3.client('ssm')
 
 # run pbkdf2 bench
-run_pbkdf2_bench(True)
+#run_pbkdf2_bench(True)
 
 #cleanup()
 
@@ -896,15 +911,15 @@ run_pbkdf2_bench(True)
 # run average bench
 #run_average_bench()
 
-cleanup()
+#cleanup()
 
 # run image blue bench
 run_image_blur_bench()
 
-cleanup()
+#cleanup()
 
 # run image hash bench
-run_image_hash_bench()
+#run_image_hash_bench()
 
 # clean up all instances at end
 ec2.instances.filter(InstanceIds = instance_id_list).terminate()
