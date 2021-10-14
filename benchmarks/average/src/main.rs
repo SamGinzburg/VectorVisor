@@ -21,13 +21,19 @@ struct FuncResponse {
     p999: u64,
 }
 
-// Take in a list of numbers and compute the average
-fn histogram(event: FuncInput) -> FuncResponse {
-    let mut histogram = Histogram::<u64>::new(2).unwrap();
-
+#[inline(never)]
+fn process_event(event: FuncInput, histogram: &mut Histogram<u64>) -> () {
     for item in &event.numbers {
         histogram.record(*item);
     }
+}
+
+// Take in a list of numbers and compute the average
+#[inline(never)]
+fn histogram(event: FuncInput) -> FuncResponse {
+    let mut histogram = Histogram::<u64>::new(2).unwrap();
+
+    process_event(event, &mut histogram);
 
     FuncResponse { 
         min: histogram.min(),

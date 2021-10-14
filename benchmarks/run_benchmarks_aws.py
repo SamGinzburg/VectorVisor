@@ -899,14 +899,14 @@ while True:
 ssm_client = boto3.client('ssm')
 
 # run pbkdf2 bench
-#run_pbkdf2_bench(True)
+run_pbkdf2_bench(True)
 
-#cleanup()
+cleanup()
 
 # run lz4 bench
-#run_lz4_bench()
+run_lz4_bench()
 
-#cleanup()
+cleanup()
 
 # run NLP bench
 #run_nlp_count_bench()
@@ -914,17 +914,21 @@ ssm_client = boto3.client('ssm')
 #cleanup()
 
 # run average bench
-#run_average_bench()
+run_average_bench()
 
-#cleanup()
+cleanup()
 
 # run image blue bench
 run_image_blur_bench(run_bmp = True)
 
-#cleanup()
+cleanup()
+
+run_image_blur_bench(run_bmp = False)
+
+cleanup()
 
 # run image hash bench
-#run_image_hash_bench()
+run_image_hash_bench()
 
 # clean up all instances at end
 ec2.instances.filter(InstanceIds = instance_id_list).terminate()
