@@ -755,7 +755,7 @@ impl<'a> OpenCLCWriter<'_> {
                     (_, Some(_inline)) => panic!("Inline types for call_indirect not implemented yet (main pass opencl_writer.rs)"),
                     _ => panic!("Unable to find types for call_indirect (main pass opencl_writer.rs)"),
                 };
-                emit_call_indirect(&self, stack_ctx, call_indirect, fn_name.to_string(), fastcall_set, indirect_call_mapping, call_ret_map, call_ret_idx, call_indirect_count, function_id_map, call_indirect_type_index, debug)
+                emit_call_indirect(&self, stack_ctx, call_indirect, fn_name.to_string(), fastcall_set, indirect_call_mapping, call_ret_map, call_ret_idx, call_indirect_count, function_id_map, call_indirect_type_index, is_fastcall, debug)
             },
             wast::Instruction::I32Eq => {
                 emit_i32_eq(self, stack_ctx, debug)
@@ -2043,7 +2043,7 @@ r#"
         };
 
         let fast_function_set = if !disable_fastcalls {
-            compute_fastcall_set(self, &self.func_map, &mut indirect_call_set, start_func.clone())
+            compute_fastcall_set(self, &self.func_map, &mut indirect_call_set, start_func.clone(), indirect_call_mapping)
         } else {
             let allowed_fastcalls = vec!["__lctrans",
                                          "dlfree",
@@ -2089,7 +2089,7 @@ r#"
             for f in allowed_fastcalls {
                 hset.insert(f.to_string());
             }
-            let fastcall_set = compute_fastcall_set(self, &self.func_map, &mut indirect_call_set, start_func.clone());
+            let fastcall_set = compute_fastcall_set(self, &self.func_map, &mut indirect_call_set, start_func.clone(), indirect_call_mapping);
 
             // now filter to only allow the allowed list and functions they call
             let hset_clone = hset.clone();

@@ -23,12 +23,18 @@ struct FuncResponse {
 }
 
 #[inline(never)]
+fn compress_input(data: Vec<u8>, mut encoder: Encoder<BufWriter<Vec<u8>>>) -> String {
+    encoder.write(&data).unwrap();
+    let (compressed_bytes, _) = encoder.finish();
+    let encoded = encode(compressed_bytes.into_inner().unwrap());
+    return encoded;
+}
+
+#[inline(never)]
 fn compress_json(event: FuncInput) -> FuncResponse {
     let mut decoded_str = decode(event.encoded_str.as_bytes()).unwrap();
     let mut encoder = Encoder::new(BufWriter::new(Vec::new()));
-    encoder.write(&decoded_str).unwrap();
-    let (compressed_bytes, _) = encoder.finish();
-    let encoded = encode(compressed_bytes.into_inner().unwrap());
+    let encoded = compress_input(decoded_str, encoder);
     FuncResponse { encoded_resp: encoded }
 }
 

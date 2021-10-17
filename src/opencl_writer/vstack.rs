@@ -1088,10 +1088,7 @@ impl<'a> StackCtx {
                     }
                 },
                 wast::Instruction::CallIndirect(call_indirect) => {
-                    // Taint open loops
-                    taint_open_loops(&mut tainted_loops, open_loop_stack.clone());
-                    is_fastcall = false;
-
+                    let mut matching_types = 0;
                     // Check for types
                     match (call_indirect.ty.index.as_ref(), call_indirect.ty.inline.as_ref()) {
                         (Some(index), _) => {
@@ -1167,6 +1164,14 @@ impl<'a> StackCtx {
                                     &mut current_i64_count, &mut max_i64_count,
                                     &mut current_f32_count, &mut max_f32_count,
                                     &mut current_f64_count, &mut max_f64_count);
+                            }
+
+                            // If we have no matching types for the call, then we can ignore it
+                            // since it will always fault
+                            if matching_types > 0 {
+                                // Taint open loops
+                                taint_open_loops(&mut tainted_loops, open_loop_stack.clone());
+                                is_fastcall = false;
                             }
                         },
                         (_, Some(_inline)) => panic!("Inline types for call_indirect not implemented yet (vstack)"),

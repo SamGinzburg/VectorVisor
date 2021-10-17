@@ -16,6 +16,7 @@ benchmarks/pbkdf2/target/*
 benchmarks/imageblur/target/*
 benchmarks/imageblur-bmp/target/*
 benchmarks/imagehash/target/*
+benchmarks/imagehash-modified/target/*
 benchmarks/*/target/*
 *.rlib
 *.rmeta

@@ -622,7 +622,7 @@ pub fn function_unwind(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut St
  *  each other, so we must process them sequentially.
  * 
  */
-pub fn emit_call_indirect(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, call_indirect: &wast::CallIndirect, curr_fn_name: String, fastcalls: &HashSet<String>, table: &HashMap<u32, &wast::Index>, call_ret_map: &mut HashMap<&str, u32>, call_ret_idx: &mut u32, call_indirect_count: &mut u32, function_id_map: HashMap<&str, u32>, call_indirect_type_index: String, debug: bool) -> String {
+pub fn emit_call_indirect(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, call_indirect: &wast::CallIndirect, curr_fn_name: String, fastcalls: &HashSet<String>, table: &HashMap<u32, &wast::Index>, call_ret_map: &mut HashMap<&str, u32>, call_ret_idx: &mut u32, call_indirect_count: &mut u32, function_id_map: HashMap<&str, u32>, call_indirect_type_index: String, is_fastcall: bool, debug: bool) -> String {
     let mut result = String::from("");
     // set up a switch case statement, we read the last value on the stack and determine what function we are going to call
     // this adds code bloat, but it reduces the complexity of the compiler.
@@ -728,34 +728,38 @@ pub fn emit_call_indirect(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut
 
     // After trying to perform fastcalls, we check the remaining cases
     // Save the context before entering the switch case
-    result += &save_ctx;
+    if !is_fastcall {
+        result += &save_ctx;
+    }
 
     // Push the parameters to the stack
-    for (param, ty) in stack_params.iter().zip(stack_params_types.iter()) {
-        match ty {
-            StackType::i32 => {
-                result += &format!("\t{};\n\t*sp += 2;\n",
-                                        emit_write_u32_aligned("(ulong)(stack_u32+*sp)", "(ulong)(stack_u32)", &param, "warp_idx"));
-            },
-            StackType::i64 => {
-                result += &format!("\t{};\n\t*sp += 2;\n",
-                                        emit_write_u64_aligned("(ulong)(stack_u32+*sp)", "(ulong)(stack_u32)", &param, "warp_idx"));
-            },
-            StackType::f32 => {
-                result += &format!("\t{{\n");
-                result += &format!("\t\tuint temp = 0;\n");
-                result += &format!("\t\t___private_memcpy_nonmmu(&temp, &{}, sizeof(uint));\n", param);
-                result += &format!("\t\t{};\n\t\t*sp += 2;\n",
-                                    emit_write_u32_aligned("(ulong)(stack_u32+*sp)", "(ulong)(stack_u32)", "temp", "warp_idx"));
-                result += &format!("\t}}\n");
-            },
-            StackType::f64 => {
-                result += &format!("\t{{\n");
-                result += &format!("\t\tulong temp = 0;\n");
-                result += &format!("\t\t___private_memcpy_nonmmu(&temp, &{}, sizeof(double));\n", param);
-                result += &format!("\t\t{};\n\t\t*sp += 2;\n",
-                                    emit_write_u64_aligned("(ulong)(stack_u32+*sp)", "(ulong)(stack_u32)", "temp", "warp_idx"));
-                result += &format!("\t}}\n");
+    if !is_fastcall {
+        for (param, ty) in stack_params.iter().zip(stack_params_types.iter()) {
+            match ty {
+                StackType::i32 => {
+                    result += &format!("\t{};\n\t*sp += 2;\n",
+                                            emit_write_u32_aligned("(ulong)(stack_u32+*sp)", "(ulong)(stack_u32)", &param, "warp_idx"));
+                },
+                StackType::i64 => {
+                    result += &format!("\t{};\n\t*sp += 2;\n",
+                                            emit_write_u64_aligned("(ulong)(stack_u32+*sp)", "(ulong)(stack_u32)", &param, "warp_idx"));
+                },
+                StackType::f32 => {
+                    result += &format!("\t{{\n");
+                    result += &format!("\t\tuint temp = 0;\n");
+                    result += &format!("\t\t___private_memcpy_nonmmu(&temp, &{}, sizeof(uint));\n", param);
+                    result += &format!("\t\t{};\n\t\t*sp += 2;\n",
+                                        emit_write_u32_aligned("(ulong)(stack_u32+*sp)", "(ulong)(stack_u32)", "temp", "warp_idx"));
+                    result += &format!("\t}}\n");
+                },
+                StackType::f64 => {
+                    result += &format!("\t{{\n");
+                    result += &format!("\t\tulong temp = 0;\n");
+                    result += &format!("\t\t___private_memcpy_nonmmu(&temp, &{}, sizeof(double));\n", param);
+                    result += &format!("\t\t{};\n\t\t*sp += 2;\n",
+                                        emit_write_u64_aligned("(ulong)(stack_u32+*sp)", "(ulong)(stack_u32)", "temp", "warp_idx"));
+                    result += &format!("\t}}\n");
+                }
             }
         }
     }
@@ -790,10 +794,12 @@ pub fn emit_call_indirect(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut
     result += &format!("\t}}\n");
 
     // Restore the context
-    result += &restore_ctx;
+    if !is_fastcall {
+        result += &restore_ctx;
+    }
 
     // Read the result value into a register
-    if result_types.len() > 0 {
+    if result_types.len() > 0 && !is_fastcall {
         match StackCtx::convert_wast_types(&result_types[0]) {
             StackType::i32 => {
                 result += &format!("\t{} = {};\n\t{};\n", result_register, 
