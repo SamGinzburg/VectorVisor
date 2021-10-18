@@ -55,10 +55,17 @@ lazy_static! {
     static ref RSA_PKEY: RSAPrivateKey = RSAPrivateKey::try_from(rsa::pem::parse(raw_pkey).unwrap()).expect("failed to parse key");
 }
 
+#[inline(never)]
+fn perform_decrypt(key: RSAPrivateKey, padding: PaddingScheme, decoded_str: Vec<u8>) -> Vec<u8> {
+    key.decrypt(padding, &decoded_str).unwrap()
+}
+
+#[inline(never)]
 fn rsa_decrypt(event: FuncInput) -> FuncResponse {
     let mut decoded_str = decode(event.encoded_str.as_bytes()).unwrap();
     let padding = PaddingScheme::new_pkcs1v15_encrypt();
-    let dec_data = RSA_PKEY.decrypt(padding, &decoded_str).expect("failed to decrypt");
+    let key: RSAPrivateKey = RSA_PKEY.clone();
+    let dec_data = perform_decrypt(key, padding, decoded_str);
     FuncResponse { encoded_resp: encode(dec_data) }
 }
 

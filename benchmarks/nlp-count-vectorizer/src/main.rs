@@ -13,7 +13,8 @@ struct FuncResponse {
     tokenized: Vec<Vec<String>>
 }
 
-fn tokenize(inputs: Vec<String>, tok: &Tokenizer) -> Vec<Vec<String>> {
+#[inline(never)]
+fn tokenize(inputs: Vec<String>, tok: &dyn Tokenizer) -> Vec<Vec<String>> {
     let mut results = vec![];
     for tweet in inputs {
         let mut str_vec: Vec<String> = vec![];
@@ -25,6 +26,7 @@ fn tokenize(inputs: Vec<String>, tok: &Tokenizer) -> Vec<Vec<String>> {
     results
 }
 
+#[inline(never)]
 fn tokenize_inputs(event: FuncInput) -> FuncResponse {
     let tok = VTextTokenizerParams::default().lang("en").build().unwrap();
     FuncResponse { tokenized: tokenize(event.tweets, &tok) }

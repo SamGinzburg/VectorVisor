@@ -129,6 +129,11 @@ userdata_ubuntu = """#cloud-config
      - sudo ~/.cargo/bin/cargo build --release
      - ~/.cargo/bin/wasm-snip target/wasm32-wasi/release/imagehash.wasm {snip_args} --snip-rust-fmt-code -o target/wasm32-wasi/release/imagehash.wasm -p {snip_custom}
      - /tmp/binaryen-version_100/bin/wasm-opt target/wasm32-wasi/release/imagehash.wasm {opt} -c -o target/wasm32-wasi/release/imagehash-opt.wasm
+     - cd ..
+     - cd imagehash-modified/
+     - sudo ~/.cargo/bin/cargo build --release
+     - ~/.cargo/bin/wasm-snip target/wasm32-wasi/release/imagehash.wasm {snip_args} --snip-rust-fmt-code -o target/wasm32-wasi/release/imagehash.wasm -p {snip_custom}
+     - /tmp/binaryen-version_100/bin/wasm-opt target/wasm32-wasi/release/imagehash.wasm {opt} -c -o target/wasm32-wasi/release/imagehash-opt.wasm
 """.format(opt=OPT_LEVEL, snip_args=WASM_SNIP_ARGS, snip_custom=WASM_SNIP_CUSTOM)
 
 
@@ -229,7 +234,7 @@ def run_pbkdf2_bench(run_x86):
     /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/pbkdf2/run_pbkdf2.go {addr} 8000 {target_rps} 1 120
 
     /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/pbkdf2/run_pbkdf2.go {addr} 8000 {target_rps} 1 120
-    """.format(addr=gpu_instance[0].private_dns_name, target_rps=target_rps)
+    """.format(addr=gpu_instance[0].private_dns_name, target_rps=4096)
 
     command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
 
@@ -480,7 +485,12 @@ def run_average_bench():
     with open("cpu_bench_average.txt", "w") as text_file:
         text_file.write(str(output))
 
-def run_image_hash_bench():
+def run_image_hash_bench(run_modified = False):
+
+    imagehash_path = "/tmp/wasm2opencl/benchmarks/imagehash/"
+    if run_modified:
+        imagehash_path = "/tmp/wasm2opencl/benchmarks/imagehash-modified/"
+
     run_image_command_wasmtime = """#!/bin/bash
     sudo su
     ulimit -n 65536
@@ -490,8 +500,8 @@ def run_image_hash_bench():
     x=$(cloud-init status)
     done
 
-    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/imagehash/target/wasm32-wasi/release/imagehash-opt.wasm --ip=0.0.0.0 --heap=4194304 --stack=262144 --hcallsize=524288 --partition=true --serverless=true --vmcount=3072 --wasmtime=true --fastreply={fastreply} &> /tmp/imagehash.log &
-    """.format(fastreply=fastreply)
+    /tmp/wasm2opencl/target/release/wasm2opencl --input {imagehash_path}target/wasm32-wasi/release/imagehash-opt.wasm --ip=0.0.0.0 --heap=4194304 --stack=262144 --hcallsize=524288 --partition=true --serverless=true --vmcount=3072 --wasmtime=true --fastreply={fastreply} &> /tmp/imagehash.log &
+    """.format(fastreply=fastreply, imagehash_path=imagehash_path)
 
     run_command(run_image_command_wasmtime, "run_imagehash_command_wasmtime", cpu_bench_instance[0].id)
 
@@ -504,8 +514,8 @@ def run_image_hash_bench():
     x=$(cloud-init status)
     done
 
-    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/imagehash/target/wasm32-wasi/release/imagehash-opt.wasm --ip=0.0.0.0 --heap=4194304 --stack=262144 --hcallsize=524288 --partition=true --serverless=true --vmcount=3072 --vmgroups=1 --maxdup=3 --disablefastcalls=false --partitions=50 --maxloc=1000000 --lgroup={lgroup} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} &> /tmp/imagehash.log &
-    """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace)
+    /tmp/wasm2opencl/target/release/wasm2opencl --input {imagehash_path}target/wasm32-wasi/release/imagehash-opt.wasm --ip=0.0.0.0 --heap=4194304 --stack=262144 --hcallsize=524288 --partition=true --serverless=true --vmcount=3072 --vmgroups=1 --maxdup=3 --disablefastcalls=false --partitions=50 --maxloc=1000000 --lgroup={lgroup} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} &> /tmp/imagehash.log &
+    """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, imagehash_path=imagehash_path)
 
     run_command(run_image_command, "run_imagehash_gpu_command", gpu_instance[0].id)
 
@@ -527,12 +537,12 @@ def run_image_hash_bench():
     x=$(cloud-init status)
     done
 
-    cd /tmp/wasm2opencl/benchmarks/imagehash/
+    cd {imagehash_path}
 
     /usr/local/go/bin/go run run_image_hash.go {addr} 8000 {target_rps} 1 120
 
     /usr/local/go/bin/go run run_image_hash.go {addr} 8000 {target_rps} 1 120
-    """.format(addr=gpu_instance[0].private_dns_name, input_size=1000, target_rps=target_rps)
+    """.format(addr=gpu_instance[0].private_dns_name, input_size=1000, target_rps=target_rps, imagehash_path=imagehash_path)
 
 
     command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
@@ -544,8 +554,12 @@ def run_image_hash_bench():
     print (output)
 
     # save output
-    with open("gpu_bench_imagehash.txt", "w") as text_file:
-        text_file.write(str(output))
+    if run_modified:
+        with open("gpu_bench_imagehash_modified.txt", "w") as text_file:
+            text_file.write(str(output))
+    else:
+        with open("gpu_bench_imagehash.txt", "w") as text_file:
+            text_file.write(str(output))
 
     run_invoker_wasmtime = """#!/bin/bash
     sudo su
@@ -563,12 +577,12 @@ def run_image_hash_bench():
     x=$(cloud-init status)
     done
 
-    cd /tmp/wasm2opencl/benchmarks/imagehash/
+    cd {imagehash_path}
 
     /usr/local/go/bin/go run run_image_hash.go {addr} 8000 {target_rps} 1 120
 
     /usr/local/go/bin/go run run_image_hash.go {addr} 8000 {target_rps} 1 120
-    """.format(addr=cpu_bench_instance[0].private_dns_name, input_size=1000, target_rps=target_rps_cpu)
+    """.format(addr=cpu_bench_instance[0].private_dns_name, input_size=1000, target_rps=target_rps_cpu, imagehash_path=imagehash_path)
 
     command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
 
@@ -578,8 +592,12 @@ def run_image_hash_bench():
     output = block_on_command(command_id, invoker_instance[0].id)
     print (output)
     # save output
-    with open("cpu_bench_imagehash.txt", "w") as text_file:
-        text_file.write(str(output))
+    if run_modified:
+        with open("cpu_bench_imagehash_modified.txt", "w") as text_file:
+            text_file.write(str(output))
+    else:
+        with open("cpu_bench_imagehash.txt", "w") as text_file:
+            text_file.write(str(output))
 
 
 
@@ -724,7 +742,7 @@ def run_nlp_count_bench():
     x=$(cloud-init status)
     done
 
-    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/target/wasm32-wasi/release/nlp-count-vectorizer-opt.wasm --ip=0.0.0.0 --heap=4194304 --stack=262144 --hcallsize=524288 --partition=true --serverless=true --vmcount=3072 --vmgroups=1 --maxdup=3 --disablefastcalls=false --lgroup={lgroup} --maxloc=1000000 --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} &> /tmp/nlp-count-vectorizer.log &
+    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/target/wasm32-wasi/release/nlp-count-vectorizer-opt.wasm --ip=0.0.0.0 --heap=3145728 --stack=131072 --hcallsize=262144 --partition=true --serverless=true --vmcount=4096 --vmgroups=1 --maxdup=3 --disablefastcalls=false --lgroup={lgroup} --maxloc=2000000 --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} &> /tmp/nlp-count-vectorizer.log &
     """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace)
 
     run_command(run_nlp_command, "run_nlp_command", gpu_instance[0].id)
@@ -752,7 +770,7 @@ def run_nlp_count_bench():
     /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/run_nlp.go {addr} 8000 {target_rps} 1 60 /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/smaller_tweets.txt {input_size}
 
     /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/run_nlp.go {addr} 8000 {target_rps} 1 60 /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/smaller_tweets.txt {input_size}
-    """.format(addr=gpu_instance[0].private_dns_name, input_size=1000, target_rps=target_rps)
+    """.format(addr=gpu_instance[0].private_dns_name, input_size=500, target_rps=4096)
 
 
     command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
@@ -788,7 +806,7 @@ def run_nlp_count_bench():
     /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/run_nlp.go {addr} 8000 {target_rps} 1 60 /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/smaller_tweets.txt {input_size}
 
     /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/run_nlp.go {addr} 8000 {target_rps} 1 60 /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/smaller_tweets.txt {input_size}
-    """.format(addr=cpu_bench_instance[0].private_dns_name, input_size=1000, target_rps=target_rps_cpu)
+    """.format(addr=cpu_bench_instance[0].private_dns_name, input_size=500, target_rps=target_rps_cpu)
 
     command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
 
@@ -899,14 +917,14 @@ while True:
 ssm_client = boto3.client('ssm')
 
 # run pbkdf2 bench
-run_pbkdf2_bench(True)
+#run_pbkdf2_bench(True)
 
-cleanup()
+#cleanup()
 
 # run lz4 bench
-run_lz4_bench()
+#run_lz4_bench()
 
-cleanup()
+#cleanup()
 
 # run NLP bench
 #run_nlp_count_bench()
@@ -914,21 +932,27 @@ cleanup()
 #cleanup()
 
 # run average bench
-run_average_bench()
+#run_average_bench()
 
-cleanup()
+#cleanup()
 
 # run image blue bench
-run_image_blur_bench(run_bmp = True)
+#run_image_blur_bench(run_bmp = True)
 
-cleanup()
+#cleanup()
 
-run_image_blur_bench(run_bmp = False)
+#run_image_blur_bench(run_bmp = False)
+
+#cleanup()
+
+# run image hash bench
+run_image_hash_bench(run_modified = False)
 
 cleanup()
 
 # run image hash bench
-run_image_hash_bench()
+run_image_hash_bench(run_modified = True)
+
 
 # clean up all instances at end
 ec2.instances.filter(InstanceIds = instance_id_list).terminate()
