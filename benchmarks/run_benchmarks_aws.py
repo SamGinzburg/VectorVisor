@@ -728,7 +728,7 @@ def run_nlp_count_bench():
     x=$(cloud-init status)
     done
 
-    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/target/wasm32-wasi/release/nlp-count-vectorizer-opt.wasm --ip=0.0.0.0 --heap=4194304 --stack=262144 --hcallsize=524288 --partition=true --serverless=true --vmcount=3072 --wasmtime=true --fastreply={fastreply} &> /tmp/nlp-count-vectorizer.log &
+    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/target/wasm32-wasi/release/nlp-count-vectorizer-opt.wasm --ip=0.0.0.0 --heap=3145728 --stack=131072 --hcallsize=262144 --partition=true --serverless=true --vmcount=4096 --wasmtime=true --fastreply={fastreply} &> /tmp/nlp-count-vectorizer.log &
     """.format(fastreply=fastreply)
 
     run_command(run_nlp_command_wasmtime, "run_nlp_command_wasmtime", cpu_bench_instance[0].id)
@@ -767,9 +767,9 @@ def run_nlp_count_bench():
 
     cd /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/
 
-    /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/run_nlp.go {addr} 8000 {target_rps} 1 60 /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/smaller_tweets.txt {input_size}
+    /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/run_nlp.go {addr} 8000 {target_rps} 1 120 /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/smaller_tweets.txt {input_size}
 
-    /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/run_nlp.go {addr} 8000 {target_rps} 1 60 /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/smaller_tweets.txt {input_size}
+    /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/run_nlp.go {addr} 8000 {target_rps} 1 120 /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/smaller_tweets.txt {input_size}
     """.format(addr=gpu_instance[0].private_dns_name, input_size=500, target_rps=4096)
 
 
@@ -803,9 +803,9 @@ def run_nlp_count_bench():
 
     cd /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/
 
-    /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/run_nlp.go {addr} 8000 {target_rps} 1 60 /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/smaller_tweets.txt {input_size}
+    /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/run_nlp.go {addr} 8000 {target_rps} 1 120 /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/smaller_tweets.txt {input_size}
 
-    /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/run_nlp.go {addr} 8000 {target_rps} 1 60 /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/smaller_tweets.txt {input_size}
+    /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/run_nlp.go {addr} 8000 {target_rps} 1 120 /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/smaller_tweets.txt {input_size}
     """.format(addr=cpu_bench_instance[0].private_dns_name, input_size=500, target_rps=target_rps_cpu)
 
     command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
@@ -927,7 +927,7 @@ ssm_client = boto3.client('ssm')
 #cleanup()
 
 # run NLP bench
-#run_nlp_count_bench()
+run_nlp_count_bench()
 
 #cleanup()
 
@@ -946,12 +946,12 @@ ssm_client = boto3.client('ssm')
 #cleanup()
 
 # run image hash bench
-run_image_hash_bench(run_modified = False)
+#run_image_hash_bench(run_modified = False)
 
-cleanup()
+#cleanup()
 
 # run image hash bench
-run_image_hash_bench(run_modified = True)
+#run_image_hash_bench(run_modified = True)
 
 
 # clean up all instances at end

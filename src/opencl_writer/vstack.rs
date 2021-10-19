@@ -940,45 +940,41 @@ impl<'a> StackCtx {
                                     // ignore WASI API scoping for now
                                     (_, Some(true)) => {
                                         // Taint loops that perform hypercalls
-                                        taint_open_loops(&mut tainted_loops, open_loop_stack.clone());
+                                        if wasi_fn_name != &"proc_exit" {
+                                            taint_open_loops(&mut tainted_loops, open_loop_stack.clone());
+                                            is_fastcall = false;
+                                        }
+
                                         // Track how many hypercalls we perform
                                         num_hypercalls += 1;
 
                                         match wasi_fn_name {
                                             &"fd_write"               => {
                                                 current_i32_count -= 3;
-                                                is_fastcall = false;
                                             },
                                             &"proc_exit"              => {
                                                 current_i32_count -= 1;
                                             },
                                             &"environ_sizes_get"      => {
                                                 current_i32_count -= 1;
-                                                is_fastcall = false;
                                             },
                                             &"environ_get"            => {
                                                 current_i32_count -= 1;
-                                                is_fastcall = false;
                                             },
                                             &"fd_prestat_get"         => {
                                                 current_i32_count -= 1;
-                                                is_fastcall = false;
                                             },
                                             &"fd_prestat_dir_name"    => {
                                                 current_i32_count -= 2;
-                                                is_fastcall = false;
                                             },
                                             &"random_get"             => {
                                                 current_i32_count -= 1;
-                                                is_fastcall = false;
                                             },
                                             &"serverless_invoke"      => {
                                                 current_i32_count -= 1;
-                                                is_fastcall = false;
                                             },
                                             &"serverless_response"    => {
                                                 current_i32_count -= 2;
-                                                is_fastcall = false;
                                             },
                                             _ => panic!("Unidentified WASI fn name: {:?} (vstack)", wasi_fn_name),
                                         }
