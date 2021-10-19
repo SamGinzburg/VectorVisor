@@ -927,7 +927,7 @@ ssm_client = boto3.client('ssm')
 #cleanup()
 
 # run NLP bench
-run_nlp_count_bench()
+#run_nlp_count_bench()
 
 #cleanup()
 
@@ -946,12 +946,12 @@ run_nlp_count_bench()
 #cleanup()
 
 # run image hash bench
-#run_image_hash_bench(run_modified = False)
+run_image_hash_bench(run_modified = False)
 
-#cleanup()
+cleanup()
 
 # run image hash bench
-#run_image_hash_bench(run_modified = True)
+run_image_hash_bench(run_modified = True)
 
 
 # clean up all instances at end
