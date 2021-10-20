@@ -326,6 +326,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "heck"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6d621efb26863f0e9924c6ac577e8275e5e6b77455db64ffa6c65c904e9e132c"
+dependencies = [
+ "unicode-segmentation",
+]
+
+[[package]]
 name = "hermit-abi"
 version = "0.1.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -579,7 +588,9 @@ dependencies = [
 name = "nlp-count-vectorizer"
 version = "0.1.0"
 dependencies = [
+ "lazy_static",
  "serde",
+ "stop-words",
  "vtext",
  "wasm-serverless-invoke",
 ]
@@ -1040,6 +1051,35 @@ dependencies = [
  "ndarray",
  "num-complex",
  "num-traits 0.1.43",
+]
+
+[[package]]
+name = "stop-words"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "45b2781b0c4d8a38a08f516ed719341b41c1b21f6453dea775b564f5b1b46d6c"
+dependencies = [
+ "serde_json",
+ "strum",
+ "strum_macros",
+]
+
+[[package]]
+name = "strum"
+version = "0.20.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7318c509b5ba57f18533982607f24070a55d353e90d4cae30c467cdb2ad5ac5c"
+
+[[package]]
+name = "strum_macros"
+version = "0.20.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ee8bc6b87a5112aeeab1f4a9f7ab634fe6cbefc4850006df31267f4cfb9e3149"
+dependencies = [
+ "heck",
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]

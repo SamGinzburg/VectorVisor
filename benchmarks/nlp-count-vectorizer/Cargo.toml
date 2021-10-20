@@ -10,9 +10,10 @@ edition = "2018"
 wasm-serverless-invoke = { path = "../../wasm-serverless-invoke" }
 serde = { version = "1.0.62", features = ["derive"] }
 vtext = "0.2.0"
+stop-words = "0.4.0"
+lazy_static = "1.4.0"
 
 [profile.release]
 lto = true
 codegen-units = 1 # better optimizations
 opt-level = 3
-

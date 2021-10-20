@@ -54,10 +54,17 @@ impl warp::reject::Reject for NoVmAvailable {}
 
 impl BatchSubmitServer {
 
-    fn create_response(resp: Vec<u8>) -> warp::http::Response<Body> {
-       Response::builder()
-        .status(StatusCode::OK)
-        .body(Body::from(resp)).unwrap() 
+    fn create_response(resp: Vec<u8>, on_dev_time: u64, queue_submit_time: u64, num_queue_submits: u64, num_unique_fns: u64) -> warp::http::Response<Body> {
+        let mut final_resp = Response::builder().status(StatusCode::OK);
+        {
+            let headers = final_resp.headers_mut().unwrap();
+            headers.insert("on_device_time", warp::http::HeaderValue::from_str(&on_dev_time.to_string()).unwrap());
+            headers.insert("queue_submit_time", warp::http::HeaderValue::from_str(&queue_submit_time.to_string()).unwrap());
+            headers.insert("num_queue_submits", warp::http::HeaderValue::from_str(&num_queue_submits.to_string()).unwrap());
+            headers.insert("num_unique_fns", warp::http::HeaderValue::from_str(&num_unique_fns.to_string()).unwrap());
+        }
+
+        final_resp.body(Body::from(resp)).unwrap()
     }
 
 
@@ -103,8 +110,9 @@ impl BatchSubmitServer {
         let req_end = std::time::Instant::now();
         //println!("req time: {:?}, vm_idx: {:?}", (req_end - req_start).as_nanos(), vm_idx);
 
+        /*
         if fast_reply {
-            Ok(BatchSubmitServer::create_response(resp))
+            Ok(BatchSubmitServer::create_response(resp, on_dev_time, queue_submit_time, num_queue_submits, num_unique_fns))
         } else {
             let final_response = BatchReply {
                 response: &resp,
@@ -116,6 +124,10 @@ impl BatchSubmitServer {
 
             Ok(warp::reply::json(&final_response).into_response())
         }
+        */
+
+
+        Ok(BatchSubmitServer::create_response(resp, on_dev_time, queue_submit_time, num_queue_submits, num_unique_fns))
     }
 
     pub fn start_server(_hcall_buf_size: usize, fast_reply: bool, is_active: Arc<SyncMutex<bool>>, sender: Arc<Vec<Mutex<Sender<(bytes::Bytes, usize)>>>>, receiver: Arc<Vec<Mutex<Receiver<VmSenderType>>>>, num_vms: u32, server_ip: String, server_port: String) -> () {

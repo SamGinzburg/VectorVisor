@@ -946,9 +946,9 @@ ssm_client = boto3.client('ssm')
 #cleanup()
 
 # run image hash bench
-run_image_hash_bench(run_modified = False)
+#run_image_hash_bench(run_modified = False)
 
-cleanup()
+#cleanup()
 
 # run image hash bench
 run_image_hash_bench(run_modified = True)
