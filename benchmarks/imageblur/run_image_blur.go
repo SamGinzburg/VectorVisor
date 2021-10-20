@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	b64 "encoding/base64"
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"math/rand"
@@ -89,16 +88,11 @@ func IssueRequests(ip string, port int, req [][]byte, exec_time chan<- float64, 
 			//fmt.Printf("E2E req time: %s\n", read_secs)
 			//fmt.Printf("%s\n", body)
 		}
-		m := map[string]interface{}{}
-		err = json.Unmarshal(body, &m)
-		if err == nil {
-			if m["on_device_execution_time_ns"] != nil {
-				on_device_compute_time = m["on_device_execution_time_ns"].(float64)
-				device_queue_overhead = m["device_queue_overhead_time_ns"].(float64)
-				queue_submit_count = m["queue_submit_count"].(float64)
-				num_unique_fns_called = m["num_unique_fns_called"].(float64)
-			}
-		}
+
+		on_device_compute_time, _ = strconv.ParseFloat(resp.Header.Get("on_device_time"), 64)
+		device_queue_overhead, _ = strconv.ParseFloat(resp.Header.Get("queue_submit_time"), 64)
+		queue_submit_count, _ = strconv.ParseFloat(resp.Header.Get("num_queue_submits"), 64)
+		num_unique_fns_called, _ = strconv.ParseFloat(resp.Header.Get("num_unique_fns"), 64)
 
 		select {
 		case exec_time <- on_device_compute_time:
