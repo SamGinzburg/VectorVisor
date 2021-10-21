@@ -1,15 +1,15 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"os"
-	"net/http"
-	"time"
-	"encoding/json"
-	"bytes"
-	"strconv"
 	"math/rand"
+	"net/http"
+	"os"
+	"strconv"
+	"time"
 )
 
 type payload struct {
@@ -17,8 +17,8 @@ type payload struct {
 }
 
 type Message struct {
-	Req_id int `json:"req_id"`
-	Req string `json:"req"`
+	Req_id int    `json:"req_id"`
+	Req    string `json:"req"`
 }
 
 type MessageBatch struct {
@@ -26,40 +26,45 @@ type MessageBatch struct {
 }
 
 type VmmResponse struct {
-	response string
-	on_device_execution_time_ns float64
+	response                      string
+	on_device_execution_time_ns   float64
 	device_queue_overhead_time_ns float64
-	queue_submit_count float64
-	num_unique_fns_called float64
+	queue_submit_count            float64
+	num_unique_fns_called         float64
 }
 
-var NUM_PARAMS = 256;
+var NUM_PARAMS = 256
 
 var client = &http.Client{}
 
 func RandIntSlice(n int) []int {
-    b := make([]int, n)
-    for i := range b {
-        b[i] = rand.Intn(10000)
-    }
-    return b
+	b := make([]int, n)
+	for i := range b {
+		b[i] = rand.Intn(10000)
+	}
+	return b
 }
 
 // https://stackoverflow.com/questions/22892120/how-to-generate-a-random-string-of-a-fixed-length-in-go
 var letterRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 
 func RandString(n int) string {
-    b := make([]rune, n)
-    for i := range b {
-        b[i] = letterRunes[rand.Intn(len(letterRunes))]
-    }
-    return string(b)
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = letterRunes[rand.Intn(len(letterRunes))]
+	}
+	return string(b)
 }
 
-func IssueRequests(ip string, port int, req [][]byte, exec_time chan<-float64, latency chan<-float64, queue_time chan<-float64, submit_count chan<-float64, unique_fns chan<-float64, end_chan chan bool) {
+func IssueRequests(ip string, port int, req [][]byte, exec_time chan<- float64, latency chan<- float64, queue_time chan<- float64, submit_count chan<- float64, unique_fns chan<- float64, end_chan chan bool) {
 	addr := fmt.Sprintf("http://%s:%d/batch_submit/", ip, port)
 	http_request, _ := http.NewRequest("GET", addr, nil)
 	http_request.Header.Add("Content-Type", "application/json; charset=utf-8")
+
+	on_device_compute_time := 0.0
+	device_queue_overhead := 0.0
+	queue_submit_count := 0.0
+	num_unique_fns_called := 0.0
 
 	for {
 		http_request.Body = ioutil.NopCloser(bytes.NewReader(req[rand.Intn(NUM_PARAMS)]))
@@ -69,7 +74,7 @@ func IssueRequests(ip string, port int, req [][]byte, exec_time chan<-float64, l
 		if err != nil {
 			// check to see if we are done
 			if len(end_chan) > 0 {
-				return;
+				return
 			}
 			continue
 		}
@@ -90,43 +95,40 @@ func IssueRequests(ip string, port int, req [][]byte, exec_time chan<-float64, l
 			//fmt.Printf("E2E req time: %s\n", read_secs)
 			//fmt.Printf("%s\n", body)
 		}
-		m := map[string]interface{}{}
-		err = json.Unmarshal(body, &m)
-		if err != nil {
-			panic(err)
-		}
-		on_device_compute_time := m["on_device_execution_time_ns"].(float64)
-		device_queue_overhead := m["device_queue_overhead_time_ns"].(float64)
-		queue_submit_count := m["queue_submit_count"].(float64)
-		num_unique_fns_called := m["num_unique_fns_called"].(float64)
+
+		on_device_compute_time, _ = strconv.ParseFloat(resp.Header.Get("on_device_time"), 64)
+		device_queue_overhead, _ = strconv.ParseFloat(resp.Header.Get("queue_submit_time"), 64)
+		queue_submit_count, _ = strconv.ParseFloat(resp.Header.Get("num_queue_submits"), 64)
+		num_unique_fns_called, _ = strconv.ParseFloat(resp.Header.Get("num_unique_fns"), 64)
+
 		select {
-			case exec_time <- on_device_compute_time:
-			default:
-				return;
+		case exec_time <- on_device_compute_time:
+		default:
+			return
 		}
 		select {
-			case latency <- float64(read_secs):
-			default:
-				return;
+		case latency <- float64(read_secs):
+		default:
+			return
 		}
 		select {
-			case queue_time <- device_queue_overhead:
-			default:
-				return;
+		case queue_time <- device_queue_overhead:
+		default:
+			return
 		}
 		select {
-			case submit_count <- queue_submit_count:
-			default:
-				return;
+		case submit_count <- queue_submit_count:
+		default:
+			return
 		}
 		select {
-			case unique_fns <- num_unique_fns_called:
-			default:
-				return;
+		case unique_fns <- num_unique_fns_called:
+		default:
+			return
 		}
 		// check to see if we are done
 		if len(end_chan) > 0 {
-			return;
+			return
 		}
 	}
 }
@@ -174,7 +176,6 @@ func main() {
 	}
 	client = &http.Client{Transport: tr}
 
-
 	addr := fmt.Sprintf("http://%s:%d/is_active/", os.Args[1], port)
 	http_request, _ := http.NewRequest("GET", addr, nil)
 	http_request.Header.Add("Content-Type", "application/json; charset=utf-8")
@@ -205,7 +206,7 @@ func main() {
 
 	benchmark_duration := time.Duration(timeout_secs) * time.Second
 	bench_timer := time.NewTimer(benchmark_duration)
-	for vmgroup := 0 ; vmgroup < num_vmgroups; vmgroup++ {
+	for vmgroup := 0; vmgroup < num_vmgroups; vmgroup++ {
 		for i := 0; i < num_vms; i++ {
 			go IssueRequests(os.Args[1], port+vmgroup, reqs, ch_exec_time, ch_latency, ch_queue_time, ch_submit, ch_unique_fns, termination_chan)
 		}
@@ -239,7 +240,7 @@ func main() {
 		termination_chan <- true
 	}
 
-	// calculate the total RPS	
+	// calculate the total RPS
 	total_rps := (float64(batches_completed)) / duration
 	fmt.Printf("Total RPS: %f\n", total_rps)
 	fmt.Printf("On device execution time: %f\n", exec_time)
@@ -248,33 +249,33 @@ func main() {
 	fmt.Printf("submit count: %f\n", submit_count)
 	fmt.Printf("unique fns: %f\n", unique_fns)
 	/*
-	on_device_compute_time := 0.0
-	device_queue_overhead := 0.0
-	queue_submit_count := 0.0
-	num_unique_fns_called := 0.0
-	req_count := 0.0
-	m := map[string]interface{}{}
-	for i := 0; i < batches_completed; i++ {
-		err := json.Unmarshal(responses[i], &m)
-		if err != nil {
-			fmt.Printf("Failed to unmarshal json error: %s, %s", err, string(responses[i]))
-			os.Exit(2)
+		on_device_compute_time := 0.0
+		device_queue_overhead := 0.0
+		queue_submit_count := 0.0
+		num_unique_fns_called := 0.0
+		req_count := 0.0
+		m := map[string]interface{}{}
+		for i := 0; i < batches_completed; i++ {
+			err := json.Unmarshal(responses[i], &m)
+			if err != nil {
+				fmt.Printf("Failed to unmarshal json error: %s, %s", err, string(responses[i]))
+				os.Exit(2)
+			}
+			on_device_compute_time += m["on_device_execution_time_ns"].(float64)
+			device_queue_overhead += m["device_queue_overhead_time_ns"].(float64)
+			queue_submit_count += m["queue_submit_count"].(float64)
 		}
-		on_device_compute_time += m["on_device_execution_time_ns"].(float64)
-		device_queue_overhead += m["device_queue_overhead_time_ns"].(float64)
-		queue_submit_count += m["queue_submit_count"].(float64)
-	}
 
-	on_device_compute_time = on_device_compute_time / req_count
-	device_queue_overhead = device_queue_overhead / req_count
-	queue_submit_count = queue_submit_count / req_count
-	num_unique_fns_called = num_unique_fns_called / req_count
+		on_device_compute_time = on_device_compute_time / req_count
+		device_queue_overhead = device_queue_overhead / req_count
+		queue_submit_count = queue_submit_count / req_count
+		num_unique_fns_called = num_unique_fns_called / req_count
 
-	fmt.Printf("Average on device compute time (ns): %f\n", on_device_compute_time)
-	fmt.Printf("Average device queue overhead (ns): %f\n", device_queue_overhead)
-	fmt.Printf("Average queue submit count: %f\n", queue_submit_count)
-	fmt.Printf("Average num of unique fns called: %f\n", num_unique_fns_called)
+		fmt.Printf("Average on device compute time (ns): %f\n", on_device_compute_time)
+		fmt.Printf("Average device queue overhead (ns): %f\n", device_queue_overhead)
+		fmt.Printf("Average queue submit count: %f\n", queue_submit_count)
+		fmt.Printf("Average num of unique fns called: %f\n", num_unique_fns_called)
 
-	fmt.Printf("Parallel fraction of function (only applicable to GPU funcs): %f\n", (((on_device_compute_time+device_queue_overhead)/1000000000)) / duration)
+		fmt.Printf("Parallel fraction of function (only applicable to GPU funcs): %f\n", (((on_device_compute_time+device_queue_overhead)/1000000000)) / duration)
 	*/
 }
