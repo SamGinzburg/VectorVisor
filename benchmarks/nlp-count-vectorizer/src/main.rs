@@ -7,7 +7,7 @@ use std::collections::HashSet;
 use lazy_static::lazy_static;
 
 lazy_static! {
-    static ref WORD_SET: HashSet<String> = stop_words::get(stop_words::LANGUAGE::English).into_iter().collect(); 
+    //static ref WORD_SET: HashSet<String> = stop_words::get(stop_words::LANGUAGE::English).into_iter().collect(); 
 }
 
 #[derive(Debug, Deserialize)]
@@ -60,7 +60,6 @@ fn tokenize(inputs: Vec<String>, tok: &dyn Tokenizer) -> Vec<Vec<String>> {
 #[inline(never)]
 fn tokenize_inputs(event: FuncInput) -> FuncResponse {
     let tok = VTextTokenizerParams::default().lang("en").build().unwrap();
-
     let mut tweets = tokenize(event.tweets, &tok);
     //let word_set: HashSet<String> = WORD_SET.clone();
     

@@ -743,7 +743,7 @@ def run_nlp_count_bench():
     done
 
     /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/target/wasm32-wasi/release/nlp-count-vectorizer-opt.wasm --ip=0.0.0.0 --heap=3145728 --stack=131072 --hcallsize=262144 --partition=true --serverless=true --vmcount=4096 --vmgroups=1 --maxdup=3 --disablefastcalls=false --lgroup={lgroup} --maxloc=2000000 --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} &> /tmp/nlp-count-vectorizer.log &
-    """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace)
+    """.format(lgroup=1, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace)
 
     run_command(run_nlp_command, "run_nlp_command", gpu_instance[0].id)
 
