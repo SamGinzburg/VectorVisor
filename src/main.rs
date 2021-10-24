@@ -24,7 +24,7 @@ use opencl_writer::bpatch;
 use opencl_runner::InputProgram;
 use opencl_runner::SeralizedProgram;
 use opencl_runner::PartitionedSeralizedProgram;
-use opencl_runner::vectorized_vm::VmSenderType;
+use opencl_runner::vectorized_vm::{VmSenderType, VmRecvType};
 use ocl::core::ContextProperties;
 use batch_submit::BatchSubmitServer;
 use wasmtime_runner::WasmtimeRunner;
@@ -680,7 +680,7 @@ fn main() {
             let mut server_sender_vec = vec![];
             let mut vm_recv_vec = vec![];
             for _ in 0..num_vms.clone() {
-                let (sender, recv): (tokio::sync::mpsc::Sender<(bytes::Bytes, usize)>, tokio::sync::mpsc::Receiver<(bytes::Bytes, usize)>) = mpsc::channel(16384);
+                let (sender, recv): (tokio::sync::mpsc::Sender<VmRecvType>, tokio::sync::mpsc::Receiver<VmRecvType>) = mpsc::channel(16384);
                 server_sender_vec.push(AsyncMutex::new(sender));
                 vm_recv_vec.push(Mutex::new(recv));
             }
@@ -740,7 +740,7 @@ fn main() {
         let mut server_sender_vec = vec![];
         let mut vm_recv_vec = vec![];
         for _ in 0..num_threads {
-            let (sender, recv): (tokio::sync::mpsc::Sender<(bytes::Bytes, usize)>, tokio::sync::mpsc::Receiver<(bytes::Bytes, usize)>) = mpsc::channel(1);
+            let (sender, recv): (tokio::sync::mpsc::Sender<VmRecvType>, tokio::sync::mpsc::Receiver<VmRecvType>) = mpsc::channel(1);
             server_sender_vec.push(AsyncMutex::new(sender));
             vm_recv_vec.push(Mutex::new(recv));
         }

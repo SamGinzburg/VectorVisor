@@ -50,7 +50,7 @@ impl Serverless {
     }
 
 
-    pub fn hypercall_serverless_response(_ctx: &WasiCtx, vm_ctx: &VectorizedVM, hypercall: &mut HyperCall, sender: &Sender<HyperCallResult>) -> () {
+    pub fn hypercall_serverless_response(vm_ctx: &mut VectorizedVM, hypercall: &mut HyperCall, sender: &Sender<HyperCallResult>) -> () {
         let mut hcall_buf: &[u8] = unsafe { *hypercall.hypercall_buffer.buf.get() };
         let hcall_buf_size: u32 = vm_ctx.hcall_buf_size;
         let vm_idx = vm_ctx.vm_id;
@@ -78,7 +78,13 @@ impl Serverless {
                 count += 1;
             }
 
-            send_chan.lock().unwrap().blocking_send((resp_buf, resp_buf_len, on_device_time, queue_submit_time, queue_submit_count, count)).unwrap();
+            send_chan.lock().unwrap().blocking_send((resp_buf,
+                                                     resp_buf_len,
+                                                     on_device_time,
+                                                     queue_submit_time,
+                                                     queue_submit_count,
+                                                     count,
+                                                     vm_ctx.uuid_queue.pop_front().unwrap())).unwrap();
         }
 
         sender.send({

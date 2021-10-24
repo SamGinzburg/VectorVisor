@@ -38,3 +38,4 @@ deadqueue = "0.2.0"
 futures = "0.3"
 bus = "2.2.3"
 rustc-demangle = "0.1"
+uuid = { version = "0.8", features = ["v4"] }

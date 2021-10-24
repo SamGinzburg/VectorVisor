@@ -26,6 +26,7 @@ use std::collections::HashSet;
 use std::convert::TryInto;
 use std::fs::File;
 use std::path::Path;
+use std::collections::VecDeque;
 
 #[derive(Clone, Copy)]
 pub enum WasiSyscalls {
@@ -124,7 +125,8 @@ impl HyperCallResult {
     }
 }
 
-pub type VmSenderType = (Vec<u8>, usize, u64, u64, u64, u64);
+pub type VmSenderType = (Vec<u8>, usize, u64, u64, u64, u64, String);
+pub type VmRecvType = (bytes::Bytes, usize, String);
 
 pub struct VectorizedVM {
     // each VM has its own WASI state tracking object
@@ -142,14 +144,15 @@ pub struct VectorizedVM {
     pub queue_submit_qty: Arc<u64>,
     pub called_fns_set: Arc<HashSet<u32>>,
     pub vm_sender: Arc<Vec<Mutex<Sender<VmSenderType>>>>,
-    pub vm_recv: Arc<Vec<Mutex<Receiver<(bytes::Bytes, usize)>>>>,
+    pub vm_recv: Arc<Vec<Mutex<Receiver<VmRecvType>>>>,
     pub ready_for_input: AtomicBool,
     pub input_msg_len: usize,
     pub no_resp: bool,
+    pub uuid_queue: VecDeque<String>,
 }
 
 impl VectorizedVM {
-    pub fn new(vm_id: u32, hcall_buf_size: u32, _num_total_vms: u32, vm_sender: Arc<Vec<Mutex<Sender<VmSenderType>>>>, vm_recv: Arc<Vec<Mutex<Receiver<(bytes::Bytes, usize)>>>>) -> VectorizedVM {
+    pub fn new(vm_id: u32, hcall_buf_size: u32, _num_total_vms: u32, vm_sender: Arc<Vec<Mutex<Sender<VmSenderType>>>>, vm_recv: Arc<Vec<Mutex<Receiver<VmRecvType>>>>) -> VectorizedVM {
         // default context with no args yet - we can inherit arguments from the CLI if we want
         // or we can pass them in some other config file
 
@@ -199,6 +202,7 @@ impl VectorizedVM {
             ready_for_input: AtomicBool::new(true),
             input_msg_len: 0,
             no_resp: true,
+            uuid_queue: VecDeque::new()
         }
     }
 
@@ -206,12 +210,13 @@ impl VectorizedVM {
         self.ready_for_input.load(Ordering::Relaxed).clone()
     }
 
-    pub fn queue_request(&mut self, msg: bytes::Bytes, hcall_buf: &mut [u8]) -> () {
+    pub fn queue_request(&mut self, msg: bytes::Bytes, hcall_buf: &mut [u8], uuid: String) -> () {
         let hcall_buf_size: u32 = self.hcall_buf_size;
         let vm_hcall_buf = &mut hcall_buf[(self.vm_id * hcall_buf_size) as usize..((self.vm_id+1) * hcall_buf_size) as usize];
         vm_hcall_buf[0..msg.len()].copy_from_slice(&msg);
         self.ready_for_input.store(false, Ordering::Relaxed);
         self.input_msg_len = msg.len();
+        self.uuid_queue.push_back(uuid);
     }
 
     /*
@@ -249,7 +254,7 @@ impl VectorizedVM {
                 Serverless::hypercall_serverless_invoke(self, hypercall, sender);
             },
             WasiSyscalls::ServerlessResponse => {
-                Serverless::hypercall_serverless_response(&self.ctx, self, hypercall, sender);
+                Serverless::hypercall_serverless_response(self, hypercall, sender);
                 self.ready_for_input.store(true, Ordering::Relaxed);
             },
             WasiSyscalls::RandomGet => {

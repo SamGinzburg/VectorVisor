@@ -7,7 +7,7 @@ mod random;
 
 use wasi_fd::WasiFd;
 use vectorized_vm::VectorizedVM;
-use vectorized_vm::VmSenderType;
+use vectorized_vm::{VmSenderType, VmRecvType};
 use vectorized_vm::HyperCall;
 use vectorized_vm::HyperCallResult;
 use vectorized_vm::WasiSyscalls;
@@ -208,7 +208,7 @@ impl OpenCLRunner {
                local_work_group: usize,
                mexec: usize,
                vm_sender: Arc<Vec<Mutex<Sender<VmSenderType>>>>,
-               vm_recv: Arc<Vec<Mutex<Receiver<(bytes::Bytes, usize)>>>>,
+               vm_recv: Arc<Vec<Mutex<Receiver<VmRecvType>>>>,
                _compile_flags: String,
                _link_flags: String,
                print_return: bool) -> JoinHandle<()> {
@@ -768,7 +768,7 @@ impl OpenCLRunner {
                          ctx: &ocl::core::Context,
                          print_return: bool,
                          vm_sender: Arc<Vec<Mutex<Sender<VmSenderType>>>>,
-                         vm_recv: Arc<Vec<Mutex<Receiver<(bytes::Bytes, usize)>>>>) -> VMMRuntimeStatus {
+                         vm_recv: Arc<Vec<Mutex<Receiver<VmRecvType>>>>) -> VMMRuntimeStatus {
         // we have the compiled program & context, we now can set up the kernels...
         let data_kernel = ocl::core::create_kernel(&program, "data_init").unwrap();
         let start_kernel = ocl::core::create_kernel(&program, "wasm_entry").unwrap();
@@ -863,14 +863,14 @@ impl OpenCLRunner {
                     if avail_vms {
                         for vm_idx in 0..(number_vms/num_threads) {
                             match vm_recv_copy[vm_idx as usize].lock().unwrap().poll_recv(&mut cx) {
-                                Poll::Ready(Some((msg, _))) => {
+                                Poll::Ready(Some((msg, _, uuid))) => {
                                     // Check if this VM has an input ready already
                                     let wasi_context = &mut wasi_ctxs[vm_idx as usize];
 
                                     // Queue the input in the VM
                                     let buffer = async_buffer.clone();
                                     let deref_buf = unsafe { &mut *buffer.buf.get() };
-                                    wasi_context.queue_request(msg, *deref_buf);
+                                    wasi_context.queue_request(msg, *deref_buf, uuid);
 
                                     // Update the count of available VMs
                                     avail_vm_count -= 1;
@@ -1227,7 +1227,7 @@ impl OpenCLRunner {
                                     ctx: &ocl::core::Context,
                                     print_return: bool,
                                     vm_sender: Arc<Vec<Mutex<Sender<VmSenderType>>>>,
-                                    vm_recv: Arc<Vec<Mutex<Receiver<(bytes::Bytes, usize)>>>>) -> VMMRuntimeStatus {
+                                    vm_recv: Arc<Vec<Mutex<Receiver<VmRecvType>>>>) -> VMMRuntimeStatus {
         let mut kernels: HashMap<u32, ocl::core::Kernel> = HashMap::new();
 
         // setup the data kernel
@@ -1381,12 +1381,12 @@ impl OpenCLRunner {
                             let worker_vm_idx = *vm_id_mapping.get(vm_idx).unwrap() as usize;
                             if !is_empty_vm.contains(&worker_vm_idx) {
                                 match vm_recv_copy[*vm_idx as usize].lock().unwrap().poll_recv(&mut cx) {
-                                    Poll::Ready(Some((msg, _))) => {
+                                    Poll::Ready(Some((msg, _, uuid))) => {
                                         let wasi_context = &mut worker_vms[worker_vm_idx];
                                         // Queue the input in the VM
                                         let buffer = async_buffer.clone();
                                         let deref_buf = unsafe { &mut *buffer.buf.get() };
-                                        wasi_context.queue_request(msg, *deref_buf);
+                                        wasi_context.queue_request(msg, *deref_buf, uuid);
                                         recv_reqs += 1;
                                         is_empty_vm.insert(worker_vm_idx);
                                     },

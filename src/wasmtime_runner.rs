@@ -8,20 +8,21 @@ use wasmtime::*;
 use wasi_cap_std_sync::WasiCtxBuilder;
 use wasmtime_wasi::Wasi;
 use chrono::prelude::*;
+use crate::{VmSenderType, VmRecvType};
 
 pub struct WasmtimeRunner {
     vm_idx: usize,
-    vm_sender: Arc<Vec<Mutex<Sender<(Vec<u8>, usize, u64, u64, u64, u64)>>>>,
-    vm_recv: Arc<Vec<Mutex<Receiver<(bytes::Bytes, usize)>>>>
+    vm_sender: Arc<Vec<Mutex<Sender<VmSenderType>>>>,
+    vm_recv: Arc<Vec<Mutex<Receiver<VmRecvType>>>>,
 }
 
 impl WasmtimeRunner {
-    pub fn new(vm_idx: usize, vm_sender: Arc<Vec<Mutex<Sender<(Vec<u8>, usize, u64, u64, u64, u64)>>>>,
-               vm_recv: Arc<Vec<Mutex<Receiver<(bytes::Bytes, usize)>>>>) -> WasmtimeRunner {
+    pub fn new(vm_idx: usize, vm_sender: Arc<Vec<Mutex<Sender<VmSenderType>>>>,
+               vm_recv: Arc<Vec<Mutex<Receiver<VmRecvType>>>>) -> WasmtimeRunner {
             WasmtimeRunner {
                 vm_idx: vm_idx,
                 vm_sender: vm_sender,
-                vm_recv: vm_recv
+                vm_recv: vm_recv,
             }
     }
     // this is run once for each thread/VM
@@ -34,15 +35,19 @@ impl WasmtimeRunner {
         let curr_time_invoke = curr_time.clone();
         let curr_time_response = curr_time.clone();
 
+        let mut current_uuid = Arc::new(Mutex::new(String::from("")));
+        let curr_uuid_invoke = current_uuid.clone();
+        let curr_uuid_response = current_uuid.clone();
+
         // serverless_invoke
         let serverless_invoke = Func::wrap(&store, move |caller: Caller<'_>, buf_ptr: u32, _buf_len: u32| -> u32 {
             let mem = match caller.get_export("memory") {
                 Some(Extern::Memory(mem)) => Ok(mem),
                 _ => Err(Trap::new("failed to find host memory")),
             };
-
             let chan = self.vm_recv.get(self.vm_idx).unwrap();
-            let (msg, _) = chan.lock().unwrap().blocking_recv().unwrap();
+            let (msg, _, uuid) = chan.lock().unwrap().blocking_recv().unwrap();
+            *curr_uuid_invoke.lock().unwrap() = uuid;
 
             /*
             // Parse JSON
@@ -97,8 +102,13 @@ impl WasmtimeRunner {
 
                         let tsc = curr_time_response.clone();
                         let device_execution_time = Utc::now().timestamp_nanos() - *tsc.lock().unwrap();
+                        let resp_uuid: String = curr_uuid_response.lock().unwrap().to_string();
 
-                        chan.lock().unwrap().blocking_send((resp_buf, resp_buf_len, device_execution_time.try_into().unwrap(), 0, 0, 0)).unwrap();
+                        chan.lock().unwrap().blocking_send((resp_buf,
+                                                            resp_buf_len,
+                                                            device_execution_time.try_into().unwrap(),
+                                                            0, 0, 0,
+                                                            resp_uuid)).unwrap();
                     }
                 },
                 Err(e) => {

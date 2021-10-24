@@ -168,33 +168,44 @@ def block_on_command(command_id, instance_id):
             print ("Command has completed with status: " + str(output['Status']))
             return output
 
-def run_pbkdf2_bench(run_x86):
+# call between benchmarks
+def cleanup():
+    terminate_gpu = """#!/bin/bash
+    sudo su
+    curl -X GET {addr}:8000/terminate
+    curl -X GET {addr_cpu}:8000/terminate
+    """.format(addr=gpu_instance[0].private_dns_name, addr_cpu=cpu_bench_instance[0].private_dns_name)
+    command_id = run_command(terminate_gpu, "run invoker for gpu", invoker_instance[0].id)
+    time.sleep(2)
+    output = block_on_command(command_id, invoker_instance[0].id)
+    time.sleep(2)
+
+def run_pbkdf2_bench():
     # Now we can set up the next benchmark (pbkdf2)
-    if run_x86:
-        run_pbkdf2_command_wasmtime = """#!/bin/bash
-        sudo su
-        ulimit -n 65536
-        x=$(cloud-init status)
-        until [ "$x" == "status: done" ]; do
-        sleep 10
-        x=$(cloud-init status)
-        done
+    run_pbkdf2_command_x86 = """#!/bin/bash
+    sudo su
+    ulimit -n 65536
+    x=$(cloud-init status)
+    until [ "$x" == "status: done" ]; do
+    sleep 10
+    x=$(cloud-init status)
+    done
 
-        cd /tmp/wasm2opencl/benchmarks/pbkdf2/
-        ~/.cargo/bin/cargo run --release --target x86_64-unknown-linux-gnu &> /tmp/pbkdf2.log &
-        """
-    else:
-        run_pbkdf2_command_wasmtime = """#!/bin/bash
-        sudo su
-        ulimit -n 65536
-        x=$(cloud-init status)
-        until [ "$x" == "status: done" ]; do
-        sleep 10
-        x=$(cloud-init status)
-        done
+    cd /tmp/wasm2opencl/benchmarks/pbkdf2/
+    ~/.cargo/bin/cargo run --release --target x86_64-unknown-linux-gnu &> /tmp/pbkdf2.log &
+    """
 
-        /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/pbkdf2/target/wasm32-wasi/release/pbkdf2-opt.wasm --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=131072 --partition=true --serverless=true --vmcount=4096 --wasmtime=true --fastreply={fastreply} &> /tmp/pbkdf2.log &
-        """.format(fastreply=fastreply)
+    run_pbkdf2_command_wasmtime = """#!/bin/bash
+    sudo su
+    ulimit -n 65536
+    x=$(cloud-init status)
+    until [ "$x" == "status: done" ]; do
+    sleep 10
+    x=$(cloud-init status)
+    done
+
+    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/pbkdf2/target/wasm32-wasi/release/pbkdf2-opt.wasm --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=131072 --partition=true --serverless=true --vmcount=4096 --wasmtime=true --fastreply={fastreply} &> /tmp/pbkdf2.log &
+    """.format(fastreply=fastreply)
 
     run_command(run_pbkdf2_command_wasmtime, "pbkdf2_cpu", cpu_bench_instance[0].id)
 
@@ -283,7 +294,36 @@ def run_pbkdf2_bench(run_x86):
     with open("cpu_bench_pbkdf2.txt", "w") as text_file:
         text_file.write(str(output))
 
+    cleanup()
+
+    run_command(run_pbkdf2_command_x86, "pbkdf2_cpu_x86", cpu_bench_instance[0].id)
+    
+    command_id = run_command(run_invoker_cpu, "run invoker for cpu", invoker_instance[0].id)
+
+    time.sleep(20)
+
+    # Block until benchmark is complete
+    output = block_on_command(command_id, invoker_instance[0].id)
+    print (output)
+
+    # save output
+    with open("cpu_x86_bench_pbkdf2.txt", "w") as text_file:
+        text_file.write(str(output))
+
 def run_lz4_bench():
+    run_json_lz4_command_x86 = """#!/bin/bash
+    sudo su
+    ulimit -n 65536
+    x=$(cloud-init status)
+    until [ "$x" == "status: done" ]; do
+    sleep 10
+    x=$(cloud-init status)
+    done
+
+    cd /tmp/wasm2opencl/benchmarks/json-compression/
+    ~/.cargo/bin/cargo run --release --target x86_64-unknown-linux-gnu &> /tmp/json-compression.log &
+    """.format(fastreply=fastreply)
+
     run_json_lz4_command_wasmtime = """#!/bin/bash
     sudo su
     ulimit -n 65536
@@ -384,7 +424,36 @@ def run_lz4_bench():
     with open("cpu_bench_lz4.txt", "w") as text_file:
         text_file.write(str(output))
 
+    cleanup()
+
+    run_command(run_json_lz4_command_x86, "run_json_lz4_command_x86", cpu_bench_instance[0].id)
+
+    command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
+
+    time.sleep(20)
+
+    # Block until benchmark is complete
+    output = block_on_command(command_id, invoker_instance[0].id)
+
+    print (output)
+    # save output
+    with open("cpu_x86_bench_lz4.txt", "w") as text_file:
+        text_file.write(str(output))
+
 def run_average_bench():
+    run_average_command_x86 = """#!/bin/bash
+    sudo su
+    ulimit -n 65536
+    x=$(cloud-init status)
+    until [ "$x" == "status: done" ]; do
+    sleep 10
+    x=$(cloud-init status)
+    done
+
+    cd /tmp/wasm2opencl/benchmarks/average/
+    ~/.cargo/bin/cargo run --release --target x86_64-unknown-linux-gnu &> /tmp/average.log &
+    """.format(fastreply=fastreply)
+
     run_average_command_wasmtime = """#!/bin/bash
     sudo su
     ulimit -n 65536
@@ -485,11 +554,37 @@ def run_average_bench():
     with open("cpu_bench_average.txt", "w") as text_file:
         text_file.write(str(output))
 
+    cleanup()
+
+    run_command(run_average_command_x86, "run_average_command_x86", cpu_bench_instance[0].id)
+    
+    command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
+
+    time.sleep(20)
+    output = block_on_command(command_id, invoker_instance[0].id)
+    print (output)
+    # save output
+    with open("cpu_x86_bench_average.txt", "w") as text_file:
+        text_file.write(str(output))
+
 def run_image_hash_bench(run_modified = False):
 
     imagehash_path = "/tmp/wasm2opencl/benchmarks/imagehash/"
     if run_modified:
         imagehash_path = "/tmp/wasm2opencl/benchmarks/imagehash-modified/"
+
+    run_image_command_x86 = """#!/bin/bash
+    sudo su
+    ulimit -n 65536
+    x=$(cloud-init status)
+    until [ "$x" == "status: done" ]; do
+    sleep 10
+    x=$(cloud-init status)
+    done
+    
+    cd {imagehash_path}
+    ~/.cargo/bin/cargo run --release --target x86_64-unknown-linux-gnu &> /tmp/imagehash.log &
+    """.format(fastreply=fastreply, imagehash_path=imagehash_path)
 
     run_image_command_wasmtime = """#!/bin/bash
     sudo su
@@ -544,7 +639,6 @@ def run_image_hash_bench(run_modified = False):
     /usr/local/go/bin/go run run_image_hash.go {addr} 8000 {target_rps} 1 120
     """.format(addr=gpu_instance[0].private_dns_name, input_size=1000, target_rps=target_rps, imagehash_path=imagehash_path)
 
-
     command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
 
     time.sleep(20)
@@ -560,6 +654,8 @@ def run_image_hash_bench(run_modified = False):
     else:
         with open("gpu_bench_imagehash.txt", "w") as text_file:
             text_file.write(str(output))
+
+    run_command(run_image_command_wasmtime, "run_imagehash_command_x86", cpu_bench_instance[0].id)
 
     run_invoker_wasmtime = """#!/bin/bash
     sudo su
@@ -599,7 +695,24 @@ def run_image_hash_bench(run_modified = False):
         with open("cpu_bench_imagehash.txt", "w") as text_file:
             text_file.write(str(output))
 
+    cleanup()
 
+    run_command(run_image_command_x86, "run_imagehash_command_x86", cpu_bench_instance[0].id)
+
+    command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
+
+    time.sleep(20)
+
+    # Block until benchmark is complete
+    output = block_on_command(command_id, invoker_instance[0].id)
+    print (output)
+    # save output
+    if run_modified:
+        with open("cpu_x86_bench_imagehash_modified.txt", "w") as text_file:
+            text_file.write(str(output))
+    else:
+        with open("cpu_x86_bench_imagehash.txt", "w") as text_file:
+            text_file.write(str(output))
 
 def run_image_blur_bench(run_bmp = False):
     if not run_bmp:
@@ -608,6 +721,19 @@ def run_image_blur_bench(run_bmp = False):
     else:
         bin_path = "/tmp/wasm2opencl/benchmarks/imageblur-bmp/target/wasm32-wasi/release/imageblur-opt.wasm"
         exe_path = "/tmp/wasm2opencl/benchmarks/imageblur-bmp/"
+
+    run_image_command_x86 = """#!/bin/bash
+    sudo su
+    ulimit -n 65536
+    x=$(cloud-init status)
+    until [ "$x" == "status: done" ]; do
+    sleep 10
+    x=$(cloud-init status)
+    done
+
+    cd {bin_path}
+    ~/.cargo/bin/cargo run --release --target x86_64-unknown-linux-gnu &> /tmp/imageblur.log &
+    """.format(fastreply=fastreply, bin_path=exe_path)
 
     run_image_command_wasmtime = """#!/bin/bash
     sudo su
@@ -718,7 +844,39 @@ def run_image_blur_bench(run_bmp = False):
             text_file.write(str(output))
 
 
+    cleanup()
+
+    run_command(run_image_command_x86, "run_imageblur_command_x86", cpu_bench_instance[0].id)
+
+    command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
+
+    time.sleep(20)
+
+    # Block until benchmark is complete
+    output = block_on_command(command_id, invoker_instance[0].id)
+    print (output)
+    # save output
+    if not run_bmp:
+        with open("cpu_x86_bench_imageblur.txt", "w") as text_file:
+            text_file.write(str(output))
+    else:
+        with open("cpu_x86_bench_imageblur_bmp.txt", "w") as text_file:
+            text_file.write(str(output))
+
 def run_nlp_count_bench():
+    run_nlp_command_x86 = """#!/bin/bash
+    sudo su
+    ulimit -n 65536
+    x=$(cloud-init status)
+    until [ "$x" == "status: done" ]; do
+    sleep 10
+    x=$(cloud-init status)
+    done
+
+    cd /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/
+    ~/.cargo/bin/cargo run --release --target x86_64-unknown-linux-gnu &> /tmp/nlp-count-vectorizer.log &
+    """.format(fastreply=fastreply)
+
     run_nlp_command_wasmtime = """#!/bin/bash
     sudo su
     ulimit -n 65536
@@ -728,7 +886,7 @@ def run_nlp_count_bench():
     x=$(cloud-init status)
     done
 
-    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/target/wasm32-wasi/release/nlp-count-vectorizer-opt.wasm --ip=0.0.0.0 --heap=3145728 --stack=131072 --hcallsize=262144 --partition=true --serverless=true --vmcount=4096 --wasmtime=true --fastreply={fastreply} &> /tmp/nlp-count-vectorizer.log &
+    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/target/wasm32-wasi/release/nlp-count-vectorizer-opt.wasm --ip=0.0.0.0 --heap=4194304 --stack=131072 --hcallsize=524288 --partition=true --serverless=true --vmcount=4096 --wasmtime=true --fastreply={fastreply} &> /tmp/nlp-count-vectorizer.log &
     """.format(fastreply=fastreply)
 
     run_command(run_nlp_command_wasmtime, "run_nlp_command_wasmtime", cpu_bench_instance[0].id)
@@ -742,8 +900,8 @@ def run_nlp_count_bench():
     x=$(cloud-init status)
     done
 
-    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/target/wasm32-wasi/release/nlp-count-vectorizer-opt.wasm --ip=0.0.0.0 --heap=3145728 --stack=131072 --hcallsize=262144 --partition=true --serverless=true --vmcount=4096 --vmgroups=1 --maxdup=3 --disablefastcalls=false --lgroup={lgroup} --maxloc=2000000 --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} &> /tmp/nlp-count-vectorizer.log &
-    """.format(lgroup=1, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace)
+    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/target/wasm32-wasi/release/nlp-count-vectorizer-opt.wasm --ip=0.0.0.0 --heap=4194304 --stack=131072 --hcallsize=524288 --partition=true --serverless=true --vmcount=3072 --vmgroups=1 --maxdup=3 --disablefastcalls=false --lgroup={lgroup} --maxloc=2000000 --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} &> /tmp/nlp-count-vectorizer.log &
+    """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace)
 
     run_command(run_nlp_command, "run_nlp_command", gpu_instance[0].id)
 
@@ -770,7 +928,7 @@ def run_nlp_count_bench():
     /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/run_nlp.go {addr} 8000 {target_rps} 1 120 /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/smaller_tweets.txt {input_size}
 
     /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/run_nlp.go {addr} 8000 {target_rps} 1 120 /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/smaller_tweets.txt {input_size}
-    """.format(addr=gpu_instance[0].private_dns_name, input_size=500, target_rps=4096)
+    """.format(addr=gpu_instance[0].private_dns_name, input_size=500, target_rps=3072)
 
 
     command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
@@ -819,17 +977,19 @@ def run_nlp_count_bench():
     with open("cpu_bench_nlp.txt", "w") as text_file:
         text_file.write(str(output))
 
-# call between benchmarks
-def cleanup():
-    terminate_gpu = """#!/bin/bash
-    sudo su
-    curl -X GET {addr}:8000/terminate
-    curl -X GET {addr_cpu}:8000/terminate
-    """.format(addr=gpu_instance[0].private_dns_name, addr_cpu=cpu_bench_instance[0].private_dns_name)
-    command_id = run_command(terminate_gpu, "run invoker for gpu", invoker_instance[0].id)
-    time.sleep(2)
+    cleanup()
+    run_command(run_nlp_command_x86, "run_nlp_command_x86", cpu_bench_instance[0].id)
+    
+    command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
+
+    time.sleep(20)
+
+    # Block until benchmark is complete
     output = block_on_command(command_id, invoker_instance[0].id)
-    time.sleep(2)
+    print (output)
+    # save output
+    with open("cpu_x86_bench_nlp.txt", "w") as text_file:
+        text_file.write(str(output))
 
 """
 Create VMs for the test
@@ -917,38 +1077,38 @@ while True:
 ssm_client = boto3.client('ssm')
 
 # run pbkdf2 bench
-#run_pbkdf2_bench(True)
+run_pbkdf2_bench()
 
-#cleanup()
+cleanup()
 
 # run lz4 bench
-#run_lz4_bench()
+run_lz4_bench()
 
-#cleanup()
+cleanup()
 
 # run NLP bench
-#run_nlp_count_bench()
+run_nlp_count_bench()
 
-#cleanup()
+cleanup()
 
 # run average bench
-#run_average_bench()
+run_average_bench()
 
-#cleanup()
+cleanup()
 
 # run image blue bench
-#run_image_blur_bench(run_bmp = True)
+run_image_blur_bench(run_bmp = True)
 
-#cleanup()
+cleanup()
 
-#run_image_blur_bench(run_bmp = False)
+run_image_blur_bench(run_bmp = False)
 
-#cleanup()
+cleanup()
 
 # run image hash bench
-#run_image_hash_bench(run_modified = False)
+run_image_hash_bench(run_modified = False)
 
-#cleanup()
+cleanup()
 
 # run image hash bench
 run_image_hash_bench(run_modified = True)

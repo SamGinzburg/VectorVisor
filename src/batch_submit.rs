@@ -15,8 +15,9 @@ use serde::Serialize;
 use warp::{Filter, Reply};
 use warp::http::{Response, StatusCode};
 use hyper::Body;
+use uuid::Uuid;
 
-use crate::opencl_runner::vectorized_vm::VmSenderType;
+use crate::opencl_runner::vectorized_vm::{VmSenderType, VmRecvType};
 
 pub struct BatchSubmitServer {}
 
@@ -68,11 +69,11 @@ impl BatchSubmitServer {
     }
 
 
-    async fn response(body: bytes::Bytes, fast_reply: bool, vm_idx: usize, vm_queue: Arc<VmQueue>, sender: Arc<Vec<Mutex<Sender<(bytes::Bytes, usize)>>>>, receiver: Arc<Vec<Mutex<Receiver<VmSenderType>>>>) -> Result<impl warp::Reply, warp::Rejection> {
+    async fn response(body: bytes::Bytes, fast_reply: bool, vm_idx: usize, vm_queue: Arc<VmQueue>, sender: Arc<Vec<Mutex<Sender<(bytes::Bytes, usize, String)>>>>, receiver: Arc<Vec<Mutex<Receiver<VmSenderType>>>>) -> Result<impl warp::Reply, warp::Rejection> {
 
         //dbg!(&vm_idx);
         // Get an available VM first
-        let tx: &Mutex<Sender<(bytes::Bytes, usize)>> = (*sender).get(vm_idx).unwrap();
+        let tx: &Mutex<Sender<VmRecvType>> = (*sender).get(vm_idx).unwrap();
         let rx: &Mutex<Receiver<VmSenderType>> = (*receiver).get(vm_idx).unwrap();
 
         /*
@@ -86,51 +87,30 @@ impl BatchSubmitServer {
         */
 
         // Send the request body to the selected VM
-        let req_start = std::time::Instant::now();
         {
             let sender = tx.lock().await;
-            sender.send((body.clone(), body.len())).await.unwrap();
+            let req_id = Uuid::new_v4().to_simple().to_string();
+
+            sender.send((body.clone(), body.len(), req_id.clone())).await.unwrap();
+
+            // Wait on response from the VM
+            while let Some((resp,
+                            len,
+                            on_dev_time,
+                            queue_submit_time,
+                            num_queue_submits,
+                            num_unique_fns,
+                            uuid)) = rx.lock().await.recv().await {
+                if uuid == req_id {
+                    return Ok(BatchSubmitServer::create_response(resp, on_dev_time, queue_submit_time, num_queue_submits, num_unique_fns))
+                }
+            }
         }
 
-        /*
-         * Tokio locks operate in a FIFO order, so the first request to send will also
-         * subsequenly be the first to receive.
-         * see: https://docs.rs/tokio/1.12.0/tokio/sync/struct.Mutex.html
-         *
-         * This means that the first person to acquire the previous lock on 'sender' will be the
-         * first to acquire the lock on recv before yielding to the tokio scheduler. So reqs will
-         * line up properly. This also allows multiple requests to queue up on VMs.
-         */
-
-        // Wait on response from the VM
-        let (resp, len, on_dev_time, queue_submit_time, num_queue_submits, num_unique_fns) = match rx.lock().await.recv().await {
-            Some(val) => val,
-            None => panic!("A VM died while processing a request, vm_idx: {}", vm_idx),
-        };
-        let req_end = std::time::Instant::now();
-        //println!("req time: {:?}, vm_idx: {:?}", (req_end - req_start).as_nanos(), vm_idx);
-
-        /*
-        if fast_reply {
-            Ok(BatchSubmitServer::create_response(resp, on_dev_time, queue_submit_time, num_queue_submits, num_unique_fns))
-        } else {
-            let final_response = BatchReply {
-                response: &resp,
-                on_device_execution_time_ns: on_dev_time,
-                device_queue_overhead_time_ns: queue_submit_time,
-                queue_submit_count: num_queue_submits,
-                num_unique_fns_called: num_unique_fns,
-            };
-
-            Ok(warp::reply::json(&final_response).into_response())
-        }
-        */
-
-
-        Ok(BatchSubmitServer::create_response(resp, on_dev_time, queue_submit_time, num_queue_submits, num_unique_fns))
+        panic!("This line in batch server should not be reached")
     }
 
-    pub fn start_server(_hcall_buf_size: usize, fast_reply: bool, is_active: Arc<SyncMutex<bool>>, sender: Arc<Vec<Mutex<Sender<(bytes::Bytes, usize)>>>>, receiver: Arc<Vec<Mutex<Receiver<VmSenderType>>>>, num_vms: u32, server_ip: String, server_port: String) -> () {
+    pub fn start_server(_hcall_buf_size: usize, fast_reply: bool, is_active: Arc<SyncMutex<bool>>, sender: Arc<Vec<Mutex<Sender<(bytes::Bytes, usize, String)>>>>, receiver: Arc<Vec<Mutex<Receiver<VmSenderType>>>>, num_vms: u32, server_ip: String, server_port: String) -> () {
         
         tokio::runtime::Builder::new_multi_thread()
             //.worker_threads(4)
