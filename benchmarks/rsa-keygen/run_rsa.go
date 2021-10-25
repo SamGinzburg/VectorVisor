@@ -57,7 +57,7 @@ func RandString(n int) string {
 	return b64.StdEncoding.EncodeToString([]byte(string(b)))
 }
 
-func IssueRequests(ip string, port int, req [][]byte, exec_time chan<- float64, latency chan<- float64, queue_time chan<- float64, submit_count chan<- float64, unique_fns chan<- float64, end_chan chan bool) {
+func IssueRequests(ip string, port int, req [][]byte, exec_time chan<- float64, latency chan<- float64, queue_time chan<- float64, submit_count chan<- float64, unique_fns chan<- float64, request_queue_time chan<- float64, end_chan chan bool) {
 	addr := fmt.Sprintf("http://%s:%d/batch_submit/", ip, port)
 	http_request, _ := http.NewRequest("GET", addr, nil)
 	http_request.Header.Add("Content-Type", "application/json; charset=utf-8")
@@ -66,6 +66,7 @@ func IssueRequests(ip string, port int, req [][]byte, exec_time chan<- float64, 
 	device_queue_overhead := 0.0
 	queue_submit_count := 0.0
 	num_unique_fns_called := 0.0
+	req_queue_time := 0.0
 
 	for {
 		http_request.Body = ioutil.NopCloser(bytes.NewReader(req[rand.Intn(NUM_PARAMS)]))
@@ -101,7 +102,13 @@ func IssueRequests(ip string, port int, req [][]byte, exec_time chan<- float64, 
 		device_queue_overhead, _ = strconv.ParseFloat(resp.Header.Get("queue_submit_time"), 64)
 		queue_submit_count, _ = strconv.ParseFloat(resp.Header.Get("num_queue_submits"), 64)
 		num_unique_fns_called, _ = strconv.ParseFloat(resp.Header.Get("num_unique_fns"), 64)
+		req_queue_time, _ = strconv.ParseFloat(resp.Header.Get("req_queue_time"), 64)
 
+		select {
+		case request_queue_time <- req_queue_time:
+		default:
+			return
+		}
 		select {
 		case exec_time <- on_device_compute_time:
 		default:
