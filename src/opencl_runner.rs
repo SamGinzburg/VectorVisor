@@ -1363,7 +1363,7 @@ impl OpenCLRunner {
                 let mut dispatchable_hcalls = vec![];
                 let mut block_on_inputs = false;
                 let poll_freq = 10;
-                let buffer_timeout = 500;
+                let buffer_timeout = 200;
                 let mut ellapsed_time = 0;
                 let sleep_time = time::Duration::from_millis(poll_freq);
                 let invoke_blocker_rx = invoke_blocker;

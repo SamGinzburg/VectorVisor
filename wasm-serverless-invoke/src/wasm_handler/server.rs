@@ -10,6 +10,8 @@ use std::sync::Arc;
 use std::sync::Mutex as SyncMutex;
 use std::net::{SocketAddr};
 use std::sync::atomic::{AtomicU64, Ordering};
+use warp::http::{Response, StatusCode};
+use warp::hyper::Body;
 
 pub struct FunctionServer {}
 
@@ -23,6 +25,22 @@ struct BatchReply {
 }
 
 impl FunctionServer {
+
+        fn create_response(resp: Vec<u8>, on_dev_time: u64, queue_submit_time: u64, num_queue_submits: u64, num_unique_fns: u64, queue_time: u128) -> warp::http::Response<Body> {
+            let mut final_resp = Response::builder().status(StatusCode::OK);
+            {
+                let headers = final_resp.headers_mut().unwrap();
+                headers.insert("on_device_time", warp::http::HeaderValue::from_str(&on_dev_time.to_string()).unwrap());
+                headers.insert("queue_submit_time", warp::http::HeaderValue::from_str(&queue_submit_time.to_string()).unwrap());
+                headers.insert("num_queue_submits", warp::http::HeaderValue::from_str(&num_queue_submits.to_string()).unwrap());
+                headers.insert("num_unique_fns", warp::http::HeaderValue::from_str(&num_unique_fns.to_string()).unwrap());
+                headers.insert("req_queue_time", warp::http::HeaderValue::from_str(&queue_time.to_string()).unwrap());
+            }
+
+            final_resp.body(Body::from(resp)).unwrap()
+        }
+
+
         async fn response(body: bytes::Bytes, vm_idx: usize, sender: Arc<Vec<Mutex<Sender<(Vec<u8>, usize)>>>>, receiver: Arc<Vec<Mutex<Receiver<(Vec<u8>, usize, u64, u64, u64, u64)>>>>) -> Result<impl warp::Reply, warp::Rejection> {
         // Get an available VM first
         let tx: &Mutex<Sender<(Vec<u8>, usize)>> = (*sender).get(vm_idx).unwrap();
@@ -30,7 +48,9 @@ impl FunctionServer {
 
         // Send the request body to the selected VM
         // We can't await on the send because we have the mutex acquired here
+        let req_queue = std::time::Instant::now();
         let sender = tx.lock().await;
+        let req_start = std::time::Instant::now();
         sender.send((body.to_vec(), body.len())).await.unwrap();
 
         // Wait on response from the VM
@@ -39,15 +59,7 @@ impl FunctionServer {
             None => panic!("A VM died while processing a request, vm_idx: {}", vm_idx),
         };
 
-        let final_response = BatchReply {
-            response: resp[0..len].to_vec(),
-            on_device_execution_time_ns: on_dev_time,
-            device_queue_overhead_time_ns: queue_submit_time,
-            queue_submit_count: num_queue_submits,
-            num_unique_fns_called: num_unique_fns,
-        };
-
-        Ok(warp::reply::json(&final_response).into_response())
+        Ok(FunctionServer::create_response(resp, on_dev_time, queue_submit_time, num_queue_submits, num_unique_fns, (req_start-req_queue).as_nanos()))
     }
 
     pub fn start_server(sender: Arc<Vec<Mutex<Sender<(Vec<u8>, usize)>>>>, receiver: Arc<Vec<Mutex<Receiver<(Vec<u8>, usize, u64, u64, u64, u64)>>>>, is_active: Arc<SyncMutex<bool>>, num_vms: u32) -> () {

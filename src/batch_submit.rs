@@ -55,7 +55,7 @@ impl warp::reject::Reject for NoVmAvailable {}
 
 impl BatchSubmitServer {
 
-    fn create_response(resp: Vec<u8>, on_dev_time: u64, queue_submit_time: u64, num_queue_submits: u64, num_unique_fns: u64) -> warp::http::Response<Body> {
+    fn create_response(resp: Vec<u8>, on_dev_time: u64, queue_submit_time: u64, num_queue_submits: u64, num_unique_fns: u64, queue_time: u128) -> warp::http::Response<Body> {
         let mut final_resp = Response::builder().status(StatusCode::OK);
         {
             let headers = final_resp.headers_mut().unwrap();
@@ -63,6 +63,7 @@ impl BatchSubmitServer {
             headers.insert("queue_submit_time", warp::http::HeaderValue::from_str(&queue_submit_time.to_string()).unwrap());
             headers.insert("num_queue_submits", warp::http::HeaderValue::from_str(&num_queue_submits.to_string()).unwrap());
             headers.insert("num_unique_fns", warp::http::HeaderValue::from_str(&num_unique_fns.to_string()).unwrap());
+            headers.insert("req_queue_time", warp::http::HeaderValue::from_str(&queue_time.to_string()).unwrap());
         }
 
         final_resp.body(Body::from(resp)).unwrap()
@@ -87,10 +88,11 @@ impl BatchSubmitServer {
         */
 
         // Send the request body to the selected VM
+        let req_queue = std::time::Instant::now();
         {
             let sender = tx.lock().await;
             let req_id = Uuid::new_v4().to_simple().to_string();
-
+            let req_start = std::time::Instant::now();
             sender.send((body.clone(), body.len(), req_id.clone())).await.unwrap();
 
             // Wait on response from the VM
@@ -102,7 +104,7 @@ impl BatchSubmitServer {
                             num_unique_fns,
                             uuid)) = rx.lock().await.recv().await {
                 if uuid == req_id {
-                    return Ok(BatchSubmitServer::create_response(resp, on_dev_time, queue_submit_time, num_queue_submits, num_unique_fns))
+                    return Ok(BatchSubmitServer::create_response(resp, on_dev_time, queue_submit_time, num_queue_submits, num_unique_fns, (req_start-req_queue).as_nanos()))
                 }
             }
         }
