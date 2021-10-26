@@ -55,7 +55,7 @@ impl warp::reject::Reject for NoVmAvailable {}
 
 impl BatchSubmitServer {
 
-    fn create_response(resp: Vec<u8>, on_dev_time: u64, queue_submit_time: u64, num_queue_submits: u64, num_unique_fns: u64, queue_time: u128) -> warp::http::Response<Body> {
+    fn create_response(resp: Vec<u8>, on_dev_time: u64, queue_submit_time: u64, num_queue_submits: u64, num_unique_fns: u64, queue_time: u128, device_time: u128) -> warp::http::Response<Body> {
         let mut final_resp = Response::builder().status(StatusCode::OK);
         {
             let headers = final_resp.headers_mut().unwrap();
@@ -64,6 +64,7 @@ impl BatchSubmitServer {
             headers.insert("num_queue_submits", warp::http::HeaderValue::from_str(&num_queue_submits.to_string()).unwrap());
             headers.insert("num_unique_fns", warp::http::HeaderValue::from_str(&num_unique_fns.to_string()).unwrap());
             headers.insert("req_queue_time", warp::http::HeaderValue::from_str(&queue_time.to_string()).unwrap());
+            headers.insert("device_time", warp::http::HeaderValue::from_str(&queue_time.to_string()).unwrap());
         }
 
         final_resp.body(Body::from(resp)).unwrap()
@@ -104,7 +105,8 @@ impl BatchSubmitServer {
                             num_unique_fns,
                             uuid)) = rx.lock().await.recv().await {
                 if uuid == req_id {
-                    return Ok(BatchSubmitServer::create_response(resp, on_dev_time, queue_submit_time, num_queue_submits, num_unique_fns, (req_start-req_queue).as_nanos()))
+                    let req_end = std::time::Instant::now();
+                    return Ok(BatchSubmitServer::create_response(resp, on_dev_time, queue_submit_time, num_queue_submits, num_unique_fns, (req_start-req_queue).as_nanos(), (req_end-req_queue).as_nanos()))
                 }
             }
         }
