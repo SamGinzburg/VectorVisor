@@ -135,7 +135,7 @@ gpu_rps_device = []
 cpu_wasm_rps_device = []
 cpu_x86_rps_device = []
 for d, v in zip(gpu_list, vmcount):
-    new_rps = v / (d['on_dev_exe_time'] / (10 ** 9))
+    new_rps = v / ((d['on_dev_exe_time'] + d['queue_submit_time']) / (10 ** 9))
     gpu_rps_device.append(new_rps)
 # Each CPU instance has 4 cores, so can process 4 requests per second
 for d, v in zip(cpu_wasm_list, vmcount):
