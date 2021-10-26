@@ -64,7 +64,7 @@ impl BatchSubmitServer {
             headers.insert("num_queue_submits", warp::http::HeaderValue::from_str(&num_queue_submits.to_string()).unwrap());
             headers.insert("num_unique_fns", warp::http::HeaderValue::from_str(&num_unique_fns.to_string()).unwrap());
             headers.insert("req_queue_time", warp::http::HeaderValue::from_str(&queue_time.to_string()).unwrap());
-            headers.insert("device_time", warp::http::HeaderValue::from_str(&queue_time.to_string()).unwrap());
+            headers.insert("device_time", warp::http::HeaderValue::from_str(&device_time.to_string()).unwrap());
         }
 
         final_resp.body(Body::from(resp)).unwrap()
