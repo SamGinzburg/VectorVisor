@@ -115,7 +115,7 @@ lz4_cpu_x86 = parse_file("cpu_x86_bench_lz4")
 vmcount = [4096, 3072, 3072, 3072, 3072, 4096, 3072]
 gpu_list = [pbkdf2_gpu, imageblur_gpu, imageblur_bmp_gpu, imagehash_gpu, imagehash_modified_gpu, histogram_gpu, lz4_gpu]
 cpu_wasm_list = [pbkdf2_cpu_wasm, imageblur_cpu_wasm, imageblur_bmp_cpu_wasm, imagehash_cpu_wasm, imagehash_modified_cpu_wasm, histogram_cpu_wasm, lz4_cpu_wasm]
-cpu_x86_list = [pbkdf2_cpu_x86, imageblur_cpu_x86, imageblur_cpu_x86, imagehash_cpu_x86, imagehash_modified_cpu_x86, histogram_cpu_x86, lz4_cpu_x86]
+cpu_x86_list = [pbkdf2_cpu_x86, imageblur_cpu_x86, imageblur_bmp_cpu_x86, imagehash_cpu_x86, imagehash_modified_cpu_x86, histogram_cpu_x86, lz4_cpu_x86]
 gpu_rps = []
 cpu_wasm_rps = []
 cpu_x86_rps = []
@@ -137,11 +137,12 @@ cpu_x86_rps_device = []
 for d, v in zip(gpu_list, vmcount):
     new_rps = v / (d['on_dev_exe_time'] / (10 ** 9))
     gpu_rps_device.append(new_rps)
+# Each CPU instance has 4 cores, so can process 4 requests per second
 for d, v in zip(cpu_wasm_list, vmcount):
-    new_rps = v / (d['on_dev_exe_time'] / (10 ** 9))
+    new_rps = 4 / (d['on_dev_exe_time'] / (10 ** 9))
     cpu_wasm_rps_device.append(new_rps)
 for d, v in zip(cpu_x86_list, vmcount):
-    new_rps = v / (d['on_dev_exe_time'] / (10 ** 9))
+    new_rps = 4 / (d['on_dev_exe_time'] / (10 ** 9))
     cpu_x86_rps_device.append(new_rps)
 
 plot_bars(gpu_rps_device, cpu_wasm_rps_device, cpu_x86_rps_device, "e2e_device_time_only")
