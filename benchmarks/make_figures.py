@@ -144,4 +144,4 @@ for d, v in zip(cpu_x86_list, vmcount):
     new_rps = v / (d['on_dev_exe_time'] / (10 ** 9))
     cpu_x86_rps_device.append(new_rps)
 
-plot_bars(gpu_rps, cpu_wasm_rps, cpu_x86_rps, "e2e_device_time_only")
+plot_bars(gpu_rps_device, cpu_wasm_rps_device, cpu_x86_rps_device, "e2e_device_time_only")
