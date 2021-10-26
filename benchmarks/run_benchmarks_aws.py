@@ -21,7 +21,7 @@ WASM_SNIP_CUSTOM="rust_oom __rg_oom"
 maxdemospace = 0
 
 today = date.today()
-temp_dir = today.strftime("%d_%m_%Y_bench_results/")
+temp_dir = today.strftime("%d_%m_%Y_%H_%M_%S_bench_results/")
 
 if os.path.isdir(temp_dir):
     print ("Temp dir: {d} exists already".format(d=temp_dir))
