@@ -1,5 +1,7 @@
 import boto3
 import time
+import os
+from datetime import date
 
 # Benchmark constants
 # target rps is really just the number of concurrent invokers
@@ -17,6 +19,14 @@ OPT_LEVEL="-O1 -g"
 WASM_SNIP_ARGS="--snip-rust-panicking-code"
 WASM_SNIP_CUSTOM="rust_oom __rg_oom"
 maxdemospace = 0
+
+today = date.today()
+temp_dir = today.strftime("%d_%m_%Y_bench_results/")
+
+if os.path.isdir(temp_dir):
+    print ("Temp dir: {d} exists already".format(d=temp_dir))
+else:
+    os.mkdir(temp_dir, 0o755)
 
 ec2 = boto3.resource('ec2')
 ec2_client = boto3.client('ec2')
@@ -256,7 +266,7 @@ def run_pbkdf2_bench():
     print (output)
 
     # save output
-    with open("gpu_bench_pbkdf2.txt", "w") as text_file:
+    with open(temp_dir+"gpu_bench_pbkdf2.txt", "w") as text_file:
         text_file.write(str(output))
 
     run_invoker_cpu = """#!/bin/bash
@@ -291,7 +301,7 @@ def run_pbkdf2_bench():
     print (output)
 
     # save output
-    with open("cpu_bench_pbkdf2.txt", "w") as text_file:
+    with open(temp_dir+"cpu_bench_pbkdf2.txt", "w") as text_file:
         text_file.write(str(output))
 
     cleanup()
@@ -307,7 +317,7 @@ def run_pbkdf2_bench():
     print (output)
 
     # save output
-    with open("cpu_x86_bench_pbkdf2.txt", "w") as text_file:
+    with open(temp_dir+"cpu_x86_bench_pbkdf2.txt", "w") as text_file:
         text_file.write(str(output))
 
 def run_lz4_bench():
@@ -387,7 +397,7 @@ def run_lz4_bench():
     print (output)
 
     # save output
-    with open("gpu_bench_lz4.txt", "w") as text_file:
+    with open(temp_dir+"gpu_bench_lz4.txt", "w") as text_file:
         text_file.write(str(output))
 
     run_invoker_wasmtime = """#!/bin/bash
@@ -421,7 +431,7 @@ def run_lz4_bench():
     output = block_on_command(command_id, invoker_instance[0].id)
     print (output)
     # save output
-    with open("cpu_bench_lz4.txt", "w") as text_file:
+    with open(temp_dir+"cpu_bench_lz4.txt", "w") as text_file:
         text_file.write(str(output))
 
     cleanup()
@@ -437,7 +447,7 @@ def run_lz4_bench():
 
     print (output)
     # save output
-    with open("cpu_x86_bench_lz4.txt", "w") as text_file:
+    with open(temp_dir+"cpu_x86_bench_lz4.txt", "w") as text_file:
         text_file.write(str(output))
 
 def run_average_bench():
@@ -517,7 +527,7 @@ def run_average_bench():
     print (output)
 
     # save output
-    with open("gpu_bench_average.txt", "w") as text_file:
+    with open(temp_dir+"gpu_bench_average.txt", "w") as text_file:
         text_file.write(str(output))
 
     run_invoker_wasmtime = """#!/bin/bash
@@ -551,7 +561,7 @@ def run_average_bench():
     output = block_on_command(command_id, invoker_instance[0].id)
     print (output)
     # save output
-    with open("cpu_bench_average.txt", "w") as text_file:
+    with open(temp_dir+"cpu_bench_average.txt", "w") as text_file:
         text_file.write(str(output))
 
     cleanup()
@@ -564,7 +574,7 @@ def run_average_bench():
     output = block_on_command(command_id, invoker_instance[0].id)
     print (output)
     # save output
-    with open("cpu_x86_bench_average.txt", "w") as text_file:
+    with open(temp_dir+"cpu_x86_bench_average.txt", "w") as text_file:
         text_file.write(str(output))
 
 def run_image_hash_bench(run_modified = False):
@@ -649,10 +659,10 @@ def run_image_hash_bench(run_modified = False):
 
     # save output
     if run_modified:
-        with open("gpu_bench_imagehash_modified.txt", "w") as text_file:
+        with open(temp_dir+"gpu_bench_imagehash_modified.txt", "w") as text_file:
             text_file.write(str(output))
     else:
-        with open("gpu_bench_imagehash.txt", "w") as text_file:
+        with open(temp_dir+"gpu_bench_imagehash.txt", "w") as text_file:
             text_file.write(str(output))
 
     run_command(run_image_command_wasmtime, "run_imagehash_command_x86", cpu_bench_instance[0].id)
@@ -689,10 +699,10 @@ def run_image_hash_bench(run_modified = False):
     print (output)
     # save output
     if run_modified:
-        with open("cpu_bench_imagehash_modified.txt", "w") as text_file:
+        with open(temp_dir+"cpu_bench_imagehash_modified.txt", "w") as text_file:
             text_file.write(str(output))
     else:
-        with open("cpu_bench_imagehash.txt", "w") as text_file:
+        with open(temp_dir+"cpu_bench_imagehash.txt", "w") as text_file:
             text_file.write(str(output))
 
     cleanup()
@@ -708,10 +718,10 @@ def run_image_hash_bench(run_modified = False):
     print (output)
     # save output
     if run_modified:
-        with open("cpu_x86_bench_imagehash_modified.txt", "w") as text_file:
+        with open(temp_dir+"cpu_x86_bench_imagehash_modified.txt", "w") as text_file:
             text_file.write(str(output))
     else:
-        with open("cpu_x86_bench_imagehash.txt", "w") as text_file:
+        with open(temp_dir+"cpu_x86_bench_imagehash.txt", "w") as text_file:
             text_file.write(str(output))
 
 def run_image_blur_bench(run_bmp = False):
@@ -799,10 +809,10 @@ def run_image_blur_bench(run_bmp = False):
 
     # save output
     if not run_bmp:
-        with open("gpu_bench_imageblur.txt", "w") as text_file:
+        with open(temp_dir+"gpu_bench_imageblur.txt", "w") as text_file:
             text_file.write(str(output))
     else:
-        with open("gpu_bench_imageblur_bmp.txt", "w") as text_file:
+        with open(temp_dir+"gpu_bench_imageblur_bmp.txt", "w") as text_file:
             text_file.write(str(output))
 
     run_invoker_wasmtime = """#!/bin/bash
@@ -837,10 +847,10 @@ def run_image_blur_bench(run_bmp = False):
     print (output)
     # save output
     if not run_bmp:
-        with open("cpu_bench_imageblur.txt", "w") as text_file:
+        with open(temp_dir+"cpu_bench_imageblur.txt", "w") as text_file:
             text_file.write(str(output))
     else:
-        with open("cpu_bench_imageblur_bmp.txt", "w") as text_file:
+        with open(temp_dir+"cpu_bench_imageblur_bmp.txt", "w") as text_file:
             text_file.write(str(output))
 
 
@@ -857,10 +867,10 @@ def run_image_blur_bench(run_bmp = False):
     print (output)
     # save output
     if not run_bmp:
-        with open("cpu_x86_bench_imageblur.txt", "w") as text_file:
+        with open(temp_dir+"cpu_x86_bench_imageblur.txt", "w") as text_file:
             text_file.write(str(output))
     else:
-        with open("cpu_x86_bench_imageblur_bmp.txt", "w") as text_file:
+        with open(temp_dir+"cpu_x86_bench_imageblur_bmp.txt", "w") as text_file:
             text_file.write(str(output))
 
 def run_nlp_count_bench():
@@ -940,7 +950,7 @@ def run_nlp_count_bench():
     print (output)
 
     # save output
-    with open("gpu_bench_nlp.txt", "w") as text_file:
+    with open(temp_dir+"gpu_bench_nlp.txt", "w") as text_file:
         text_file.write(str(output))
 
     run_invoker_wasmtime = """#!/bin/bash
@@ -974,7 +984,7 @@ def run_nlp_count_bench():
     output = block_on_command(command_id, invoker_instance[0].id)
     print (output)
     # save output
-    with open("cpu_bench_nlp.txt", "w") as text_file:
+    with open(temp_dir+"cpu_bench_nlp.txt", "w") as text_file:
         text_file.write(str(output))
 
     cleanup()
@@ -988,7 +998,7 @@ def run_nlp_count_bench():
     output = block_on_command(command_id, invoker_instance[0].id)
     print (output)
     # save output
-    with open("cpu_x86_bench_nlp.txt", "w") as text_file:
+    with open(temp_dir+"cpu_x86_bench_nlp.txt", "w") as text_file:
         text_file.write(str(output))
 
 """
