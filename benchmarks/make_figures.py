@@ -140,14 +140,15 @@ gpu_rps_device = []
 cpu_wasm_rps_device = []
 cpu_x86_rps_device = []
 for d, v in zip(gpu_list, vmcount):
+    # include buffer time in GPU measurement but not CPU
     new_rps = v / (d['device_time'] / (10 ** 9))
     gpu_rps_device.append(new_rps)
 # Each CPU instance has 4 cores, so can process 4 requests per second
 for d, v in zip(cpu_wasm_list, vmcount):
-    new_rps = 4 / (d['device_time'] / (10 ** 9))
+    new_rps = 4 / ((d['device_time'] - d['buffer_time']) / (10 ** 9))
     cpu_wasm_rps_device.append(new_rps)
 for d, v in zip(cpu_x86_list, vmcount):
-    new_rps = 4 / (d['device_time'] / (10 ** 9))
+    new_rps = 4 / ((d['device_time'] - d['buffer_time']) / (10 ** 9))
     cpu_x86_rps_device.append(new_rps)
 
 plot_bars(gpu_rps_device, cpu_wasm_rps_device, cpu_x86_rps_device, "e2e_device_time_only")
