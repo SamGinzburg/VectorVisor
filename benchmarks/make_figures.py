@@ -16,17 +16,22 @@ print (input_dir)
 def parse_file(f_name):
     ret = dict()
     with open (input_dir+"/{name}.txt".format(name=f_name), "r") as myfile:
-        data = myfile.read().replace("\'", "\"")
-        rps = float(re.search(r'Total\sRPS:\s(.*?)\\n', data).group(1))
-        on_dev_exe_time = float(re.search(r'On\sdevice\sexecution\stime:\s(.*?)\\n', data).group(1))
-        latency = float(re.search(r'Average\srequest\slatency:\s(.*?)\\n', data).group(1))
-        queue_submit_time = float(re.search(r'queue\ssubmit\stime:\s(.*?)\\n', data).group(1))
-        buffer_time = float(re.search(r'Request\sQueue\sTime:\s(.*?)\\n', data).group(1))
-        ret['rps'] = rps
-        ret['on_dev_exe_time'] = on_dev_exe_time
-        ret['latency'] = latency
-        ret['queue_submit_time'] = queue_submit_time
-        ret['buffer_time'] = buffer_time
+        try:
+            data = myfile.read().replace("\'", "\"")
+            rps = float(re.search(r'Total\sRPS:\s(.*?)\\n', data).group(1))
+            on_dev_exe_time = float(re.search(r'On\sdevice\sexecution\stime:\s(.*?)\\n', data).group(1))
+            latency = float(re.search(r'Average\srequest\slatency:\s(.*?)\\n', data).group(1))
+            queue_submit_time = float(re.search(r'queue\ssubmit\stime:\s(.*?)\\n', data).group(1))
+            buffer_time = float(re.search(r'Request\sQueue\sTime:\s(.*?)\\n', data).group(1))
+            device_time = float(re.search(r'Device\sTime:\s(.*?)\\n', data).group(1))
+            ret['rps'] = rps
+            ret['on_dev_exe_time'] = on_dev_exe_time
+            ret['latency'] = latency
+            ret['queue_submit_time'] = queue_submit_time
+            ret['buffer_time'] = buffer_time
+            ret['device_time'] = device_time
+        except Exception:
+            print ("{n} was not parsed properly".format(n=f_name))
     return ret
 
 def plot_bars(gpu_latency, cpu_wasm_latency, cpu_x86_latency, figname):
@@ -135,14 +140,14 @@ gpu_rps_device = []
 cpu_wasm_rps_device = []
 cpu_x86_rps_device = []
 for d, v in zip(gpu_list, vmcount):
-    new_rps = v / ((d['on_dev_exe_time'] + d['queue_submit_time']) / (10 ** 9))
+    new_rps = v / (d['device_time'] / (10 ** 9))
     gpu_rps_device.append(new_rps)
 # Each CPU instance has 4 cores, so can process 4 requests per second
 for d, v in zip(cpu_wasm_list, vmcount):
-    new_rps = 4 / (d['on_dev_exe_time'] / (10 ** 9))
+    new_rps = 4 / (d['device_time'] / (10 ** 9))
     cpu_wasm_rps_device.append(new_rps)
 for d, v in zip(cpu_x86_list, vmcount):
-    new_rps = 4 / (d['on_dev_exe_time'] / (10 ** 9))
+    new_rps = 4 / (d['device_time'] / (10 ** 9))
     cpu_x86_rps_device.append(new_rps)
 
 plot_bars(gpu_rps_device, cpu_wasm_rps_device, cpu_x86_rps_device, "e2e_device_time_only")
