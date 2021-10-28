@@ -1,7 +1,7 @@
 import boto3
 import time
 import os
-from datetime import date
+from datetime import date, datetime
 
 # Benchmark constants
 # target rps is really just the number of concurrent invokers
@@ -20,7 +20,7 @@ WASM_SNIP_ARGS="--snip-rust-panicking-code"
 WASM_SNIP_CUSTOM="rust_oom __rg_oom"
 maxdemospace = 0
 
-today = date.today()
+today = datetime.now()
 temp_dir = today.strftime("%d_%m_%Y_%H_%M_%S_bench_results/")
 
 if os.path.isdir(temp_dir):
@@ -1085,7 +1085,7 @@ while True:
         time.sleep(10)
 
 ssm_client = boto3.client('ssm')
-
+"""
 # run pbkdf2 bench
 run_pbkdf2_bench()
 
@@ -1114,6 +1114,7 @@ cleanup()
 run_image_blur_bench(run_bmp = False)
 
 cleanup()
+"""
 
 # run image hash bench
 run_image_hash_bench(run_modified = False)
