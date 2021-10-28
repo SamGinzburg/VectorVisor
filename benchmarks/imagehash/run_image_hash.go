@@ -243,6 +243,7 @@ func main() {
 	submit_count = submit_count / float64(batches_completed)
 	unique_fns = unique_fns / float64(batches_completed)
 	req_queue_time = req_queue_time / float64(batches_completed)
+	device_time = device_time / float64(batches_completed)
 
 	fmt.Printf("duration: %f\n", duration)
 
@@ -259,6 +260,7 @@ func main() {
 	fmt.Printf("submit count: %f\n", submit_count)
 	fmt.Printf("unique fns: %f\n", unique_fns)
 	fmt.Printf("Request Queue Time: %f\n", req_queue_time)
+	fmt.Printf("Device Time: %f\n", device_time)
 
 	/*
 		on_device_compute_time := 0.0
