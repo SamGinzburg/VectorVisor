@@ -19,8 +19,10 @@ OPT_LEVEL="-O1 -g"
 WASM_SNIP_ARGS="--snip-rust-panicking-code"
 WASM_SNIP_CUSTOM="rust_oom __rg_oom"
 maxdemospace = 0
-maxfuncs = 999
-maxloc = 20000000
+maxfuncs = 50
+maxloc = 2000000
+#maxfuncs = 999
+#maxloc = 20000000
 
 today = datetime.now()
 temp_dir = today.strftime("%d_%m_%Y_%H_%M_%S_bench_results/")
@@ -232,7 +234,7 @@ def run_pbkdf2_bench():
 
     /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/pbkdf2/target/wasm32-wasi/release/pbkdf2-opt.wasm --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=131072 --partition=true --partitions={maxfuncs} --maxloc={maxloc} --serverless=true --vmcount=4096 --vmgroups=1 --maxdup=3 --lgroup={lgroup} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} &> /tmp/pbkdf2.log &
     """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, \
-               maxfuncs=maxfuncs, maxloc=maxloc)
+               maxfuncs=999, maxloc=maxloc*10)
 
     run_command(run_pbkdf2_command, "pbkdf2_gpu", gpu_instance[0].id)
 
@@ -1099,6 +1101,8 @@ cleanup()
 # run image hash bench
 
 run_image_hash_bench(run_modified = True)
+
+cleanup()
 
 # run pbkdf2 bench
 run_pbkdf2_bench()
