@@ -1094,7 +1094,7 @@ while True:
 ssm_client = boto3.client('ssm')
 
 # run image hash bench
-run_image_hash_bench(run_modified = False)
+run_image_hash_bench(run_modified = True)
 
 """
 cleanup()
