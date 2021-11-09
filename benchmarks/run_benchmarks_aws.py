@@ -10,7 +10,7 @@ target_rps = 3072
 target_rps_cpu = 1024
 TIMEOUT_MINUTES = 120
 local_group_size = 64
-interleave = 1
+interleave = 4
 #local_group_size = 999999
 is_pretty = "true"
 fastreply = "true"
@@ -1096,6 +1096,7 @@ ssm_client = boto3.client('ssm')
 # run image hash bench
 run_image_hash_bench(run_modified = False)
 
+"""
 cleanup()
 
 # run image hash bench
@@ -1132,6 +1133,7 @@ cleanup()
 run_image_blur_bench(run_bmp = False)
 
 cleanup()
+"""
 
 # clean up all instances at end
 ec2.instances.filter(InstanceIds = instance_id_list).terminate()
