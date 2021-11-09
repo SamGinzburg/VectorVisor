@@ -654,7 +654,7 @@ def run_image_hash_bench(run_modified = False):
     /usr/local/go/bin/go run run_image_hash.go {addr} 8000 {target_rps} 1 120
 
     /usr/local/go/bin/go run run_image_hash.go {addr} 8000 {target_rps} 1 120
-    """.format(addr=gpu_instance[0].private_dns_name, input_size=1000, target_rps=target_rps, imagehash_path=imagehash_path)
+    """.format(addr=gpu_instance[0].private_dns_name, input_size=1000, target_rps=target_rps*2, imagehash_path=imagehash_path)
 
     command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
 

@@ -89,25 +89,30 @@ impl BatchSubmitServer {
         */
 
         // Send the request body to the selected VM
+        //
+        // Tokio locks are FIFO, and tokio is cooperatively scheduled
+        // The first person to acquire sender is also the first to acquire recv
         let req_queue = std::time::Instant::now();
+        let req_id;
+        let req_start;
         {
             let sender = tx.lock().await;
-            let req_id = Uuid::new_v4().to_simple().to_string();
-            let req_start = std::time::Instant::now();
+            req_id = Uuid::new_v4().to_simple().to_string();
+            req_start = std::time::Instant::now();
             sender.send((body.clone(), body.len(), req_id.clone())).await.unwrap();
+        }
 
-            // Wait on response from the VM
-            while let Some((resp,
-                            len,
-                            on_dev_time,
-                            queue_submit_time,
-                            num_queue_submits,
-                            num_unique_fns,
-                            uuid)) = rx.lock().await.recv().await {
-                if uuid == req_id {
-                    let req_end = std::time::Instant::now();
-                    return Ok(BatchSubmitServer::create_response(resp, on_dev_time, queue_submit_time, num_queue_submits, num_unique_fns, (req_start-req_queue).as_nanos(), (req_end-req_queue).as_nanos()))
-                }
+        // Wait on response from the VM
+        while let Some((resp,
+                        len,
+                        on_dev_time,
+                        queue_submit_time,
+                        num_queue_submits,
+                        num_unique_fns,
+                        uuid)) = rx.lock().await.recv().await {
+            if uuid == req_id {
+                let req_end = std::time::Instant::now();
+                return Ok(BatchSubmitServer::create_response(resp, on_dev_time, queue_submit_time, num_queue_submits, num_unique_fns, (req_start-req_queue).as_nanos(), (req_end-req_queue).as_nanos()))
             }
         }
 
