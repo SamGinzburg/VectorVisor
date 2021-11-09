@@ -39,7 +39,7 @@ fn perform_image_hash(image: image::DynamicImage, hasher: img_hash::Hasher) -> V
 fn image_hash(event: FuncInput) -> FuncResponse {
     let mut image = decode(event.image.as_bytes()).unwrap();
     let mut decoded_image = load_from_memory_with_format(&image, ImageFormat::Bmp).unwrap();
-    let hasher = HasherConfig::new().hash_size(256, 256).hash_alg(HashAlg::DoubleGradient).to_hasher();
+    let hasher = HasherConfig::new().hash_size(256, 256).to_hasher();
     let hash = perform_image_hash(decoded_image, hasher);
     
     FuncResponse { hash: hash }

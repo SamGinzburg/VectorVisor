@@ -23,6 +23,7 @@ maxfuncs = 50
 maxloc = 2000000
 #maxfuncs = 999
 #maxloc = 20000000
+benchmark_duration = 300
 
 today = datetime.now()
 temp_dir = today.strftime("%d_%m_%Y_%H_%M_%S_bench_results/")
@@ -257,10 +258,10 @@ def run_pbkdf2_bench():
 
     cd /tmp/wasm2opencl/benchmarks/pbkdf2/
 
-    /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/pbkdf2/run_pbkdf2.go {addr} 8000 {target_rps} 1 120
+    /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/pbkdf2/run_pbkdf2.go {addr} 8000 {target_rps} 1 {duration}
 
-    /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/pbkdf2/run_pbkdf2.go {addr} 8000 {target_rps} 1 120
-    """.format(addr=gpu_instance[0].private_dns_name, target_rps=4096)
+    /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/pbkdf2/run_pbkdf2.go {addr} 8000 {target_rps} 1 {duration}
+    """.format(addr=gpu_instance[0].private_dns_name, target_rps=4096, duration=benchmark_duration)
 
     command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
 
@@ -292,10 +293,10 @@ def run_pbkdf2_bench():
 
     cd /tmp/wasm2opencl/benchmarks/pbkdf2/
 
-    /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/pbkdf2/run_pbkdf2.go {addr} 8000 {target_rps} 1 120
+    /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/pbkdf2/run_pbkdf2.go {addr} 8000 {target_rps} 1 {duration}
 
-    /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/pbkdf2/run_pbkdf2.go {addr} 8000 {target_rps} 1 120
-    """.format(addr=cpu_bench_instance[0].private_dns_name, target_rps=target_rps_cpu)
+    /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/pbkdf2/run_pbkdf2.go {addr} 8000 {target_rps} 1 {duration} 
+    """.format(addr=cpu_bench_instance[0].private_dns_name, target_rps=target_rps_cpu, duration=benchmark_duration)
 
     command_id = run_command(run_invoker_cpu, "run invoker for cpu", invoker_instance[0].id)
 
@@ -388,10 +389,10 @@ def run_lz4_bench():
 
     cd /tmp/wasm2opencl/benchmarks/json-compression/
 
-    /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/json-compression/run_json_lz4.go {addr} 8000 {target_rps} 1 60 {input_size}
+    /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/json-compression/run_json_lz4.go {addr} 8000 {target_rps} 1 {duration} {input_size}
 
-    /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/json-compression/run_json_lz4.go {addr} 8000 {target_rps} 1 60 {input_size}
-    """.format(addr=gpu_instance[0].private_dns_name, input_size=200, target_rps=target_rps)
+    /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/json-compression/run_json_lz4.go {addr} 8000 {target_rps} 1 {duration} {input_size}
+    """.format(addr=gpu_instance[0].private_dns_name, input_size=200, target_rps=target_rps, duration=benchmark_duration)
 
 
     command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
@@ -424,10 +425,10 @@ def run_lz4_bench():
 
     cd /tmp/wasm2opencl/benchmarks/json-compression/
 
-    /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/json-compression/run_json_lz4.go {addr} 8000 {target_rps} 1 60 {input_size}
+    /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/json-compression/run_json_lz4.go {addr} 8000 {target_rps} 1 {duration} {input_size}
 
-    /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/json-compression/run_json_lz4.go {addr} 8000 {target_rps} 1 60 {input_size}
-    """.format(addr=cpu_bench_instance[0].private_dns_name, input_size=200, target_rps=target_rps_cpu)
+    /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/json-compression/run_json_lz4.go {addr} 8000 {target_rps} 1 {duration} {input_size}
+    """.format(addr=cpu_bench_instance[0].private_dns_name, input_size=200, target_rps=target_rps_cpu, duration=benchmark_duration)
 
     command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
 
@@ -519,10 +520,10 @@ def run_average_bench():
 
     cd /tmp/wasm2opencl/benchmarks/average/
 
-    /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/average/run_average_bench.go {addr} 8000 {target_rps} 1 120 {input_size}
+    /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/average/run_average_bench.go {addr} 8000 {target_rps} 1 {duration} {input_size}
 
-    /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/average/run_average_bench.go {addr} 8000 {target_rps} 1 120 {input_size}
-    """.format(addr=gpu_instance[0].private_dns_name, input_size=50, target_rps=target_rps)
+    /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/average/run_average_bench.go {addr} 8000 {target_rps} 1 {duration} {input_size}
+    """.format(addr=gpu_instance[0].private_dns_name, input_size=50, target_rps=target_rps, duration=benchmark_duration)
 
 
     command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
@@ -555,10 +556,10 @@ def run_average_bench():
 
     cd /tmp/wasm2opencl/benchmarks/average/
 
-    /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/average/run_average_bench.go {addr} 8000 {target_rps} 1 120 {input_size}
+    /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/average/run_average_bench.go {addr} 8000 {target_rps} 1 {duration} {input_size}
 
-    /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/average/run_average_bench.go {addr} 8000 {target_rps} 1 120 {input_size}
-    """.format(addr=cpu_bench_instance[0].private_dns_name, input_size=50, target_rps=target_rps_cpu)
+    /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/average/run_average_bench.go {addr} 8000 {target_rps} 1 {duration} {input_size}
+    """.format(addr=cpu_bench_instance[0].private_dns_name, input_size=50, target_rps=target_rps_cpu, duration=benchmark_duration)
 
     command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
 
@@ -651,10 +652,10 @@ def run_image_hash_bench(run_modified = False):
 
     cd {imagehash_path}
 
-    /usr/local/go/bin/go run run_image_hash.go {addr} 8000 {target_rps} 1 120
+    /usr/local/go/bin/go run run_image_hash.go {addr} 8000 {target_rps} 1 {duration}
 
-    /usr/local/go/bin/go run run_image_hash.go {addr} 8000 {target_rps} 1 120
-    """.format(addr=gpu_instance[0].private_dns_name, input_size=1000, target_rps=target_rps*2, imagehash_path=imagehash_path)
+    /usr/local/go/bin/go run run_image_hash.go {addr} 8000 {target_rps} 1 {duration}
+    """.format(addr=gpu_instance[0].private_dns_name, input_size=1000, target_rps=target_rps, imagehash_path=imagehash_path, duration=benchmark_duration)
 
     command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
 
@@ -692,10 +693,10 @@ def run_image_hash_bench(run_modified = False):
 
     cd {imagehash_path}
 
-    /usr/local/go/bin/go run run_image_hash.go {addr} 8000 {target_rps} 1 120
+    /usr/local/go/bin/go run run_image_hash.go {addr} 8000 {target_rps} 1 {duration}
 
-    /usr/local/go/bin/go run run_image_hash.go {addr} 8000 {target_rps} 1 120
-    """.format(addr=cpu_bench_instance[0].private_dns_name, input_size=1000, target_rps=target_rps_cpu, imagehash_path=imagehash_path)
+    /usr/local/go/bin/go run run_image_hash.go {addr} 8000 {target_rps} 1 {duration}
+    """.format(addr=cpu_bench_instance[0].private_dns_name, input_size=1000, target_rps=target_rps_cpu, imagehash_path=imagehash_path, duration=benchmark_duration)
 
     command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
 
@@ -800,10 +801,10 @@ def run_image_blur_bench(run_bmp = False):
 
     cd {exe_path}
 
-    /usr/local/go/bin/go run run_image_blur.go {addr} 8000 {target_rps} 1 300
+    /usr/local/go/bin/go run run_image_blur.go {addr} 8000 {target_rps} 1 {duration}
 
-    /usr/local/go/bin/go run run_image_blur.go {addr} 8000 {target_rps} 1 300
-    """.format(addr=gpu_instance[0].private_dns_name, input_size=1000, target_rps=target_rps, exe_path=exe_path)
+    /usr/local/go/bin/go run run_image_blur.go {addr} 8000 {target_rps} 1 {duration}
+    """.format(addr=gpu_instance[0].private_dns_name, input_size=1000, target_rps=target_rps, exe_path=exe_path, duration=benchmark_duration)
 
 
     command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
@@ -840,10 +841,10 @@ def run_image_blur_bench(run_bmp = False):
 
     cd {exe_path}
 
-    /usr/local/go/bin/go run run_image_blur.go {addr} 8000 {target_rps} 1 120
+    /usr/local/go/bin/go run run_image_blur.go {addr} 8000 {target_rps} 1 {duration}
 
-    /usr/local/go/bin/go run run_image_blur.go {addr} 8000 {target_rps} 1 120
-    """.format(addr=cpu_bench_instance[0].private_dns_name, input_size=1000, target_rps=target_rps_cpu, exe_path=exe_path)
+    /usr/local/go/bin/go run run_image_blur.go {addr} 8000 {target_rps} 1 {duration}
+    """.format(addr=cpu_bench_instance[0].private_dns_name, input_size=1000, target_rps=target_rps_cpu, exe_path=exe_path, duration=benchmark_duration)
 
     command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
 
@@ -942,10 +943,10 @@ def run_nlp_count_bench():
 
     cd /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/
 
-    /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/run_nlp.go {addr} 8000 {target_rps} 1 120 /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/smaller_tweets.txt {input_size}
+    /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/run_nlp.go {addr} 8000 {target_rps} 1 {duration} /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/smaller_tweets.txt {input_size}
 
-    /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/run_nlp.go {addr} 8000 {target_rps} 1 120 /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/smaller_tweets.txt {input_size}
-    """.format(addr=gpu_instance[0].private_dns_name, input_size=500, target_rps=3072)
+    /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/run_nlp.go {addr} 8000 {target_rps} 1 {duration} /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/smaller_tweets.txt {input_size}
+    """.format(addr=gpu_instance[0].private_dns_name, input_size=500, target_rps=3072, duration=benchmark_duration)
 
 
     command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
@@ -978,10 +979,10 @@ def run_nlp_count_bench():
 
     cd /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/
 
-    /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/run_nlp.go {addr} 8000 {target_rps} 1 120 /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/smaller_tweets.txt {input_size}
+    /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/run_nlp.go {addr} 8000 {target_rps} 1 {duration} /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/smaller_tweets.txt {input_size}
 
-    /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/run_nlp.go {addr} 8000 {target_rps} 1 120 /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/smaller_tweets.txt {input_size}
-    """.format(addr=cpu_bench_instance[0].private_dns_name, input_size=500, target_rps=target_rps_cpu)
+    /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/run_nlp.go {addr} 8000 {target_rps} 1 {duration} /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/smaller_tweets.txt {input_size}
+    """.format(addr=cpu_bench_instance[0].private_dns_name, input_size=500, target_rps=target_rps_cpu, duration=benchmark_duration)
 
     command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
 
