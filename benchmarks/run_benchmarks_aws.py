@@ -655,7 +655,7 @@ def run_image_hash_bench(run_modified = False):
     /usr/local/go/bin/go run run_image_hash.go {addr} 8000 {target_rps} 1 {duration}
 
     /usr/local/go/bin/go run run_image_hash.go {addr} 8000 {target_rps} 1 {duration}
-    """.format(addr=gpu_instance[0].private_dns_name, input_size=1000, target_rps=target_rps, imagehash_path=imagehash_path, duration=benchmark_duration)
+    """.format(addr=gpu_instance[0].private_dns_name, input_size=1000, target_rps=target_rps*2, imagehash_path=imagehash_path, duration=benchmark_duration)
 
     command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
 
@@ -1024,7 +1024,7 @@ p3.2xlarge   => 1 V100, 16 GiB memory, 8 vCPU, $3.06 / hr
 # ami-00339339e800db52e  ==> OpenCL 1.2 driver (460.X)
 # ami-0748c95fd9dd9f42a  ==> OpenCL 1.2 driver (450.X)
 gpu_instance = ec2.create_instances(ImageId='ami-01463836f7041cd10',
-                                InstanceType="g4dn.xlarge",
+                                InstanceType="g4dn.2xlarge",
                                 MinCount=1,
                                 MaxCount=1,
                                 UserData=userdata_ubuntu,
