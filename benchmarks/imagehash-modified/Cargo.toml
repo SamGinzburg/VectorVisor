@@ -12,7 +12,7 @@ serde_json = "1.0.62"
 serde = { version = "1.0.62", features = ["derive"] }
 image = { version = "*", default-features = false, features = ["bmp"] } 
 base64 = "0.13.0"
-img_hash = { git = "https://github.com/SamGinzburg/img_hash.git", rev="42207d2" }
+img_hash = { git = "https://github.com/SamGinzburg/img_hash.git", rev="4fa26ad6ff0122deb3738b5d33b935cb694a1064" }
 
 [profile.release]
 lto = true
