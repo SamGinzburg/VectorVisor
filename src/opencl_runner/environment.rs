@@ -21,18 +21,19 @@ use std::convert::TryInto;
 pub struct Environment {}
 
 impl Environment {
-    pub fn hypercall_environ_sizes_get(ctx: &WasiCtx, hypercall: &mut HyperCall, sender: &Sender<HyperCallResult>) -> () {
+    pub fn hypercall_environ_sizes_get(ctx: &WasiCtx, vm_ctx: &VectorizedVM, hypercall: &mut HyperCall, sender: &Sender<HyperCallResult>) -> () {
         let mut hcall_buf: &mut [u8] = unsafe { *hypercall.hypercall_buffer.buf.get() };
+        let vm_idx = vm_ctx.vm_id;
         let result = match ctx.environ_sizes_get() {
             Ok(tuple) => {
                 // now that we have retreived the sizes
                 // now we copy the result to the hcall buf
                 if hypercall.is_interleaved_mem > 0 {
-                    Interleave::write_u32(hcall_buf, 0, hypercall.num_total_vms, tuple.0, hypercall.vm_id, hypercall.is_interleaved_mem);
-                    Interleave::write_u32(hcall_buf, 4, hypercall.num_total_vms, tuple.1, hypercall.vm_id, hypercall.is_interleaved_mem);
+                    Interleave::write_u32(hcall_buf, 0, hypercall.num_total_vms, tuple.0, vm_idx, hypercall.is_interleaved_mem);
+                    Interleave::write_u32(hcall_buf, 4, hypercall.num_total_vms, tuple.1, vm_idx, hypercall.is_interleaved_mem);
                 } else {
                     let hcall_buf_size: u32 = (hcall_buf.len() / hypercall.num_total_vms as usize).try_into().unwrap();
-                    hcall_buf = &mut hcall_buf[(hypercall.vm_id * hcall_buf_size) as usize..((hypercall.vm_id+1) * hcall_buf_size) as usize];
+                    hcall_buf = &mut hcall_buf[(vm_idx * hcall_buf_size) as usize..((vm_idx+1) * hcall_buf_size) as usize];
                     LittleEndian::write_u32(&mut hcall_buf[0..4], tuple.0);
                     LittleEndian::write_u32(&mut hcall_buf[4..8], tuple.1);
                 }
@@ -44,13 +45,14 @@ impl Environment {
         };
 
         sender.send({
-            HyperCallResult::new(result, hypercall.vm_id, WasiSyscalls::EnvironSizeGet)
+            HyperCallResult::new(result, vm_idx, WasiSyscalls::EnvironSizeGet)
         }).unwrap();
     }
 
     pub fn hypercall_environ_get(ctx: &WasiCtx, vm_ctx: &VectorizedVM, hypercall: &mut HyperCall, sender: &Sender<HyperCallResult>) -> () {
         let mut hcall_buf: &mut [u8] = unsafe { *hypercall.hypercall_buffer.buf.get() };
         let hcall_buf_size: u32 = vm_ctx.hcall_buf_size;
+        let vm_idx = vm_ctx.vm_id;
 
         let memory = &vm_ctx.memory;
         let wasm_mem = &vm_ctx.wasm_memory;
@@ -75,13 +77,13 @@ impl Environment {
 
         // copy the results back to the hcall_buf
         if hypercall.is_interleaved_mem > 0 {
-            Interleave::write_u32(&mut hcall_buf, 0, hypercall.num_total_vms, num_env_vars, hypercall.vm_id, hypercall.is_interleaved_mem);
-            Interleave::write_u32(&mut hcall_buf, 4, hypercall.num_total_vms, env_str_size, hypercall.vm_id, hypercall.is_interleaved_mem);
+            Interleave::write_u32(&mut hcall_buf, 0, hypercall.num_total_vms, num_env_vars, vm_idx, hypercall.is_interleaved_mem);
+            Interleave::write_u32(&mut hcall_buf, 4, hypercall.num_total_vms, env_str_size, vm_idx, hypercall.is_interleaved_mem);
             for idx in 8..(num_env_vars * 4 + env_str_size) {
-                Interleave::write_u8(&mut hcall_buf, idx, hypercall.num_total_vms, raw_mem[idx as usize], hypercall.vm_id, hypercall.is_interleaved_mem);
+                Interleave::write_u8(&mut hcall_buf, idx, hypercall.num_total_vms, raw_mem[idx as usize], vm_idx, hypercall.is_interleaved_mem);
             }    
         } else {
-            hcall_buf = &mut hcall_buf[(hypercall.vm_id * hcall_buf_size) as usize..((hypercall.vm_id+1) * hcall_buf_size) as usize];
+            hcall_buf = &mut hcall_buf[(vm_idx * hcall_buf_size) as usize..((vm_idx+1) * hcall_buf_size) as usize];
             LittleEndian::write_u32(&mut hcall_buf[0..4], num_env_vars);
             LittleEndian::write_u32(&mut hcall_buf[4..8], env_str_size);
             for idx in 8..(num_env_vars * 4 + env_str_size) {
@@ -92,7 +94,7 @@ impl Environment {
         //dbg!(&mut hcall_buf[0..16]);
 
         sender.send({
-            HyperCallResult::new(0, hypercall.vm_id, WasiSyscalls::EnvironGet)
+            HyperCallResult::new(0, vm_idx, WasiSyscalls::EnvironGet)
         }).unwrap();
     }
 

@@ -39,14 +39,15 @@ impl WasiFd {
         let num_iovecs: u32;
         let mut bytes_to_copy: u32 = 0;
         let raw_mem: &mut [u8] = unsafe { memory.data_unchecked_mut() };
+        let vm_idx = vm_ctx.vm_id;
 
         // copy the hypercall buffer over to the memory object
         if hypercall.is_interleaved_mem > 0 {
-            fd = Interleave::read_u32(hcall_buf, 0, hypercall.num_total_vms, hypercall.vm_id, hypercall.is_interleaved_mem);
-            num_iovecs = Interleave::read_u32(hcall_buf, 8, hypercall.num_total_vms, hypercall.vm_id, hypercall.is_interleaved_mem);
+            fd = Interleave::read_u32(hcall_buf, 0, hypercall.num_total_vms, vm_idx, hypercall.is_interleaved_mem);
+            num_iovecs = Interleave::read_u32(hcall_buf, 8, hypercall.num_total_vms, vm_idx, hypercall.is_interleaved_mem);
             // for each iovec, read the buf_len to determine how many bytes to actually copy over
             for idx in 0..num_iovecs {
-                bytes_to_copy += Interleave::read_u32(hcall_buf, 16 + 8 * idx + 4, hypercall.num_total_vms, hypercall.vm_id, hypercall.is_interleaved_mem);
+                bytes_to_copy += Interleave::read_u32(hcall_buf, 16 + 8 * idx + 4, hypercall.num_total_vms, vm_idx, hypercall.is_interleaved_mem);
             }
 
             // the amount of bytes to copy is the sum of all buf_lens + size of the iovec_arr
@@ -56,13 +57,13 @@ impl WasiFd {
                 raw_mem[idx - 16] = Interleave::read_u8(hcall_buf,
                                                         idx as u32,
                                                         hypercall.num_total_vms,
-                                                        hypercall.vm_id,
+                                                        vm_idx,
                                                         hypercall.is_interleaved_mem);
             }
         } else {
             // set the buffer to the scratch space for the appropriate VM
             // we don't have to do this for the interleave
-            hcall_buf = &hcall_buf[(hypercall.vm_id * hcall_buf_size) as usize..((hypercall.vm_id+1) * hcall_buf_size) as usize];
+            hcall_buf = &hcall_buf[(vm_idx * hcall_buf_size) as usize..((vm_idx+1) * hcall_buf_size) as usize];
             fd = LittleEndian::read_u32(&hcall_buf[0..4]);
             num_iovecs = LittleEndian::read_u32(&hcall_buf[8..12]);
 
@@ -88,13 +89,14 @@ impl WasiFd {
         let result = ctx.fd_write(Fd::from(fd), &ciovec_ptr);
 
         sender.send({
-            HyperCallResult::new(result.unwrap() as i32, hypercall.vm_id, WasiSyscalls::FdWrite)
+            HyperCallResult::new(result.unwrap() as i32, vm_idx, WasiSyscalls::FdWrite)
         }).unwrap();
     }
 
-    pub fn hypercall_fd_prestat_get(ctx: &WasiCtx, _vm_ctx: &VectorizedVM, hypercall: &mut HyperCall, sender: &Sender<HyperCallResult>) -> () {
+    pub fn hypercall_fd_prestat_get(ctx: &WasiCtx, vm_ctx: &VectorizedVM, hypercall: &mut HyperCall, sender: &Sender<HyperCallResult>) -> () {
         let mut hcall_buf: &mut [u8] = unsafe { *hypercall.hypercall_buffer.buf.get() };
         let hcall_buf_size: u32 = (hcall_buf.len() / hypercall.num_total_vms as usize).try_into().unwrap();
+        let vm_idx = vm_ctx.vm_id;
 
         //let memory = &vm_ctx.memory;
         //let wasm_mem = &vm_ctx.wasm_memory;
@@ -103,11 +105,11 @@ impl WasiFd {
 
         //let raw_mem: &mut [u8] = unsafe { memory.data_unchecked_mut() };
         if hypercall.is_interleaved_mem > 0 {
-            fd = Interleave::read_u32(hcall_buf, 0, hypercall.num_total_vms, hypercall.vm_id, hypercall.is_interleaved_mem);
+            fd = Interleave::read_u32(hcall_buf, 0, hypercall.num_total_vms, vm_idx, hypercall.is_interleaved_mem);
         } else {
             // set the buffer to the scratch space for the appropriate VM
             // we don't have to do this for the interleave
-            hcall_buf = &mut hcall_buf[(hypercall.vm_id * hcall_buf_size) as usize..((hypercall.vm_id+1) * hcall_buf_size) as usize];
+            hcall_buf = &mut hcall_buf[(vm_idx * hcall_buf_size) as usize..((vm_idx+1) * hcall_buf_size) as usize];
             fd = LittleEndian::read_u32(&hcall_buf[0..4]);
         }
 
@@ -119,13 +121,13 @@ impl WasiFd {
         };
 
         if hypercall.is_interleaved_mem > 0 {
-            Interleave::write_u32(hcall_buf, 0, hypercall.num_total_vms, result, hypercall.vm_id, hypercall.is_interleaved_mem);
+            Interleave::write_u32(hcall_buf, 0, hypercall.num_total_vms, result, vm_idx, hypercall.is_interleaved_mem);
         } else {
             LittleEndian::write_u32(&mut hcall_buf[0..4], result);
         }
 
         sender.send({
-            HyperCallResult::new(result as i32, hypercall.vm_id, WasiSyscalls::FdPrestatGet)
+            HyperCallResult::new(result as i32, vm_idx, WasiSyscalls::FdPrestatGet)
         }).unwrap();
     }
     pub fn hypercall_fd_prestat_dir_name(ctx: &WasiCtx, vm_ctx: &VectorizedVM, hypercall: &mut HyperCall, sender: &Sender<HyperCallResult>) -> () {
@@ -134,6 +136,7 @@ impl WasiFd {
 
         //let memory = &vm_ctx.memory;
         let wasm_mem = &vm_ctx.wasm_memory;
+        let vm_idx = vm_ctx.vm_id;
 
         let fd: u32;
         let str_len: u32;
@@ -141,13 +144,13 @@ impl WasiFd {
 
         //let _raw_mem: &mut [u8] = unsafe { memory.data_unchecked_mut() };
         if hypercall.is_interleaved_mem > 0 {
-            fd = Interleave::read_u32(hcall_buf, 0, hypercall.num_total_vms, hypercall.vm_id, hypercall.is_interleaved_mem);
-            str_len = Interleave::read_u32(hcall_buf, 4, hypercall.num_total_vms, hypercall.vm_id, hypercall.is_interleaved_mem);
+            fd = Interleave::read_u32(hcall_buf, 0, hypercall.num_total_vms, vm_idx, hypercall.is_interleaved_mem);
+            str_len = Interleave::read_u32(hcall_buf, 4, hypercall.num_total_vms, vm_idx, hypercall.is_interleaved_mem);
 
         } else {
             // set the buffer to the scratch space for the appropriate VM
             // we don't have to do this for the interleave
-            hcall_buf = &mut hcall_buf[(hypercall.vm_id * hcall_buf_size) as usize..((hypercall.vm_id+1) * hcall_buf_size) as usize];
+            hcall_buf = &mut hcall_buf[(vm_idx * hcall_buf_size) as usize..((vm_idx+1) * hcall_buf_size) as usize];
             fd = LittleEndian::read_u32(&hcall_buf[0..4]);
             str_len = LittleEndian::read_u32(&hcall_buf[4..8]);
         }
@@ -164,7 +167,7 @@ impl WasiFd {
         for idx in str_ptr.as_array(str_len).iter() {
             let value = idx.unwrap().read().unwrap();
             if hypercall.is_interleaved_mem > 0 {
-                Interleave::write_u8(hcall_buf, index + 8, hypercall.num_total_vms, value, hypercall.vm_id, hypercall.is_interleaved_mem);
+                Interleave::write_u8(hcall_buf, index + 8, hypercall.num_total_vms, value, vm_idx, hypercall.is_interleaved_mem);
             } else {
                 let mut hcall_buf_temp = &mut hcall_buf[(index + 8) as usize..(index + 8 + 1) as usize];
                 hcall_buf_temp.write_u8(value).unwrap();
@@ -173,7 +176,7 @@ impl WasiFd {
         }
 
         sender.send({
-            HyperCallResult::new(result as i32, hypercall.vm_id, WasiSyscalls::FdPrestatDirName)
+            HyperCallResult::new(result as i32, vm_idx, WasiSyscalls::FdPrestatDirName)
         }).unwrap();
     }
 }

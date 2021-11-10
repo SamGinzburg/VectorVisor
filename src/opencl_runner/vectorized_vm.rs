@@ -239,7 +239,7 @@ impl VectorizedVM {
                 }).unwrap();
             },
             WasiSyscalls::EnvironSizeGet => {
-                Environment::hypercall_environ_sizes_get(&self.ctx, hypercall, sender);
+                Environment::hypercall_environ_sizes_get(&self.ctx, self, hypercall, sender);
             },
             WasiSyscalls::EnvironGet => {
                 Environment::hypercall_environ_get(&self.ctx, self, hypercall, sender);
