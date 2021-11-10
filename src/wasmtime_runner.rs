@@ -104,7 +104,7 @@ impl WasmtimeRunner {
                         let device_execution_time = Utc::now().timestamp_nanos() - *tsc.lock().unwrap();
                         let resp_uuid: String = curr_uuid_response.lock().unwrap().to_string();
 
-                        chan.lock().unwrap().blocking_send((resp_buf,
+                        chan.lock().unwrap().blocking_send((bytes::Bytes::from(resp_buf),
                                                             resp_buf_len,
                                                             device_execution_time.try_into().unwrap(),
                                                             0, 0, 0,

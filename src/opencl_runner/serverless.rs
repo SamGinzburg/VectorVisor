@@ -51,7 +51,7 @@ impl Serverless {
 
 
     pub fn hypercall_serverless_response(vm_ctx: &mut VectorizedVM, hypercall: &mut HyperCall, sender: &Sender<HyperCallResult>) -> () {
-        let mut hcall_buf: &[u8] = unsafe { *hypercall.hypercall_buffer.buf.get() };
+        let mut hcall_buf: &'static [u8] = unsafe { *hypercall.hypercall_buffer.buf.get() };
         let hcall_buf_size: u32 = vm_ctx.hcall_buf_size;
         let vm_idx = vm_ctx.vm_id;
         hcall_buf = &hcall_buf[(vm_idx * hcall_buf_size) as usize..((vm_idx+1) * hcall_buf_size) as usize];
@@ -62,10 +62,10 @@ impl Serverless {
             let msg_len = LittleEndian::read_u32(&hcall_buf[0..4]);
             let resp_buf_len: usize = msg_len.try_into().unwrap();
 
-            let mut resp_buf = vec![0u8; resp_buf_len.try_into().unwrap()];
-
+            //let mut resp_buf = vec![0u8; resp_buf_len.try_into().unwrap()];
+            let resp_buf = bytes::Bytes::from_static(&hcall_buf[4..4+resp_buf_len]);
             // copy the data from the hcall_buffer
-            resp_buf[0..resp_buf_len].copy_from_slice(&hcall_buf[4..4+resp_buf_len]);
+            // resp_buf[0..resp_buf_len].copy_from_slice(&hcall_buf[4..4+resp_buf_len]);
 
             // calculate on device time and queue submit times
             let on_device_time = hypercall.timestamp_counter - *vm_ctx.timestamp_counter;

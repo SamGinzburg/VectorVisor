@@ -125,7 +125,7 @@ impl HyperCallResult {
     }
 }
 
-pub type VmSenderType = (Vec<u8>, usize, u64, u64, u64, u64, String);
+pub type VmSenderType = (bytes::Bytes, usize, u64, u64, u64, u64, String);
 pub type VmRecvType = (bytes::Bytes, usize, String);
 
 pub struct VectorizedVM {

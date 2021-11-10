@@ -55,7 +55,7 @@ impl warp::reject::Reject for NoVmAvailable {}
 
 impl BatchSubmitServer {
 
-    fn create_response(resp: Vec<u8>, on_dev_time: u64, queue_submit_time: u64, num_queue_submits: u64, num_unique_fns: u64, queue_time: u128, device_time: u128) -> warp::http::Response<Body> {
+    fn create_response(resp: bytes::Bytes, on_dev_time: u64, queue_submit_time: u64, num_queue_submits: u64, num_unique_fns: u64, queue_time: u128, device_time: u128) -> warp::http::Response<Body> {
         let mut final_resp = Response::builder().status(StatusCode::OK);
         {
             let headers = final_resp.headers_mut().unwrap();
