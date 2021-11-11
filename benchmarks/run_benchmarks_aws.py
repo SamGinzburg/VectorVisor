@@ -18,7 +18,7 @@ CFLAGS="-cl-nv-verbose"
 OPT_LEVEL="-O1 -g"
 WASM_SNIP_ARGS="--snip-rust-panicking-code"
 WASM_SNIP_CUSTOM="rust_oom __rg_oom"
-maxdemospace = 0
+maxdemospace = 2048
 maxfuncs = 50
 maxloc = 2000000
 #maxfuncs = 999
@@ -627,7 +627,7 @@ def run_image_hash_bench(run_modified = False):
     x=$(cloud-init status)
     done
 
-    /tmp/wasm2opencl/target/release/wasm2opencl --input {imagehash_path}target/wasm32-wasi/release/imagehash-opt.wasm --ip=0.0.0.0 --heap=4194304 --stack=131072 --hcallsize=524288 --partition=true --serverless=true --vmcount=3072 --vmgroups=1 --maxdup=2 --disablefastcalls=false --partitions={maxfuncs} --maxloc={maxloc} --lgroup={lgroup} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} &> /tmp/imagehash.log &
+    /tmp/wasm2opencl/target/release/wasm2opencl --input {imagehash_path}target/wasm32-wasi/release/imagehash-opt.wasm --ip=0.0.0.0 --heap=4194304 --stack=131072 --hcallsize=524288 --partition=true --serverless=true --vmcount=3072 --vmgroups=1 --maxdup=3 --disablefastcalls=false --partitions={maxfuncs} --maxloc={maxloc} --lgroup={lgroup} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} &> /tmp/imagehash.log &
     """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, imagehash_path=imagehash_path, maxfuncs=maxfuncs, maxloc=maxloc)
 
     run_command(run_image_command, "run_imagehash_gpu_command", gpu_instance[0].id)
