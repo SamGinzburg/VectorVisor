@@ -18,7 +18,7 @@ CFLAGS="-cl-nv-verbose"
 OPT_LEVEL="-O1 -g"
 WASM_SNIP_ARGS="--snip-rust-panicking-code"
 WASM_SNIP_CUSTOM="rust_oom __rg_oom"
-maxdemospace = 2048
+maxdemospace = 0
 maxfuncs = 50
 maxloc = 2000000
 #maxfuncs = 999
@@ -1095,9 +1095,8 @@ while True:
 ssm_client = boto3.client('ssm')
 
 # run image hash bench
-run_image_hash_bench(run_modified = True)
+run_image_hash_bench(run_modified = False)
 
-"""
 cleanup()
 
 # run image hash bench
@@ -1134,7 +1133,6 @@ cleanup()
 run_image_blur_bench(run_bmp = False)
 
 cleanup()
-"""
 
 # clean up all instances at end
 ec2.instances.filter(InstanceIds = instance_id_list).terminate()
