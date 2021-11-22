@@ -33,10 +33,10 @@ if os.path.isdir(temp_dir):
 else:
     os.mkdir(temp_dir, 0o755)
 
-ec2 = boto3.resource('ec2')
-ec2_client = boto3.client('ec2')
+region = "us-east-1"
+ec2 = boto3.resource('ec2', region_name=region)
+ec2_client = boto3.client('ec2', region_name=region)
 
-region = "us-east-2"
 userdata = """#cloud-config
     runcmd:
      - /home/ec2-user/sudo npm run prod
@@ -1017,14 +1017,27 @@ g4dn.xlarge  => 1 T4, 16 GiB memory,  4 vCPU, $0.526 / hr
 g4dn.2xlarge => 1 T4, 32 GiB memory, 8 vCPU, $0.752 / hr
 g4dn.4xlarge => 1 T4, 64 GiB memory, 16 vCPU, $1.204 / hr
 p3.2xlarge   => 1 V100, 16 GiB memory, 8 vCPU, $3.06 / hr
+g5.xlarge    => 1 A10G, 24GiB memory, 4 vCPU, $1.006 / hr
 
 """
 # AMIs specific to us-east-2
 # ami-01463836f7041cd10  ==> OpenCL 3.0 driver (470.57.02)
 # ami-00339339e800db52e  ==> OpenCL 1.2 driver (460.X)
 # ami-0748c95fd9dd9f42a  ==> OpenCL 1.2 driver (450.X)
-gpu_instance = ec2.create_instances(ImageId='ami-01463836f7041cd10',
-                                InstanceType="g4dn.xlarge",
+
+
+"""
+us-east-2 AMI: ami-01463836f7041cd10
+us-east-1 AMI: ami-094c089c38ed069f2 
+"""
+
+if region == "us-east-1":
+    gpu_ami = 'ami-09a83b91fc98e860f'
+elif region == "us-east-2":
+    gpu_ami = 'ami-01463836f7041cd10'
+
+gpu_instance = ec2.create_instances(ImageId=gpu_ami,
+                                InstanceType="g5.xlarge",
                                 MinCount=1,
                                 MaxCount=1,
                                 UserData=userdata_ubuntu,
@@ -1034,8 +1047,20 @@ gpu_instance = ec2.create_instances(ImageId='ami-01463836f7041cd10',
                                 })
 
 # cpu wasmtime instance
-cpu_bench_instance = ec2.create_instances(ImageId='ami-028dbc12531690cf4',
-                                InstanceType="c5.xlarge", # $0.17 / hr
+# c5.xlarge (0.17), c5a.xlarge (0.154)
+
+"""
+us-east-2 AMI: ami-028dbc12531690cf4
+us-east-1 AMI: ami-083654bd07b5da81d
+"""
+
+if region == "us-east-1":
+    cpu_ami = 'ami-09a83b91fc98e860f'
+elif region == "us-east-2":
+    cpu_ami = 'ami-028dbc12531690cf4'
+
+cpu_bench_instance = ec2.create_instances(ImageId=cpu_ami,
+                                InstanceType="c5a.xlarge",
                                 MinCount=1,
                                 MaxCount=1,
                                 UserData=userdata_ubuntu,
@@ -1047,7 +1072,7 @@ cpu_bench_instance = ec2.create_instances(ImageId='ami-028dbc12531690cf4',
 
 # t2.2xlarge = 8 vCPUs, $0.37/hr
 # c5.4xlarge = 16 vCPUs, $0.68/hr
-invoker_instance = ec2.create_instances(ImageId='ami-028dbc12531690cf4',
+invoker_instance = ec2.create_instances(ImageId=cpu_ami,
                                 InstanceType="c5.4xlarge",
                                 MinCount=1,
                                 MaxCount=1,
@@ -1092,8 +1117,13 @@ while True:
         print ("Still waiting on allocated VMs to finish waiting...")
         time.sleep(10)
 
-ssm_client = boto3.client('ssm')
+ssm_client = boto3.client('ssm', region_name=region)
 
+run_image_blur_bench(run_bmp = True)
+
+cleanup()
+
+"""
 # run image hash bench
 run_image_hash_bench(run_modified = False)
 
@@ -1133,6 +1163,7 @@ cleanup()
 run_image_blur_bench(run_bmp = False)
 
 cleanup()
+"""
 
 # clean up all instances at end
 ec2.instances.filter(InstanceIds = instance_id_list).terminate()
