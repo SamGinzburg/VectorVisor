@@ -29,7 +29,7 @@ impl Random {
         let raw_mem: &mut [u8] = unsafe { memory.data_unchecked_mut() };
 
         // If the VM is masked off, don't try to run the syscall
-        if vm_ctx.no_resp {
+        if !vm_ctx.no_resp {
             let random_len = if hypercall.is_interleaved_mem > 0 {
                 Interleave::read_u32(hcall_buf, 0, hypercall.num_total_vms, vm_idx, hypercall.is_interleaved_mem)
             } else {

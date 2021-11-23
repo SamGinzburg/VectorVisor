@@ -182,7 +182,7 @@ func main() {
 
 	reqs := make([][]byte, NUM_PARAMS)
 	for i := 0; i < NUM_PARAMS; i++ {
-		p := payload{Text: RandStringVec(32, 256)}
+		p := payload{Text: RandStringVec(80, 512)}
 		request_body, _ := msgpack.Marshal(p)
 		reqs[i] = request_body
 	}
