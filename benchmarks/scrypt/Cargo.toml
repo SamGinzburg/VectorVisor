@@ -1,0 +1,19 @@
+[package]
+name = "scrypt"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+wasm-serverless-invoke = { path = "../../wasm-serverless-invoke" }
+serde_json = "1.0.62"
+serde = { version = "1.0.62", features = ["derive"] }
+rand_core = { version = "0.6", features = ["std"] }
+lazy_static = "1.4.0"
+scrypt = "0.8.0"
+
+[profile.release]
+lto = true
+codegen-units = 1 # better optimizations
+opt-level = 3

@@ -125,6 +125,11 @@ userdata_ubuntu = """#cloud-config
      - ~/.cargo/bin/wasm-snip target/wasm32-wasi/release/pbkdf2.wasm {snip_args} -o target/wasm32-wasi/release/pbkdf2.wasm -p {snip_custom}
      - /tmp/binaryen-version_100/bin/wasm-opt target/wasm32-wasi/release/pbkdf2.wasm {opt} -c -o target/wasm32-wasi/release/pbkdf2-opt.wasm
      - cd ..
+     - cd scrypt/
+     - ~/.cargo/bin/cargo build --release
+     - ~/.cargo/bin/wasm-snip target/wasm32-wasi/release/scrypt.wasm {snip_args} -o target/wasm32-wasi/release/scrypt.wasm -p {snip_custom}
+     - /tmp/binaryen-version_100/bin/wasm-opt target/wasm32-wasi/release/scrypt.wasm {opt} -c -o target/wasm32-wasi/release/scrypt-opt.wasm
+     - cd ..
      - cd nlp-count-vectorizer/
      - ~/.cargo/bin/cargo build --release
      - ~/.cargo/bin/wasm-snip target/wasm32-wasi/release/nlp-count-vectorizer.wasm {snip_args} -o target/wasm32-wasi/release/nlp-count-vectorizer.wasm -p {snip_custom}
@@ -194,6 +199,139 @@ def cleanup():
     time.sleep(2)
     output = block_on_command(command_id, invoker_instance[0].id)
     time.sleep(2)
+
+def run_scrypt_bench():
+    # Now we can set up the next benchmark (scrypt)
+    run_scrypt_command_x86 = """#!/bin/bash
+    sudo su
+    ulimit -n 65536
+    x=$(cloud-init status)
+    until [ "$x" == "status: done" ]; do
+    sleep 10
+    x=$(cloud-init status)
+    done
+
+    cd /tmp/wasm2opencl/benchmarks/scrypt/
+    ~/.cargo/bin/cargo run --release --target x86_64-unknown-linux-gnu &> /tmp/scrypt.log &
+    """
+
+    run_scrypt_command_wasmtime = """#!/bin/bash
+    sudo su
+    ulimit -n 65536
+    x=$(cloud-init status)
+    until [ "$x" == "status: done" ]; do
+    sleep 10
+    x=$(cloud-init status)
+    done
+
+    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/scrypt/target/wasm32-wasi/release/scrypt-opt.wasm --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=131072 --partition=true --serverless=true --vmcount=4096 --wasmtime=true --fastreply={fastreply} &> /tmp/scrypt.log &
+    """.format(fastreply=fastreply)
+
+    run_command(run_scrypt_command_wasmtime, "scrypt_cpu", cpu_bench_instance[0].id)
+
+    run_scrypt_command = """#!/bin/bash
+    sudo su
+    ulimit -n 65536
+    x=$(cloud-init status)
+    until [ "$x" == "status: done" ]; do
+    sleep 10
+    x=$(cloud-init status)
+    done
+
+    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/scrypt/target/wasm32-wasi/release/scrypt-opt.wasm --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=131072 --partition=true --partitions={maxfuncs} --maxloc={maxloc} --serverless=true --vmcount=4096 --vmgroups=1 --maxdup=3 --lgroup={lgroup} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} &> /tmp/scrypt.log &
+    """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, \
+               maxfuncs=999, maxloc=maxloc*10)
+
+    run_command(run_scrypt_command, "scrypt_gpu", gpu_instance[0].id)
+
+    # now run the invoker(s) for pbkdf2
+    run_invoker = """#!/bin/bash
+    sudo su
+    ulimit -n 65536
+    mkdir -p ~/gocache/
+    mkdir -p ~/gopath/
+    mkdir -p ~/xdg/
+    export GOCACHE=~/gocache/
+    export GOPATH=~/gopath/
+    export XDG_CACHE_HOME=~/xdg/
+
+    x=$(cloud-init status)
+    until [ "$x" == "status: done" ]; do
+    sleep 10
+    x=$(cloud-init status)
+    done
+
+    cd /tmp/wasm2opencl/benchmarks/scrypt/
+
+    /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/scrypt/run_scrypt.go {addr} 8000 {target_rps} 1 {duration}
+
+    /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/scrypt/run_scrypt.go {addr} 8000 {target_rps} 1 {duration}
+    """.format(addr=gpu_instance[0].private_dns_name, target_rps=4096, duration=benchmark_duration)
+
+    command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
+
+    time.sleep(20)
+
+    # Block until benchmark is complete
+    output = block_on_command(command_id, invoker_instance[0].id)
+    print (output)
+
+    # save output
+    with open(temp_dir+"gpu_bench_scrypt.txt", "w") as text_file:
+        text_file.write(str(output))
+
+    run_invoker_cpu = """#!/bin/bash
+    sudo su
+    ulimit -n 65536
+    mkdir -p ~/gocache/
+    mkdir -p ~/gopath/
+    mkdir -p ~/xdg/
+    export GOCACHE=~/gocache/
+    export GOPATH=~/gopath/
+    export XDG_CACHE_HOME=~/xdg/
+
+    x=$(cloud-init status)
+    until [ "$x" == "status: done" ]; do
+    sleep 10
+    x=$(cloud-init status)
+    done
+
+    cd /tmp/wasm2opencl/benchmarks/scrypt/
+
+    /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/scrypt/run_scrypt.go {addr} 8000 {target_rps} 1 {duration}
+
+    /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/scrypt/run_scrypt.go {addr} 8000 {target_rps} 1 {duration} 
+    """.format(addr=cpu_bench_instance[0].private_dns_name, target_rps=target_rps_cpu, duration=benchmark_duration)
+
+    command_id = run_command(run_invoker_cpu, "run invoker for cpu", invoker_instance[0].id)
+
+    time.sleep(20)
+
+    # Block until benchmark is complete
+    output = block_on_command(command_id, invoker_instance[0].id)
+    print (output)
+
+    # save output
+    with open(temp_dir+"cpu_bench_scrypt.txt", "w") as text_file:
+        text_file.write(str(output))
+
+    cleanup()
+
+    run_command(run_scrypt_command_x86, "scrypt_cpu_x86", cpu_bench_instance[0].id)
+    
+    command_id = run_command(run_invoker_cpu, "run invoker for cpu", invoker_instance[0].id)
+
+    time.sleep(20)
+
+    # Block until benchmark is complete
+    output = block_on_command(command_id, invoker_instance[0].id)
+    print (output)
+
+    # save output
+    with open(temp_dir+"cpu_x86_bench_scrypt.txt", "w") as text_file:
+        text_file.write(str(output))
+
+
 
 def run_pbkdf2_bench():
     # Now we can set up the next benchmark (pbkdf2)
