@@ -9,7 +9,6 @@ from datetime import date, datetime
 target_rps = 3072
 target_rps_cpu = 1024
 TIMEOUT_MINUTES = 120
-local_group_size = 64
 interleave = 4
 #local_group_size = 999999
 is_pretty = "true"
@@ -24,6 +23,13 @@ maxloc = 2000000
 #maxfuncs = 999
 #maxloc = 20000000
 benchmark_duration = 180
+run_a10g = True
+if run_a10g:
+    local_group_size = 16
+else:
+    local_group_size = 64
+
+
 
 today = datetime.now()
 temp_dir = today.strftime("%d_%m_%Y_%H_%M_%S_bench_results/")
@@ -202,6 +208,12 @@ def cleanup():
 
 def run_scrypt_bench():
     # Now we can set up the next benchmark (scrypt)
+
+    if run_a10g:
+        vmcount = 4096
+    else:
+        vmcount = 6144
+
     run_scrypt_command_x86 = """#!/bin/bash
     sudo su
     ulimit -n 65536
@@ -238,9 +250,9 @@ def run_scrypt_bench():
     x=$(cloud-init status)
     done
 
-    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/scrypt/target/wasm32-wasi/release/scrypt-opt.wasm --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=131072 --partition=true --partitions={maxfuncs} --maxloc={maxloc} --serverless=true --vmcount=4096 --vmgroups=1 --maxdup=3 --lgroup={lgroup} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} &> /tmp/scrypt.log &
+    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/scrypt/target/wasm32-wasi/release/scrypt-opt.wasm --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=131072 --partition=true --partitions={maxfuncs} --maxloc={maxloc} --serverless=true --vmcount={vmcount} --vmgroups=1 --maxdup=3 --lgroup={lgroup} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} &> /tmp/scrypt.log &
     """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, \
-               maxfuncs=999, maxloc=maxloc*10)
+               maxfuncs=999, maxloc=maxloc*10, vmcount=vmcount)
 
     run_command(run_scrypt_command, "scrypt_gpu", gpu_instance[0].id)
 
@@ -263,10 +275,10 @@ def run_scrypt_bench():
 
     cd /tmp/wasm2opencl/benchmarks/scrypt/
 
-    /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/scrypt/run_scrypt.go {addr} 8000 {target_rps} 1 {duration}
+    /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/scrypt/run_scrypt.go {addr} 8000 {target_rps} 1 {duration} {hashes}
 
-    /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/scrypt/run_scrypt.go {addr} 8000 {target_rps} 1 {duration}
-    """.format(addr=gpu_instance[0].private_dns_name, target_rps=4096, duration=benchmark_duration)
+    /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/scrypt/run_scrypt.go {addr} 8000 {target_rps} 1 {duration} {hashes}
+    """.format(addr=gpu_instance[0].private_dns_name, target_rps=vmcount, duration=benchmark_duration, hashes=256)
 
     command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
 
@@ -298,10 +310,10 @@ def run_scrypt_bench():
 
     cd /tmp/wasm2opencl/benchmarks/scrypt/
 
-    /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/scrypt/run_scrypt.go {addr} 8000 {target_rps} 1 {duration}
+    /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/scrypt/run_scrypt.go {addr} 8000 {target_rps} 1 {duration} {hashes}
 
-    /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/scrypt/run_scrypt.go {addr} 8000 {target_rps} 1 {duration} 
-    """.format(addr=cpu_bench_instance[0].private_dns_name, target_rps=target_rps_cpu, duration=benchmark_duration)
+    /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/scrypt/run_scrypt.go {addr} 8000 {target_rps} 1 {duration} {hashes}
+    """.format(addr=cpu_bench_instance[0].private_dns_name, target_rps=target_rps_cpu, duration=benchmark_duration, hashes=256)
 
     command_id = run_command(run_invoker_cpu, "run invoker for cpu", invoker_instance[0].id)
 
@@ -335,6 +347,11 @@ def run_scrypt_bench():
 
 def run_pbkdf2_bench():
     # Now we can set up the next benchmark (pbkdf2)
+    if run_a10g:
+        vmcount = 4096
+    else:
+        vmcount = 6144
+
     run_pbkdf2_command_x86 = """#!/bin/bash
     sudo su
     ulimit -n 65536
@@ -371,9 +388,9 @@ def run_pbkdf2_bench():
     x=$(cloud-init status)
     done
 
-    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/pbkdf2/target/wasm32-wasi/release/pbkdf2-opt.wasm --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=131072 --partition=true --partitions={maxfuncs} --maxloc={maxloc} --serverless=true --vmcount=4096 --vmgroups=1 --maxdup=3 --lgroup={lgroup} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} &> /tmp/pbkdf2.log &
+    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/pbkdf2/target/wasm32-wasi/release/pbkdf2-opt.wasm --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=131072 --partition=true --partitions={maxfuncs} --maxloc={maxloc} --serverless=true --vmcount={vmcount} --vmgroups=1 --maxdup=3 --lgroup={lgroup} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} &> /tmp/pbkdf2.log &
     """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, \
-               maxfuncs=999, maxloc=maxloc*10)
+               maxfuncs=999, maxloc=maxloc*10, vmcount=vmcount)
 
     run_command(run_pbkdf2_command, "pbkdf2_gpu", gpu_instance[0].id)
 
@@ -399,7 +416,7 @@ def run_pbkdf2_bench():
     /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/pbkdf2/run_pbkdf2.go {addr} 8000 {target_rps} 1 {duration}
 
     /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/pbkdf2/run_pbkdf2.go {addr} 8000 {target_rps} 1 {duration}
-    """.format(addr=gpu_instance[0].private_dns_name, target_rps=4096, duration=benchmark_duration)
+    """.format(addr=gpu_instance[0].private_dns_name, target_rps=vmcount, duration=benchmark_duration)
 
     command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
 
@@ -1174,8 +1191,14 @@ if region == "us-east-1":
 elif region == "us-east-2":
     gpu_ami = 'ami-01463836f7041cd10'
 
+if run_a10g:
+    gpuinstance = "g5.xlarge"
+else:
+    gpuinstance = "g4dn.xlarge"
+
+
 gpu_instance = ec2.create_instances(ImageId=gpu_ami,
-                                InstanceType="g5.xlarge",
+                                InstanceType=gpuinstance,
                                 MinCount=1,
                                 MaxCount=1,
                                 UserData=userdata_ubuntu,
@@ -1257,7 +1280,7 @@ while True:
 
 ssm_client = boto3.client('ssm', region_name=region)
 
-run_image_blur_bench(run_bmp = True)
+run_scrypt_bench()
 
 cleanup()
 

@@ -180,9 +180,15 @@ func main() {
 		os.Exit(2)
 	}
 
+	num_hashes, err := strconv.Atoi(os.Args[6])
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(2)
+	}
+
 	reqs := make([][]byte, NUM_PARAMS)
 	for i := 0; i < NUM_PARAMS; i++ {
-		p := payload{Text: RandStringVec(80, 512)}
+		p := payload{Text: RandStringVec(80, num_hashes)}
 		request_body, _ := msgpack.Marshal(p)
 		reqs[i] = request_body
 	}
