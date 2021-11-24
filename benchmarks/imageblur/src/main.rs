@@ -33,7 +33,7 @@ struct FuncResponse {
 
 #[inline(never)]
 fn blur_inline(image: image::DynamicImage) -> ImageBuffer<Rgba<u8>, Vec<u8>> {
-    return imageops::blur(&image, 4.0);
+    return imageops::blur(&image, 10.0);
 }
 
 #[inline(never)]

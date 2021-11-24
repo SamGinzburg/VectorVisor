@@ -22,7 +22,7 @@ maxfuncs = 50
 maxloc = 2000000
 #maxfuncs = 999
 #maxloc = 20000000
-benchmark_duration = 180
+benchmark_duration = 300
 run_a10g = True
 if run_a10g:
     local_group_size = 16
@@ -797,7 +797,7 @@ def run_image_hash_bench(run_modified = False):
     x=$(cloud-init status)
     done
 
-    /tmp/wasm2opencl/target/release/wasm2opencl --input {imagehash_path}target/wasm32-wasi/release/imagehash-opt.wasm --ip=0.0.0.0 --heap=4194304 --stack=131072 --hcallsize=524288 --partition=true --serverless=true --vmcount{vmcount} --vmgroups=1 --maxdup=3 --disablefastcalls=false --partitions={maxfuncs} --maxloc={maxloc} --lgroup={lgroup} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} &> /tmp/imagehash.log &
+    /tmp/wasm2opencl/target/release/wasm2opencl --input {imagehash_path}target/wasm32-wasi/release/imagehash-opt.wasm --ip=0.0.0.0 --heap=4194304 --stack=131072 --hcallsize=524288 --partition=true --serverless=true --vmcount={vmcount} --vmgroups=1 --maxdup=3 --disablefastcalls=false --partitions={maxfuncs} --maxloc={maxloc} --lgroup={lgroup} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} &> /tmp/imagehash.log &
     """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, imagehash_path=imagehash_path, maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount)
 
     run_command(run_image_command, "run_imagehash_gpu_command", gpu_instance[0].id)
@@ -1305,15 +1305,11 @@ while True:
 
 ssm_client = boto3.client('ssm', region_name=region)
 
-run_scrypt_bench()
-
-cleanup()
-
-run_pbkdf2_bench()
-
-cleanup()
-
 run_image_blur_bench(run_bmp = True)
+
+cleanup()
+
+run_image_hash_bench(run_modified = True)
 
 
 """
