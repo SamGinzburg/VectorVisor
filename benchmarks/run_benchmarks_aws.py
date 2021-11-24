@@ -210,9 +210,9 @@ def run_scrypt_bench():
     # Now we can set up the next benchmark (scrypt)
 
     if run_a10g:
-        vmcount = 4096
-    else:
         vmcount = 6144
+    else:
+        vmcount = 4096
 
     run_scrypt_command_x86 = """#!/bin/bash
     sudo su
@@ -348,9 +348,9 @@ def run_scrypt_bench():
 def run_pbkdf2_bench():
     # Now we can set up the next benchmark (pbkdf2)
     if run_a10g:
-        vmcount = 4096
-    else:
         vmcount = 6144
+    else:
+        vmcount = 4096
 
     run_pbkdf2_command_x86 = """#!/bin/bash
     sudo su
@@ -482,6 +482,11 @@ def run_pbkdf2_bench():
         text_file.write(str(output))
 
 def run_lz4_bench():
+    if run_a10g:
+        vmcount = 4608
+    else:
+        vmcount = 3072
+
     run_json_lz4_command_x86 = """#!/bin/bash
     sudo su
     ulimit -n 65536
@@ -518,9 +523,9 @@ def run_lz4_bench():
     x=$(cloud-init status)
     done
 
-    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/json-compression/target/wasm32-wasi/release/json-compression-opt.wasm --ip=0.0.0.0 --heap=4194304 --stack=131072 --hcallsize=524288 --partition=true --serverless=true --vmcount=3072 --vmgroups=1 --maxdup=3 --partitions={maxfuncs} --maxloc={maxloc} --lgroup={lgroup} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} &> /tmp/json-compression.log &
+    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/json-compression/target/wasm32-wasi/release/json-compression-opt.wasm --ip=0.0.0.0 --heap=4194304 --stack=131072 --hcallsize=524288 --partition=true --serverless=true --vmcount={vmcount} --vmgroups=1 --maxdup=3 --partitions={maxfuncs} --maxloc={maxloc} --lgroup={lgroup} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} &> /tmp/json-compression.log &
     """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, \
-               maxfuncs=maxfuncs, maxloc=maxloc)
+               maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount)
 
     run_command(run_json_lz4_command, "run_json_lz4_command", gpu_instance[0].id)
 
@@ -547,7 +552,7 @@ def run_lz4_bench():
     /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/json-compression/run_json_lz4.go {addr} 8000 {target_rps} 1 {duration} {input_size}
 
     /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/json-compression/run_json_lz4.go {addr} 8000 {target_rps} 1 {duration} {input_size}
-    """.format(addr=gpu_instance[0].private_dns_name, input_size=200, target_rps=target_rps, duration=benchmark_duration)
+    """.format(addr=gpu_instance[0].private_dns_name, input_size=200, target_rps=vmcount, duration=benchmark_duration)
 
 
     command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
@@ -613,6 +618,12 @@ def run_lz4_bench():
         text_file.write(str(output))
 
 def run_average_bench():
+
+    if run_a10g:
+        vmcount = 6144
+    else:
+        vmcount = 4096
+
     run_average_command_x86 = """#!/bin/bash
     sudo su
     ulimit -n 65536
@@ -649,9 +660,9 @@ def run_average_bench():
     x=$(cloud-init status)
     done
 
-    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/average/target/wasm32-wasi/release/average-opt.wasm --ip=0.0.0.0 --heap=3145728 --stack=131072 --hcallsize=524288 --partition=true --serverless=true --vmcount=4096 --wasmtime=false --maxdup=3 --lgroup={lgroup} --partitions={maxfuncs} --maxloc={maxloc} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} &> /tmp/average.log &
+    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/average/target/wasm32-wasi/release/average-opt.wasm --ip=0.0.0.0 --heap=3145728 --stack=131072 --hcallsize=524288 --partition=true --serverless=true --vmcount={vmcount} --wasmtime=false --maxdup=3 --lgroup={lgroup} --partitions={maxfuncs} --maxloc={maxloc} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} &> /tmp/average.log &
     """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, \
-               maxfuncs=maxfuncs, maxloc=maxloc)
+               maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount)
 
     run_command(run_average_command, "run_average_command", gpu_instance[0].id)
 
@@ -678,7 +689,7 @@ def run_average_bench():
     /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/average/run_average_bench.go {addr} 8000 {target_rps} 1 {duration} {input_size}
 
     /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/average/run_average_bench.go {addr} 8000 {target_rps} 1 {duration} {input_size}
-    """.format(addr=gpu_instance[0].private_dns_name, input_size=50, target_rps=target_rps, duration=benchmark_duration)
+    """.format(addr=gpu_instance[0].private_dns_name, input_size=50, target_rps=vmcount, duration=benchmark_duration)
 
 
     command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
@@ -741,7 +752,11 @@ def run_average_bench():
         text_file.write(str(output))
 
 def run_image_hash_bench(run_modified = False):
-
+    if run_a10g:
+        vmcount = 4608
+    else:
+        vmcount = 3072
+    
     imagehash_path = "/tmp/wasm2opencl/benchmarks/imagehash/"
     if run_modified:
         imagehash_path = "/tmp/wasm2opencl/benchmarks/imagehash-modified/"
@@ -782,8 +797,8 @@ def run_image_hash_bench(run_modified = False):
     x=$(cloud-init status)
     done
 
-    /tmp/wasm2opencl/target/release/wasm2opencl --input {imagehash_path}target/wasm32-wasi/release/imagehash-opt.wasm --ip=0.0.0.0 --heap=4194304 --stack=131072 --hcallsize=524288 --partition=true --serverless=true --vmcount=3072 --vmgroups=1 --maxdup=3 --disablefastcalls=false --partitions={maxfuncs} --maxloc={maxloc} --lgroup={lgroup} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} &> /tmp/imagehash.log &
-    """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, imagehash_path=imagehash_path, maxfuncs=maxfuncs, maxloc=maxloc)
+    /tmp/wasm2opencl/target/release/wasm2opencl --input {imagehash_path}target/wasm32-wasi/release/imagehash-opt.wasm --ip=0.0.0.0 --heap=4194304 --stack=131072 --hcallsize=524288 --partition=true --serverless=true --vmcount{vmcount} --vmgroups=1 --maxdup=3 --disablefastcalls=false --partitions={maxfuncs} --maxloc={maxloc} --lgroup={lgroup} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} &> /tmp/imagehash.log &
+    """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, imagehash_path=imagehash_path, maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount)
 
     run_command(run_image_command, "run_imagehash_gpu_command", gpu_instance[0].id)
 
@@ -810,7 +825,7 @@ def run_image_hash_bench(run_modified = False):
     /usr/local/go/bin/go run run_image_hash.go {addr} 8000 {target_rps} 1 {duration}
 
     /usr/local/go/bin/go run run_image_hash.go {addr} 8000 {target_rps} 1 {duration}
-    """.format(addr=gpu_instance[0].private_dns_name, input_size=1000, target_rps=target_rps, imagehash_path=imagehash_path, duration=benchmark_duration)
+    """.format(addr=gpu_instance[0].private_dns_name, input_size=1000, target_rps=vmcount, imagehash_path=imagehash_path, duration=benchmark_duration)
 
     command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
 
@@ -888,6 +903,11 @@ def run_image_hash_bench(run_modified = False):
             text_file.write(str(output))
 
 def run_image_blur_bench(run_bmp = False):
+    if run_a10g:
+        vmcount = 4608
+    else:
+        vmcount = 3072
+
     if not run_bmp:
         bin_path = "/tmp/wasm2opencl/benchmarks/imageblur/target/wasm32-wasi/release/imageblur-opt.wasm"
         exe_path = "/tmp/wasm2opencl/benchmarks/imageblur/"
@@ -931,8 +951,8 @@ def run_image_blur_bench(run_bmp = False):
     x=$(cloud-init status)
     done
 
-    /tmp/wasm2opencl/target/release/wasm2opencl --input {bin_path} --ip=0.0.0.0 --heap=4194304 --stack=262144 --hcallsize=524288 --partition=true --serverless=true --vmcount=3072 --vmgroups=1 --maxdup=3 --disablefastcalls=false --partitions={maxfuncs} --maxloc={maxloc} --lgroup={lgroup} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} &> /tmp/imageblur.log &
-    """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, bin_path=bin_path, maxfuncs=maxfuncs, maxloc=maxloc)
+    /tmp/wasm2opencl/target/release/wasm2opencl --input {bin_path} --ip=0.0.0.0 --heap=4194304 --stack=262144 --hcallsize=524288 --partition=true --serverless=true --vmcount={vmcount} --vmgroups=1 --maxdup=3 --disablefastcalls=false --partitions={maxfuncs} --maxloc={maxloc} --lgroup={lgroup} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} &> /tmp/imageblur.log &
+    """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, bin_path=bin_path, maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount)
 
     run_command(run_image_command, "run_imageblur_gpu_command", gpu_instance[0].id)
 
@@ -959,7 +979,7 @@ def run_image_blur_bench(run_bmp = False):
     /usr/local/go/bin/go run run_image_blur.go {addr} 8000 {target_rps} 1 {duration}
 
     /usr/local/go/bin/go run run_image_blur.go {addr} 8000 {target_rps} 1 {duration}
-    """.format(addr=gpu_instance[0].private_dns_name, input_size=1000, target_rps=target_rps, exe_path=exe_path, duration=benchmark_duration)
+    """.format(addr=gpu_instance[0].private_dns_name, input_size=1000, target_rps=vmcount, exe_path=exe_path, duration=benchmark_duration)
 
 
     command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
@@ -1037,6 +1057,11 @@ def run_image_blur_bench(run_bmp = False):
             text_file.write(str(output))
 
 def run_nlp_count_bench():
+    if run_a10g:
+        vmcount = 4608
+    else:
+        vmcount = 3072
+
     run_nlp_command_x86 = """#!/bin/bash
     sudo su
     ulimit -n 65536
@@ -1073,8 +1098,8 @@ def run_nlp_count_bench():
     x=$(cloud-init status)
     done
 
-    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/target/wasm32-wasi/release/nlp-count-vectorizer-opt.wasm --ip=0.0.0.0 --heap=4194304 --stack=131072 --hcallsize=524288 --partition=true --serverless=true --vmcount=3072 --vmgroups=1 --maxdup=3 --disablefastcalls=false --lgroup={lgroup} --partitions={maxfuncs} --maxloc={maxloc} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} &> /tmp/nlp-count-vectorizer.log &
-    """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, maxfuncs=maxfuncs, maxloc=maxloc)
+    /tmp/wasm2opencl/target/release/wasm2opencl --input /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/target/wasm32-wasi/release/nlp-count-vectorizer-opt.wasm --ip=0.0.0.0 --heap=4194304 --stack=131072 --hcallsize=524288 --partition=true --serverless=true --vmcount={vmcount} --vmgroups=1 --maxdup=3 --disablefastcalls=false --lgroup={lgroup} --partitions={maxfuncs} --maxloc={maxloc} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} &> /tmp/nlp-count-vectorizer.log &
+    """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount)
 
     run_command(run_nlp_command, "run_nlp_command", gpu_instance[0].id)
 
@@ -1101,7 +1126,7 @@ def run_nlp_count_bench():
     /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/run_nlp.go {addr} 8000 {target_rps} 1 {duration} /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/smaller_tweets.txt {input_size}
 
     /usr/local/go/bin/go run /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/run_nlp.go {addr} 8000 {target_rps} 1 {duration} /tmp/wasm2opencl/benchmarks/nlp-count-vectorizer/smaller_tweets.txt {input_size}
-    """.format(addr=gpu_instance[0].private_dns_name, input_size=500, target_rps=3072, duration=benchmark_duration)
+    """.format(addr=gpu_instance[0].private_dns_name, input_size=500, target_rps=vmcount, duration=benchmark_duration)
 
 
     command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
@@ -1234,7 +1259,7 @@ cpu_bench_instance = ec2.create_instances(ImageId=cpu_ami,
 # t2.2xlarge = 8 vCPUs, $0.37/hr
 # c5.4xlarge = 16 vCPUs, $0.68/hr
 invoker_instance = ec2.create_instances(ImageId=cpu_ami,
-                                InstanceType="c5.4xlarge",
+                                InstanceType="c5a.4xlarge",
                                 MinCount=1,
                                 MaxCount=1,
                                 UserData=userdata_ubuntu,
@@ -1283,6 +1308,13 @@ ssm_client = boto3.client('ssm', region_name=region)
 run_scrypt_bench()
 
 cleanup()
+
+run_pbkdf2_bench()
+
+cleanup()
+
+run_image_blur_bench(run_bmp = True)
+
 
 """
 # run image hash bench
