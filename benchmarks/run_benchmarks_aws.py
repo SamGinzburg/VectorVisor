@@ -620,7 +620,7 @@ def run_lz4_bench():
 def run_average_bench():
 
     if run_a10g:
-        vmcount = 6144
+        vmcount = 5120
     else:
         vmcount = 4096
 
@@ -937,7 +937,7 @@ def run_image_blur_bench(run_bmp = False):
     x=$(cloud-init status)
     done
 
-    /tmp/wasm2opencl/target/release/wasm2opencl --input {bin_path} --ip=0.0.0.0 --heap=4194304 --stack=262144 --hcallsize=262144 --partition=true --serverless=true --vmcount=3072 --wasmtime=true --fastreply={fastreply} &> /tmp/imageblur.log &
+    /tmp/wasm2opencl/target/release/wasm2opencl --input {bin_path} --ip=0.0.0.0 --heap=4194304 --stack=262144 --hcallsize=409600 --partition=true --serverless=true --vmcount=3072 --wasmtime=true --fastreply={fastreply} &> /tmp/imageblur.log &
     """.format(fastreply=fastreply, bin_path=bin_path)
 
     run_command(run_image_command_wasmtime, "run_imageblur_command_wasmtime", cpu_bench_instance[0].id)
@@ -951,7 +951,7 @@ def run_image_blur_bench(run_bmp = False):
     x=$(cloud-init status)
     done
 
-    /tmp/wasm2opencl/target/release/wasm2opencl --input {bin_path} --ip=0.0.0.0 --heap=4194304 --stack=262144 --hcallsize=262144 --partition=true --serverless=true --vmcount={vmcount} --vmgroups=1 --maxdup=3 --disablefastcalls=false --partitions={maxfuncs} --maxloc={maxloc} --lgroup={lgroup} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} &> /tmp/imageblur.log &
+    /tmp/wasm2opencl/target/release/wasm2opencl --input {bin_path} --ip=0.0.0.0 --heap=4194304 --stack=262144 --hcallsize=409600 --partition=true --serverless=true --vmcount={vmcount} --vmgroups=1 --maxdup=3 --disablefastcalls=false --partitions={maxfuncs} --maxloc={maxloc} --lgroup={lgroup} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} &> /tmp/imageblur.log &
     """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, bin_path=bin_path, maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount)
 
     run_command(run_image_command, "run_imageblur_gpu_command", gpu_instance[0].id)
@@ -1305,15 +1305,14 @@ while True:
 
 ssm_client = boto3.client('ssm', region_name=region)
 
-#run_image_blur_bench(run_bmp = False)
+# run image blue bench
+run_image_blur_bench(run_bmp = True)
 
-#cleanup()
+cleanup()
 
-#run_image_blur_bench(run_bmp = True)
+run_image_blur_bench(run_bmp = False)
 
-#cleanup()
-
-run_image_hash_bench(run_modified = True)
+cleanup()
 
 
 """
@@ -1330,6 +1329,11 @@ cleanup()
 
 # run pbkdf2 bench
 run_pbkdf2_bench()
+
+cleanup()
+
+# run scrypt bench
+run_scrypt_bench()
 
 cleanup()
 
