@@ -207,6 +207,7 @@ impl OpenCLRunner {
                globals_buffer_size: u32,
                local_work_group: usize,
                mexec: usize,
+               req_timeout: u32,
                vm_sender: Arc<Vec<Mutex<Sender<VmSenderType>>>>,
                vm_recv: Arc<Vec<Mutex<Receiver<VmRecvType>>>>,
                _compile_flags: String,
@@ -248,7 +249,7 @@ impl OpenCLRunner {
                     final_runner.run_vector_vms(stack_frames_size, local_work_group, program, &leaked_command_queue, hypercall_buffer_read_buffer, hypercall_input_buffer, hcall_size.try_into().unwrap(), context, print_return, vm_sender, vm_recv)
                 },
                 ProgramType::Partitioned(program_map, kernel_partition_mapping) => {
-                    final_runner.run_partitioned_vector_vms(stack_frames_size, local_work_group, mexec, program_map, kernel_partition_mapping, &leaked_command_queue, hypercall_buffer_read_buffer, hypercall_input_buffer, hcall_size.try_into().unwrap(), &context, print_return, vm_sender, vm_recv)
+                    final_runner.run_partitioned_vector_vms(stack_frames_size, local_work_group, mexec, program_map, kernel_partition_mapping, &leaked_command_queue, hypercall_buffer_read_buffer, hypercall_input_buffer, hcall_size.try_into().unwrap(), &context, print_return, vm_sender, vm_recv, req_timeout)
                 }
             };
 
@@ -1227,7 +1228,8 @@ impl OpenCLRunner {
                                     ctx: &ocl::core::Context,
                                     print_return: bool,
                                     vm_sender: Arc<Vec<Mutex<Sender<VmSenderType>>>>,
-                                    vm_recv: Arc<Vec<Mutex<Receiver<VmRecvType>>>>) -> VMMRuntimeStatus {
+                                    vm_recv: Arc<Vec<Mutex<Receiver<VmRecvType>>>>,
+                                    req_timeout: u32) -> VMMRuntimeStatus {
         let mut kernels: HashMap<u32, ocl::core::Kernel> = HashMap::new();
 
         // setup the data kernel
@@ -1363,7 +1365,7 @@ impl OpenCLRunner {
                 let mut dispatchable_hcalls = vec![];
                 let mut block_on_inputs = false;
                 let poll_freq = 10;
-                let buffer_timeout = 200;
+                let buffer_timeout: u64 = req_timeout.into();
                 let mut ellapsed_time = 0;
                 let sleep_time = time::Duration::from_millis(poll_freq);
                 let invoke_blocker_rx = invoke_blocker;
