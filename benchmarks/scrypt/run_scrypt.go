@@ -10,6 +10,7 @@ import (
 	"os"
 	"strconv"
 	"time"
+
 	msgpack "github.com/vmihailenco/msgpack/v5"
 )
 
@@ -90,11 +91,13 @@ func IssueRequests(ip string, port int, req [][]byte, exec_time chan<- float64, 
 			continue
 		}
 
-		body, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			panic(err)
-		}
-		_ = body
+		/*
+			body, err := ioutil.ReadAll(resp.Body)
+			if err != nil {
+				panic(err)
+			}
+			_ = body
+		*/
 		resp.Body.Close()
 		read_secs := time.Since(start_read)
 		_ = read_secs

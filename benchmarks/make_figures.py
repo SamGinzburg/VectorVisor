@@ -5,6 +5,8 @@ import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 
+sysname = "VectorVisor"
+
 parser = argparse.ArgumentParser(description='Process some integers.')
 parser.add_argument("--input_dir", required=True)
 args = vars(parser.parse_args())
@@ -75,14 +77,16 @@ def plot_bars(gpu_latency, cpu_wasm_latency, cpu_x86_latency, figname):
 
     # breakeven point for performance per dollar
     # ((x)/y) / (0.526 / 0.17) > 1
-    l1 = plt.axhline(y=3.09412, color='r', linestyle='-')
+    # T4 -> 3.09412
+    # A10G -> 6.53
+    l1 = plt.axhline(y=6.53, color='r', linestyle='-')
 
-    ax.legend([l1, p1, p2], ['Throughput/$ Breakeven Threshold', 'WebAssembly', 'x86-64'])
+    ax.legend([l1, p1, p2], ['Throughput/$ Breakeven Threshold', '{sys} vs. WebAssembly'.format(sys=sysname), '{sys} vs. x86-64'.format(sys=sysname)])
     plt.grid()
     plt.savefig(input_dir+"/{name}.png".format(name=figname))
     plt.clf()
 
-def latency_breakdown(device_exe_time, buffer_time, vmm_overhead, queue_submit, net_latency):
+def latency_breakdown(device_exe_time, buffer_time, vmm_overhead, queue_submit, net_latency, name, scale=30):
     N = 7
 
     total = []
@@ -110,11 +114,11 @@ def latency_breakdown(device_exe_time, buffer_time, vmm_overhead, queue_submit, 
     plt.ylabel('Average Latency (s)')
     plt.title('GPU (g4dn.xlarge) Latency Breakdown')
     plt.xticks(ind, ('Pbkdf2', 'Blur-Jpeg', 'Blur-Bmp', 'PHash', 'PHash-Modified', 'Histogram', 'LZ4'))
-    plt.yticks(np.arange(0, 30, 2))
+    plt.yticks(np.arange(0, scale, scale/10))
     plt.legend((p1[0], p2[0], p3[0], p4[0], p5[0]), ('On Device Execution Time', 'Device Queueing Overhead', 'VMM Overhead', 'Buffer Time', 'Network'))
 
     plt.grid()
-    plt.savefig("latency_breakdown.png")
+    plt.savefig(input_dir+"/{name}_latency_breakdown.png".format(name=name))
     plt.clf()
 
 def latency_throughput(gpu_latency, gpu_throughput, cpu_x86_latency, cpu_x86_throughput, cpu_wasm_latency, cpu_wasm_throughput):
@@ -140,7 +144,7 @@ def latency_throughput(gpu_latency, gpu_throughput, cpu_x86_latency, cpu_x86_thr
         ax.set_xlim(0, 1300)
         ax.grid(True)
     plt.legend()
-    plt.savefig("latency_throughput.png")
+    plt.savefig(input_dir+"/latency_throughput.png")
     plt.clf()
 
 # pbkdf2
@@ -204,7 +208,7 @@ for d, v in zip(gpu_list, vmcount):
     # include buffer time in GPU measurement but not CPU
     new_rps = v / (d['device_time'] / (10 ** 9))
     gpu_rps_device.append(new_rps)
-# Each CPU instance has 4 cores, so can process 4 requests per second
+# Each CPU instance has 4 cores, so can process 4 requests concurrently
 for d, v in zip(cpu_wasm_list, vmcount):
     new_rps = 4 / ((d['device_time'] - d['buffer_time']) / (10 ** 9))
     cpu_wasm_rps_device.append(new_rps)
@@ -229,7 +233,24 @@ for d, v in zip(gpu_list, vmcount):
     gpu_vmm_overhead.append((d['device_time'] - d['queue_submit_time'] - d['buffer_time'] - d['on_dev_exe_time']) / (10 ** 9))
     gpu_net_latency.append((d['latency'] - d['device_time']) / (10 ** 9))
 
-latency_breakdown(gpu_device_exe, gpu_buffer_time, gpu_vmm_overhead, gpu_qsubmit, gpu_net_latency)
+latency_breakdown(gpu_device_exe, gpu_buffer_time, gpu_vmm_overhead, gpu_qsubmit, gpu_net_latency, "gpu", scale=30)
+
+cpu_device_exe = []
+cpu_buffer_time = []
+cpu_qsubmit = []
+cpu_vmm_overhead = []
+cpu_net_latency = []
+for d, v in zip(cpu_x86_list, vmcount):
+    cpu_device_exe.append(d['on_dev_exe_time'] / (10 ** 9))
+    #cpu_buffer_time.append(d['buffer_time'] / (10 ** 9))
+    cpu_buffer_time.append(0)
+    cpu_qsubmit.append(d['queue_submit_time'] / (10 ** 9))
+    # vmm overhead = device_time - queue_submit_time - buffer_time - exe_time
+    cpu_vmm_overhead.append((d['device_time'] - d['queue_submit_time'] - d['buffer_time'] - d['on_dev_exe_time']) / (10 ** 9))
+    cpu_net_latency.append((d['latency'] - d['device_time']) / (10 ** 9))
+
+
+latency_breakdown(cpu_device_exe, cpu_buffer_time, cpu_vmm_overhead, cpu_qsubmit, cpu_net_latency, "cpu_x86", scale=1)
 
 gpu_latency = []
 cpu_x86_latency = []
