@@ -299,7 +299,15 @@ fn main() {
         .arg(Arg::with_name("max_smem_demo_space")
             .long("maxdemospace")
             .value_name("Specifies the amount of shared memory to allocate for register demotion for large kernels")
-            .default_value("2048")
+            .default_value("0")
+            .help("")
+            .multiple(false)
+            .number_of_values(1)
+            .takes_value(true))
+        .arg(Arg::with_name("reqtimeout")
+            .long("rt")
+            .value_name("Specifies the timeout to wait while buffering requests")
+            .default_value("2000")
             .help("")
             .multiple(false)
             .number_of_values(1)
@@ -339,6 +347,7 @@ fn main() {
     let pinput = value_t!(matches.value_of("pinput"), bool).unwrap_or_else(|e| e.exit());
     let fastreply = value_t!(matches.value_of("fastreply"), bool).unwrap_or_else(|e| e.exit());
     let maxdemospace = value_t!(matches.value_of("max_smem_demo_space"), u32).unwrap_or_else(|e| e.exit());
+    let req_timeout = value_t!(matches.value_of("reqtimeout"), u32).unwrap_or_else(|e| e.exit());
 
     if mexec > 1 && interleave == 0 {
         panic!("Multi-Execution is only enabled for interleaved workloads!");
@@ -723,6 +732,7 @@ fn main() {
                        globals_buffer_size,
                        local_work_group,
                        mexec,
+                       req_timeout,
                        vm_sender_vec_arc.clone(),
                        vm_recv_vec_arc.clone(),
                        compile_args.clone(),
