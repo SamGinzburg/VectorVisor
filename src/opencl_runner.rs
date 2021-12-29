@@ -475,54 +475,43 @@ impl OpenCLRunner {
         // compile the GPU kernel(s)
         let program_to_run = match &self.input_program {
             InputProgram::Text(program, fastcall_header) => {
-                let src_cstring = CString::new(program.clone()).unwrap();
-                let header_cstring = CString::new(fastcall_header.clone()).unwrap();
+                // create the build log
+                File::create(format!("recent.buildlog")).unwrap();
 
                 println!("Sucessfully compiled kernel to OpenCL C: saving to: {}", format!("{}.cl", input_filename));
                 let mut file = File::create(format!("{}.cl", input_filename)).unwrap();
                 file.write_all(&program.clone().into_bytes()).unwrap();
                 println!("Starting kernel compilation...");
+                
+                let formatted_program = str::replace(&program, "#include \"fastcalls.cl\"", &fastcall_header);
+                let final_formatted_program = CString::new(formatted_program).unwrap();
+
                 let compile_start = std::time::Instant::now();
 
-                let compiled_program = ocl::core::create_program_with_source(context, &[src_cstring.clone()]).unwrap();
-                let header = ocl::core::create_program_with_source(context, &[header_cstring.clone()]).unwrap();
+
+                let final_program = ocl::core::create_program_with_source(context, &[final_formatted_program.clone()]).unwrap();
+
+                let build_start = std::time::Instant::now();
                 let options = &CString::new(format!("{} -DNUM_THREADS={} -DVMM_STACK_SIZE_BYTES={} -DVMM_HEAP_SIZE_BYTES={}", compile_flags, self.num_vms, stack_size, heap_size)).unwrap();
-                let build_result = ocl::core::compile_program(&compiled_program, Some(&[device_id]), options, &[&header], &[CString::new("fastcalls.cl").unwrap()], None, None, None);
-                match build_result {
-                    Err(e) => {
-                        println!("Build error:\n{}", e);
-                        println!("\n\nWriting source to output file test.cl\n");
-                        std::fs::write("test.cl", program).expect("Unable to write file");
-                        panic!("Build failure: {:?}", e);
-                    }
-                    Ok(_) => {
-                    },
-                };
-                let buildinfo = ocl::core::get_program_build_info(&compiled_program, &device_id, ocl::core::ProgramBuildInfo::BuildLog).unwrap();
+                ocl::core::build_program(&final_program, Some(&[device_id]), options, None, None).unwrap();
+                let build_end = std::time::Instant::now();
+                println!("Build time for kernel: {:?}", build_end-build_start);
+
+                let buildinfo = ocl::core::get_program_build_info(&final_program, &device_id, ocl::core::ProgramBuildInfo::BuildLog).unwrap();
+                let mut build_log = OpenOptions::new().append(true).open("recent.buildlog").unwrap();
+
+                build_log.write_all(&format!("\nbuildlog for full program:\n").into_bytes()).unwrap();
+                build_log.write_all(&buildinfo.to_string().into_bytes()).unwrap();
+
+                let buildinfo = ocl::core::get_program_build_info(&final_program, &device_id, ocl::core::ProgramBuildInfo::BuildLog).unwrap();
                 dbg!(buildinfo);
                 let compile_end = std::time::Instant::now();
-                println!("Compile time for kernel: {:?}", compile_end-compile_start);
-
-                println!("Now linking program...");
-
-                let link_start = std::time::Instant::now();
-                let final_program = ocl::core::link_program(context, Some(&[device_id]), &CString::new(format!("{}", link_flags)).unwrap(), &[&compiled_program], None, None, None);
-                let link_end = std::time::Instant::now();
-                println!("Link time for kernel: {:?}", link_end-link_start);
-
-                match final_program {
-                    Err(e) => {
-                        println!("Link error:\n{}\n", e);
-                        println!("\n\nWriting source to output file test.cl\n");
-                        std::fs::write("test.cl", program).expect("Unable to write file");
-                        panic!("Unable to compile OpenCL kernel - see errors above");
-                    },
-                    Ok(_) => println!("Finished kernel compilation!"),
-                }
-
+               
                 // if we are going to save the program, we save the binary here
-                let program_to_save = final_program.unwrap();
-                let saved_binary = ocl::core::get_program_info(&program_to_save, ocl::core::ProgramInfo::Binaries);
+                let buildinfo2 = ocl::core::get_program_build_info(&final_program, &device_id, ocl::core::ProgramBuildInfo::BuildLog).unwrap();
+                dbg!(buildinfo2);
+
+                let saved_binary = ocl::core::get_program_info(&final_program, ocl::core::ProgramInfo::Binaries);
                 let binary = match saved_binary.unwrap() {
                     ocl::core::types::enums::ProgramInfoResult::Binaries(binary_vec) => binary_vec.get(0).unwrap().clone(),
                     _ => panic!("Incorrect result from get_program_info"),
@@ -551,7 +540,7 @@ impl OpenCLRunner {
                 let mut file = File::create(format!("{}.cl", input_filename)).unwrap();
                 file.write_all(&program.clone().into_bytes()).unwrap();
 
-                ProgramType::Standard(program_to_save)
+                ProgramType::Standard(final_program)
             },
             InputProgram::Binary(b) => {
                 let binary_start = std::time::Instant::now();

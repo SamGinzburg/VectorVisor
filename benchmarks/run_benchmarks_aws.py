@@ -23,7 +23,7 @@ maxloc = 2000000
 #maxfuncs = 999
 #maxloc = 20000000
 benchmark_duration = 300
-run_a10g = True
+run_a10g = False
 if run_a10g:
     local_group_size = 16
 else:
@@ -1276,11 +1276,13 @@ while True:
 
 ssm_client = boto3.client('ssm', region_name=region)
 
-run_image_blur_bench(run_bmp = True)
+run_image_hash_bench(run_modified = False)
 
 cleanup()
 
-run_image_blur_bench(run_bmp = False)
+# run image hash bench
+
+run_image_hash_bench(run_modified = True)
 
 cleanup()
 
