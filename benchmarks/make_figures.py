@@ -226,7 +226,7 @@ def plot_compile_times():
     plt.xlabel('Compile Time (min)')
     p1 = plt.barh(ind, compile_times_1, width)
     for idx in range(9):
-        p1[idx].set_color('lightgray')
+        p1[idx].set_color('green')
 
     p2 = plt.barh(ind2, compile_times_4, width)
     for idx in range(9):
