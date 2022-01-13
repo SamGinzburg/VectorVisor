@@ -1,8 +1,10 @@
 (module
+  (memory (export "memory") 1)
   (func $_lt (param $p0 i32) (param $p1 i32) (result i32)
     (local $l1 i32)
     (local.get $p0)
-    (local.get $p1)
+    (i32.const 42)
+    (i32.load align=4)
     (i32.lt_u)
     (local.set $l1)
     (local.get $l1)
