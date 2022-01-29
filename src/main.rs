@@ -33,7 +33,7 @@ fn main() {
     // TODO add Clap arg parsing here to get the WASM files from CLI
     // also consider supporting .wasm files as well?
 
-    let matches = App::new("wasm-vectorvmm")
+    let matches = App::new("vectorvisor")
         .version("0.1")
         .author("Sam Ginzburg <ginzburg.sam@gmail.com>")
         .about("A Vectorized Virtual Machine Monitor for WebAssembly")
@@ -68,7 +68,7 @@ fn main() {
             .short("v")
             .long("vmcount")
             .value_name("NUM VMs (number of VMs to run)")
-            .default_value("16") // default of 16
+            .default_value("64") // default of 64
             .help("The number of VMs to run in parallel")
             .multiple(false)
             .number_of_values(1)
@@ -179,7 +179,7 @@ fn main() {
         .arg(Arg::with_name("partition")
             .long("partition")
             .value_name("Partition the program into multiple kernels for faster JIT compilation")
-            .default_value("false")
+            .default_value("true")
             .help("This flag breaks up a given input program into many OpenCL kernels for faster JIT compilation of kernels")
             .multiple(false)
             .number_of_values(1)
