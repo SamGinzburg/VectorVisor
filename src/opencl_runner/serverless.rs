@@ -2,11 +2,11 @@ use wasi_common::WasiCtx;
 // this provides the needed traits for the WASI calls
 use crate::opencl_runner::vectorized_vm::HyperCall;
 use crate::opencl_runner::vectorized_vm::HyperCallResult;
-use crate::opencl_runner::vectorized_vm::WasiSyscalls;
 use crate::opencl_runner::vectorized_vm::VectorizedVM;
+use crate::opencl_runner::vectorized_vm::WasiSyscalls;
 
-use byteorder::LittleEndian;
 use byteorder::ByteOrder;
+use byteorder::LittleEndian;
 
 use crossbeam::channel::Sender;
 
@@ -14,14 +14,18 @@ use std::convert::TryInto;
 use std::sync::Arc;
 
 use serde_json::Value;
-use std::time;
-use std::thread;
 use std::sync::atomic::Ordering;
+use std::thread;
+use std::time;
 
 pub struct Serverless {}
 
 impl Serverless {
-    pub fn hypercall_serverless_invoke(vm_ctx: &mut VectorizedVM, hypercall: &mut HyperCall, sender: &Sender<HyperCallResult>) -> () {
+    pub fn hypercall_serverless_invoke(
+        vm_ctx: &mut VectorizedVM,
+        hypercall: &mut HyperCall,
+        sender: &Sender<HyperCallResult>,
+    ) -> () {
         // store this in the vmctx for when we return
         *Arc::make_mut(&mut vm_ctx.timestamp_counter) = hypercall.timestamp_counter;
         *Arc::make_mut(&mut vm_ctx.queue_submit_counter) = hypercall.queue_submit_delta;
@@ -41,20 +45,30 @@ impl Serverless {
         }
 
         let vm_idx = vm_ctx.vm_id;
-        sender.send({
-            HyperCallResult::new(vm_ctx.input_msg_len.try_into().unwrap(), vm_idx, WasiSyscalls::ServerlessInvoke)
-        }).unwrap();
+        sender
+            .send({
+                HyperCallResult::new(
+                    vm_ctx.input_msg_len.try_into().unwrap(),
+                    vm_idx,
+                    WasiSyscalls::ServerlessInvoke,
+                )
+            })
+            .unwrap();
 
         // reset msg len for the next request
         vm_ctx.input_msg_len = 0;
     }
 
-
-    pub fn hypercall_serverless_response(vm_ctx: &mut VectorizedVM, hypercall: &mut HyperCall, sender: &Sender<HyperCallResult>) -> () {
+    pub fn hypercall_serverless_response(
+        vm_ctx: &mut VectorizedVM,
+        hypercall: &mut HyperCall,
+        sender: &Sender<HyperCallResult>,
+    ) -> () {
         let mut hcall_buf: &'static [u8] = unsafe { *hypercall.hypercall_buffer.buf.get() };
         let hcall_buf_size: u32 = vm_ctx.hcall_buf_size;
         let vm_idx = vm_ctx.vm_id;
-        hcall_buf = &hcall_buf[(vm_idx * hcall_buf_size) as usize..((vm_idx+1) * hcall_buf_size) as usize];
+        hcall_buf = &hcall_buf
+            [(vm_idx * hcall_buf_size) as usize..((vm_idx + 1) * hcall_buf_size) as usize];
         if !vm_ctx.no_resp {
             let send_chan = (vm_ctx.vm_sender).get(vm_idx as usize).unwrap();
             // the first 4 bytes are the length as a u32, the remainder is the buffer containing the json
@@ -63,7 +77,7 @@ impl Serverless {
             let resp_buf_len: usize = msg_len.try_into().unwrap();
 
             //let mut resp_buf = vec![0u8; resp_buf_len.try_into().unwrap()];
-            let resp_buf = bytes::Bytes::from_static(&hcall_buf[4..4+resp_buf_len]);
+            let resp_buf = bytes::Bytes::from_static(&hcall_buf[4..4 + resp_buf_len]);
             // copy the data from the hcall_buffer
             // resp_buf[0..resp_buf_len].copy_from_slice(&hcall_buf[4..4+resp_buf_len]);
 
@@ -78,18 +92,24 @@ impl Serverless {
                 count += 1;
             }
 
-            send_chan.lock().unwrap().blocking_send((resp_buf,
-                                                     resp_buf_len,
-                                                     on_device_time,
-                                                     queue_submit_time,
-                                                     queue_submit_count,
-                                                     count,
-                                                     vm_ctx.uuid_queue.pop_front().unwrap())).unwrap();
+            send_chan
+                .lock()
+                .unwrap()
+                .blocking_send((
+                    resp_buf,
+                    resp_buf_len,
+                    on_device_time,
+                    queue_submit_time,
+                    queue_submit_count,
+                    count,
+                    vm_ctx.uuid_queue.pop_front().unwrap(),
+                ))
+                .unwrap();
         }
 
-        sender.send({
-            HyperCallResult::new(0, vm_idx, WasiSyscalls::ServerlessResponse)
-        }).unwrap();
+        sender
+            .send({ HyperCallResult::new(0, vm_idx, WasiSyscalls::ServerlessResponse) })
+            .unwrap();
 
         // Perform async replies, no need to block in the critical path
         /*
@@ -98,5 +118,4 @@ impl Serverless {
         }).unwrap();
         */
     }
-
 }

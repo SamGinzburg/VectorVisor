@@ -1,58 +1,116 @@
 use crate::opencl_writer;
-use crate::opencl_writer::Regex;
+use crate::opencl_writer::format_fn_name;
+use crate::opencl_writer::function_unwind;
+use crate::opencl_writer::get_func_result;
 use crate::opencl_writer::mem_interleave::emit_write_u64_aligned;
+use crate::opencl_writer::Regex;
 use crate::opencl_writer::StackCtx;
 use crate::opencl_writer::StackType;
-use crate::opencl_writer::function_unwind;
 use crate::opencl_writer::WasmHypercallId;
-use crate::opencl_writer::get_func_result;
-use crate::opencl_writer::format_fn_name;
 
 use std::collections::HashMap;
 use std::convert::TryInto;
 
 /*
  * Every time we encounter a Loop, Block, or If statement, we store the entry on the control stack
- * We store the label, 
+ * We store the label,
  */
 pub type ControlStackEntryType = (String, u32, i32, u32, Option<StackType>, Option<String>);
 
-// TODO: double check the semantics of this? 
-pub fn emit_return(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, fn_name: &str, start_fn_name: String, hypercall_id_count: &mut u32, is_fastcall: bool, debug: bool) -> String {
+// TODO: double check the semantics of this?
+pub fn emit_return(
+    writer: &opencl_writer::OpenCLCWriter,
+    stack_ctx: &mut StackCtx,
+    fn_name: &str,
+    start_fn_name: String,
+    hypercall_id_count: &mut u32,
+    is_fastcall: bool,
+    debug: bool,
+) -> String {
     let mut ret_str = String::from("");
 
     let fn_type = &writer.func_map.get(&fn_name.to_string()).unwrap().ty.inline;
 
     if fn_name.to_string() == start_fn_name {
         // emit modified func unwind for _start
-        ret_str += &function_unwind(&writer, stack_ctx, fn_name, &fn_type, true, is_fastcall, debug);
-        ret_str += &writer.emit_hypercall(WasmHypercallId::proc_exit, stack_ctx, hypercall_id_count, fn_name.to_string(), true, debug);
+        ret_str += &function_unwind(
+            &writer,
+            stack_ctx,
+            fn_name,
+            &fn_type,
+            true,
+            is_fastcall,
+            debug,
+        );
+        ret_str += &writer.emit_hypercall(
+            WasmHypercallId::proc_exit,
+            stack_ctx,
+            hypercall_id_count,
+            fn_name.to_string(),
+            true,
+            debug,
+        );
     } else {
         // to unwind from the function we unwind the call stack by moving the stack pointer
-        // and returning the last value on the stack 
-        ret_str += &function_unwind(writer, stack_ctx, fn_name, &fn_type, false, is_fastcall, debug);
+        // and returning the last value on the stack
+        ret_str += &function_unwind(
+            writer,
+            stack_ctx,
+            fn_name,
+            &fn_type,
+            false,
+            is_fastcall,
+            debug,
+        );
     }
 
     ret_str
 }
 
 // this function is semantically equivalent to function_unwind
-pub fn emit_br(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, idx: wast::Index, fn_name: &str, control_stack: &mut Vec<ControlStackEntryType>, function_id_map: HashMap<&str, u32>, is_fastcall: bool, from_br_table: bool, _debug: bool) -> String {
+pub fn emit_br(
+    _writer: &opencl_writer::OpenCLCWriter,
+    stack_ctx: &mut StackCtx,
+    idx: wast::Index,
+    fn_name: &str,
+    control_stack: &mut Vec<ControlStackEntryType>,
+    function_id_map: HashMap<&str, u32>,
+    is_fastcall: bool,
+    from_br_table: bool,
+    _debug: bool,
+) -> String {
     let mut ret_str = String::from("");
 
     // we need to do linear scans for blocks that are pre-named
     let mut temp_map: HashMap<String, ControlStackEntryType> = HashMap::new();
-    for (label, block_type, reentry, loop_or_block_idx, block_result_type, result_register) in control_stack.clone() {
-        temp_map.insert(label.to_string(), (label.to_string(), block_type, reentry, loop_or_block_idx, block_result_type, result_register));
+    for (label, block_type, reentry, loop_or_block_idx, block_result_type, result_register) in
+        control_stack.clone()
+    {
+        temp_map.insert(
+            label.to_string(),
+            (
+                label.to_string(),
+                block_type,
+                reentry,
+                loop_or_block_idx,
+                block_result_type,
+                result_register,
+            ),
+        );
     }
 
-    let (block_name, block_type, loop_header_reentry, block_or_loop_idx, block_result_type, result_register) = match idx {
-        wast::Index::Id(id) => {
-            temp_map.get(id.name()).unwrap()
-        },
-        wast::Index::Num(value, _) => {
-            control_stack.get(control_stack.len() - 1 - value as usize).unwrap()
-        },
+    let (
+        block_name,
+        block_type,
+        loop_header_reentry,
+        block_or_loop_idx,
+        block_result_type,
+        result_register,
+    ) = match idx {
+        wast::Index::Id(id) => temp_map.get(id.name()).unwrap(),
+        wast::Index::Num(value, _) => control_stack
+            .get(control_stack.len() - 1 - value as usize)
+            .unwrap(),
     };
 
     if *block_type == 1 && *loop_header_reentry < 0 {
@@ -62,14 +120,14 @@ pub fn emit_br(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx,
     // First, determine if the branch is a forward branch or a backwards branch (targeting a loop header)
     // block = 0, loop = 1
     if *block_type == 0 {
-        // Check for return values, if this branch targets a block with a return value, we need to set that return value 
+        // Check for return values, if this branch targets a block with a return value, we need to set that return value
         // We pop the most recent value on the stack and set the result register to be equal to that
         match (block_result_type, result_register) {
             (Some(stack_size), Some(result)) => {
                 // We peak the previous value, we don't pop it!
                 let val = stack_ctx.vstack_peak(stack_size.clone(), 0);
                 ret_str += &format!("\t{} = {};\n", result, val);
-            },
+            }
             _ => (),
         }
 
@@ -78,11 +136,24 @@ pub fn emit_br(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx,
             if !from_br_table {
                 ret_str += &stack_ctx.save_context(true, false);
             }
-            ret_str += &format!("\t{}\n", format!("goto {}_{};", format!("{}{}", "__", format_fn_name(&fn_name)), block_name));
+            ret_str += &format!(
+                "\t{}\n",
+                format!(
+                    "goto {}_{};",
+                    format!("{}{}", "__", format_fn_name(&fn_name)),
+                    block_name
+                )
+            );
         } else {
-            ret_str += &format!("\t{}\n", format!("goto {}_{}_fastcall;", format!("{}{}", "__", format_fn_name(&fn_name)), block_name));
+            ret_str += &format!(
+                "\t{}\n",
+                format!(
+                    "goto {}_{}_fastcall;",
+                    format!("{}{}", "__", format_fn_name(&fn_name)),
+                    block_name
+                )
+            );
         }
-
     } else {
         // For loops, we need to check if we are targeting a tainted loop
         let is_loop_tainted = stack_ctx.is_loop_tainted((*block_or_loop_idx).try_into().unwrap());
@@ -94,41 +165,80 @@ pub fn emit_br(_writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx,
                 ret_str += &stack_ctx.save_context(true, false);
             }
 
-            ret_str += &format!("\t{}\n",
-                                "*sfp += 1;");
+            ret_str += &format!("\t{}\n", "*sfp += 1;");
             // increment the stack frame pointer & save the label of the loop header so we return to it
-            ret_str += &format!("\t{}\n", &format!("{};",
-                        emit_write_u64_aligned("(ulong)(call_stack+*sfp)",
-                                               "(ulong)(call_stack)",
-                                               &format!("{}", *loop_header_reentry), "warp_idx")));
+            ret_str += &format!(
+                "\t{}\n",
+                &format!(
+                    "{};",
+                    emit_write_u64_aligned(
+                        "(ulong)(call_stack+*sfp)",
+                        "(ulong)(call_stack)",
+                        &format!("{}", *loop_header_reentry),
+                        "warp_idx"
+                    )
+                )
+            );
 
             // set our re-entry target to ourself
-            ret_str += &format!("\t{}\n",
-                                format!("*entry_point = {};", function_id_map.get(fn_name).unwrap()));
+            ret_str += &format!(
+                "\t{}\n",
+                format!("*entry_point = {};", function_id_map.get(fn_name).unwrap())
+            );
             // set is_calling to false to perform the recursive call to ourself
             // upon re-entry, we will pop off the top call_stack value which will be pointing at our loop header
-            ret_str += &format!("\t{}\n",
-                                "*is_calling = 0;");
-            ret_str += &format!("\t{}\n",
-                                "return;");
+            ret_str += &format!("\t{}\n", "*is_calling = 0;");
+            ret_str += &format!("\t{}\n", "return;");
         } else if !is_loop_tainted && !is_fastcall {
-            ret_str += &format!("\t{}\n", format!("goto {}_{}_loop;", format!("{}{}", "__", format_fn_name(&fn_name)), block_name));
+            ret_str += &format!(
+                "\t{}\n",
+                format!(
+                    "goto {}_{}_loop;",
+                    format!("{}{}", "__", format_fn_name(&fn_name)),
+                    block_name
+                )
+            );
         } else {
-            ret_str += &format!("\t{}\n", format!("goto {}_{}_fastcall;", format!("{}{}", "__", format_fn_name(&fn_name)), block_name));
+            ret_str += &format!(
+                "\t{}\n",
+                format!(
+                    "goto {}_{}_fastcall;",
+                    format!("{}{}", "__", format_fn_name(&fn_name)),
+                    block_name
+                )
+            );
         }
     }
-    
-    
+
     ret_str
 }
 
-pub fn emit_br_if(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, idx: wast::Index, fn_name: &str, control_stack: &mut Vec<ControlStackEntryType>, function_id_map: HashMap<&str, u32>, is_fastcall: bool, debug: bool) -> String {
+pub fn emit_br_if(
+    writer: &opencl_writer::OpenCLCWriter,
+    stack_ctx: &mut StackCtx,
+    idx: wast::Index,
+    fn_name: &str,
+    control_stack: &mut Vec<ControlStackEntryType>,
+    function_id_map: HashMap<&str, u32>,
+    is_fastcall: bool,
+    debug: bool,
+) -> String {
     let mut ret_str = String::from("");
 
     let reg = stack_ctx.vstack_pop(StackType::i32);
 
     ret_str += &format!("\tif ({} != 0) {{\n", reg);
-    ret_str += &emit_br(writer, stack_ctx, idx, fn_name, control_stack, function_id_map, is_fastcall, false, debug);
+    ret_str += &emit_br(
+        writer,
+        stack_ctx,
+        idx,
+        fn_name,
+        control_stack,
+        function_id_map,
+        is_fastcall,
+        false,
+        debug,
+    );
     ret_str += &format!("\t}}\n");
 
     ret_str
@@ -136,7 +246,19 @@ pub fn emit_br_if(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCt
 
 // semantically, the end statement pops from the control stack,
 // in our compiler, this is a no-op
-pub fn emit_end<'a>(_writer: &opencl_writer::OpenCLCWriter<'a>, stack_ctx: &mut StackCtx, _id: &Option<wast::Id<'a>>, label: &str, block_type: u32, fn_name: &str, result_type: Option<StackType>, result_register: Option<String>, is_fastcall: bool, loop_idx: u32, _debug: bool) -> String {
+pub fn emit_end<'a>(
+    _writer: &opencl_writer::OpenCLCWriter<'a>,
+    stack_ctx: &mut StackCtx,
+    _id: &Option<wast::Id<'a>>,
+    label: &str,
+    block_type: u32,
+    fn_name: &str,
+    result_type: Option<StackType>,
+    result_register: Option<String>,
+    is_fastcall: bool,
+    loop_idx: u32,
+    _debug: bool,
+) -> String {
     let mut result = String::from("");
 
     // after a block ends, we need to unwind the stack!
@@ -157,7 +279,7 @@ pub fn emit_end<'a>(_writer: &opencl_writer::OpenCLCWriter<'a>, stack_ctx: &mut 
                 None
             };
             (hanging_val, r_val)
-        },
+        }
         (_, _) => (false, None),
     };
 
@@ -181,12 +303,12 @@ pub fn emit_end<'a>(_writer: &opencl_writer::OpenCLCWriter<'a>, stack_ctx: &mut 
     stack_ctx.vstack_pop_stack_frame(block_type == 2);
     stack_ctx.vstack_pop_stack_info();
 
-    /* 
+    /*
      * For loops we have the following edge case:
      * loop (result i32)
      *  br 0
      * end
-     * 
+     *
      * Where we have an infinite loop that returns an i32.
      * We check to see if anything is on the stack first, then we return a value if we can.
      */
@@ -197,9 +319,9 @@ pub fn emit_end<'a>(_writer: &opencl_writer::OpenCLCWriter<'a>, stack_ctx: &mut 
             } else {
                 format!("\t{} = {};\n", result_register, return_value)
             }
-        },
+        }
         (_, _) => String::from(""),
-    };    
+    };
 
     // if the end statement corresponds to a block -> we want to put the label *here* and not at the top
     // of the block, otherwise for loops we jump back to the start of the loop!
@@ -208,12 +330,24 @@ pub fn emit_end<'a>(_writer: &opencl_writer::OpenCLCWriter<'a>, stack_ctx: &mut 
     // 2 -> if statement (insert closing bracket)
     if block_type == 0 {
         if !is_fastcall {
-            result += &format!("\n{}_{}:\n", format!("{}{}", "__", format_fn_name(&fn_name)), label);
+            result += &format!(
+                "\n{}_{}:\n",
+                format!("{}{}", "__", format_fn_name(&fn_name)),
+                label
+            );
         } else {
-            result += &format!("\n{}_{}_fastcall:\n", format!("{}{}", "__", format_fn_name(&fn_name)), label);
+            result += &format!(
+                "\n{}_{}_fastcall:\n",
+                format!("{}{}", "__", format_fn_name(&fn_name)),
+                label
+            );
         }
     } else if block_type == 1 {
-        result += &format!("\t/* END (loop: {}_{}) */\n", format!("{}{}", "__", format_fn_name(&fn_name)), label);
+        result += &format!(
+            "\t/* END (loop: {}_{}) */\n",
+            format!("{}{}", "__", format_fn_name(&fn_name)),
+            label
+        );
     } else if block_type == 2 {
         result += &format!("\t{}_{}_end:\n", format_fn_name(&fn_name), label);
     }
@@ -235,30 +369,43 @@ pub fn emit_end<'a>(_writer: &opencl_writer::OpenCLCWriter<'a>, stack_ctx: &mut 
 
 // basically the same as emit_block, except we have to reset the stack pointer
 // at the *top* of the block, since we are doing a backwards jump not a forward jump
-pub fn emit_loop(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, control_stack: &mut Vec<ControlStackEntryType>, block: &wast::BlockType, label: String, loop_branch_idx: &mut u32, fn_name: &str, _function_id_map: HashMap<&str, u32>, call_ret_idx: &mut u32, is_fastcall: bool, is_loop_tainted: bool, _debug: bool) -> String {
+pub fn emit_loop(
+    writer: &opencl_writer::OpenCLCWriter,
+    stack_ctx: &mut StackCtx,
+    control_stack: &mut Vec<ControlStackEntryType>,
+    block: &wast::BlockType,
+    label: String,
+    loop_branch_idx: &mut u32,
+    fn_name: &str,
+    _function_id_map: HashMap<&str, u32>,
+    call_ret_idx: &mut u32,
+    is_fastcall: bool,
+    is_loop_tainted: bool,
+    _debug: bool,
+) -> String {
     let mut result: String = String::from("");
 
     // Get the type of the block
     let block_type = get_func_result(&writer, &block.ty);
 
     let result_register = match block_type {
-        Some(StackType::i32) => {
-            Some(stack_ctx.vstack_alloc(StackType::i32))
-        },
-        Some(StackType::i64) => {
-            Some(stack_ctx.vstack_alloc(StackType::i64))
-        },
-        Some(StackType::f32) => {
-            Some(stack_ctx.vstack_alloc(StackType::f32))
-        },
-        Some(StackType::f64) => {
-            Some(stack_ctx.vstack_alloc(StackType::f64))
-        },
+        Some(StackType::i32) => Some(stack_ctx.vstack_alloc(StackType::i32)),
+        Some(StackType::i64) => Some(stack_ctx.vstack_alloc(StackType::i64)),
+        Some(StackType::f32) => Some(stack_ctx.vstack_alloc(StackType::f32)),
+        Some(StackType::f64) => Some(stack_ctx.vstack_alloc(StackType::f64)),
+        Some(StackType::u128) => Some(stack_ctx.vstack_alloc(StackType::u128)),
         None => None,
     };
 
     // the third parameter in the control stack stores loop header entry points
-    control_stack.push((label.to_string(), 1, (*call_ret_idx).try_into().unwrap(), *loop_branch_idx, block_type, result_register));
+    control_stack.push((
+        label.to_string(),
+        1,
+        (*call_ret_idx).try_into().unwrap(),
+        *loop_branch_idx,
+        block_type,
+        result_register,
+    ));
     *loop_branch_idx += 1;
 
     if !is_fastcall && is_loop_tainted {
@@ -268,7 +415,11 @@ pub fn emit_loop(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx
         stack_ctx.vstack_push_stack_info(stack_ctx.stack_frame_size().try_into().unwrap());
 
         // we convert our loop into a recursive call here - the loop header is treated as a function call re-entry point
-        result += &format!("{}_call_return_stub_{}:\n", format!("{}{}", "__", format_fn_name(&fn_name)), *call_ret_idx);
+        result += &format!(
+            "{}_call_return_stub_{}:\n",
+            format!("{}{}", "__", format_fn_name(&fn_name)),
+            *call_ret_idx
+        );
 
         // We have to issue a restore here because on subsequent invocations the state will have changed
         // only restore locals here
@@ -277,7 +428,6 @@ pub fn emit_loop(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx
 
         *call_ret_idx += 1;
     } else {
-
         // we need to save locals in these cases as well
         if !is_fastcall {
             result += &stack_ctx.save_context(true, false);
@@ -289,12 +439,26 @@ pub fn emit_loop(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx
 
         // emit just the loop header for GOTOs during fastcalls or for non-tainted loops
         if is_fastcall {
-            result += &format!("{}\n", format!("{}_{}_fastcall:", format!("{}{}", "__", format_fn_name(&fn_name)), label));
+            result += &format!(
+                "{}\n",
+                format!(
+                    "{}_{}_fastcall:",
+                    format!("{}{}", "__", format_fn_name(&fn_name)),
+                    label
+                )
+            );
         } else {
             // Emit optimized loops for non-tainted cases
             // We want to load all the values we could need, so we disable liveness analysis here
             result += &stack_ctx.restore_context(true, false);
-            result += &format!("{}\n", format!("{}_{}_loop:", format!("{}{}", "__", format_fn_name(&fn_name)), label));
+            result += &format!(
+                "{}\n",
+                format!(
+                    "{}_{}_loop:",
+                    format!("{}{}", "__", format_fn_name(&fn_name)),
+                    label
+                )
+            );
             // Set the vstack internal tracking state so we don't emit save/restore points inside
             // of the optimized loop
             stack_ctx.open_opt_loop();
@@ -304,7 +468,17 @@ pub fn emit_loop(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx
     result
 }
 
-pub fn emit_block(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, block: &wast::BlockType, _label: String, _branch_idx_u32: u32, _fn_name: &str, _function_id_map: HashMap<&str, u32>, is_fastcall: bool, _debug: bool) -> String {
+pub fn emit_block(
+    writer: &opencl_writer::OpenCLCWriter,
+    stack_ctx: &mut StackCtx,
+    block: &wast::BlockType,
+    _label: String,
+    _branch_idx_u32: u32,
+    _fn_name: &str,
+    _function_id_map: HashMap<&str, u32>,
+    is_fastcall: bool,
+    _debug: bool,
+) -> String {
     let mut result: String = String::from("");
 
     if !is_fastcall {
@@ -324,7 +498,15 @@ pub fn emit_block(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCt
     result
 }
 
-pub fn emit_if(writer: &opencl_writer::OpenCLCWriter, label: String, fn_name: String, block: &wast::BlockType, control_stack: &mut Vec<ControlStackEntryType>, if_name_count: &mut u32, stack_ctx: &mut StackCtx) -> String {
+pub fn emit_if(
+    writer: &opencl_writer::OpenCLCWriter,
+    label: String,
+    fn_name: String,
+    block: &wast::BlockType,
+    control_stack: &mut Vec<ControlStackEntryType>,
+    if_name_count: &mut u32,
+    stack_ctx: &mut StackCtx,
+) -> String {
     let mut result: String = String::from("");
 
     // Pop the top value on the stack as the conditional
@@ -344,18 +526,11 @@ pub fn emit_if(writer: &opencl_writer::OpenCLCWriter, label: String, fn_name: St
     // Allocate a register to store the result in after the block exits, if we have one
     // We pop this value back during the corresponding `end` instruction, since WASM does not allow hanging values
     let result_register = match block_type {
-        Some(StackType::i32) => {
-            Some(stack_ctx.vstack_alloc(StackType::i32))
-        },
-        Some(StackType::i64) => {
-            Some(stack_ctx.vstack_alloc(StackType::i64))
-        },
-        Some(StackType::f32) => {
-            Some(stack_ctx.vstack_alloc(StackType::f32))
-        },
-        Some(StackType::f64) => {
-            Some(stack_ctx.vstack_alloc(StackType::f64))
-        },
+        Some(StackType::i32) => Some(stack_ctx.vstack_alloc(StackType::i32)),
+        Some(StackType::i64) => Some(stack_ctx.vstack_alloc(StackType::i64)),
+        Some(StackType::f32) => Some(stack_ctx.vstack_alloc(StackType::f32)),
+        Some(StackType::f64) => Some(stack_ctx.vstack_alloc(StackType::f64)),
+        Some(StackType::u128) => Some(stack_ctx.vstack_alloc(StackType::u128)),
         None => None,
     };
 
@@ -370,7 +545,12 @@ pub fn emit_if(writer: &opencl_writer::OpenCLCWriter, label: String, fn_name: St
     result
 }
 
-pub fn emit_else(_writer: &opencl_writer::OpenCLCWriter, fn_name: String, control_stack: &mut Vec<ControlStackEntryType>, stack_ctx: &mut StackCtx) -> String {
+pub fn emit_else(
+    _writer: &opencl_writer::OpenCLCWriter,
+    fn_name: String,
+    control_stack: &mut Vec<ControlStackEntryType>,
+    stack_ctx: &mut StackCtx,
+) -> String {
     let mut result: String = String::from("");
     let mut else_label = None;
 
@@ -384,32 +564,41 @@ pub fn emit_else(_writer: &opencl_writer::OpenCLCWriter, fn_name: String, contro
                 (Some(t), Some(result_register)) => {
                     else_label = Some(if_label);
                     let val = stack_ctx.vstack_pop(t);
-                    result +=&format!("\t{} = {};\n", result_register, val);
+                    result += &format!("\t{} = {};\n", result_register, val);
                     break;
-                },
+                }
                 _ => {
                     // If the if statement doesn't return a value, we still have to emit the else
                     else_label = Some(if_label);
                     break;
-                },
+                }
             }
         }
     }
-    
+
     match else_label {
         Some(label) => {
             // If we just ran the first code block of the If block, then jump to the end
-            result +=&format!("\tgoto {}_{}_end;\n", format_fn_name(&fn_name), label);
+            result += &format!("\tgoto {}_{}_end;\n", format_fn_name(&fn_name), label);
             // Else, put a label here for the header of the If block to jump to the second code block
-            result +=&format!("\t{}_{}_else:\n", format_fn_name(&fn_name), label);
-        },
+            result += &format!("\t{}_{}_else:\n", format_fn_name(&fn_name), label);
+        }
         None => (),
     }
 
     result
 }
 
-pub fn emit_br_table(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut StackCtx, table_indicies: &wast::BrTableIndices, fn_name: &str, control_stack: &mut Vec<ControlStackEntryType>, function_id_map: HashMap<&str, u32>, is_fastcall: bool, debug: bool) -> String {
+pub fn emit_br_table(
+    writer: &opencl_writer::OpenCLCWriter,
+    stack_ctx: &mut StackCtx,
+    table_indicies: &wast::BrTableIndices,
+    fn_name: &str,
+    control_stack: &mut Vec<ControlStackEntryType>,
+    function_id_map: HashMap<&str, u32>,
+    is_fastcall: bool,
+    debug: bool,
+) -> String {
     let mut ret_str = String::from("");
 
     let indicies = &table_indicies.labels;
@@ -428,14 +617,34 @@ pub fn emit_br_table(writer: &opencl_writer::OpenCLCWriter, stack_ctx: &mut Stac
     for index in 0..indicies.len() {
         ret_str += &format!("\t\tcase {}:\n", index);
         // emit br i
-        ret_str += &emit_br(writer, stack_ctx, indicies[index], fn_name, control_stack, function_id_map.clone(), is_fastcall, true, debug);
+        ret_str += &emit_br(
+            writer,
+            stack_ctx,
+            indicies[index],
+            fn_name,
+            control_stack,
+            function_id_map.clone(),
+            is_fastcall,
+            true,
+            debug,
+        );
         ret_str += &format!("\t\t\tbreak;\n");
     }
 
     // we add the default index, if label_idx > than length l*
     ret_str += &format!("\t\tdefault:\n");
     // emit br i
-    ret_str += &emit_br(writer, stack_ctx, table_indicies.default, fn_name, control_stack, function_id_map, is_fastcall, true, debug);
+    ret_str += &emit_br(
+        writer,
+        stack_ctx,
+        table_indicies.default,
+        fn_name,
+        control_stack,
+        function_id_map,
+        is_fastcall,
+        true,
+        debug,
+    );
     ret_str += &format!("\t\t\tbreak;\n");
 
     ret_str += &format!("\t}}\n");

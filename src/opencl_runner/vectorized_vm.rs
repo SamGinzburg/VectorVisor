@@ -1,45 +1,45 @@
-use wasi_common::WasiCtx;
 use wasi_cap_std_sync::WasiCtxBuilder;
+use wasi_common::WasiCtx;
 
+use cap_std::fs::Dir as CapDir;
 use std::fmt;
 use wasmtime::*;
 use wasmtime_wiggle::WasmtimeGuestMemory;
-use cap_std::fs::Dir as CapDir;
 
 use crate::opencl_runner::OpenCLBuffers;
 
-use crate::opencl_runner::WasiFd;
 use crate::opencl_runner::environment::Environment;
-use crate::opencl_runner::serverless::Serverless;
 use crate::opencl_runner::random::Random;
+use crate::opencl_runner::serverless::Serverless;
 use crate::opencl_runner::UnsafeCellWrapper;
+use crate::opencl_runner::WasiFd;
 
 use ocl::core::CommandQueue;
 
-use tokio::sync::mpsc::{Sender, Receiver};
 use crossbeam::channel::Sender as SyncSender;
+use tokio::sync::mpsc::{Receiver, Sender};
 
-use std::sync::Arc;
-use std::sync::Mutex;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::collections::HashSet;
+use std::collections::VecDeque;
 use std::convert::TryInto;
 use std::fs::File;
 use std::path::Path;
-use std::collections::VecDeque;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use std::sync::Mutex;
 
 #[derive(Clone, Copy)]
 pub enum WasiSyscalls {
-    FdWrite               =  0,
-    ProcExit              =  1,
-    EnvironSizeGet        =  2,
-    EnvironGet            =  3,
-    FdPrestatGet          =  4,
-    FdPrestatDirName      =  5,
-    RandomGet             =  6,
-    ServerlessInvoke      =  9999,
-    ServerlessResponse    =  10000,
-    InvalidHyperCallNum   = -1,
+    FdWrite = 0,
+    ProcExit = 1,
+    EnvironSizeGet = 2,
+    EnvironGet = 3,
+    FdPrestatGet = 4,
+    FdPrestatDirName = 5,
+    RandomGet = 6,
+    ServerlessInvoke = 9999,
+    ServerlessResponse = 10000,
+    InvalidHyperCallNum = -1,
 }
 
 impl fmt::Debug for WasiSyscalls {
@@ -63,17 +63,19 @@ pub struct HyperCall<'a> {
 }
 
 impl<'a> HyperCall<'a> {
-    pub fn new(vm_id: u32,
-               num_total_vms: u32,
-               timestamp_counter: u64,
-               queue_submit_delta: u64,
-               num_queue_submits: u64,
-               called_funcs: HashSet<u32>,
-               syscall: WasiSyscalls,
-               is_interleaved_mem: u32,
-               ocl_buffers: &'a OpenCLBuffers,
-               hypercall_buffer: Arc<UnsafeCellWrapper>,
-               queue: &'a CommandQueue) -> HyperCall<'a> {
+    pub fn new(
+        vm_id: u32,
+        num_total_vms: u32,
+        timestamp_counter: u64,
+        queue_submit_delta: u64,
+        num_queue_submits: u64,
+        called_funcs: HashSet<u32>,
+        syscall: WasiSyscalls,
+        is_interleaved_mem: u32,
+        ocl_buffers: &'a OpenCLBuffers,
+        hypercall_buffer: Arc<UnsafeCellWrapper>,
+        queue: &'a CommandQueue,
+    ) -> HyperCall<'a> {
         HyperCall {
             vm_id: vm_id,
             num_total_vms: num_total_vms,
@@ -93,9 +95,9 @@ impl<'a> HyperCall<'a> {
 impl fmt::Debug for HyperCall<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("HyperCall")
-        .field("vm_id", &self.vm_id)
-        .field("syscall_id", &(self.syscall as u8))
-        .finish()
+            .field("vm_id", &self.vm_id)
+            .field("syscall_id", &(self.syscall as u8))
+            .finish()
     }
 }
 
@@ -152,25 +154,35 @@ pub struct VectorizedVM {
 }
 
 impl VectorizedVM {
-    pub fn new(vm_id: u32, hcall_buf_size: u32, _num_total_vms: u32, vm_sender: Arc<Vec<Mutex<Sender<VmSenderType>>>>, vm_recv: Arc<Vec<Mutex<Receiver<VmRecvType>>>>) -> VectorizedVM {
+    pub fn new(
+        vm_id: u32,
+        hcall_buf_size: u32,
+        _num_total_vms: u32,
+        vm_sender: Arc<Vec<Mutex<Sender<VmSenderType>>>>,
+        vm_recv: Arc<Vec<Mutex<Receiver<VmRecvType>>>>,
+    ) -> VectorizedVM {
         // default context with no args yet - we can inherit arguments from the CLI if we want
         // or we can pass them in some other config file
 
         let opendir = unsafe { CapDir::from_std_file(File::open(".").unwrap()) };
 
         let wasi_ctx = WasiCtxBuilder::new()
-                        .inherit_args().unwrap()
-                        .inherit_stdio()
-                        .inherit_env().unwrap()
-                        // preopen whatever the current directory is
-                        // TODO: pass this via CLI somehow
-                        .preopened_dir(opendir, Path::new(".")).unwrap()
-                        .build().unwrap();
+            .inherit_args()
+            .unwrap()
+            .inherit_stdio()
+            .inherit_env()
+            .unwrap()
+            // preopen whatever the current directory is
+            // TODO: pass this via CLI somehow
+            .preopened_dir(opendir, Path::new("."))
+            .unwrap()
+            .build()
+            .unwrap();
 
         let engine = Engine::default();
         let store = Store::new(&engine);
 
-         let num_vm_pages = if hcall_buf_size >= (1024 * 64) {
+        let num_vm_pages = if hcall_buf_size >= (1024 * 64) {
             hcall_buf_size / (1024 * 64)
         } else {
             1
@@ -202,7 +214,7 @@ impl VectorizedVM {
             ready_for_input: AtomicBool::new(true),
             input_msg_len: 0,
             no_resp: true,
-            uuid_queue: VecDeque::new()
+            uuid_queue: VecDeque::new(),
         }
     }
 
@@ -212,7 +224,8 @@ impl VectorizedVM {
 
     pub fn queue_request(&mut self, msg: bytes::Bytes, hcall_buf: &mut [u8], uuid: String) -> () {
         let hcall_buf_size: u32 = self.hcall_buf_size;
-        let vm_hcall_buf = &mut hcall_buf[(self.vm_id * hcall_buf_size) as usize..((self.vm_id+1) * hcall_buf_size) as usize];
+        let vm_hcall_buf = &mut hcall_buf
+            [(self.vm_id * hcall_buf_size) as usize..((self.vm_id + 1) * hcall_buf_size) as usize];
         vm_hcall_buf[0..msg.len()].copy_from_slice(&msg);
         self.ready_for_input.store(false, Ordering::Relaxed);
         self.input_msg_len = msg.len();
@@ -225,41 +238,43 @@ impl VectorizedVM {
      * For non interleaved memory, we must perform concurrent reads on the openCL context
      * using the given buffers.
      */
-    pub fn dispatch_hypercall(&mut self,
-                              hypercall: &mut HyperCall,
-                              sender: &SyncSender<HyperCallResult>) -> () {
+    pub fn dispatch_hypercall(
+        &mut self,
+        hypercall: &mut HyperCall,
+        sender: &SyncSender<HyperCallResult>,
+    ) -> () {
         match hypercall.syscall {
             WasiSyscalls::FdWrite => {
                 WasiFd::hypercall_fd_write(&self.ctx, self, hypercall, sender);
-            },
+            }
             // ProcExit is special cased, since we want to manually mask off those VMs
             WasiSyscalls::ProcExit => {
-                sender.send({
-                    HyperCallResult::new(0, hypercall.vm_id, WasiSyscalls::ProcExit)
-                }).unwrap();
-            },
+                sender
+                    .send({ HyperCallResult::new(0, hypercall.vm_id, WasiSyscalls::ProcExit) })
+                    .unwrap();
+            }
             WasiSyscalls::EnvironSizeGet => {
                 Environment::hypercall_environ_sizes_get(&self.ctx, self, hypercall, sender);
-            },
+            }
             WasiSyscalls::EnvironGet => {
                 Environment::hypercall_environ_get(&self.ctx, self, hypercall, sender);
-            },
+            }
             WasiSyscalls::FdPrestatGet => {
                 WasiFd::hypercall_fd_prestat_get(&self.ctx, self, hypercall, sender);
-            },
+            }
             WasiSyscalls::FdPrestatDirName => {
                 WasiFd::hypercall_fd_prestat_dir_name(&self.ctx, self, hypercall, sender);
-            },
+            }
             WasiSyscalls::ServerlessInvoke => {
                 Serverless::hypercall_serverless_invoke(self, hypercall, sender);
-            },
+            }
             WasiSyscalls::ServerlessResponse => {
                 Serverless::hypercall_serverless_response(self, hypercall, sender);
                 self.ready_for_input.store(true, Ordering::Relaxed);
-            },
+            }
             WasiSyscalls::RandomGet => {
                 Random::hypercall_random_get(&self.ctx, self, hypercall, sender);
-            },
+            }
             /*
             _ => {
                 sender.send({
@@ -269,14 +284,13 @@ impl VectorizedVM {
             */
             _ => panic!("Unsupported hypercall invoked! {:?}", hypercall),
         }
-
     }
 }
 
 impl fmt::Debug for VectorizedVM {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("VectorizedVM")
-        .field("vm_id", &self.vm_id)
-        .finish()
+            .field("vm_id", &self.vm_id)
+            .finish()
     }
 }

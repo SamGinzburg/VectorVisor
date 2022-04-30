@@ -1,5 +1,5 @@
 [package]
-name = "wasm2opencl"
+name = "vectorvisor"
 version = "0.1.0"
 authors = ["SamGinzburg <ginzburg.sam@gmail.com>"]
 edition = "2018"

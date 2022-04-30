@@ -4,18 +4,18 @@
  * handle_alloc_error).
  */
 
-use crate::opencl_writer::OpenCLCWriter;
-use wast::Wat;
-use wast::parser::{self, ParseBuffer};
-use wast::ModuleKind::{Text, Binary};
-use std::sync::Arc;
-use std::collections::hash_map::DefaultHasher;
-use std::hash::Hasher;
-use std::iter::FromIterator;
-use regex::Regex;
 use crate::opencl_writer::format_fn_name;
 use crate::opencl_writer::get_func_params;
 use crate::opencl_writer::get_func_result;
+use crate::opencl_writer::OpenCLCWriter;
+use regex::Regex;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::Hasher;
+use std::iter::FromIterator;
+use std::sync::Arc;
+use wast::parser::{self, ParseBuffer};
+use wast::ModuleKind::{Binary, Text};
+use wast::Wat;
 
 pub const PATCH_FILE: &'static str = include_str!("patch/do_reserve_and_handle.wat");
 
@@ -26,8 +26,8 @@ fn get_function_hash(f: wast::Func) -> u64 {
             // In this case, we have an InlineImport of the form:
             // (func (type 3) (import "foo" "bar"))
             panic!("InlineImport functions not yet implemented");
-        },
-        (wast::FuncKind::Inline{locals, expression}) => {
+        }
+        (wast::FuncKind::Inline { locals, expression }) => {
             for instr in expression.instrs.iter() {
                 hash.write(format!("{:?}", instr).as_bytes());
             }
@@ -63,19 +63,13 @@ impl<'a> OpenCLCWriter<'_> {
                         match item {
                             wast::ModuleField::Func(f) => {
                                 let mut f_name = match f.id {
-                                    Some(f_id) => {
-                                        f_id.name().to_string()
-                                    },
+                                    Some(f_id) => f_id.name().to_string(),
                                     // possible TODO: patch using hashed function values?
                                     None => String::from(""),
                                 };
                                 let demangle_name = match rustc_demangle::try_demangle(&func_name) {
-                                    Ok(name) => {
-                                        name.to_string()
-                                    },
-                                    Err(_) => {
-                                        func_name.to_string()
-                                    },
+                                    Ok(name) => name.to_string(),
+                                    Err(_) => func_name.to_string(),
                                 };
                                 /*
                                  * We check both the name and type signature here
@@ -106,11 +100,11 @@ impl<'a> OpenCLCWriter<'_> {
                                     }
                                     _ => (),
                                 }
-                            },
+                            }
                             _ => (),
                         }
                     }
-                },
+                }
                 Binary(_) => (),
             }
         }
