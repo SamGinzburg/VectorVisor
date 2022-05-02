@@ -448,27 +448,31 @@ impl<'a> StackCtx {
                 wast::Instruction::GlobalGet(_idx) => {
                     update_counter(&mut current_i32_count, &mut max_i32_count);
                     stack_sizes.push(StackType::i32);
-                }
+                },
                 wast::Instruction::GlobalSet(_idx) => {
                     current_i32_count -= 1;
                     stack_sizes.pop().unwrap();
-                }
+                },
                 wast::Instruction::I32Const(_val) => {
                     stack_sizes.push(StackType::i32);
                     update_counter(&mut current_i32_count, &mut max_i32_count);
-                }
+                },
                 wast::Instruction::I64Const(_val) => {
                     stack_sizes.push(StackType::i64);
                     update_counter(&mut current_i64_count, &mut max_i64_count);
-                }
+                },
                 wast::Instruction::F32Const(_val) => {
                     stack_sizes.push(StackType::f32);
                     update_counter(&mut current_f32_count, &mut max_f32_count);
-                }
+                },
                 wast::Instruction::F64Const(_val) => {
                     stack_sizes.push(StackType::f64);
                     update_counter(&mut current_f64_count, &mut max_f64_count);
-                }
+                },
+                wast::Instruction::V128Const(_) => {
+                    stack_sizes.push(StackType::u128);
+                    update_counter(&mut current_u128_count, &mut max_u128_count);
+                },
                 wast::Instruction::LocalGet(idx) => match idx {
                     wast::Index::Id(id) => {
                         stack_sizes.push(StackCtx::convert_wast_types(
@@ -1867,6 +1871,42 @@ impl<'a> StackCtx {
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);
                     current_u128_count -= 1;
+                },
+                wast::Instruction::I32x4ExtractLane(laneval) => {
+                    stack_sizes.pop().unwrap();
+                    stack_sizes.push(StackType::i32);
+                    update_counter(&mut current_i32_count, &mut max_i32_count);
+                    current_u128_count -= 1;
+                },
+                wast::Instruction::I64x2ExtractLane(laneval) => {
+                    stack_sizes.pop().unwrap();
+                    stack_sizes.push(StackType::i64);
+                    update_counter(&mut current_i64_count, &mut max_i64_count);
+                    current_u128_count -= 1;
+                },
+                wast::Instruction::F32x4ExtractLane(laneval) => {
+                    stack_sizes.pop().unwrap();
+                    stack_sizes.push(StackType::f32);
+                    update_counter(&mut current_f32_count, &mut max_f32_count);
+                    current_u128_count -= 1;
+                },
+                wast::Instruction::F64x2ExtractLane(laneval) => {
+                    stack_sizes.pop().unwrap();
+                    stack_sizes.push(StackType::f64);
+                    update_counter(&mut current_f64_count, &mut max_f64_count);
+                    current_u128_count -= 1;
+                },
+                wast::Instruction::I32x4ReplaceLane(laneval) => {
+                    stack_sizes.pop().unwrap();
+                },
+                wast::Instruction::I64x2ReplaceLane(laneval) => {
+                    stack_sizes.pop().unwrap();
+                },
+                wast::Instruction::F32x4ReplaceLane(laneval) => {
+                    stack_sizes.pop().unwrap();
+                },
+                wast::Instruction::F64x2ReplaceLane(laneval) => {
+                    stack_sizes.pop().unwrap();
                 },
                 _ => panic!(
                     "Instruction {:?} not yet implemented (vstack-pass)",

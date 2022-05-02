@@ -40,6 +40,8 @@ use unops::*;
 use util::*;
 use vector::splat::*;
 use vector::binops::*;
+use vector::stackops::*;
+use vector::laneops::*;
 use vstack::*;
 use wasi_helpers::*;
 
@@ -450,6 +452,7 @@ impl<'a> OpenCLCWriter<'_> {
             wast::Instruction::I64Const(val) => emit_i64_const(self, stack_ctx, val, debug),
             wast::Instruction::F32Const(val) => emit_f32_const(self, stack_ctx, &val.bits, debug),
             wast::Instruction::F64Const(val) => emit_f64_const(self, stack_ctx, &val.bits, debug),
+            wast::Instruction::V128Const(v128_enum) => emit_v128_const(self, stack_ctx, v128_enum, debug),
             wast::Instruction::LocalGet(idx) => match idx {
                 wast::Index::Id(id) => emit_local_get(
                     self,
@@ -943,6 +946,14 @@ impl<'a> OpenCLCWriter<'_> {
             wast::Instruction::F32x4Splat => f32x4_splat(self, stack_ctx, debug),
             wast::Instruction::F32x4Mul => f32x4_binop(self, stack_ctx, VecBinOp::Mul, debug),
             wast::Instruction::F32x4Add => f32x4_binop(self, stack_ctx, VecBinOp::Add, debug),
+            wast::Instruction::I32x4ExtractLane(laneval) => extract_lane(self, stack_ctx, StackType::i32, laneval.lane, debug),
+            wast::Instruction::I64x2ExtractLane(laneval) => extract_lane(self, stack_ctx, StackType::i64, laneval.lane, debug),
+            wast::Instruction::F32x4ExtractLane(laneval) => extract_lane(self, stack_ctx, StackType::f32, laneval.lane, debug),
+            wast::Instruction::F64x2ExtractLane(laneval) => extract_lane(self, stack_ctx, StackType::f64, laneval.lane, debug),
+            wast::Instruction::I32x4ReplaceLane(laneval) => replace_lane(self, stack_ctx, StackType::i32, laneval.lane, debug),
+            wast::Instruction::I64x2ReplaceLane(laneval) => replace_lane(self, stack_ctx, StackType::i64, laneval.lane, debug),
+            wast::Instruction::F32x4ReplaceLane(laneval) => replace_lane(self, stack_ctx, StackType::f32, laneval.lane, debug),
+            wast::Instruction::F64x2ReplaceLane(laneval) => replace_lane(self, stack_ctx, StackType::f64, laneval.lane, debug),
             _ => panic!(
                 "Instruction {:?} not yet implemented, in func: {:?}",
                 instr, func.id
