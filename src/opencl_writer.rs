@@ -39,6 +39,7 @@ use trap::*;
 use unops::*;
 use util::*;
 use vector::splat::*;
+use vector::binops::*;
 use vstack::*;
 use wasi_helpers::*;
 
@@ -940,6 +941,8 @@ impl<'a> OpenCLCWriter<'_> {
                 }
             }
             wast::Instruction::F32x4Splat => f32x4_splat(self, stack_ctx, debug),
+            wast::Instruction::F32x4Mul => f32x4_binop(self, stack_ctx, VecBinOp::Mul, debug),
+            wast::Instruction::F32x4Add => f32x4_binop(self, stack_ctx, VecBinOp::Add, debug),
             _ => panic!(
                 "Instruction {:?} not yet implemented, in func: {:?}",
                 instr, func.id

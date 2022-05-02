@@ -876,7 +876,7 @@ pub fn function_unwind(
                         offset = write_u64;
                         offset += &format!(";\n\t");
                         let write_u64 = emit_write_u64_aligned(
-                            &format!("(ulong)(stack_u32-{}-2+{})", parameter_offset, read_sfp),
+                            &format!("(ulong)(stack_u32-{}+2+{})", parameter_offset, read_sfp),
                             "(ulong)stack_u32",
                             &format!("{}.y", reg),
                             "warp_idx",
@@ -897,7 +897,7 @@ pub fn function_unwind(
                         offset = write_u64;
                         offset += &format!(";\n\t");
                         let write_u64 = emit_write_u64_aligned(
-                            &format!("(ulong)(stack_u32-{}-2+{})", parameter_offset, read_sfp),
+                            &format!("(ulong)(stack_u32-{}+2+{})", parameter_offset, read_sfp),
                             "(ulong)stack_u32",
                             &format!("{}.y", reg),
                             "warp_idx",

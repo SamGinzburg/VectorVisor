@@ -77,19 +77,23 @@ pub fn emit_local_set(
         wast::ValType::I32 => {
             let register = stack_ctx.vstack_pop(StackType::i32);
             format!("\t{} = {};\n{}", local_id, register, cache)
-        }
+        },
         wast::ValType::I64 => {
             let register = stack_ctx.vstack_pop(StackType::i64);
             format!("\t{} = {};\n{}", local_id, register, cache)
-        }
+        },
         wast::ValType::F32 => {
             let register = stack_ctx.vstack_pop(StackType::f32);
             format!("\t{} = {};\n{}", local_id, register, cache)
-        }
+        },
         wast::ValType::F64 => {
             let register = stack_ctx.vstack_pop(StackType::f64);
             format!("\t{} = {};\n{}", local_id, register, cache)
-        }
+        },
+        wast::ValType::V128 => {
+            let register = stack_ctx.vstack_pop(StackType::u128);
+            format!("\t{} = {};\n{}", local_id, register, cache)
+        },
         _ => panic!("emit_local_set type not handled"),
     }
 }
@@ -117,6 +121,7 @@ pub fn emit_local_tee(
         wast::ValType::I64 => stack_ctx.vstack_peak(StackType::i64, 0),
         wast::ValType::F32 => stack_ctx.vstack_peak(StackType::f32, 0),
         wast::ValType::F64 => stack_ctx.vstack_peak(StackType::f64, 0),
+        wast::ValType::V128 => stack_ctx.vstack_peak(StackType::u128, 0),
         _ => panic!("emit_local_tee type not handled"),
     };
 
@@ -254,4 +259,13 @@ pub fn emit_f64_const(
     ret_val += &format!("\t}}\n");
 
     ret_val
+}
+
+pub fn emit_u128_const(
+    _writer: &opencl_writer::OpenCLCWriter,
+    stack_ctx: &mut StackCtx,
+    val: &i64,
+    _debug: bool,
+) -> String {
+    format!("\t{} = {};\n", stack_ctx.vstack_alloc(StackType::i64), val)
 }

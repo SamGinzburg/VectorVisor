@@ -1854,7 +1854,20 @@ impl<'a> StackCtx {
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);
                     update_counter(&mut current_u128_count, &mut max_u128_count);
-                }
+                    current_f32_count -= 1;
+                },
+                wast::Instruction::F32x4Mul => {
+                    stack_sizes.pop().unwrap();
+                    stack_sizes.pop().unwrap();
+                    stack_sizes.push(StackType::u128);
+                    current_u128_count -= 1;
+                },
+                wast::Instruction::F32x4Add => {
+                    stack_sizes.pop().unwrap();
+                    stack_sizes.pop().unwrap();
+                    stack_sizes.push(StackType::u128);
+                    current_u128_count -= 1;
+                },
                 _ => panic!(
                     "Instruction {:?} not yet implemented (vstack-pass)",
                     instruction
