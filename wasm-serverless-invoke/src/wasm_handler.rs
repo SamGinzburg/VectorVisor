@@ -46,21 +46,89 @@ extern "C" {
     // return the json response back to the VMM
     fn serverless_response(output_arr: *mut u8, output_arr_len: u32) -> ();
 
-    // Custom syscalls for accelerating workloads
-    fn start_accelerate(count: usize) -> usize;
-    fn end_accelerate() -> ();
+    // Custom syscalls for acquiring/releasing locks on VMs
+    fn lock_vm(vm_id: usize) -> ();
+    fn unlock_vm(vm_id: usize) -> ();
+    fn num_total_vms() -> usize;
+
+    // Copy data between VMs (from VM 1, to VM 2)
+    fn inter_vm_copy(buf: &[u8], len: usize, vm1: usize, vm2: usize) -> ();
+
+    // Switch read/write mode to another VM
+    fn get_warp_idx() -> usize;
+    fn set_warp_idx(new_warp_idx: usize) -> ();
 }
 
 
-// Utility function for enhanced parallelism on GPUs
-#[inline(never)]
-pub fn accelerate<F>(count: usize, mut closure: F)
-where
-    F: FnMut(usize) -> () {
-    let index = unsafe { start_accelerate(count) };
-    closure(index);
-    unsafe { end_accelerate() };
+// VectorVisor API for "distributed" applications
+pub struct VMMailbox<T> {
+    copy_buffer: [u8; 1024*16], // 16KiB copy buffer
+    mailbox: Vec<T>,
+    // used for locking
+    atomic_val: usize,
+    current_vm_id: usize,
 }
+
+impl<T: DeserializeOwned + Serialize + Clone + Copy> VMMailbox<T> {
+    pub fn send(&mut self, data: T, vm_id: usize) -> ()
+    where
+        T: Clone + Copy {
+        // 1) Acquire lock on remote VM's mailbox
+        unsafe { lock_vm(vm_id) };
+        // 2) Copy data into remote VM's copy_buffer
+        //    which will be alloc'd at the same offset
+        let encoded_data = encode::to_vec(&data).unwrap();
+        let encoded_data_len = encoded_data.len();
+
+        self.copy_buffer.clone_from_slice(&encoded_data);
+
+        // 2.1) Perform inter-VM copy (VM 1 to VM 2)
+        unsafe { inter_vm_copy(&self.copy_buffer, encoded_data_len, self.current_vm_id, vm_id) };
+
+        // 2.1) Unmarshal data in VM 2
+        // old_warp_idx is saved on the stack
+        let old_warp_idx = unsafe { get_warp_idx() };
+        unsafe { set_warp_idx(vm_id) };
+        let recieved_msg: T = decode::from_slice(&self.copy_buffer).unwrap();
+        self.mailbox.push(recieved_msg);
+        unsafe { set_warp_idx(old_warp_idx) };
+
+        // 3) Release lock
+        unsafe { unlock_vm(vm_id) };
+    }
+
+    pub fn broadcast(&mut self, data: T) -> ()
+    where
+        T: Clone + Copy {
+            // send(data) for each VM in system
+            let current_vm_id = self.current_vm_id.clone();
+            let total_vm_count = unsafe { num_total_vms() };
+            // Start with the next VM and continue sending
+            // This lets us keep some parallelism w.r.t writes and avoid lock contention
+            for vm_idx in current_vm_id..(current_vm_id+total_vm_count) {
+                let curr_vm = vm_idx % total_vm_count;
+                if curr_vm != current_vm_id {
+                    self.send(data, curr_vm);
+                }
+            }
+    }
+
+    pub fn recv(&mut self) -> Option<T>
+    where
+        T: Clone + Copy {
+        // 1) Acquire lock on local mailbox
+        unsafe { lock_vm(self.current_vm_id) };
+
+        // 2) Pop val
+        let val = self.mailbox.pop();
+
+        // 3) Release lock on local mailbox
+        unsafe { unlock_vm(self.current_vm_id) };
+
+        return val;
+    }
+}
+
 
 impl<'a, T1: DeserializeOwned, T2: Serialize> WasmHandler<T1, T2> {
 
