@@ -2721,10 +2721,20 @@ impl OpenCLRunner {
                         vm_idx,
                         self.is_memory_interleaved,
                     );
+
+                    let result_u128 = Interleave::read_u128(
+                        &mut check_results_debug[512..],
+                        0,
+                        self.num_vms,
+                        vm_idx,
+                        self.is_memory_interleaved,
+                    );
+
                     dbg!(result_i32 as i32);
                     dbg!(result_i64 as i64);
                     dbg!(result_i32 as u32);
                     dbg!(result_i64 as u64);
+                    dbg!(result_u128 as u128);
 
                     let bytes_i32: [u8; 4] = unsafe { transmute(result_i32.to_le()) };
                     let bytes_i64: [u8; 8] = unsafe { transmute(result_i64.to_le()) };
@@ -2734,11 +2744,13 @@ impl OpenCLRunner {
                 } else {
                     let result_i32 = LittleEndian::read_u32(&check_results_debug[512..516]);
                     let result_i64 = LittleEndian::read_u64(&check_results_debug[512..520]);
+                    let result_u128 = LittleEndian::read_u128(&check_results_debug[512..528]);
 
                     dbg!(result_i32 as i32);
                     dbg!(result_i64 as i64);
                     dbg!(result_i32 as u32);
                     dbg!(result_i64 as u64);
+                    dbg!(result_u128 as u128);
 
                     let bytes_i32: [u8; 4] = unsafe { transmute(result_i32.to_le()) };
                     let bytes_i64: [u8; 8] = unsafe { transmute(result_i64.to_le()) };

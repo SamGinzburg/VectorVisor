@@ -16,6 +16,7 @@ mod testops;
 mod trap;
 mod unops;
 mod util;
+mod vector;
 mod vstack;
 mod wasi_helpers;
 
@@ -37,6 +38,7 @@ use testops::*;
 use trap::*;
 use unops::*;
 use util::*;
+use vector::splat::*;
 use vstack::*;
 use wasi_helpers::*;
 
@@ -937,6 +939,7 @@ impl<'a> OpenCLCWriter<'_> {
                     )
                 }
             }
+            wast::Instruction::F32x4Splat => f32x4_splat(self, stack_ctx, debug),
             _ => panic!(
                 "Instruction {:?} not yet implemented, in func: {:?}",
                 instr, func.id

@@ -1850,6 +1850,11 @@ impl<'a> StackCtx {
                         num_hypercalls += 1;
                     }
                 }
+                wast::Instruction::F32x4Splat => {
+                    stack_sizes.pop().unwrap();
+                    stack_sizes.push(StackType::u128);
+                    update_counter(&mut current_u128_count, &mut max_u128_count);
+                }
                 _ => panic!(
                     "Instruction {:?} not yet implemented (vstack-pass)",
                     instruction
@@ -3123,7 +3128,7 @@ impl<'a> StackCtx {
                         &format!(
                             "(ulong)(stack_u32+{}+{}+{})",
                             sfp_val,
-                            self.stack_frame_offset + 2,
+                            self.stack_frame_offset + 4,
                             i_name_offset
                         ),
                         "(ulong)stack_u32",
@@ -3308,7 +3313,7 @@ impl<'a> StackCtx {
                             &emit_read_u64_aligned(
                                 &format!(
                                     "(ulong)(stack_u32+{}+{})",
-                                    offset + 2,
+                                    offset + 4,
                                     &emit_read_u32_aligned(
                                         "(ulong)(stack_frames+*sfp)",
                                         "(ulong)stack_frames",
@@ -3443,7 +3448,7 @@ impl<'a> StackCtx {
                         &format!(
                             "(ulong)(stack_u32+{}+{}+{})",
                             sfp_val,
-                            self.stack_frame_offset + 2,
+                            self.stack_frame_offset + 4,
                             i_name_offset
                         ),
                         "(ulong)stack_u32",

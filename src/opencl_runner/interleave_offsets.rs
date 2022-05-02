@@ -97,6 +97,20 @@ impl Interleave {
         temp
     }
 
+    pub fn read_u128(
+        buffer: &[u8],
+        offset: u32,
+        num_threads: u32,
+        vm_id: u32,
+        interleave: u32,
+    ) -> u128 {
+        let mut temp: u128 = 0;
+        temp += Interleave::read_u64(buffer, offset + 8, num_threads, vm_id, interleave) as u128;
+        temp = temp << 64;
+        temp += Interleave::read_u64(buffer, offset, num_threads, vm_id, interleave) as u128;
+        temp
+    }
+
     pub fn write_u32(
         buffer: &mut [u8],
         offset: u32,
