@@ -103,7 +103,7 @@ userdata_ubuntu = """#cloud-config
      - sudo curl https://sh.rustup.rs -sSf | sh -s -- -y
      - . $HOME/.cargo/env
      - sudo ~/.cargo/bin/rustup target add wasm32-wasi
-     - git clone https://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:x-oauth-basic@github.com/SamGinzburg/VectorVisor.git
+     - git clone https://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:x-oauth-basic@github.com/SamGinzburg/VectorVisor.git
      - wget https://github.com/WebAssembly/binaryen/releases/download/version_100/binaryen-version_100-x86_64-linux.tar.gz
      - tar -xzvf binaryen-version_100-x86_64-linux.tar.gz
      - cargo install wasm-snip
