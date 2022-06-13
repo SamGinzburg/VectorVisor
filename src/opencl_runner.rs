@@ -2849,6 +2849,24 @@ impl OpenCLRunner {
             vmm_overhead as f64 / (e2e_time_end - e2e_time_start).as_nanos() as f64
         );
 
+        unsafe {
+            let overhead_buf: &mut [u64] = *overhead_tracker_buffer.buf.get();
+            ocl::core::enqueue_read_buffer(
+                &queue,
+                &buffers.overhead_tracker,
+                true,
+                0,
+                overhead_buf,
+                None::<Event>,
+                None::<&mut Event>,
+            )
+            .unwrap();
+            println!(
+                "Context saving overhead time for VM #0 (ns): {:?}",
+                overhead_buf[0]
+            );
+        }
+
         //dbg!(&first_invokes);
         let mut avg = 0;
         for val in &first_invokes {
