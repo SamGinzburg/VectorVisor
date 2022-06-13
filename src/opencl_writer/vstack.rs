@@ -2894,7 +2894,7 @@ impl<'a> StackCtx {
             return ret_str;
         }
 
-        ret_str += &format!("{{");
+        ret_str += &format!("{{\n");
         ret_str += &format!("\tulong start = get_clock();\n");
 
         let map_idx = self.stack_frame_stack.last().unwrap();
@@ -3208,7 +3208,7 @@ impl<'a> StackCtx {
             ret_str += &format!("\t*sp += {};\n", intermediate_offset);
         }
         */
-        ret_str += &format!("}}");
+        ret_str += &format!("}}\n");
 
         ret_str
     }
@@ -3232,7 +3232,7 @@ impl<'a> StackCtx {
             return ret_str;
         }
 
-        ret_str += &format!("{{");
+        ret_str += &format!("{{\n");
         ret_str += &format!("\tulong start = get_clock();\n");
 
         // First, load all locals from memory
@@ -3522,7 +3522,7 @@ impl<'a> StackCtx {
 
         ret_str += &format!("\tulong end = get_clock();\n");
         ret_str += &format!("\t*overhead_tracker += end - start;\n");
-        ret_str += &format!("}}");
+        ret_str += &format!("}}\n");
         ret_str
     }
 
