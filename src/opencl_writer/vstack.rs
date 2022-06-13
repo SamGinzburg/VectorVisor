@@ -2894,6 +2894,9 @@ impl<'a> StackCtx {
             return ret_str;
         }
 
+        ret_str += &format!("{{");
+        ret_str += &format!("\tulong start = get_clock();\n");
+
         let map_idx = self.stack_frame_stack.last().unwrap();
         let locals_set = self.save_context_map.get(map_idx).unwrap().clone();
 
@@ -3190,6 +3193,8 @@ impl<'a> StackCtx {
                     )
                 );
 
+                ret_str += &format!("\tulong end = get_clock();\n");
+                ret_str += &format!("\t*overhead_tracker += end - start;\n");
                 ret_str += &format!("\t}}\n");
             }
         }
@@ -3203,6 +3208,7 @@ impl<'a> StackCtx {
             ret_str += &format!("\t*sp += {};\n", intermediate_offset);
         }
         */
+        ret_str += &format!("}}");
 
         ret_str
     }
@@ -3225,6 +3231,9 @@ impl<'a> StackCtx {
         if self.opt_loop_tracking.len() > 0 {
             return ret_str;
         }
+
+        ret_str += &format!("{{");
+        ret_str += &format!("\tulong start = get_clock();\n");
 
         // First, load all locals from memory
         if !restore_intermediates_only {
@@ -3511,6 +3520,9 @@ impl<'a> StackCtx {
             }
         }
 
+        ret_str += &format!("\tulong end = get_clock();\n");
+        ret_str += &format!("\t*overhead_tracker += end - start;\n");
+        ret_str += &format!("}}");
         ret_str
     }
 
