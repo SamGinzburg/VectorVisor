@@ -66,20 +66,24 @@ pub enum VMMRuntimeStatus {
     StatusUnknownError,
 }
 
-pub struct UnsafeCellWrapper {
-    pub buf: UnsafeCell<&'static mut [u8]>,
+pub struct UnsafeCellWrapper<T: 'static> {
+    pub buf: UnsafeCell<&'static mut [T]>,
 }
 
-impl UnsafeCellWrapper {
-    pub fn new(t: &'static mut [u8]) -> Self {
+impl<T> UnsafeCellWrapper<T> {
+    pub fn new(t: &'static mut [T]) -> Self {
         Self {
             buf: UnsafeCell::new(t),
         }
     }
 }
 
-unsafe impl Sync for UnsafeCellWrapper {}
-unsafe impl Send for UnsafeCellWrapper {}
+unsafe impl Sync for UnsafeCellWrapper<u8> {}
+unsafe impl Send for UnsafeCellWrapper<u8> {}
+unsafe impl Sync for UnsafeCellWrapper<u32> {}
+unsafe impl Send for UnsafeCellWrapper<u32> {}
+unsafe impl Sync for UnsafeCellWrapper<u64> {}
+unsafe impl Send for UnsafeCellWrapper<u64> {}
 
 #[derive(Clone)]
 pub struct OpenCLBuffers {
@@ -98,6 +102,7 @@ pub struct OpenCLBuffers {
     is_calling: ocl::core::Mem,
     hcall_size: ocl::core::Mem,
     entry: ocl::core::Mem,
+    overhead_tracker: ocl::core::Mem,
 }
 
 impl OpenCLBuffers {
@@ -117,6 +122,7 @@ impl OpenCLBuffers {
         is_calling: ocl::core::Mem,
         hcall_size: ocl::core::Mem,
         entry: ocl::core::Mem,
+        overhead_tracker: ocl::core::Mem,
     ) -> OpenCLBuffers {
         OpenCLBuffers {
             stack_buffer: stack_buffer,
@@ -134,6 +140,7 @@ impl OpenCLBuffers {
             is_calling: is_calling,
             hcall_size: hcall_size,
             entry: entry,
+            overhead_tracker: overhead_tracker,
         }
     }
 }
@@ -509,6 +516,18 @@ impl OpenCLRunner {
             .unwrap()
         };
         size_tracker += (self.num_vms * 4) as u64;
+
+        let overhead_tracker = unsafe {
+            ocl::core::create_buffer::<_, u8>(
+                context,
+                ocl::core::MEM_READ_WRITE,
+                (self.num_vms * 8) as usize,
+                None,
+            )
+            .unwrap()
+        };
+        size_tracker += (self.num_vms * 8) as u64;
+
         println!(
             "Allocated: {:.2} MB in OpenCL Buffers",
             size_tracker as f64 / 1024.0 / 1024.0
@@ -530,6 +549,7 @@ impl OpenCLRunner {
             is_calling,
             hcall_size,
             entry,
+            overhead_tracker,
         ));
         self
     }
@@ -1021,6 +1041,8 @@ impl OpenCLRunner {
         let start_kernel = ocl::core::create_kernel(&program, "wasm_entry").unwrap();
 
         let mut stack_pointer_temp = vec![0u64; self.num_vms as usize];
+        let mut overhead_tracker: &'static mut [u64] =
+                Box::leak(vec![0u64; self.num_vms as usize].into_boxed_slice());
         let mut entry_point_temp = vec![0u32; self.num_vms as usize];
         let mut hypercall_num_temp = vec![0i32; self.num_vms as usize];
         let mut hypercall_retval_temp = vec![0i32; self.num_vms as usize];
@@ -1032,9 +1054,11 @@ impl OpenCLRunner {
         }
         .collect();
         let mut hypercall_sender = vec![];
-        let hcall_read_buffer: Arc<UnsafeCellWrapper> =
+        let overhead_tracker_buffer: Arc<UnsafeCellWrapper<u64>> =
+            Arc::new(UnsafeCellWrapper::new(overhead_tracker));
+        let hcall_read_buffer: Arc<UnsafeCellWrapper<u8>> =
             Arc::new(UnsafeCellWrapper::new(hypercall_buffer_read_buffer));
-        let hcall_async_buffer: Arc<UnsafeCellWrapper> =
+        let hcall_async_buffer: Arc<UnsafeCellWrapper<u8>> =
             Arc::new(UnsafeCellWrapper::new(hypercall_input_buffer));
 
         let mut total_gpu_execution_time: u64 = 0;
@@ -1512,6 +1536,7 @@ impl OpenCLRunner {
                         &buffers,
                         hcall_read_buffer.clone(),
                         queue,
+                        overhead_tracker_buffer.clone(),
                     ))
                     .unwrap();
             });
@@ -1737,6 +1762,8 @@ impl OpenCLRunner {
         }
 
         let mut stack_pointer_temp: &mut [u64] = &mut vec![0u64; self.num_vms as usize * mexec];
+        let mut overhead_tracker: &'static mut [u64] =
+                Box::leak(vec![0u64; self.num_vms as usize].into_boxed_slice());
         let mut entry_point_temp = vec![0u32; self.num_vms as usize * mexec];
         let mut hypercall_num_temp = vec![0i32; self.num_vms as usize * mexec];
         let mut hypercall_retval_temp = vec![0i32; self.num_vms as usize];
@@ -1747,9 +1774,11 @@ impl OpenCLRunner {
         }
         .collect();
         //let mut hypercall_sender = vec![];
-        let hcall_read_buffer: Arc<UnsafeCellWrapper> =
+        let overhead_tracker_buffer: Arc<UnsafeCellWrapper<u64>> =
+            Arc::new(UnsafeCellWrapper::new(overhead_tracker));
+        let hcall_read_buffer: Arc<UnsafeCellWrapper<u8>> =
             Arc::new(UnsafeCellWrapper::new(hypercall_buffer_read_buffer));
-        let hcall_async_buffer: Arc<UnsafeCellWrapper> =
+        let hcall_async_buffer: Arc<UnsafeCellWrapper<u8>> =
             Arc::new(UnsafeCellWrapper::new(hypercall_input_buffer));
 
         let mut total_gpu_execution_time: u64 = 0;
@@ -2180,6 +2209,7 @@ impl OpenCLRunner {
                 ocl::core::set_kernel_arg(&value, 16, ArgVal::mem(&buffers.entry)).unwrap();
                 ocl::core::set_kernel_arg(&value, 17, ArgVal::mem(&hcall_retval_buffer)).unwrap();
                 ocl::core::set_kernel_arg(&value, 18, ArgVal::mem(&buffers.hcall_size)).unwrap();
+                ocl::core::set_kernel_arg(&value, 19, ArgVal::mem(&buffers.overhead_tracker)).unwrap();
             }
         }
 
@@ -2446,6 +2476,8 @@ impl OpenCLRunner {
             let start_hcall_dispatch = std::time::Instant::now();
             unsafe {
                 let buf: &mut [u8] = *hcall_read_buffer.buf.get();
+                let overhead_buf: &mut [u64] = *overhead_tracker_buffer.buf.get();
+
                 // We don't need to read previous buffer values for serverless invoke
                 if hypercall_num_temp[0] != 9999 {
                     ocl::core::enqueue_read_buffer(
@@ -2469,6 +2501,18 @@ impl OpenCLRunner {
                     None::<&mut Event>,
                 )
                 .unwrap();
+                if hypercall_num_temp[0] == 10000 {
+                    ocl::core::enqueue_read_buffer(
+                        &queue,
+                        &buffers.overhead_tracker,
+                        true,
+                        0,
+                        overhead_buf,
+                        None::<Event>,
+                        None::<&mut Event>,
+                    )
+                    .unwrap();
+                }
             }
 
             num_batches += 1;
@@ -2506,6 +2550,7 @@ impl OpenCLRunner {
                     &buffers,
                     hcall_read_buffer.clone(),
                     queue,
+                    overhead_tracker_buffer.clone(),
                 ));
                 let serverless_invoke = if hypercall_num_temp[*vm_idx as usize] == 9999 {
                     true

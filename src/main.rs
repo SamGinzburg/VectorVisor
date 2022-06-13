@@ -97,6 +97,14 @@ fn main() {
             .multiple(false)
             .number_of_values(1)
             .takes_value(true))
+        .arg(Arg::with_name("nvidia")
+            .short("nv")
+            .long("nvidia")
+            .help("If this flag is true, use NVIDIA-specific intrinsics")
+            .default_value("true") // default to using NVIDIA
+            .multiple(false)
+            .number_of_values(1)
+            .takes_value(true))
         // now for less frequently changed arguments...
         .arg(Arg::with_name("callstack")
             .short("cs")
@@ -327,6 +335,7 @@ fn main() {
     let num_vms = value_t!(matches.value_of("vmcount"), u32).unwrap_or_else(|e| e.exit());
     let num_vm_groups = value_t!(matches.value_of("vmgroups"), u32).unwrap_or_else(|e| e.exit());
     let is_gpu = value_t!(matches.value_of("isgpu"), bool).unwrap_or_else(|e| e.exit());
+    let is_nvidia_gpu = value_t!(matches.value_of("nvidia"), bool).unwrap_or_else(|e| e.exit());
     let print_return = value_t!(matches.value_of("printreturn"), bool).unwrap_or_else(|e| e.exit());
     let debug_call_print =
         value_t!(matches.value_of("debugcallprint"), bool).unwrap_or_else(|e| e.exit());
@@ -408,6 +417,7 @@ fn main() {
             force_inline,
             is_gpu,
             false,
+            is_nvidia_gpu,
         );
 
         println!("The following info is needed to later run compiled pre-compiled/externally compiled binaries");
@@ -483,6 +493,7 @@ fn main() {
                     force_inline,
                     is_gpu,
                     false,
+                    is_nvidia_gpu,
                 );
                 println!("Compiled: {} functions", num_compiled_funcs);
                 println!("Entry point: {}", entry_point);
@@ -538,6 +549,7 @@ fn main() {
                     force_inline,
                     is_gpu,
                     false,
+                    is_nvidia_gpu,
                 );
                 println!("Compiled: {} functions", num_compiled_funcs);
                 println!("Entry point: {}", entry_point);
@@ -596,6 +608,7 @@ fn main() {
                     force_inline,
                     is_gpu,
                     false,
+                    is_nvidia_gpu,
                 );
                 println!("Compiled: {} functions", num_compiled_funcs);
                 println!("Entry point: {}", entry_point);
@@ -656,6 +669,7 @@ fn main() {
                     force_inline,
                     is_gpu,
                     false,
+                    is_nvidia_gpu,
                 );
                 println!("Compiled: {} functions", num_compiled_funcs);
                 println!("Entry point: {}", entry_point);

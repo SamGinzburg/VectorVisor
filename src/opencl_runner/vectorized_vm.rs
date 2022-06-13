@@ -58,8 +58,9 @@ pub struct HyperCall<'a> {
     pub syscall: WasiSyscalls,
     pub is_interleaved_mem: u32,
     pub ocl_buffers: &'a OpenCLBuffers,
-    pub hypercall_buffer: Arc<UnsafeCellWrapper>,
+    pub hypercall_buffer: Arc<UnsafeCellWrapper<u8>>,
     pub queue: &'a CommandQueue,
+    pub overhead_tracker: Arc<UnsafeCellWrapper<u64>>,
 }
 
 impl<'a> HyperCall<'a> {
@@ -73,8 +74,9 @@ impl<'a> HyperCall<'a> {
         syscall: WasiSyscalls,
         is_interleaved_mem: u32,
         ocl_buffers: &'a OpenCLBuffers,
-        hypercall_buffer: Arc<UnsafeCellWrapper>,
+        hypercall_buffer: Arc<UnsafeCellWrapper<u8>>,
         queue: &'a CommandQueue,
+        overhead_tracker: Arc<UnsafeCellWrapper<u64>>,
     ) -> HyperCall<'a> {
         HyperCall {
             vm_id: vm_id,
@@ -88,6 +90,7 @@ impl<'a> HyperCall<'a> {
             num_queue_submits: num_queue_submits,
             called_fns: called_funcs,
             queue: queue,
+            overhead_tracker: overhead_tracker,
         }
     }
 }

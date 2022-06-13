@@ -573,11 +573,11 @@ pub fn emit_fn_call(
         if return_size > 0 && !is_indirect {
             let result_register =
                 stack_ctx.vstack_alloc(StackCtx::convert_wast_types(&return_type.unwrap()));
-            ret_str += &format!("\t{} = {}_fastcall({}heap_u32, current_mem_size, max_mem_size, globals_buffer, warp_idx, thread_idx, read_idx, scratch_space);\n", result_register, calling_func_name, parameter_list);
+            ret_str += &format!("\t{} = {}_fastcall({}heap_u32, current_mem_size, max_mem_size, globals_buffer, warp_idx, thread_idx, read_idx, overhead_tracker, scratch_space);\n", result_register, calling_func_name, parameter_list);
         } else if return_size > 0 {
-            ret_str += &format!("\t{} = {}_fastcall({}heap_u32, current_mem_size, max_mem_size, globals_buffer, warp_idx, thread_idx, read_idx, scratch_space);\n", indirect_fastcall_param, calling_func_name, parameter_list);
+            ret_str += &format!("\t{} = {}_fastcall({}heap_u32, current_mem_size, max_mem_size, globals_buffer, warp_idx, thread_idx, read_idx, overhead_tracker, scratch_space);\n", indirect_fastcall_param, calling_func_name, parameter_list);
         } else {
-            ret_str += &format!("\t{}_fastcall({}heap_u32, current_mem_size, max_mem_size, globals_buffer, warp_idx, thread_idx, read_idx, scratch_space);\n", calling_func_name, parameter_list);
+            ret_str += &format!("\t{}_fastcall({}heap_u32, current_mem_size, max_mem_size, globals_buffer, warp_idx, thread_idx, read_idx, overhead_tracker, scratch_space);\n", calling_func_name, parameter_list);
         }
     }
 

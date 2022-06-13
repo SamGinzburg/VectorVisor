@@ -1608,7 +1608,7 @@ impl<'a> OpenCLCWriter<'_> {
                 //format!("__attribute__((reqd_work_group_size({}, 1, 1)))", local_work_group)
                 String::from("")
             };
-            let header = format!("__kernel {} void {}(__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}) {{\n",
+            let header = format!("__kernel {} void {}(__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}\n\t__global {}) {{\n",
                                     work_group,
                                     fn_name,
                                     "uint   *stack_u32_global,",
@@ -1629,42 +1629,14 @@ impl<'a> OpenCLCWriter<'_> {
                                     "uchar  *is_calling_global,",
                                     "uint   *entry_point_global,",
                                     "uint   *hcall_ret_val_global,",
-                                    "uint   *hcall_size_global");
+                                    "uint   *hcall_size_global,",
+                                    "ulong  *overhead_tracker_global");
             // write thread-local private variables before header
 
             write!(output, "{}", header).unwrap();
             // TODO: for the openCL launcher, pass the memory stride as a function parameter
-            if interleave > 0 && mexec > 1 {
-                write!(output, "\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\n\t{}\n",
-                format!("uint warp_idx = get_global_id(0) / {};",  mexec),
-                format!("uint thread_idx = get_local_id(0) / {};",  mexec),
-                format!("uint read_idx = get_local_id(0) % {};",  mexec),
-                format!("local ulong scratch_space[{}];", (local_work_group)),
-                "global uint  *stack_u32    = (global uint*)stack_u32_global;",
-                "global ulong *stack_u64    = (global ulong*)stack_u32;",
-                "global uint  *heap_u32     = (global uint *)heap_u32_global;",
-                "global ulong *heap_u64     = (global ulong *)heap_u32;",
-                "global uint  *hypercall_buffer = (global uint *)hypercall_buffer_global;",
-                "global uint  *globals_buffer = (global uint *)globals_buffer_global;",
-                "global uint  *stack_frames = (global uint*)stack_frames_global;",
-                // only an array of N elements, where N=warp size
-                "global ulong *sp           = (global ulong *)sp_global+(get_global_id(0));",
-                // the stack frame pointer is used for both the stack frame, and call stack as they are
-                // essentially the same structure, except they hold different values
-                "global ulong *sfp          = (global ulong*)(sfp_global+(get_global_id(0)));",
-                // holds the numeric index of the return label for where to jump after a function call
-                "global ulong *call_stack   = (global ulong*)call_stack_global;",
-                "global ulong *call_return_stack   = (global ulong*)call_return_stack_global;",
-                "global int *hypercall_number = (global int *)hypercall_number_global+(get_global_id(0));",
-                "global uint *hypercall_continuation = (global uint *)hypercall_continuation_global+(get_global_id(0));",
-                "global uint *current_mem_size = (global uint *)current_mem_size_global+(get_global_id(0));",
-                "global uint *max_mem_size = (global uint *)max_mem_size_global+(get_global_id(0));",
-                "global uchar *is_calling = (global uchar *)is_calling_global+(get_global_id(0));",
-                "global uint  *entry_point   = (global uint*)entry_point_global+get_global_id(0);",
-                "global uint  *hcall_ret_val = (global uint*)hcall_ret_val_global+warp_idx;",
-                "global uint  *hcall_size = (global uint*)hcall_size_global+warp_idx;").unwrap();
-            } else if interleave > 0 {
-                write!(output, "\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\n\t{}\n",
+            if interleave > 0 {
+                write!(output, "\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\n\t{}\n",
                 "uint warp_idx = get_global_id(0);",
                 "uint thread_idx = get_local_id(0);",
                 format!("uint read_idx = 0;"), // dummy value here, isn't used
@@ -1691,10 +1663,11 @@ impl<'a> OpenCLCWriter<'_> {
                 "global uchar *is_calling = (global uchar *)is_calling_global+(get_global_id(0));",
                 "global uint  *entry_point   = (global uint*)entry_point_global+get_global_id(0);",
                 "global uint  *hcall_ret_val = (global uint*)hcall_ret_val_global+get_global_id(0);",
+                "global ulong  *overhead_tracker = (global ulong*)overhead_tracker+get_global_id(0);",
                 "global uint  *hcall_size = (global uint*)hcall_size_global+get_global_id(0);").unwrap();
             } else {
                 // The pointer math must be calculated in terms of bytes, which is why we cast to (char*) first
-                write!(output, "\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\n\t{}\n",
+                write!(output, "\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n\n\t{}\n",
                 format!("global uint  *stack_u32    = (global uint*)((global char*)stack_u32_global+(get_global_id(0) * {}));", stack_size_bytes),
                 "global ulong *stack_u64    = (global ulong*)stack_u32;",
                 format!("global uint  *heap_u32     = (global uint *)((global char*)heap_u32_global+(get_global_id(0) * {}));", heap_size_bytes),
@@ -1719,6 +1692,7 @@ impl<'a> OpenCLCWriter<'_> {
                 "global uint  *entry_point   = (global uint *)entry_point_global+get_global_id(0);",
                 "uint warp_idx = get_global_id(0);",
                 "uint thread_idx = get_local_id(0);",
+                "global ulong  *overhead_tracker = (global ulong*)overhead_tracker+get_global_id(0);",
                 format!("uint read_idx = 0;"), // dummy value here, isn't used
                 format!("local uchar scratch_space[{}];", 0), // dummy value here, isn't used
                 "global uint  *hcall_ret_val = (global uint*)hcall_ret_val_global+get_global_id(0);").unwrap();
@@ -1752,6 +1726,7 @@ __attribute__((always_inline)) void {}(global uint   *stack_u32,
     local uchar *scratch_space,
     uint   hcall_size,
     global uint   *entry_point,
+    global ulong  *overhead_tracker,
     uint hcall_ret_val)",
                     fn_name
                 )
@@ -2069,7 +2044,7 @@ __attribute__((always_inline)) void {}(global uint   *stack_u32,
                 .unwrap();
             }
             // strip illegal chars from function names
-            write!(ret_str, "\t\t\t{}({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {});\n",
+            write!(ret_str, "\t\t\t{}({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {});\n",
                             format!("{}{}", "__", format_fn_name(&key)),
                             "stack_u32",
                             "stack_u64",
@@ -2093,6 +2068,7 @@ __attribute__((always_inline)) void {}(global uint   *stack_u32,
                             "(local uchar*)scratch_space",
                             "*hcall_size",
                             "entry_point",
+                            "overhead_tracker",
                             "*hcall_ret_val").unwrap();
             write!(ret_str, "\t\t\tbreak;\n").unwrap();
         }
@@ -2137,6 +2113,7 @@ __attribute__((always_inline)) void {}(global uint   *stack_u32,
         force_inline: bool,
         is_gpu: bool,
         debug: bool,
+        is_nvidia_gpu: bool,
     ) -> (
         String,
         String,
@@ -2176,7 +2153,7 @@ __attribute__((always_inline)) void {}(global uint   *stack_u32,
         write!(
             output,
             "{}",
-            r#"
+r#"
 #ifdef cl_khr_fp64
 #pragma OPENCL EXTENSION cl_khr_fp64 : enable
 #elif defined(cl_amd_fp64)
@@ -2207,6 +2184,22 @@ __attribute__((always_inline)) void {}(global uint   *stack_u32,
 "#
         )
         .unwrap();
+
+        if is_nvidia_gpu {
+            write!(
+                output,
+                "{}",
+r#"
+ulong get_clock() {
+    ulong timestamp;
+    asm volatile("mov.u64 %0, %%globaltimer;" : "=l"(timestamp));
+    return timestamp;
+}
+"#
+            )
+            .unwrap();
+        }
+
 
         // generate the read/write functions
         // we support only either a 1 byte interleave, or no interleave
@@ -2415,7 +2408,7 @@ __attribute__((always_inline)) void {}(global uint   *stack_u32,
                 }
             };
             let calling_func_name = format!("{}{}", "__", format_fn_name(fastfunc));
-            let func_declaration = format!("{} {}_fastcall({}global uint *, global uint *, global uint *, global uint *, uint, uint, uint, local uchar*);\n", func_ret_val, calling_func_name, parameter_list);
+            let func_declaration = format!("{} {}_fastcall({}global uint *, global uint *, global uint *, global uint *, uint, uint, uint, global ulong*, local uchar*);\n", func_ret_val, calling_func_name, parameter_list);
 
             write!(fastcall_header, "{}", func_declaration).unwrap();
         }
@@ -2863,7 +2856,7 @@ __attribute__((always_inline)) void {}(global uint   *stack_u32,
                 .unwrap();
             }
             // strip illegal chars from function names
-            write!(output, "\t\t\t{}({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {});\n",
+            write!(output, "\t\t\t{}({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {});\n",
                             format!("{}{}", "__", format_fn_name(&key)),
                             "stack_u32",
                             "stack_u64",
@@ -2887,6 +2880,7 @@ __attribute__((always_inline)) void {}(global uint   *stack_u32,
                             "scratch_space",
                             "*hcall_size",
                             "entry_point",
+                            "overhead_tracker",
                             "*hcall_ret_val").unwrap();
             write!(output, "\t\t\tbreak;\n").unwrap();
         }
