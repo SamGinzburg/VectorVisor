@@ -3192,9 +3192,6 @@ impl<'a> StackCtx {
                         "warp_idx"
                     )
                 );
-
-                ret_str += &format!("\tulong end = get_clock();\n");
-                ret_str += &format!("\t*overhead_tracker += end - start;\n");
                 ret_str += &format!("\t}}\n");
             }
         }
@@ -3208,6 +3205,8 @@ impl<'a> StackCtx {
             ret_str += &format!("\t*sp += {};\n", intermediate_offset);
         }
         */
+        ret_str += &format!("\tulong end = get_clock();\n");
+        ret_str += &format!("\t*overhead_tracker += end - start;\n");
         ret_str += &format!("}}\n");
 
         ret_str
