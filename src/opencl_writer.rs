@@ -2198,6 +2198,17 @@ ulong get_clock() {
 "#
             )
             .unwrap();
+        } else {
+            write!(
+                output,
+                "{}",
+r#"
+ulong get_clock() {
+    return 0;
+}
+"#
+            )
+            .unwrap();
         }
 
 
