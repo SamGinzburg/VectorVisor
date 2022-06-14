@@ -3216,6 +3216,7 @@ impl<'a> StackCtx {
         */
         ret_str += &format!("\tulong end = get_clock();\n");
         ret_str += &format!("\t*overhead_tracker += end - start;\n");
+        //ret_str += &format!("\tprintf(\"overhead_tracker: %lu, diff: %lu, end: %lu, start: %lu\\n\", *overhead_tracker, end - start, end, start);\n");
         ret_str += &format!("}}\n");
 
         if is_empty {

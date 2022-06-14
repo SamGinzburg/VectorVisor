@@ -1563,6 +1563,7 @@ impl<'a> OpenCLCWriter<'_> {
                     uchar  *scratch_space,
                     uint   hcall_size,
                     uint   *entry_point,
+                    ulong  *overhead_tracker,
                     uint   *hcall_ret_val)",
                         fn_name
                     )
@@ -1595,6 +1596,7 @@ impl<'a> OpenCLCWriter<'_> {
                     uchar  *scratch_space,
                     uint   hcall_size,
                     uint   *entry_point,
+                    ulong  *overhead_tracker,
                     uint   hcall_ret_val)",
                         fn_name
                     )
@@ -1663,7 +1665,7 @@ impl<'a> OpenCLCWriter<'_> {
                 "global uchar *is_calling = (global uchar *)is_calling_global+(get_global_id(0));",
                 "global uint  *entry_point   = (global uint*)entry_point_global+get_global_id(0);",
                 "global uint  *hcall_ret_val = (global uint*)hcall_ret_val_global+get_global_id(0);",
-                "global ulong  *overhead_tracker = (global ulong*)overhead_tracker+get_global_id(0);",
+                "global ulong *overhead_tracker = (global ulong*)overhead_tracker_global+get_global_id(0);",
                 "global uint  *hcall_size = (global uint*)hcall_size_global+get_global_id(0);").unwrap();
             } else {
                 // The pointer math must be calculated in terms of bytes, which is why we cast to (char*) first
@@ -1692,7 +1694,7 @@ impl<'a> OpenCLCWriter<'_> {
                 "global uint  *entry_point   = (global uint *)entry_point_global+get_global_id(0);",
                 "uint warp_idx = get_global_id(0);",
                 "uint thread_idx = get_local_id(0);",
-                "global ulong  *overhead_tracker = (global ulong*)overhead_tracker+get_global_id(0);",
+                "global ulong  *overhead_tracker = (global ulong*)overhead_tracker_global+get_global_id(0);",
                 format!("uint read_idx = 0;"), // dummy value here, isn't used
                 format!("local uchar scratch_space[{}];", 0), // dummy value here, isn't used
                 "global uint  *hcall_ret_val = (global uint*)hcall_ret_val_global+get_global_id(0);").unwrap();

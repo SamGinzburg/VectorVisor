@@ -17,7 +17,6 @@ CFLAGS="-cl-nv-verbose"
 OPT_LEVEL="-O1 -g"
 WASM_SNIP_ARGS="--snip-rust-panicking-code"
 WASM_SNIP_CUSTOM="rust_oom __rg_oom"
-maxdemospace = 0
 maxfuncs = 50
 maxloc = 2000000
 #maxfuncs = 999
@@ -25,8 +24,10 @@ maxloc = 2000000
 benchmark_duration = 300
 run_a10g = False
 if run_a10g:
+    maxdemospace = 0
     local_group_size = 16
 else:
+    maxdemospace = 0
     local_group_size = 64
 
 
@@ -1282,9 +1283,9 @@ cleanup()
 
 # run image hash bench
 
-run_image_hash_bench(run_modified = True)
+#run_image_hash_bench(run_modified = True)
 
-cleanup()
+#cleanup()
 
 """
 # run image hash bench
