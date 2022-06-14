@@ -68,6 +68,7 @@ func IssueRequests(ip string, port int, req [][]byte, exec_time chan<- float64, 
 	num_unique_fns_called := 0.0
 	req_queue_time := 0.0
 	device_time := 0.0
+	overhead_time := 0.0
 
 	for {
 		http_request.Body = ioutil.NopCloser(bytes.NewReader(req[rand.Intn(NUM_PARAMS)]))
