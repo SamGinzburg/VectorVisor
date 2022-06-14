@@ -181,10 +181,12 @@ fn is_fastcall(
                                     Id(i) => i.name().to_string(),
                                 };
 
-                                let indirect_func_type = match writer.types.get(&type_index).unwrap() {
+                                /*
+                                let _indirect_func_type = match writer.types.get(&type_index).unwrap() {
                                     wast::TypeDef::Func(ft) => ft,
                                     _ => panic!("Indirect call cannot have a type of something other than a func"),
                                 };
+                                */
 
                                 // We only need to call functions with matching type signatures, the rest would trap
                                 for func_id in indirect_call_mapping.values() {

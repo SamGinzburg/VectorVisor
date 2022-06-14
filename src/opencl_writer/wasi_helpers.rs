@@ -14,6 +14,7 @@
 use crate::opencl_writer;
 use crate::opencl_writer::mem_interleave::emit_read_u32;
 use crate::opencl_writer::mem_interleave::emit_write_u32;
+use crate::opencl_writer::mem_interleave::emit_write_u64;
 use crate::opencl_writer::StackCtx;
 use crate::opencl_writer::StackType;
 
@@ -576,6 +577,63 @@ pub fn emit_random_get_post(
 
     // return the error code associated with random_get
     ret_str += &format!("\t{} = {};\n", result_register, "hcall_ret_val");
+
+    ret_str
+}
+
+pub fn emit_clock_time_get_pre(
+    _writer: &opencl_writer::OpenCLCWriter,
+    stack_ctx: &mut StackCtx,
+    _debug: bool,
+) -> String {
+    let mut ret_str = String::from("");
+
+    let clock_id = stack_ctx.vstack_pop(StackType::i32);
+    let precision = stack_ctx.vstack_pop(StackType::i64);
+
+    ret_str += &format!(
+        "\t{};\n",
+        emit_write_u32(
+            "(ulong)(hypercall_buffer)",
+            "(ulong)(hypercall_buffer)",
+            &clock_id,
+            "warp_idx"
+        )
+    );
+    ret_str += &format!(
+        "\t{};\n",
+        emit_write_u64(
+            "(ulong)(hypercall_buffer+1)",
+            "(ulong)(hypercall_buffer)",
+            &precision,
+            "warp_idx"
+        )
+    );
+
+    ret_str
+}
+
+pub fn emit_clock_time_get_post(
+    _writer: &opencl_writer::OpenCLCWriter,
+    stack_ctx: &mut StackCtx,
+    _debug: bool,
+) -> String {
+    let mut ret_str = String::from("");
+
+    let offset = stack_ctx.vstack_peak(StackType::i32, 0);
+    let buf_len = &emit_read_u32(
+        "(ulong)(hypercall_buffer)",
+        "(ulong)(hypercall_buffer)",
+        "warp_idx",
+    );
+
+    ret_str += &format!("\t___private_memcpy((ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), warp_idx, read_idx);\n",
+                        "(ulong)((global char *)hypercall_buffer+4)", // src
+                        "hypercall_buffer", // mem_start_src
+                        &format!("(global char *)heap_u32+{}", offset), //dst
+                        "heap_u32", // mem_start_dst
+                        &buf_len);
+    ret_str += &format!("\t{} = {};\n", offset, "hcall_ret_val");
 
     ret_str
 }

@@ -75,6 +75,7 @@ lazy_static! {
         m.insert("fd_prestat_get", true);         // 4
         m.insert("fd_prestat_dir_name", true);    // 5
         m.insert("random_get", true);             // 6
+        m.insert("clock_time_get", true);         // 7
         m.insert("serverless_invoke", true);      // 9999
         m.insert("serverless_response", true);    // 10000
         m
@@ -90,6 +91,7 @@ pub enum WasmHypercallId {
     fd_prestat_get = 4,
     fd_prestat_dir_name = 5,
     random_get = 6,
+    clock_time_get = 7,
     serverless_invoke = 9999,
     serverless_response = 10000,
 }
@@ -251,6 +253,7 @@ impl<'a> OpenCLCWriter<'_> {
                 ret_str += &emit_serverless_response_pre(self, stack_ctx, debug)
             }
             WasmHypercallId::random_get => ret_str += &emit_random_get_pre(self, stack_ctx, debug),
+            WasmHypercallId::clock_time_get => ret_str += &emit_clock_time_get_pre(self, stack_ctx, debug),
             _ => (),
         }
         // insert return (we exit back to the VMM)
@@ -303,7 +306,8 @@ impl<'a> OpenCLCWriter<'_> {
             }
             WasmHypercallId::random_get => {
                 ret_str += &emit_random_get_post(&self, stack_ctx, debug);
-            }
+            },
+            WasmHypercallId::clock_time_get => ret_str += &emit_clock_time_get_post(self, stack_ctx, debug),
             _ => (),
         }
 
@@ -651,6 +655,7 @@ impl<'a> OpenCLCWriter<'_> {
                                         &"fd_prestat_get"         => self.emit_hypercall(WasmHypercallId::fd_prestat_get, stack_ctx, hypercall_id_count, fn_name.to_string(), false, debug),
                                         &"fd_prestat_dir_name"    => self.emit_hypercall(WasmHypercallId::fd_prestat_dir_name, stack_ctx, hypercall_id_count, fn_name.to_string(), false, debug),
                                         &"random_get"             => self.emit_hypercall(WasmHypercallId::random_get, stack_ctx, hypercall_id_count, fn_name.to_string(), false, debug),
+                                        &"clock_time_get"         => self.emit_hypercall(WasmHypercallId::clock_time_get, stack_ctx, hypercall_id_count, fn_name.to_string(), false, debug),
                                         &"serverless_invoke"      => self.emit_hypercall(WasmHypercallId::serverless_invoke, stack_ctx, hypercall_id_count, fn_name.to_string(), false, debug),
                                         &"serverless_response"    => self.emit_hypercall(WasmHypercallId::serverless_response, stack_ctx, hypercall_id_count, fn_name.to_string(), false, debug),
                                         _ => panic!("Unidentified WASI fn name: {:?}", wasi_fn_name),
@@ -982,6 +987,7 @@ impl<'a> OpenCLCWriter<'_> {
         is_fastcall: bool,
         debug: bool,
     ) -> (String, u32, HashSet<String>) {
+        dbg!(fn_name.clone());
         let mut final_string = String::from("");
         let func_intermediate_size;
         let fastfunc_calls;

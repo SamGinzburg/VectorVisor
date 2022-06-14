@@ -1037,6 +1037,14 @@ impl<'a> StackCtx {
                                             &"serverless_response"    => {
                                                 current_i32_count -= 2;
                                             },
+                                            &"clock_time_get"         => {
+                                                current_i32_count -= 1;
+                                                current_i64_count -= 1;
+                                                stack_sizes.pop();
+                                                stack_sizes.pop();
+                                                stack_sizes.pop();
+                                                stack_sizes.push(StackType::i32);
+                                            },
                                             _ => panic!("Unidentified WASI fn name: {:?} (vstack)", wasi_fn_name),
                                         }
                                     },
