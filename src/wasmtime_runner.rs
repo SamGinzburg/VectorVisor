@@ -126,6 +126,7 @@ impl WasmtimeRunner {
                                     0,
                                     0,
                                     0,
+                                    0,
                                     resp_uuid,
                                 ))
                                 .unwrap();

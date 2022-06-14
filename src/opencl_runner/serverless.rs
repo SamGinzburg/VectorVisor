@@ -65,6 +65,8 @@ impl Serverless {
         sender: &Sender<HyperCallResult>,
     ) -> () {
         let mut hcall_buf: &'static [u8] = unsafe { *hypercall.hypercall_buffer.buf.get() };
+        let mut overhead_buf: &'static [u64] = unsafe { *hypercall.overhead_tracker.buf.get() };
+
         let hcall_buf_size: u32 = vm_ctx.hcall_buf_size;
         let vm_idx = vm_ctx.vm_id;
         hcall_buf = &hcall_buf
@@ -102,6 +104,7 @@ impl Serverless {
                     queue_submit_time,
                     queue_submit_count,
                     count,
+                    overhead_buf[vm_idx as usize],
                     vm_ctx.uuid_queue.pop_front().unwrap(),
                 ))
                 .unwrap();

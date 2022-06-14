@@ -62,6 +62,7 @@ impl BatchSubmitServer {
         num_unique_fns: u64,
         queue_time: u128,
         device_time: u128,
+        overhead_time: u64,
     ) -> warp::http::Response<Body> {
         let mut final_resp = Response::builder().status(StatusCode::OK);
         {
@@ -89,6 +90,10 @@ impl BatchSubmitServer {
             headers.insert(
                 "device_time",
                 warp::http::HeaderValue::from_str(&device_time.to_string()).unwrap(),
+            );
+            headers.insert(
+                "overhead_time_ns",
+                warp::http::HeaderValue::from_str(&overhead_time.to_string()).unwrap(),
             );
         }
 
@@ -143,6 +148,7 @@ impl BatchSubmitServer {
             queue_submit_time,
             num_queue_submits,
             num_unique_fns,
+            overhead_time_ns,
             uuid,
         )) = rx.lock().await.recv().await
         {
@@ -156,6 +162,7 @@ impl BatchSubmitServer {
                     num_unique_fns,
                     (req_start - req_queue).as_nanos(),
                     (req_end - req_queue).as_nanos(),
+                    overhead_time_ns,
                 ));
             }
         }

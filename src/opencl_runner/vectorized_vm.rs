@@ -130,7 +130,7 @@ impl HyperCallResult {
     }
 }
 
-pub type VmSenderType = (bytes::Bytes, usize, u64, u64, u64, u64, String);
+pub type VmSenderType = (bytes::Bytes, usize, u64, u64, u64, u64, u64, String);
 pub type VmRecvType = (bytes::Bytes, usize, String);
 
 pub struct VectorizedVM {
@@ -145,6 +145,7 @@ pub struct VectorizedVM {
     pub vm_id: u32,
     pub hcall_buf_size: u32,
     pub timestamp_counter: Arc<u64>,
+    pub overhead_counter: Arc<u64>,
     pub queue_submit_counter: Arc<u64>,
     pub queue_submit_qty: Arc<u64>,
     pub called_fns_set: Arc<HashSet<u32>>,
@@ -209,6 +210,7 @@ impl VectorizedVM {
             vm_id: vm_id,
             hcall_buf_size: hcall_buf_size,
             timestamp_counter: Arc::new(0),
+            overhead_counter: Arc::new(0),
             queue_submit_counter: Arc::new(0),
             queue_submit_qty: Arc::new(0),
             called_fns_set: Arc::new(HashSet::new()),
