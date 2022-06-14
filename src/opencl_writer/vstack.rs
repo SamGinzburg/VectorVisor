@@ -2894,6 +2894,8 @@ impl<'a> StackCtx {
             return ret_str;
         }
 
+        let mut is_empty = true;
+
         ret_str += &format!("{{\n");
         ret_str += &format!("\tulong start = get_clock();\n");
 
@@ -2911,6 +2913,8 @@ impl<'a> StackCtx {
                 if !locals_set.contains(local) {
                     continue;
                 }
+
+                is_empty = false;
 
                 if self.moved_locals.contains(local) {
                     *local = format!("{}[thread_idx]", local);
@@ -3074,6 +3078,7 @@ impl<'a> StackCtx {
              *
              */
             for idx in i32_range {
+                is_empty = false;
                 let i_name = self.i32_stack.get(idx).unwrap();
                 let i_name_offset = self.intermediate_offsets.get(i_name).unwrap();
                 ret_str += &format!(
@@ -3091,6 +3096,7 @@ impl<'a> StackCtx {
             }
 
             for idx in i64_range {
+                is_empty = false;
                 let i_name = self.i64_stack.get(idx).unwrap();
                 let i_name_offset = self.intermediate_offsets.get(i_name).unwrap();
                 ret_str += &format!(
@@ -3108,6 +3114,7 @@ impl<'a> StackCtx {
             }
 
             for idx in f32_range {
+                is_empty = false;
                 let i_name = self.f32_stack.get(idx).unwrap();
                 let i_name_offset = self.intermediate_offsets.get(i_name).unwrap();
 
@@ -3133,6 +3140,7 @@ impl<'a> StackCtx {
             }
 
             for idx in f64_range {
+                is_empty = false;
                 let i_name = self.f64_stack.get(idx).unwrap();
                 let i_name_offset = self.intermediate_offsets.get(i_name).unwrap();
 
@@ -3158,6 +3166,7 @@ impl<'a> StackCtx {
             }
 
             for idx in u128_range {
+                is_empty = false;
                 let i_name = self.u128_stack.get(idx).unwrap();
                 let i_name_offset = self.intermediate_offsets.get(i_name).unwrap();
 
@@ -3209,6 +3218,10 @@ impl<'a> StackCtx {
         ret_str += &format!("\t*overhead_tracker += end - start;\n");
         ret_str += &format!("}}\n");
 
+        if is_empty {
+            ret_str = "".to_string();
+        }
+
         ret_str
     }
 
@@ -3221,6 +3234,7 @@ impl<'a> StackCtx {
         restore_intermediates_only: bool,
     ) -> String {
         let mut ret_str = String::from("");
+        let mut is_empty = true;
 
         if self.fastcall_opt_possible {
             return ret_str;
@@ -3250,6 +3264,8 @@ impl<'a> StackCtx {
                 if !locals_set.contains(local) {
                     continue;
                 }
+
+                is_empty = false;
 
                 if self.moved_locals.contains(local) {
                     *local = format!("{}[thread_idx]", local);
@@ -3405,6 +3421,7 @@ impl<'a> StackCtx {
             for idx in i32_range {
                 let i_name = self.i32_stack.get(idx).unwrap();
                 let i_name_offset = self.intermediate_offsets.get(i_name).unwrap();
+                is_empty = false;
 
                 ret_str += &format!(
                     "\t{} = {};\n",
@@ -3423,6 +3440,7 @@ impl<'a> StackCtx {
             for idx in i64_range {
                 let i_name = self.i64_stack.get(idx).unwrap();
                 let i_name_offset = self.intermediate_offsets.get(i_name).unwrap();
+                is_empty = false;
 
                 ret_str += &format!(
                     "\t{} = {};\n",
@@ -3441,6 +3459,7 @@ impl<'a> StackCtx {
             for idx in f32_range {
                 let i_name = self.f32_stack.get(idx).unwrap();
                 let i_name_offset = self.intermediate_offsets.get(i_name).unwrap();
+                is_empty = false;
 
                 ret_str += &format!("\t{{\n");
                 ret_str += &format!(
@@ -3464,6 +3483,7 @@ impl<'a> StackCtx {
             for idx in f64_range {
                 let i_name = self.f64_stack.get(idx).unwrap();
                 let i_name_offset = self.intermediate_offsets.get(i_name).unwrap();
+                is_empty = false;
 
                 ret_str += &format!("\t{{\n");
                 ret_str += &format!(
@@ -3487,6 +3507,7 @@ impl<'a> StackCtx {
             for idx in u128_range {
                 let i_name = self.f64_stack.get(idx).unwrap();
                 let i_name_offset = self.intermediate_offsets.get(i_name).unwrap();
+                is_empty = false;
 
                 // lower
                 ret_str += &format!(
@@ -3522,6 +3543,11 @@ impl<'a> StackCtx {
         ret_str += &format!("\tulong end = get_clock();\n");
         ret_str += &format!("\t*overhead_tracker += end - start;\n");
         ret_str += &format!("}}\n");
+
+        if is_empty {
+            ret_str = "".to_string();
+        }
+
         ret_str
     }
 
