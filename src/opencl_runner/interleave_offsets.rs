@@ -136,4 +136,30 @@ impl Interleave {
             interleave,
         );
     }
+
+    pub fn write_u64(
+        buffer: &mut [u8],
+        offset: u32,
+        num_threads: u32,
+        value: u64,
+        vm_id: u32,
+        interleave: u32,
+    ) {
+        Interleave::write_u32(
+            buffer,
+            offset,
+            num_threads,
+            (value & 0xFFFFFFFF).try_into().unwrap(),
+            vm_id,
+            interleave,
+        );
+        Interleave::write_u32(
+            buffer,
+            offset + 2,
+            num_threads,
+            ((value >> 32) & 0xFFFFFFFF).try_into().unwrap(),
+            vm_id,
+            interleave,
+        );
+    }
 }

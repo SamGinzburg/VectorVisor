@@ -1,6 +1,7 @@
 mod environment;
 mod interleave_offsets;
 mod random;
+mod wasi_time;
 mod serverless;
 pub mod vectorized_vm;
 mod wasi_fd;
@@ -1519,6 +1520,7 @@ impl OpenCLRunner {
                     4 => WasiSyscalls::FdPrestatGet,
                     5 => WasiSyscalls::FdPrestatDirName,
                     6 => WasiSyscalls::RandomGet,
+                    7 => WasiSyscalls::ClockTimeGet,
                     9999 => WasiSyscalls::ServerlessInvoke,
                     10000 => WasiSyscalls::ServerlessResponse,
                     _ => WasiSyscalls::InvalidHyperCallNum,
@@ -2533,6 +2535,7 @@ impl OpenCLRunner {
                     4 => WasiSyscalls::FdPrestatGet,
                     5 => WasiSyscalls::FdPrestatDirName,
                     6 => WasiSyscalls::RandomGet,
+                    7 => WasiSyscalls::ClockTimeGet,
                     9999 => WasiSyscalls::ServerlessInvoke,
                     10000 => WasiSyscalls::ServerlessResponse,
                     _ => WasiSyscalls::InvalidHyperCallNum,

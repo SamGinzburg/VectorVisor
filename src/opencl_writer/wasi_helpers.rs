@@ -13,6 +13,7 @@
 
 use crate::opencl_writer;
 use crate::opencl_writer::mem_interleave::emit_read_u32;
+use crate::opencl_writer::mem_interleave::emit_read_u64;
 use crate::opencl_writer::mem_interleave::emit_write_u32;
 use crate::opencl_writer::mem_interleave::emit_write_u64;
 use crate::opencl_writer::StackCtx;
@@ -621,18 +622,22 @@ pub fn emit_clock_time_get_post(
     let mut ret_str = String::from("");
 
     let offset = stack_ctx.vstack_peak(StackType::i32, 0);
-    let buf_len = &emit_read_u32(
+
+    let timestamp = &emit_read_u64(
         "(ulong)(hypercall_buffer)",
         "(ulong)(hypercall_buffer)",
         "warp_idx",
     );
 
-    ret_str += &format!("\t___private_memcpy((ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), warp_idx, read_idx);\n",
-                        "(ulong)((global char *)hypercall_buffer+4)", // src
-                        "hypercall_buffer", // mem_start_src
-                        &format!("(global char *)heap_u32+{}", offset), //dst
-                        "heap_u32", // mem_start_dst
-                        &buf_len);
+    ret_str += &format!(
+        "\t{};\n",
+        emit_write_u32(
+            &format!("(ulong)((global char*)heap_u32+(int)({}))", offset),
+            "(ulong)(heap_u32)",
+            &timestamp,
+            "warp_idx"
+        )
+    );
     ret_str += &format!("\t{} = {};\n", offset, "hcall_ret_val");
 
     ret_str

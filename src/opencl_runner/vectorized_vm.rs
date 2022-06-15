@@ -10,6 +10,8 @@ use crate::opencl_runner::OpenCLBuffers;
 
 use crate::opencl_runner::environment::Environment;
 use crate::opencl_runner::random::Random;
+use crate::opencl_runner::wasi_time::Clock;
+
 use crate::opencl_runner::serverless::Serverless;
 use crate::opencl_runner::UnsafeCellWrapper;
 use crate::opencl_runner::WasiFd;
@@ -37,6 +39,7 @@ pub enum WasiSyscalls {
     FdPrestatGet = 4,
     FdPrestatDirName = 5,
     RandomGet = 6,
+    ClockTimeGet = 7,
     ServerlessInvoke = 9999,
     ServerlessResponse = 10000,
     InvalidHyperCallNum = -1,
@@ -279,6 +282,9 @@ impl VectorizedVM {
             }
             WasiSyscalls::RandomGet => {
                 Random::hypercall_random_get(&self.ctx, self, hypercall, sender);
+            }
+            WasiSyscalls::ClockTimeGet => {
+                Clock::hypercall_clock_time_get(&self.ctx, self, hypercall, sender);
             }
             /*
             _ => {
