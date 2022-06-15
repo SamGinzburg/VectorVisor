@@ -155,7 +155,7 @@ impl Interleave {
         );
         Interleave::write_u32(
             buffer,
-            offset + 2,
+            offset + 4,
             num_threads,
             ((value >> 32) & 0xFFFFFFFF).try_into().unwrap(),
             vm_id,

@@ -589,7 +589,8 @@ pub fn emit_clock_time_get_pre(
 ) -> String {
     let mut ret_str = String::from("");
 
-    let clock_id = stack_ctx.vstack_pop(StackType::i32);
+    let _offset = stack_ctx.vstack_peak(StackType::i32, 0);
+    let clock_id = stack_ctx.vstack_peak(StackType::i32, 1);
     let precision = stack_ctx.vstack_pop(StackType::i64);
 
     ret_str += &format!(
@@ -621,7 +622,9 @@ pub fn emit_clock_time_get_post(
 ) -> String {
     let mut ret_str = String::from("");
 
-    let offset = stack_ctx.vstack_peak(StackType::i32, 0);
+    let offset = stack_ctx.vstack_pop(StackType::i32);
+    let _clock_id = stack_ctx.vstack_pop(StackType::i32);
+    let result_register = stack_ctx.vstack_alloc(StackType::i32);
 
     let timestamp = &emit_read_u64(
         "(ulong)(hypercall_buffer)",
@@ -631,14 +634,14 @@ pub fn emit_clock_time_get_post(
 
     ret_str += &format!(
         "\t{};\n",
-        emit_write_u32(
+        emit_write_u64(
             &format!("(ulong)((global char*)heap_u32+(int)({}))", offset),
             "(ulong)(heap_u32)",
             &timestamp,
             "warp_idx"
         )
     );
-    ret_str += &format!("\t{} = {};\n", offset, "hcall_ret_val");
+    ret_str += &format!("\t{} = {};\n", result_register, "hcall_ret_val");
 
     ret_str
 }
