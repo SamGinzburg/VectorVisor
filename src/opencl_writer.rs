@@ -987,7 +987,6 @@ impl<'a> OpenCLCWriter<'_> {
         is_fastcall: bool,
         debug: bool,
     ) -> (String, u32, HashSet<String>) {
-        dbg!(fn_name.clone());
         let mut final_string = String::from("");
         let func_intermediate_size;
         let fastfunc_calls;
