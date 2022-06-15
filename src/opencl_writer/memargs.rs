@@ -469,6 +469,49 @@ pub fn emit_memload_i64_32s(
     ret_str
 }
 
+pub fn emit_memload_i64_16s(
+    writer: &opencl_writer::OpenCLCWriter,
+    stack_ctx: &mut StackCtx,
+    args: &MemArg,
+    _debug: bool,
+) -> String {
+    let mut ret_str = String::from("");
+
+    let i_load = stack_ctx.vstack_pop(StackType::i32);
+    let result_register = stack_ctx.vstack_alloc(StackType::i64);
+
+    let read = if !writer.pretty_input_wasm || args.align < 2 {
+        format!(
+            "(long)({})",
+            &emit_read_u16_aligned_checked(
+                &format!(
+                    "(ulong)((global char*)heap_u32+{}+(int)({}))",
+                    args.offset, i_load
+                ),
+                "(ulong)(heap_u32)",
+                "warp_idx"
+            )
+        )
+    } else {
+        format!(
+            "(long)({})",
+            &emit_read_u16_aligned(
+                &format!(
+                    "(ulong)((global char*)heap_u32+{}+(int)({}))",
+                    args.offset, i_load
+                ),
+                "(ulong)(heap_u32)",
+                "warp_idx"
+            )
+        )
+    };
+
+    ret_str += &format!("\t{} = {};\n", result_register, read);
+
+    ret_str
+}
+
+
 pub fn emit_memload_i64_16u(
     writer: &opencl_writer::OpenCLCWriter,
     stack_ctx: &mut StackCtx,

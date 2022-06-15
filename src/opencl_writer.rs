@@ -395,6 +395,9 @@ impl<'a> OpenCLCWriter<'_> {
             wast::Instruction::I64Load16u(memarg) => {
                 emit_memload_i64_16u(self, stack_ctx, memarg, debug)
             }
+            wast::Instruction::I64Load16s(memarg) => {
+                emit_memload_i64_16s(self, stack_ctx, memarg, debug)
+            }
             wast::Instruction::I32Load16u(memarg) => {
                 emit_memload_i32_16u(self, stack_ctx, memarg, debug)
             }
