@@ -1,8 +1,37 @@
+#[macro_use]
+extern crate lazy_static;
+
 use lopdf::dictionary;
 use lopdf::{Document, Object, Stream};
 use lopdf::content::{Content, Operation};
+use lopdf::xobject;
+use wasm_serverless_invoke::wasm_handler;
+use wasm_serverless_invoke::wasm_handler::WasmHandler;
+use wasm_serverless_invoke::wasm_handler::SerializationFormat::MsgPack;
+use serde::Deserialize;
+use serde::Serialize;
 
-fn main() {
+lazy_static! {
+    static ref EMBED_IMAGE: &'static [u8] = include_bytes!("test.jpg");
+}
+
+#[derive(Debug, Deserialize)]
+struct FuncInput {
+    name: String,
+    purchases: Vec<String>,
+    price: Vec<f64>,
+}
+
+#[derive(Debug, Serialize)]
+struct FuncResponse {
+    resp: Vec<u8>
+}
+
+#[inline(never)]
+fn genpdf(event: FuncInput) -> FuncResponse {
+    let name = event.name;
+    let purchases: Vec<(&String, &f64)> = event.purchases.iter().zip(event.price.iter()).collect();
+
     let mut result: Vec<u8> = vec![];
     let mut doc = Document::with_version("1.5");
     let pages_id = doc.new_object_id();
@@ -16,21 +45,50 @@ fn main() {
             "F1" => font_id,
         },
     });
+
+    let mut pdf_ops = vec![
+        Operation::new("BT", vec![]),
+        Operation::new("Tf", vec!["F1".into(), 24.into()]),
+        Operation::new("Td", vec![50.into(), 800.into()]),
+        Operation::new("Tj", vec![Object::string_literal(format!("Fake Bill for: {}", name))]),
+        Operation::new("ET", vec![]),
+        Operation::new("BT", vec![]),
+        Operation::new("Tf", vec!["F1".into(), 12.into()]),
+        Operation::new("Td", vec![50.into(), 720.into()]),
+        Operation::new("Tj", vec![Object::string_literal("-------------------------------------------------------------------")]),
+        Operation::new("ET", vec![]),
+        Operation::new("BT", vec![]),
+        Operation::new("Tf", vec!["F1".into(), 12.into()]),
+        Operation::new("Td", vec![50.into(), 700.into()]),
+        Operation::new("Tj", vec![Object::string_literal("Purchases:")]),
+        Operation::new("ET", vec![]),
+    ];
+    let mut purchase_ops: Vec<Operation> = vec![];
+    let mut idx = 700 - 12;
+    for (purchase, price) in purchases.iter() {
+        purchase_ops.push(Operation::new("BT", vec![]));
+        purchase_ops.push(Operation::new("Tf", vec!["F1".into(), 12.into()]));
+        purchase_ops.push(Operation::new("Td", vec![50.into(), idx.into()]));
+        purchase_ops.push(Operation::new("Tj", vec![Object::string_literal(format!("{}                                                        ${:.2}", purchase, price))]));
+        purchase_ops.push(Operation::new("ET", vec![]),);
+        idx -= 12;
+    }
+    pdf_ops.extend(purchase_ops);
+
     let content = Content {
-        operations: vec![
-            Operation::new("BT", vec![]),
-            Operation::new("Tf", vec!["F1".into(), 48.into()]),
-            Operation::new("Td", vec![100.into(), 600.into()]),
-            Operation::new("Tj", vec![Object::string_literal("Hello World!")]),
-            Operation::new("ET", vec![]),
-        ],
+        operations: pdf_ops,
     };
+
     let content_id = doc.add_object(Stream::new(dictionary! {}, content.encode().unwrap()));
     let page_id = doc.add_object(dictionary! {
         "Type" => "Page",
         "Parent" => pages_id,
         "Contents" => content_id,
     });
+    //let img_stream = Stream::new(dictionary! {}, EMBED_IMAGE.to_vec());
+    let img_stream = xobject::image_from(EMBED_IMAGE.to_vec()).unwrap();
+    doc.insert_image(page_id, img_stream, (100.0, 210.0), (100.0+(814.0/3.0), 210.0+(613.0/3.0))).unwrap();
+
     let pages = dictionary! {
         "Type" => "Pages",
         "Kids" => vec![page_id.into()],
@@ -44,9 +102,22 @@ fn main() {
         "Pages" => pages_id,
     });
     doc.trailer.set("Root", catalog_id);
-    doc.compress();
+    //doc.compress();
     doc.save_to(&mut result).unwrap();
     //doc.save("test.pdf").unwrap();
+    //println!("{:?}", result);
 
-    println!("{:?}", result);
+    FuncResponse{ resp: result }
+}
+
+fn main() {
+    let handler = WasmHandler::new(&genpdf);
+    handler.run_with_format(1024*512, MsgPack);
+    /*
+    genpdf(FuncInput{
+        name: "test".to_string(),
+        purchases: vec!["test".to_string()],
+        price: vec![10.10],
+    });
+    */
 }
