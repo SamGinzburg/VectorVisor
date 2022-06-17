@@ -2440,6 +2440,7 @@ ulong get_clock() {
         let mut fast_func_size: HashMap<String, u32> = HashMap::new();
         let mut fast_func_called: HashMap<String, HashSet<String>> = HashMap::new();
         let mut fastcall_called_func_sizes: HashMap<String, Vec<u32>> = HashMap::new();
+        
         for fastfunc in fast_function_set.iter() {
             let (func, func_size, func_called) = self.emit_function(
                 self.func_map.get(&fastfunc.to_string()).unwrap(),
@@ -2467,10 +2468,11 @@ ulong get_clock() {
 
         // Compute how many instructions each fastcall contains (necessary for packing functions)
         // This is needed for the function packing
-
+        let mut iterations = 5;
         loop {
             // Go through each fastcall, tracking which ones we have known maximum possible sizes for
             let mut counter = 0;
+            let mut seen_funcs = HashSet::new();
             for fastfunc in fast_function_set.iter() {
                 let funcs_called = fast_func_called.get(&fastfunc as &str).unwrap();
                 // we know the max possible size for this function already
@@ -2481,8 +2483,16 @@ ulong get_clock() {
                     // If so - we remove the func from the set
                     let mut new_called_set: HashSet<String> = HashSet::new();
                     for called_func in funcs_called {
+                        seen_funcs.insert(called_func.clone());
                         // Get all the funcs that this func calls
-                        let funcs_called = fast_func_called.get(&called_func as &str).unwrap();
+                        /*
+                        let funcs_called: Vec<&String> = fast_func_called
+                                            .get(&called_func as &str).unwrap()
+                                            .iter().filter(|func| !seen_funcs.contains(*func)).collect();
+                        */
+                        let funcs_called = fast_func_called
+                                            .get(&called_func as &str).unwrap(); 
+                        
                         // If len==0, then the size is known, else if len>0, then we need to keep it in the set
                         if funcs_called.len() != 0 {
                             new_called_set.insert(called_func.to_string());
@@ -2500,10 +2510,11 @@ ulong get_clock() {
                 }
             }
 
-            // if all sizes are known, then that means we know all the sizes
-            if counter == fast_function_set.len() {
+            // stop when all sizes are known
+            if counter == fast_function_set.len() || iterations == 0 {
                 break;
             }
+            iterations -= 1;
         }
 
         // Now update fast_func_size with max possible sizes
@@ -2517,7 +2528,7 @@ ulong get_clock() {
                 .unwrap();
             *fast_func_size.entry(fastfunc.to_string()).or_insert(0) += max;
         }
-
+        
         // Finish fastcall register demotion pass
         for fastfunc in fast_function_set.iter() {
             let (func, func_size, func_called) = self.emit_function(
