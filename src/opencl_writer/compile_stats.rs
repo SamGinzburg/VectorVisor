@@ -22,6 +22,18 @@ pub fn function_stats(
     func_map: &HashMap<String, wast::Func>,
     indirect_call_mapping: &HashMap<u32, &wast::Index>,
 ) -> (u32, u32, u32, u32, u32, u32, u32) {
+    return function_stats_helper(writer_ctx, curr_fn_name, func, fastcalls, func_map, indirect_call_mapping, &mut HashSet::new())
+}
+
+pub fn function_stats_helper(
+    writer_ctx: &OpenCLCWriter,
+    curr_fn_name: String,
+    func: &wast::Func,
+    fastcalls: &HashSet<String>,
+    func_map: &HashMap<String, wast::Func>,
+    indirect_call_mapping: &HashMap<u32, &wast::Index>,
+    visited: &mut HashSet<String>,
+) -> (u32, u32, u32, u32, u32, u32, u32) {
     let mut total_instr_count: u32;
     let mut total_func_count: u32 = 0;
     let mut total_fastcall_count: u32 = 0;
@@ -57,10 +69,11 @@ pub fn function_stats(
                             wast::Index::Num(val, _) => format!("func_{}", val),
                         };
 
-                        if fastcalls.contains(id) {
+                        if fastcalls.contains(id) && !visited.contains(id) {
                             total_fastcall_count += 1;
                             // get the func
                             let func = func_map.get(id).unwrap();
+                            visited.insert(id.to_string());
                             // Look up the compile stats for the fastcall and add it to our own
                             let (
                                 nested_total_instr_count,
@@ -70,13 +83,14 @@ pub fn function_stats(
                                 nested_total_block_count,
                                 nested_total_loop_count,
                                 nested_total_local_size,
-                            ) = function_stats(
+                            ) = function_stats_helper(
                                 writer_ctx,
-                                curr_fn_name.clone(),
+                                id.to_string(),
                                 func,
                                 fastcalls,
                                 func_map,
                                 indirect_call_mapping,
+                                visited
                             );
                             total_instr_count += nested_total_instr_count;
                             total_func_count += nested_total_func_count;
