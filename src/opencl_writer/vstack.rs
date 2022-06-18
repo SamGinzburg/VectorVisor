@@ -1051,6 +1051,10 @@ impl<'a> StackCtx {
                                                 stack_sizes.pop();
                                                 stack_sizes.push(StackType::i32);
                                             },
+                                            &"sched_yield"            => {
+                                                stack_sizes.push(StackType::i32);
+                                                update_counter(&mut current_i32_count, &mut max_i32_count);
+                                            },
                                             _ => panic!("Unidentified WASI fn name: {:?} (vstack)", wasi_fn_name),
                                         }
                                     },

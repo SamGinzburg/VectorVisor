@@ -645,3 +645,16 @@ pub fn emit_clock_time_get_post(
 
     ret_str
 }
+
+pub fn emit_sched_yield(
+    _writer: &opencl_writer::OpenCLCWriter,
+    stack_ctx: &mut StackCtx,
+    _debug: bool,
+) -> String {
+    let mut ret_str = String::from("");
+
+    let result_register = stack_ctx.vstack_alloc(StackType::i32);
+    ret_str += &format!("\t{} = {};\n", result_register, "0");
+
+    ret_str
+}

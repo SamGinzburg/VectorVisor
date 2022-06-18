@@ -76,6 +76,7 @@ lazy_static! {
         m.insert("fd_prestat_dir_name", true);    // 5
         m.insert("random_get", true);             // 6
         m.insert("clock_time_get", true);         // 7
+        m.insert("sched_yield", true);            // 8
         m.insert("serverless_invoke", true);      // 9999
         m.insert("serverless_response", true);    // 10000
         m
@@ -92,6 +93,7 @@ pub enum WasmHypercallId {
     fd_prestat_dir_name = 5,
     random_get = 6,
     clock_time_get = 7,
+    sched_yield= 8,
     serverless_invoke = 9999,
     serverless_response = 10000,
 }
@@ -659,6 +661,10 @@ impl<'a> OpenCLCWriter<'_> {
                                         &"fd_prestat_dir_name"    => self.emit_hypercall(WasmHypercallId::fd_prestat_dir_name, stack_ctx, hypercall_id_count, fn_name.to_string(), false, debug),
                                         &"random_get"             => self.emit_hypercall(WasmHypercallId::random_get, stack_ctx, hypercall_id_count, fn_name.to_string(), false, debug),
                                         &"clock_time_get"         => self.emit_hypercall(WasmHypercallId::clock_time_get, stack_ctx, hypercall_id_count, fn_name.to_string(), false, debug),
+                                        &"sched_yield"            => {
+                                            // sched_yield is a special case, we just return an i32 value, and don't perform any context saving
+                                            emit_sched_yield(self, stack_ctx, debug)
+                                        },
                                         &"serverless_invoke"      => self.emit_hypercall(WasmHypercallId::serverless_invoke, stack_ctx, hypercall_id_count, fn_name.to_string(), false, debug),
                                         &"serverless_response"    => self.emit_hypercall(WasmHypercallId::serverless_response, stack_ctx, hypercall_id_count, fn_name.to_string(), false, debug),
                                         _ => panic!("Unidentified WASI fn name: {:?}", wasi_fn_name),
