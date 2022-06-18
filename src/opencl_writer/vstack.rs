@@ -1052,6 +1052,8 @@ impl<'a> StackCtx {
                                                 stack_sizes.push(StackType::i32);
                                             },
                                             &"sched_yield"            => {
+                                                // sched_yield is special cased, and not treated as an actual call
+                                                num_hypercalls -= 1;
                                                 stack_sizes.push(StackType::i32);
                                                 update_counter(&mut current_i32_count, &mut max_i32_count);
                                             },
