@@ -28,17 +28,28 @@ var NUM_PARAMS = 64
 
 var client = &http.Client{}
 
+var letterRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+
+func RandString(n int) string {
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = letterRunes[rand.Intn(len(letterRunes))]
+	}
+	return string(b)
+}
+
 func CreatePayload() Payload {
 	purchases := make([]string, 0, 10)
 	prices := make([]float64, 0, 10)
-
+	max := 15.00
+	min := 7.00
 	for i := 0; i < 5; i++ {
-		purchases = append(purchases, "test");
-		prices = append(prices, 10.10);
+		purchases = append(purchases, RandString(7));
+		prices = append(prices, min + rand.Float64() * (max - min));
 	}
 
 	return Payload{
-		Text: "test",
+		Text: RandString(10),
 		Purchases: purchases,
 		Price: prices,
 	}
@@ -174,8 +185,6 @@ func main() {
 		request_body, _ := msgpack.Marshal(p)
 		reqs[i] = request_body
 	}
-
-	fmt.Printf("%s\n", CreatePayload());
 
 	tr := &http.Transport{
 		MaxIdleConnsPerHost: num_vms * 2 * num_vmgroups,
