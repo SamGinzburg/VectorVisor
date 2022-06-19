@@ -153,6 +153,7 @@ pub struct SeralizedProgram {
     pub num_compiled_funcs: u32,
     pub globals_buffer_size: u32,
     pub interleave: u32,
+    pub data_segment: Vec<u8>
 }
 
 #[derive(Serialize, Deserialize)]
@@ -163,25 +164,27 @@ pub struct PartitionedSeralizedProgram {
     pub num_compiled_funcs: u32,
     pub globals_buffer_size: u32,
     pub interleave: u32,
+    pub data_segment: Vec<u8>,
 }
 
 #[derive(Clone)]
 pub enum InputProgram {
-    Binary(Vec<u8>),
-    Text(String, String),
+    Binary(Vec<u8>, Vec<u8>),
+    Text(String, String, Vec<u8>),
     Partitioned(
         HashMap<u32, String>,
         String,
         HashMap<u32, (u32, u32, u32, u32, u32, u32, u32)>,
         HashMap<u32, u32>,
+        Vec<u8>
     ),
-    PartitionedBinary(HashMap<u32, Vec<u8>>, HashMap<u32, u32>),
+    PartitionedBinary(HashMap<u32, Vec<u8>>, HashMap<u32, u32>, Vec<u8>),
 }
 
 #[derive(Clone)]
 pub enum ProgramType {
-    Standard(ocl::core::Program),
-    Partitioned(HashMap<u32, ocl::core::Program>, HashMap<u32, u32>),
+    Standard(ocl::core::Program, Vec<u8>),
+    Partitioned(HashMap<u32, ocl::core::Program>, HashMap<u32, u32>, Vec<u8>),
 }
 
 #[derive(Clone)]
@@ -272,20 +275,33 @@ impl OpenCLRunner {
 
             // decide which vector runner to use based off the compiled program enum...
             let status = match program {
-                ProgramType::Standard(program) => final_runner.run_vector_vms(
-                    stack_frames_size,
-                    local_work_group,
-                    program,
-                    &leaked_command_queue,
-                    hypercall_buffer_read_buffer,
-                    hypercall_input_buffer,
-                    hcall_size.try_into().unwrap(),
-                    context,
-                    print_return,
-                    vm_sender,
-                    vm_recv,
-                ),
-                ProgramType::Partitioned(program_map, kernel_partition_mapping) => final_runner
+                ProgramType::Standard(program, data_segment) => {
+                    let mut program_map: HashMap<u32, ocl::core::Program> = HashMap::new();
+                    program_map.insert(0, program.clone());
+                    program_map.insert(99999, program);
+
+                    let mut kernel_partition_mapping: HashMap<u32, u32> = HashMap::new();
+                    kernel_partition_mapping.insert(0, 0);
+
+                    final_runner.run_partitioned_vector_vms(
+                        stack_frames_size,
+                        local_work_group,
+                        mexec,
+                        program_map,
+                        kernel_partition_mapping,
+                        &leaked_command_queue,
+                        hypercall_buffer_read_buffer,
+                        hypercall_input_buffer,
+                        hcall_size.try_into().unwrap(),
+                        &context,
+                        print_return,
+                        vm_sender,
+                        vm_recv,
+                        req_timeout,
+                        data_segment
+                    )
+                },
+                ProgramType::Partitioned(program_map, kernel_partition_mapping, data_segment) => final_runner
                     .run_partitioned_vector_vms(
                         stack_frames_size,
                         local_work_group,
@@ -301,6 +317,7 @@ impl OpenCLRunner {
                         vm_sender,
                         vm_recv,
                         req_timeout,
+                        data_segment
                     ),
             };
 
@@ -607,7 +624,7 @@ impl OpenCLRunner {
 
         // compile the GPU kernel(s)
         let program_to_run = match &self.input_program {
-            InputProgram::Text(program, fastcall_header) => {
+            InputProgram::Text(program, fastcall_header, data_segment) => {
                 // create the build log
                 File::create(format!("recent.buildlog")).unwrap();
 
@@ -700,6 +717,7 @@ impl OpenCLRunner {
                     entry_point: self.entry_point,
                     num_compiled_funcs: num_compiled_funcs,
                     interleave: self.is_memory_interleaved,
+                    data_segment: data_segment.to_vec(),
                 };
 
                 let serialized_program = bincode::serialize(&program_to_serialize).unwrap();
@@ -710,9 +728,9 @@ impl OpenCLRunner {
                 let mut file = File::create(format!("{}.cl", input_filename)).unwrap();
                 file.write_all(&program.clone().into_bytes()).unwrap();
 
-                ProgramType::Standard(final_program)
+                ProgramType::Standard(final_program, data_segment.to_vec())
             }
-            InputProgram::Binary(b) => {
+            InputProgram::Binary(b, data_segment) => {
                 let binary_start = std::time::Instant::now();
 
                 let program_to_run =
@@ -742,13 +760,14 @@ impl OpenCLRunner {
                     "Time to load program from binary: {:?}",
                     binary_prep_end - binary_start
                 );
-                ProgramType::Standard(program_to_run)
+                ProgramType::Standard(program_to_run, data_segment.to_vec())
             }
             InputProgram::Partitioned(
                 map,
                 fastcall_header,
                 compile_stats_map,
                 kernel_partition_mappings,
+                data_segment,
             ) => {
                 let mut final_hashmap: HashMap<u32, ocl::core::Program> = HashMap::new();
                 let mut final_binarized_hashmap: HashMap<u32, Vec<u8>> = HashMap::new();
@@ -947,15 +966,16 @@ impl OpenCLRunner {
                     entry_point: self.entry_point,
                     num_compiled_funcs: num_compiled_funcs,
                     interleave: self.is_memory_interleaved,
+                    data_segment: data_segment.to_vec(),
                 };
 
                 let serialized_program = bincode::serialize(&program_to_serialize).unwrap();
                 let mut file = File::create(format!("{}.partbin", input_filename)).unwrap();
                 file.write_all(&serialized_program).unwrap();
 
-                ProgramType::Partitioned(final_hashmap, kernel_partition_mappings.clone())
+                ProgramType::Partitioned(final_hashmap, kernel_partition_mappings.clone(), data_segment.to_vec())
             }
-            InputProgram::PartitionedBinary(map, kernel_partition_mappings) => {
+            InputProgram::PartitionedBinary(map, kernel_partition_mappings, data_segment) => {
                 let mut final_hashmap: HashMap<u32, ocl::core::Program> = HashMap::new();
                 // create the build log
                 File::create(format!("recent.buildlog")).unwrap();
@@ -1011,720 +1031,11 @@ impl OpenCLRunner {
                     binary_prep_end - binary_start
                 ));
 
-                ProgramType::Partitioned(final_hashmap, kernel_partition_mappings.clone())
+                ProgramType::Partitioned(final_hashmap, kernel_partition_mappings.clone(), data_segment.to_vec())
             }
         };
 
         return (program_to_run, device_id);
-    }
-
-    /*
-     * This function actually runs the vectorized VMs, it spins off a thread that
-     * sits inside of a while loop, waiting for input to be sent to it on a channel.
-     *
-     */
-    pub fn run_vector_vms(
-        self: &'static OpenCLRunner,
-        per_vm_stack_frames_size: u32,
-        local_work_group: usize,
-        program: ocl::core::Program,
-        queue: &'static CommandQueue,
-        hypercall_buffer_read_buffer: &'static mut [u8],
-        hypercall_input_buffer: &'static mut [u8],
-        hypercall_buffer_size: u32,
-        ctx: &ocl::core::Context,
-        print_return: bool,
-        vm_sender: Arc<Vec<Mutex<Sender<VmSenderType>>>>,
-        vm_recv: Arc<Vec<Mutex<Receiver<VmRecvType>>>>,
-    ) -> VMMRuntimeStatus {
-        // we have the compiled program & context, we now can set up the kernels...
-        let data_kernel = ocl::core::create_kernel(&program, "data_init").unwrap();
-        let start_kernel = ocl::core::create_kernel(&program, "wasm_entry").unwrap();
-
-        let mut stack_pointer_temp = vec![0u64; self.num_vms as usize];
-        let mut overhead_tracker: &'static mut [u64] =
-                Box::leak(vec![0u64; self.num_vms as usize].into_boxed_slice());
-        let mut entry_point_temp = vec![0u32; self.num_vms as usize];
-        let mut hypercall_num_temp = vec![0i32; self.num_vms as usize];
-        let mut hypercall_retval_temp = vec![0i32; self.num_vms as usize];
-        let mut sp_exit_flag;
-        let mut entry_point_exit_flag;
-        let vm_slice: Vec<u32> = std::ops::Range {
-            start: 0,
-            end: (self.num_vms),
-        }
-        .collect();
-        let mut hypercall_sender = vec![];
-        let overhead_tracker_buffer: Arc<UnsafeCellWrapper<u64>> =
-            Arc::new(UnsafeCellWrapper::new(overhead_tracker));
-        let hcall_read_buffer: Arc<UnsafeCellWrapper<u8>> =
-            Arc::new(UnsafeCellWrapper::new(hypercall_buffer_read_buffer));
-        let hcall_async_buffer: Arc<UnsafeCellWrapper<u8>> =
-            Arc::new(UnsafeCellWrapper::new(hypercall_input_buffer));
-
-        let mut total_gpu_execution_time: u64 = 0;
-        let mut queue_submit_delta: u64 = 0;
-
-        let mut hcall_execution_time: u128 = 0;
-        let mut vmm_overhead: u128 = 0;
-
-        /*
-         * Allocate the hypercall_buffer at the last minute, 16KiB per VM
-         *
-         */
-        let hypercall_buffer = unsafe {
-            ocl::core::create_buffer::<_, u8>(
-                ctx,
-                ocl::core::MEM_READ_WRITE,
-                (hypercall_buffer_size * self.num_vms) as usize,
-                None,
-            )
-            .unwrap()
-        };
-
-        /*
-         * Allocate the buffer to return values
-         */
-        let hcall_retval_buffer = unsafe {
-            ocl::core::create_buffer::<_, u8>(
-                ctx,
-                ocl::core::MEM_READ_WRITE,
-                (4 * self.num_vms) as usize,
-                None,
-            )
-            .unwrap()
-        };
-
-        /*
-         * Start up N threads to serve WASI hypercalls
-         *
-         * The WASI contexts are not thread safe, so we partition the VMs evenly across each
-         * thread, to ensure an even workload. Thread 0 = (0...N/4) VMs, where N = total number of VMs
-         *
-         * The indexing is as follows:
-         *
-         * vm_id % N => This gets the index in hypercall_sender to send to
-         *
-         * Then, inside of each thread, the vm_id % (N/4) gets the WASI context
-         *
-         */
-        let num_threads = if num_cpus::get() as u32 > self.num_vms {
-            self.num_vms as u32
-        } else {
-            num_cpus::get() as u32
-        };
-
-        let thread_pool = rayon::ThreadPoolBuilder::new()
-            .num_threads(num_threads.try_into().unwrap())
-            .build()
-            .unwrap();
-
-        let number_vms = self.num_vms.clone();
-        let (result_sender, result_receiver): (
-            SyncSender<HyperCallResult>,
-            SyncReceiver<HyperCallResult>,
-        ) = bounded(0);
-        for idx in 0..num_threads {
-            let (sender, recv): (SyncSender<HyperCall>, SyncReceiver<HyperCall>) = unbounded();
-            let sender_copy = result_sender.clone();
-            hypercall_sender.push(sender.clone());
-            let vm_sender_copy = vm_sender.clone();
-            let vm_recv_copy = vm_recv.clone();
-            let async_buffer = hcall_async_buffer.clone();
-            thread_pool.spawn(move || {
-                let receiver = recv.clone();
-                // create the WASI contexts for this thread
-                let mut wasi_ctxs = vec![];
-                // we divide up the number of VMs per thread evenly
-                for vm in 0..(number_vms / num_threads) {
-                    //let vm_index = (vm + idx * (number_vms/num_threads)) as usize;
-                    wasi_ctxs.push(VectorizedVM::new(
-                        vm,
-                        hypercall_buffer_size,
-                        number_vms,
-                        vm_sender_copy.clone(),
-                        vm_recv_copy.clone(),
-                    ));
-                }
-
-                let waker = futures::task::noop_waker();
-                let mut cx = std::task::Context::from_waker(&waker);
-                let mut avail_vms = true;
-                let mut avail_vm_count = number_vms / num_threads;
-
-                loop {
-                    // Check if we have an incoming function input to write to the hcall buffer
-                    // Each thread polls a set of VMs to see if we can write to the hcall buf yet
-                    // We will only poll if we know we have open slots in our group of VMs
-                    if avail_vms {
-                        for vm_idx in 0..(number_vms / num_threads) {
-                            match vm_recv_copy[vm_idx as usize]
-                                .lock()
-                                .unwrap()
-                                .poll_recv(&mut cx)
-                            {
-                                Poll::Ready(Some((msg, _, uuid))) => {
-                                    // Check if this VM has an input ready already
-                                    let wasi_context = &mut wasi_ctxs[vm_idx as usize];
-
-                                    // Queue the input in the VM
-                                    let buffer = async_buffer.clone();
-                                    let deref_buf = unsafe { &mut *buffer.buf.get() };
-                                    wasi_context.queue_request(msg, *deref_buf, uuid);
-
-                                    // Update the count of available VMs
-                                    avail_vm_count -= 1;
-                                    if avail_vm_count == 0 {
-                                        avail_vms = false;
-                                        break;
-                                    }
-                                }
-                                _ => (),
-                            }
-                        }
-                    }
-
-                    // Check to see if we have a hypercall to dispatch for the VM
-                    match receiver.try_recv() {
-                        Ok(mut m) => {
-                            let wasi_context =
-                                &mut wasi_ctxs[(m.vm_id % (number_vms / num_threads)) as usize];
-                            wasi_context.dispatch_hypercall(&mut m, &sender_copy.clone());
-                        }
-                        _ => {
-                            // if the main sending thread is closed, we will get an error
-                            // we are handling that error elsewhere, so we can just exit the thread in that case
-                            break;
-                        }
-                    };
-
-                    // Check to see if we just replied via serverless_response
-                    // If so we can reset avail_vms && avail_vm_count
-                    for vm_idx in 0..(number_vms / num_threads) {
-                        let wasi_context = &mut wasi_ctxs[vm_idx as usize];
-                        if wasi_context.is_avail() == true {
-                            avail_vm_count += 1;
-                            if avail_vm_count == number_vms / num_threads {
-                                avail_vms = true;
-                                break;
-                            }
-                        }
-                    }
-                }
-            });
-        }
-
-        let buffers = match &self.buffers {
-            Some(b) => b,
-            _ => panic!("run_vector_vms called before allocating buffers for kernels..."),
-        };
-
-        println!("{:?}", buffers.stack_buffer);
-
-        let default_hcall_size: [u8; 4] =
-            unsafe { std::mem::transmute::<u32, [u8; 4]>(hypercall_buffer_size as u32) };
-        let default_sp: [u8; 8] = unsafe { std::mem::transmute((0 as u64).to_le()) };
-        let default_hypercall_num: [u8; 4] = unsafe { std::mem::transmute((-2 as i32).to_le()) };
-        // points to _start
-        let default_entry_point: [u8; 4] =
-            unsafe { std::mem::transmute((self.entry_point as i32).to_le()) };
-
-        println!("{:?}", default_entry_point);
-        // first, set up the default values for the VMs
-        unsafe {
-            for idx in 0..self.num_vms {
-                println!("setting up VM: {}", idx);
-                // sizeof(ulong) * 8 - NOTE: if we update sp to be 4 bytes, we have to change this too
-                let sp_result = ocl::core::enqueue_write_buffer(
-                    &queue,
-                    &buffers.sp,
-                    true,
-                    (idx * 8) as usize,
-                    &default_sp,
-                    None::<Event>,
-                    None::<&mut Event>,
-                );
-
-                match sp_result {
-                    Err(e) => panic!("sp_result, Error: {}", e),
-                    _ => (),
-                }
-
-                // set the stack frame: stack_frames[sfp - 1] = sp
-                let stack_frame_result = ocl::core::enqueue_write_buffer(
-                    &queue,
-                    &buffers.stack_frames,
-                    true,
-                    (idx * per_vm_stack_frames_size) as usize,
-                    &default_sp,
-                    None::<Event>,
-                    None::<&mut Event>,
-                );
-
-                match stack_frame_result {
-                    Err(e) => panic!("stack_frame_result, Error: {}", e),
-                    _ => (),
-                }
-
-                // set the entry point!
-                let entry_point_result = ocl::core::enqueue_write_buffer(
-                    &queue,
-                    &buffers.entry,
-                    true,
-                    (idx * 4) as usize,
-                    &default_entry_point,
-                    None::<Event>,
-                    None::<&mut Event>,
-                );
-
-                match entry_point_result {
-                    Err(e) => panic!("entry_point_result, Error: {}", e),
-                    _ => (),
-                }
-
-                // set the default hypercall number to -2
-                let hypercall_num_result = ocl::core::enqueue_write_buffer(
-                    &queue,
-                    &buffers.hypercall_num,
-                    true,
-                    (idx * 4) as usize,
-                    &default_hypercall_num,
-                    None::<Event>,
-                    None::<&mut Event>,
-                );
-
-                match hypercall_num_result {
-                    Err(e) => panic!("hypercall_num_result, Error: {}", e),
-                    _ => (),
-                }
-
-                // set the hcall_size
-                let hcall_size_result = ocl::core::enqueue_write_buffer(
-                    &queue,
-                    &buffers.hcall_size,
-                    true,
-                    (idx * 4) as usize,
-                    &default_hcall_size,
-                    None::<Event>,
-                    None::<&mut Event>,
-                );
-
-                match hcall_size_result {
-                    Err(e) => panic!("hcall_size_result, Error: {}", e),
-                    _ => (),
-                }
-            }
-        }
-
-        let global_dims = &[self.num_vms as usize, 1, 1];
-        let local_dims = if local_work_group == 999999 {
-            None
-        } else {
-            Some([local_work_group, 1, 1])
-        };
-
-        // start counting only when all VM init is finished
-        let e2e_time_start = std::time::Instant::now();
-
-        // run the data kernel to init the memory
-        ocl::core::set_kernel_arg(&data_kernel, 0, ArgVal::mem(&buffers.stack_buffer)).unwrap();
-        ocl::core::set_kernel_arg(&data_kernel, 1, ArgVal::mem(&buffers.heap_buffer)).unwrap();
-        ocl::core::set_kernel_arg(&data_kernel, 2, ArgVal::mem(&buffers.globals_buffer)).unwrap();
-        ocl::core::set_kernel_arg(&data_kernel, 3, ArgVal::mem(&buffers.current_mem)).unwrap();
-        ocl::core::set_kernel_arg(&data_kernel, 4, ArgVal::mem(&buffers.max_mem)).unwrap();
-        ocl::core::set_kernel_arg(&data_kernel, 5, ArgVal::mem(&buffers.is_calling)).unwrap();
-        ocl::core::set_kernel_arg(&data_kernel, 6, ArgVal::mem(&buffers.sfp)).unwrap();
-
-        let mut profiling_event = ocl::Event::empty();
-        unsafe {
-            ocl::core::enqueue_kernel(
-                &queue,
-                &data_kernel,
-                1,
-                None,
-                global_dims,
-                local_dims,
-                None::<Event>,
-                Some(&mut profiling_event),
-            )
-            .unwrap();
-        }
-
-        ocl::core::wait_for_event(&profiling_event).unwrap();
-        let start_data_kernel = profiling_event
-            .profiling_info(ocl::enums::ProfilingInfo::Submit)
-            .unwrap()
-            .time()
-            .unwrap();
-        let end_data_kernel = profiling_event
-            .profiling_info(ocl::enums::ProfilingInfo::End)
-            .unwrap()
-            .time()
-            .unwrap();
-        total_gpu_execution_time += end_data_kernel - start_data_kernel;
-        println!("Finished data_init kernel");
-
-        // set up the clArgs for the wasm_entry kernel
-        ocl::core::set_kernel_arg(&start_kernel, 0, ArgVal::mem(&buffers.stack_buffer)).unwrap();
-        ocl::core::set_kernel_arg(&start_kernel, 1, ArgVal::mem(&buffers.stack_buffer)).unwrap();
-        ocl::core::set_kernel_arg(&start_kernel, 2, ArgVal::mem(&buffers.heap_buffer)).unwrap();
-        ocl::core::set_kernel_arg(&start_kernel, 3, ArgVal::mem(&buffers.heap_buffer)).unwrap();
-        ocl::core::set_kernel_arg(&start_kernel, 4, ArgVal::mem(&hypercall_buffer)).unwrap();
-        ocl::core::set_kernel_arg(&start_kernel, 5, ArgVal::mem(&buffers.globals_buffer)).unwrap();
-        ocl::core::set_kernel_arg(&start_kernel, 6, ArgVal::mem(&buffers.stack_frames)).unwrap();
-        ocl::core::set_kernel_arg(&start_kernel, 7, ArgVal::mem(&buffers.sp)).unwrap();
-        ocl::core::set_kernel_arg(&start_kernel, 8, ArgVal::mem(&buffers.sfp)).unwrap();
-        ocl::core::set_kernel_arg(&start_kernel, 9, ArgVal::mem(&buffers.call_stack)).unwrap();
-        ocl::core::set_kernel_arg(&start_kernel, 10, ArgVal::mem(&buffers.call_return_stack))
-            .unwrap();
-        ocl::core::set_kernel_arg(&start_kernel, 11, ArgVal::mem(&buffers.hypercall_num)).unwrap();
-        ocl::core::set_kernel_arg(
-            &start_kernel,
-            12,
-            ArgVal::mem(&buffers.hypercall_continuation),
-        )
-        .unwrap();
-        ocl::core::set_kernel_arg(&start_kernel, 13, ArgVal::mem(&buffers.current_mem)).unwrap();
-        ocl::core::set_kernel_arg(&start_kernel, 14, ArgVal::mem(&buffers.max_mem)).unwrap();
-        ocl::core::set_kernel_arg(&start_kernel, 15, ArgVal::mem(&buffers.is_calling)).unwrap();
-        ocl::core::set_kernel_arg(&start_kernel, 16, ArgVal::mem(&buffers.entry)).unwrap();
-        ocl::core::set_kernel_arg(&start_kernel, 17, ArgVal::mem(&hcall_retval_buffer)).unwrap();
-        ocl::core::set_kernel_arg(&start_kernel, 18, ArgVal::mem(&buffers.hcall_size)).unwrap();
-
-        // this isn't used here at all, just needed for constructing hypercalls
-        // for tracking profiling information
-        let called_funcs = HashSet::new();
-
-        // now the data in the program has been initialized, we can run the main loop
-        println!("start: {}", Utc::now().timestamp());
-        loop {
-            // run the kernel!
-            // warning - bugged kernels can cause GPU driver hangs! Will result in the driver restarting...
-            // Hangs are frequently a sign of a segmentation faults from inside of the GPU kernel
-            // Unfortunately the OpenCL API doesn't give us a good way to identify what happened - the OS logs (dmesg) do have a record of this though
-            profiling_event = ocl::Event::empty();
-            unsafe {
-                ocl::core::enqueue_kernel(
-                    &queue,
-                    &start_kernel,
-                    1,
-                    None,
-                    global_dims,
-                    local_dims,
-                    None::<Event>,
-                    Some(&mut profiling_event),
-                )
-                .unwrap();
-            }
-
-            ocl::core::wait_for_event(&profiling_event).unwrap();
-            let queue_start_kernel = profiling_event
-                .profiling_info(ocl::enums::ProfilingInfo::Queued)
-                .unwrap()
-                .time()
-                .unwrap();
-            let start_start_kernel = profiling_event
-                .profiling_info(ocl::enums::ProfilingInfo::Start)
-                .unwrap()
-                .time()
-                .unwrap();
-            let end_start_kernel = profiling_event
-                .profiling_info(ocl::enums::ProfilingInfo::End)
-                .unwrap()
-                .time()
-                .unwrap();
-            total_gpu_execution_time += end_start_kernel - queue_start_kernel;
-            queue_submit_delta += start_start_kernel - queue_start_kernel;
-            // upon exiting we check the stack pointer for each VM
-            let vmm_pre_overhead = std::time::Instant::now();
-
-            unsafe {
-                ocl::core::enqueue_read_buffer(
-                    &queue,
-                    &buffers.sp,
-                    true,
-                    0,
-                    &mut stack_pointer_temp,
-                    None::<Event>,
-                    None::<&mut Event>,
-                )
-                .unwrap();
-                ocl::core::enqueue_read_buffer(
-                    &queue,
-                    &buffers.entry,
-                    true,
-                    0,
-                    &mut entry_point_temp,
-                    None::<Event>,
-                    None::<&mut Event>,
-                )
-                .unwrap();
-                ocl::core::enqueue_read_buffer(
-                    &queue,
-                    &buffers.hypercall_num,
-                    true,
-                    0,
-                    &mut hypercall_num_temp,
-                    None::<Event>,
-                    None::<&mut Event>,
-                )
-                .unwrap();
-            }
-
-            sp_exit_flag = true;
-            for sp in &stack_pointer_temp {
-                sp_exit_flag = (*sp == (0 as u64)) & sp_exit_flag;
-            }
-
-            // if all (sp) == 0, exit
-            if sp_exit_flag {
-                break;
-            }
-
-            // if all entry_point == -1, also exit
-            entry_point_exit_flag = true;
-            for e in &entry_point_temp {
-                entry_point_exit_flag = (*e as i32 == (-1)) & entry_point_exit_flag;
-            }
-
-            if entry_point_exit_flag {
-                break;
-            }
-            let vmm_pre_overhead_end = std::time::Instant::now();
-            vmm_overhead += (vmm_pre_overhead_end - vmm_pre_overhead).as_nanos();
-
-            // read the hypercall_buffer
-            let start_hcall_dispatch = std::time::Instant::now();
-
-            unsafe {
-                let buf: &mut [u8] = *hcall_read_buffer.buf.get();
-                ocl::core::enqueue_read_buffer(
-                    &queue,
-                    &hypercall_buffer,
-                    true,
-                    0,
-                    buf,
-                    None::<Event>,
-                    None::<&mut Event>,
-                )
-                .unwrap();
-            }
-
-            // now it is time to dispatch hypercalls
-            vm_slice.as_slice().iter().for_each(|vm_id| {
-                let hypercall_id = match hypercall_num_temp[*vm_id as usize] as i64 {
-                    0 => WasiSyscalls::FdWrite,
-                    1 => WasiSyscalls::ProcExit,
-                    2 => WasiSyscalls::EnvironSizeGet,
-                    3 => WasiSyscalls::EnvironGet,
-                    4 => WasiSyscalls::FdPrestatGet,
-                    5 => WasiSyscalls::FdPrestatDirName,
-                    6 => WasiSyscalls::RandomGet,
-                    7 => WasiSyscalls::ClockTimeGet,
-                    9999 => WasiSyscalls::ServerlessInvoke,
-                    10000 => WasiSyscalls::ServerlessResponse,
-                    _ => WasiSyscalls::InvalidHyperCallNum,
-                };
-                hypercall_sender[(vm_id % num_threads) as usize]
-                    .send(HyperCall::new(
-                        (*vm_id as u32).clone(),
-                        number_vms,
-                        total_gpu_execution_time,
-                        queue_submit_delta,
-                        0,
-                        called_funcs.clone(),
-                        hypercall_id,
-                        self.is_memory_interleaved.clone(),
-                        &buffers,
-                        hcall_read_buffer.clone(),
-                        queue,
-                        overhead_tracker_buffer.clone(),
-                    ))
-                    .unwrap();
-            });
-
-            // now block until all of the hypercalls have been successfully dispatched
-            for _ in 0..self.num_vms {
-                let result = result_receiver.recv().unwrap();
-                // we want to special case proc_exit to exit the VM
-                match result.get_type() {
-                    WasiSyscalls::ProcExit => {
-                        entry_point_temp[result.get_vm_id() as usize] = ((-1) as i32) as u32
-                    }
-                    _ => (),
-                }
-                // after all of the hypercalls are finished, we should update all of the stack pointers
-                hypercall_num_temp[result.get_vm_id() as usize] = -1;
-                hypercall_retval_temp[result.get_vm_id() as usize] = result.get_result();
-            }
-
-            let end_hcall_dispatch = std::time::Instant::now();
-            hcall_execution_time += (end_hcall_dispatch - start_hcall_dispatch).as_nanos();
-
-            let vmm_post_overhead = std::time::Instant::now();
-
-            // check again for threads that may be done - this is because
-            // proc_exit(...) can actually block off additional threads
-            // we don't have to read again, we can have proc_exit write directly to entry_point_temp
-            entry_point_exit_flag = true;
-            for e in &entry_point_temp {
-                entry_point_exit_flag = (*e as i32 == (-1)) & entry_point_exit_flag;
-            }
-
-            if entry_point_exit_flag {
-                break;
-            }
-
-            // now set the entry_point of exited procs to -1 if sp == 0
-            for (idx, sp) in stack_pointer_temp.iter().enumerate() {
-                if *sp == 0 as u64 {
-                    // this cast is hacky, but it does the C equivalent of (uint)(-1)
-                    entry_point_temp[idx] = ((-1) as i32) as u32;
-                }
-            }
-
-            // update the entry point to resume execution
-            // update all of the stack pointers
-            // update the hypercall numbers to -1 to indicate that we are now returning from the hypercall
-            // also don't forget to write the hcall buf back
-            unsafe {
-                let mut hcall_buf = &*hcall_read_buffer.buf.get();
-                ocl::core::enqueue_write_buffer(
-                    &queue,
-                    &hypercall_buffer,
-                    true,
-                    0,
-                    &mut hcall_buf,
-                    None::<Event>,
-                    None::<&mut Event>,
-                )
-                .unwrap();
-                ocl::core::enqueue_write_buffer(
-                    &queue,
-                    &buffers.entry,
-                    true,
-                    0,
-                    &mut entry_point_temp,
-                    None::<Event>,
-                    None::<&mut Event>,
-                )
-                .unwrap();
-                ocl::core::enqueue_write_buffer(
-                    &queue,
-                    &buffers.sp,
-                    true,
-                    0,
-                    &mut stack_pointer_temp,
-                    None::<Event>,
-                    None::<&mut Event>,
-                )
-                .unwrap();
-                ocl::core::enqueue_write_buffer(
-                    &queue,
-                    &buffers.hypercall_num,
-                    true,
-                    0,
-                    &mut hypercall_num_temp,
-                    None::<Event>,
-                    None::<&mut Event>,
-                )
-                .unwrap();
-                ocl::core::enqueue_write_buffer(
-                    &queue,
-                    &hcall_retval_buffer,
-                    true,
-                    0,
-                    &mut hypercall_retval_temp,
-                    None::<Event>,
-                    None::<&mut Event>,
-                )
-                .unwrap();
-            }
-            let vmm_post_overhead_end = std::time::Instant::now();
-            vmm_overhead += (vmm_post_overhead_end - vmm_post_overhead).as_nanos();
-        }
-
-        let e2e_time_end = std::time::Instant::now();
-
-        // To get final results back from the stack if we want for debugging stuff
-        // only uncomment this out if you need to debug stuff, it will panic if you have too many VMs and too small of a buffer
-
-        if print_return {
-            let mut check_results_debug = vec![0u8; (self.num_vms * 1024) as usize];
-            unsafe {
-                ocl::core::enqueue_read_buffer(
-                    &queue,
-                    &buffers.stack_buffer,
-                    true,
-                    0,
-                    &mut check_results_debug,
-                    None::<Event>,
-                    None::<&mut Event>,
-                )
-                .unwrap();
-            }
-
-            for vm_idx in 0..self.num_vms {
-                if self.is_memory_interleaved > 0 {
-                    let result_i32 = Interleave::read_u32(
-                        &mut check_results_debug[512..],
-                        0,
-                        self.num_vms,
-                        vm_idx,
-                        self.is_memory_interleaved,
-                    );
-                    let result_i64 = Interleave::read_u64(
-                        &mut check_results_debug[512..],
-                        0,
-                        self.num_vms,
-                        vm_idx,
-                        self.is_memory_interleaved,
-                    );
-                    dbg!(result_i32 as i32);
-                    dbg!(result_i64 as i64);
-                    dbg!(result_i64 as u64);
-                    dbg!(result_i32 as f32);
-                    dbg!(result_i64 as f64);
-                } else {
-                    let result = LittleEndian::read_u32(
-                        &check_results_debug[vm_idx as usize..(vm_idx + 4) as usize],
-                    );
-                    dbg!(result as i32);
-                }
-            }
-        }
-
-        println!("end: {}", Utc::now().timestamp());
-        println!(
-            "E2E execution time in nanoseconds: {}",
-            (e2e_time_end - e2e_time_start).as_nanos()
-        );
-        println!(
-            "On device time in nanoseconds: {}",
-            total_gpu_execution_time
-        );
-        println!(
-            "Device Start-Queue overhead in nanoseconds: {}",
-            queue_submit_delta
-        );
-        println!(
-            "fraction of time on device overhead: {}",
-            queue_submit_delta as f64 / (e2e_time_end - e2e_time_start).as_nanos() as f64
-        );
-        println!(
-            "fraction of time on device: {}",
-            total_gpu_execution_time as f64 / (e2e_time_end - e2e_time_start).as_nanos() as f64
-        );
-        println!(
-            "fraction of time on hcall dispatch: {}",
-            hcall_execution_time as f64 / (e2e_time_end - e2e_time_start).as_nanos() as f64
-        );
-        println!(
-            "fraction of time on VMM overhead: {}",
-            vmm_overhead as f64 / (e2e_time_end - e2e_time_start).as_nanos() as f64
-        );
-
-        return VMMRuntimeStatus::StatusOkay;
     }
 
     /*
@@ -1746,6 +1057,7 @@ impl OpenCLRunner {
         vm_sender: Arc<Vec<Mutex<Sender<VmSenderType>>>>,
         vm_recv: Arc<Vec<Mutex<Receiver<VmRecvType>>>>,
         req_timeout: u32,
+        data_segment: Vec<u8>
     ) -> VMMRuntimeStatus {
         let mut kernels: HashMap<u32, ocl::core::Kernel> = HashMap::new();
 
@@ -1815,6 +1127,35 @@ impl OpenCLRunner {
             )
             .unwrap()
         };
+
+        /*
+         * Allocate the data_segment buffer
+         */
+        let data_segment_buffer = unsafe {
+            ocl::core::create_buffer::<_, u8>(
+                ctx,
+                ocl::core::MEM_READ_WRITE | ocl::core::MEM_ALLOC_HOST_PTR,
+                data_segment.len() as usize,
+                None,
+            )
+            .unwrap()
+        };
+        let ds_result = unsafe {
+            ocl::core::enqueue_write_buffer(
+                &queue,
+                &data_segment_buffer,
+                true,
+                0,
+                &data_segment,
+                None::<Event>,
+                None::<&mut Event>,
+            )
+        };
+
+        match ds_result {
+            Err(e) => panic!("Failed to write data_segment to GPU memory, Error: {}", e),
+            _ => (),
+        }
 
         /*
          * Start up N threads to serve WASI hypercalls
@@ -2144,6 +1485,7 @@ impl OpenCLRunner {
         ocl::core::set_kernel_arg(&data_kernel, 4, ArgVal::mem(&buffers.max_mem)).unwrap();
         ocl::core::set_kernel_arg(&data_kernel, 5, ArgVal::mem(&buffers.is_calling)).unwrap();
         ocl::core::set_kernel_arg(&data_kernel, 6, ArgVal::mem(&buffers.sfp)).unwrap();
+        ocl::core::set_kernel_arg(&data_kernel, 7, ArgVal::mem(&data_segment_buffer)).unwrap();
 
         // start counting only when all VM init is finished
         let e2e_time_start = std::time::Instant::now();
@@ -2184,8 +1526,12 @@ impl OpenCLRunner {
         total_gpu_execution_time += end_start_kernel - start_start_kernel;
         queue_submit_delta += start_start_kernel - queue_start_kernel;
 
-        println!("Finished data_init kernel");
+        // Free the data segment, we don't need it anymore as it has been copied to the heap
+        // TODO: Figure out why release_mem_object causes a crash on program exit
+        //unsafe { ocl::core::release_mem_object(&data_segment_buffer).unwrap() };
         let data_init_setup = std::time::Instant::now();
+
+        println!("Finished data_init kernel");
 
         // set up the clArgs for the wasm_entry kernel
         for (key, value) in kernels.iter() {

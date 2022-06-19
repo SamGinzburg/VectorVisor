@@ -397,6 +397,7 @@ fn main() {
             _,
             _,
             _,
+            data_segment,
         ) = ast.write_opencl_file(
             hcall_size.try_into().unwrap(),
             interleave,
@@ -473,6 +474,7 @@ fn main() {
                     _kernel_hashmap,
                     _kernel_compile_stats,
                     _kernel_partition_mappings,
+                    data_segment
                 ) = ast.write_opencl_file(
                     hcall_size.try_into().unwrap(),
                     interleave,
@@ -501,7 +503,7 @@ fn main() {
                 println!("interleave: {}", interleave);
 
                 (
-                    InputProgram::Text(compiled_kernel.clone(), fastcall_header.clone()),
+                    InputProgram::Text(compiled_kernel.clone(), fastcall_header.clone(), data_segment),
                     entry_point,
                     num_compiled_funcs,
                     globals_buffer_size,
@@ -529,6 +531,7 @@ fn main() {
                     _kernel_hashmap,
                     _kernel_compile_stats,
                     _kernel_partition_mappings,
+                    data_segment,
                 ) = ast.write_opencl_file(
                     hcall_size.try_into().unwrap(),
                     interleave,
@@ -557,7 +560,7 @@ fn main() {
                 println!("interleave: {}", interleave);
 
                 (
-                    InputProgram::Text(compiled_kernel.clone(), fastcall_header.clone()),
+                    InputProgram::Text(compiled_kernel.clone(), fastcall_header.clone(), data_segment),
                     entry_point,
                     num_compiled_funcs,
                     globals_buffer_size,
@@ -588,6 +591,7 @@ fn main() {
                     kernel_hashmap,
                     kernel_compile_stats,
                     kernel_partition_mappings,
+                    data_segment,
                 ) = ast.write_opencl_file(
                     hcall_size.try_into().unwrap(),
                     interleave,
@@ -621,6 +625,7 @@ fn main() {
                         fastcall_header.clone(),
                         kernel_compile_stats.clone(),
                         kernel_partition_mappings.clone(),
+                        data_segment
                     ),
                     entry_point,
                     num_compiled_funcs,
@@ -649,6 +654,7 @@ fn main() {
                     kernel_hashmap,
                     kernel_compile_stats,
                     kernel_partition_mappings,
+                    data_segment,
                 ) = ast.write_opencl_file(
                     hcall_size.try_into().unwrap(),
                     interleave,
@@ -682,6 +688,7 @@ fn main() {
                         fastcall_header.clone(),
                         kernel_compile_stats.clone(),
                         kernel_partition_mappings.clone(),
+                        data_segment
                     ),
                     entry_point,
                     num_compiled_funcs,
@@ -699,7 +706,7 @@ fn main() {
                 let program: SeralizedProgram = bincode::deserialize(&filedata).unwrap();
                 println!("Loaded program with entry point: {}, num_compiled_funcs: {}, globals_buffer_size: {}, interleave: {}", program.entry_point, program.num_compiled_funcs, program.globals_buffer_size, program.interleave);
                 (
-                    InputProgram::Binary(program.program_data),
+                    InputProgram::Binary(program.program_data, program.data_segment),
                     program.entry_point,
                     program.num_compiled_funcs,
                     program.globals_buffer_size,
@@ -720,34 +727,12 @@ fn main() {
                     InputProgram::PartitionedBinary(
                         program.program_data,
                         program.partition_mapping,
+                        program.data_segment
                     ),
                     program.entry_point,
                     program.num_compiled_funcs,
                     program.globals_buffer_size,
                     program.interleave,
-                )
-            }
-            // nvidia specific assembly code, prebuilt
-            // this is a legacy stub from earlier testing, it still works though
-            ("ptx", _) => {
-                // read the binary file as a Vec<u8>
-                let filedata = match fs::read(file_path.clone()) {
-                    Ok(text) => text,
-                    Err(e) => panic_any(e),
-                };
-                let entry = value_t!(matches.value_of("entry"), u32).unwrap_or_else(|e| e.exit());
-                let numfuncs =
-                    value_t!(matches.value_of("numfuncs"), u32).unwrap_or_else(|e| e.exit());
-                let globals_buffer_size = value_t!(matches.value_of("globals-buffer-size"), u32)
-                    .unwrap_or_else(|e| e.exit());
-
-                println!("Loaded program with entry point: {}, num_compiled_funcs: {}, globals_buffer_size: {}, interleave: {}", entry, numfuncs, globals_buffer_size, interleave);
-                (
-                    InputProgram::Binary(filedata),
-                    entry,
-                    numfuncs,
-                    globals_buffer_size,
-                    interleave,
                 )
             }
             _ => panic!("Unrecognized input filetype: {:?}", (extension, partition)),

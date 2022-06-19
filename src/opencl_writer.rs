@@ -1404,13 +1404,52 @@ impl<'a> OpenCLCWriter<'_> {
         (final_string, func_intermediate_size, fastfunc_calls)
     }
 
-    fn emit_memcpy_arr(&self, _debug: bool) -> String {
+    fn emit_memcpy_arr(&self, _debug: bool) -> (String, Vec<u8>) {
         let mut result = String::from("");
+        let mut data_segment: Vec<u8>;
+        let mut data_segment_start = 0;
+        let mut data_segment_end = 0;
         let mut counter = 0;
-        let mut offset_val;
-        let mut arr_len = 0;
+
+        // Base case, no data segment
+        if self.data.len() == 0 {
+            return (result, vec![]);
+        }
+
+        // Quickly scan data segments to identify the data segment buffer size
         for temp in &self.data {
-            result += &format!("\t{}{}[] = {{\n", "uchar data_segment_data_", counter);
+            let (offset, seg_len) = match temp {
+                wast::Data {
+                    span,
+                    id,
+                    kind,
+                    data,
+                } => match kind {
+                    wast::DataKind::Active { memory, offset } => match offset.instrs[0] {
+                        wast::Instruction::I32Const(val) => {
+                            (val, data.concat().len())
+                        }
+                        _ => panic!("Unknown data offset value"),
+                    },
+                    wast::DataKind::Passive => panic!("wast::Passive datatype kind found"),
+                },
+                _ => panic!("Unknown data type"),
+            };
+            if data_segment_start > offset {
+                data_segment_start = offset;
+            }
+            if data_segment_end < offset + (seg_len as i32) {
+                data_segment_end = offset + (seg_len as i32);
+            }
+        }
+        let data_segment_len = (data_segment_end - data_segment_start) as usize;
+
+        data_segment = Vec::with_capacity(data_segment_len);
+        data_segment.resize(data_segment_len, 0);
+
+        // For each data segment, get the tuple of the (offset, Vec<u8> data)
+        // Apply the data segments in order to generate the correct (and final) Vec<u8>
+        for temp in &self.data {
             match temp {
                 wast::Data {
                     span,
@@ -1420,11 +1459,10 @@ impl<'a> OpenCLCWriter<'_> {
                 } => match kind {
                     wast::DataKind::Active { memory, offset } => match offset.instrs[0] {
                         wast::Instruction::I32Const(val) => {
-                            offset_val = val;
-                            result += &String::from("\t\t");
+                            let mut idx: usize = 0;
                             for element in data.concat() {
-                                result += &format!("{},", element);
-                                arr_len += 1;
+                                data_segment[(val as usize) + idx] = element;
+                                idx += 1;
                             }
                         }
                         _ => panic!("Unknown data offset value"),
@@ -1433,26 +1471,21 @@ impl<'a> OpenCLCWriter<'_> {
                 },
                 _ => panic!("Unknown data type"),
             };
-            result += &format!("\n\t{}\n", "};");
-            // now emit the memcpy instructions to copy to the heap
-
-            result += &format!(
-                "\t{}\n",
-                format!("for(uint idx = 0; idx < {}; idx++) {{", arr_len)
-            );
-
-            result += &format!("\t\t{}\n",
-                format!("write_u8((ulong)((global char*)heap_u32 + {} + idx), (ulong)(heap_u32), data_segment_data_{}[idx], warp_idx, read_idx);",
-                    offset_val,
-                    counter));
-
-            result += &String::from("\t}\n");
-
-            arr_len = 0;
-            counter += 1;
         }
 
-        result
+        // Generate the code that persists the data segment to the program heap
+        result += &format!(
+            "\t{}\n",
+            format!("for(uint idx = 0; idx < {}; idx++) {{", data_segment_len)
+        );
+
+        result += &format!("\t\t{}\n",
+            format!("write_u8((ulong)((global char*)heap_u32 + {} + idx), (ulong)(heap_u32), data_segment[idx], warp_idx, read_idx);",
+                    data_segment_start));
+
+        result += &String::from("\t}\n");
+
+        (result, data_segment)
     }
 
     fn emit_global_init(
@@ -1802,9 +1835,11 @@ __attribute__((always_inline)) void {}(global uint   *stack_u32,
         mexec: u32,
         local_work_group: u32,
         debug: bool,
-    ) -> (String, HashMap<String, (u32, u32)>) {
+    ) -> (String, HashMap<String, (u32, u32)>, Vec<u8>) {
         let mut result = String::from("");
+        let mut temp_str = String::from("");
         let mut mapping: HashMap<String, (u32, u32)> = HashMap::new();
+        let mut data_segment = vec![];
         let mut offset: u32 = 0;
         // needed if globals are referred to using numerical indexes
         let mut global_id: u32 = 0;
@@ -1858,7 +1893,7 @@ __attribute__((always_inline)) void {}(global uint   *stack_u32,
         dbg!(program_start_max_pages);
 
         if debug {
-            result += &String::from("\nvoid data_init(uint *stack_u32, uint *heap_u32, uint *globals_buffer, uint *curr_mem, uint *max_mem, uchar *is_calling, ulong *sfp) {\n");
+            result += &String::from("\nvoid data_init(uint *stack_u32, uint *heap_u32, uint *globals_buffer, uint *curr_mem, uint *max_mem, uchar *is_calling, ulong *sfp, uchar* data_segment) {\n");
             result += &String::from("\tulong warp_idx = 0;\n");
             result += &format!("local ulong2 scratch_space[{}];", (local_work_group));
             // each page = 64KiB
@@ -1873,12 +1908,13 @@ __attribute__((always_inline)) void {}(global uint   *stack_u32,
             result += &format!("\t{};\n", "*sfp = 0");
 
             result += &self.zero_init_memory();
-            result += &self.emit_memcpy_arr(debug);
+            (temp_str, data_segment) = self.emit_memcpy_arr(debug);
+            result += &temp_str;
             result += &self.emit_global_init(&mapping, debug);
 
             result += &String::from("}\n\n");
         } else {
-            result += &String::from("\n__kernel void data_init(__global uint *stack_u32_global, __global uint *heap_u32_global, __global uint *globals_buffer_global, __global uint *curr_mem_global, __global uint *max_mem_global, __global uchar *is_calling_global, __global ulong *sfp_global) {\n");
+            result += &String::from("\n__kernel void data_init(__global uint *stack_u32_global, __global uint *heap_u32_global, __global uint *globals_buffer_global, __global uint *curr_mem_global, __global uint *max_mem_global, __global uchar *is_calling_global, __global ulong *sfp_global, __global uchar* data_segment_global) {\n");
             result += &format!("\tulong warp_idx = get_global_id(0) / {};\n", mexec);
             result += &format!("\tulong thread_idx = get_local_id(0);\n");
             result += &format!("\tulong read_idx = thread_idx % {};\n", mexec);
@@ -1906,34 +1942,43 @@ __attribute__((always_inline)) void {}(global uint   *stack_u32,
                                    format!("global uint *heap_u32 = (global uint *)((global char*)heap_u32_global+(get_global_id(0) * VMM_HEAP_SIZE_BYTES));"));
                 result += &format!("\t{}\n",
                                    format!("global uint *stack_u32 = (global uint *)((global char*)stack_u32_global+(get_global_id(0) * VMM_STACK_SIZE_BYTES));"));
+                result += &format!("\t{}\n",
+                                   format!("global uchar *data_segment = (global uchar *)((global char*)data_segment_global+(get_global_id(0) * VMM_STACK_SIZE_BYTES));"));
 
                 result += &format!("\t{}\n",
                                    format!("global uint *globals_buffer = (global uint *)((global char*)globals_buffer_global+(get_global_id(0) * {}));", offset * 4));
             } else {
                 result += &format!(
                     "\t{}\n",
-                    format!("global uint *heap_u32 = (global uint *)(heap_u32_global);")
+                    format!("global uint *heap_u32 = (global uint*)(heap_u32_global);")
                 );
                 result += &format!(
                     "\t{}\n",
-                    format!("global uint *stack_u32 = (global uint *)(stack_u32_global);")
+                    format!("global uint *stack_u32 = (global uint*)(stack_u32_global);")
                 );
 
                 result += &format!(
                     "\t{}\n",
                     format!(
-                        "global uint *globals_buffer = (global uint *)(globals_buffer_global);"
+                        "global uint *globals_buffer = (global uint*)(globals_buffer_global);"
                     )
+                );
+
+                result += &format!(
+                    "\t{}\n",
+                    format!("global uchar *data_segment = (global uchar*)(data_segment_global);")
                 );
             }
 
             result += &self.zero_init_memory();
-            result += &self.emit_memcpy_arr(debug);
+            (temp_str, data_segment) = self.emit_memcpy_arr(debug);
+            result += &temp_str;
+
             result += &self.emit_global_init(&mapping, debug);
 
             result += &String::from("}\n\n");
         }
-        (result, mapping)
+        (result, mapping, data_segment)
     }
 
     // This function generates helper functions for performing reads/writes to the stack/heap
@@ -2139,6 +2184,7 @@ __attribute__((always_inline)) void {}(global uint   *stack_u32,
         HashMap<u32, String>,
         HashMap<u32, (u32, u32, u32, u32, u32, u32, u32)>,
         HashMap<u32, u32>,
+        Vec<u8>
     ) {
         let mut output = String::new();
         let mut header = String::new();
@@ -2256,7 +2302,7 @@ ulong get_clock() {
 
         // generate the data loading function
         // also return the global mappings: global id -> (global buffer offset, global size)
-        let (data_section, global_mappings) = self.generate_data_section(
+        let (data_section, global_mappings, data_segment) = self.generate_data_section(
             interleave,
             heap_size_bytes,
             mexec.try_into().unwrap(),
@@ -2945,6 +2991,7 @@ ulong get_clock() {
             kernel_hashmap,
             kernel_compile_stats,
             kernel_partition_mappings,
+            data_segment
         )
     }
 }
