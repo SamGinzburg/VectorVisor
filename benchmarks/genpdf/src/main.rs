@@ -10,6 +10,7 @@ use wasm_serverless_invoke::wasm_handler::WasmHandler;
 use wasm_serverless_invoke::wasm_handler::SerializationFormat::MsgPack;
 use serde::Deserialize;
 use serde::Serialize;
+use lopdf::Dictionary;
 
 lazy_static! {
     static ref EMBED_IMAGE: &'static [u8] = include_bytes!("test.jpg");
@@ -85,8 +86,22 @@ fn genpdf(event: FuncInput) -> FuncResponse {
         "Parent" => pages_id,
         "Contents" => content_id,
     });
-    //let img_stream = Stream::new(dictionary! {}, EMBED_IMAGE.to_vec());
-    let img_stream = xobject::image_from(EMBED_IMAGE.to_vec()).unwrap();
+
+    let mut dict = Dictionary::new();
+    dict.set("Type", Object::Name(b"XObject".to_vec()));
+    dict.set("Subtype", Object::Name(b"Image".to_vec()));
+    dict.set("Width", 814);
+    dict.set("Height", 613);
+    dict.set("ColorSpace", Object::Name(b"DeviceRGB".to_vec()));
+    dict.set("BitsPerComponent", 8);
+    dict.set("Filter", Object::Name(b"DCTDecode".to_vec()));
+
+    //let img = image::load_from_memory(EMBED_IMAGE.to_vec().as_ref()).unwrap();
+    //let bits = img.color().bits_per_pixel() / 3;
+    //dbg!(bits);
+
+    let img_stream = Stream::new(dict, EMBED_IMAGE.to_vec());
+    //let img_stream = xobject::image_from(EMBED_IMAGE.to_vec()).unwrap();
     doc.insert_image(page_id, img_stream, (100.0, 210.0), (100.0+(814.0/3.0), 210.0+(613.0/3.0))).unwrap();
 
     let pages = dictionary! {
@@ -104,7 +119,7 @@ fn genpdf(event: FuncInput) -> FuncResponse {
     doc.trailer.set("Root", catalog_id);
     //doc.compress();
     doc.save_to(&mut result).unwrap();
-    //doc.save("test.pdf").unwrap();
+    doc.save("test.pdf").unwrap();
     //println!("{:?}", result);
 
     FuncResponse{ resp: result }
@@ -113,6 +128,7 @@ fn genpdf(event: FuncInput) -> FuncResponse {
 fn main() {
     let handler = WasmHandler::new(&genpdf);
     handler.run_with_format(1024*512, MsgPack);
+
     /*
     genpdf(FuncInput{
         name: "test".to_string(),
