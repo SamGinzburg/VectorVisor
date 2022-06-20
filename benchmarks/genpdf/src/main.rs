@@ -29,6 +29,27 @@ struct FuncResponse {
 }
 
 #[inline(never)]
+fn insert_img(doc: &mut Document, page_id: (u32, u16)) {
+    let mut dict = Dictionary::new();
+    dict.set("Type", Object::Name(b"XObject".to_vec()));
+    dict.set("Subtype", Object::Name(b"Image".to_vec()));
+    dict.set("Width", 814);
+    dict.set("Height", 613);
+    dict.set("ColorSpace", Object::Name(b"DeviceRGB".to_vec()));
+    dict.set("BitsPerComponent", 8);
+    dict.set("Filter", Object::Name(b"DCTDecode".to_vec()));
+
+    //let img = image::load_from_memory(EMBED_IMAGE.to_vec().as_ref()).unwrap();
+    //let bits = img.color().bits_per_pixel() / 3;
+    //dbg!(bits);
+
+    let img_stream = Stream::new(dict, EMBED_IMAGE.to_vec());
+    //let img_stream = xobject::image_from(EMBED_IMAGE.to_vec()).unwrap();
+    doc.insert_image(page_id, img_stream, (100.0, 210.0), (100.0+(814.0/3.0), 210.0+(613.0/3.0))).unwrap();
+
+}
+
+#[inline(never)]
 fn genpdf(event: FuncInput) -> FuncResponse {
     let name = event.name;
     let purchases: Vec<(&String, &f64)> = event.purchases.iter().zip(event.price.iter()).collect();
@@ -87,6 +108,7 @@ fn genpdf(event: FuncInput) -> FuncResponse {
         "Contents" => content_id,
     });
 
+    /*
     let mut dict = Dictionary::new();
     dict.set("Type", Object::Name(b"XObject".to_vec()));
     dict.set("Subtype", Object::Name(b"Image".to_vec()));
@@ -94,7 +116,7 @@ fn genpdf(event: FuncInput) -> FuncResponse {
     dict.set("Height", 613);
     dict.set("ColorSpace", Object::Name(b"DeviceRGB".to_vec()));
     dict.set("BitsPerComponent", 8);
-    dict.set("Filter", Object::Name(b"DCTDecode".to_vec()));
+    //dict.set("Filter", Object::Name(b"DCTDecode".to_vec()));
 
     //let img = image::load_from_memory(EMBED_IMAGE.to_vec().as_ref()).unwrap();
     //let bits = img.color().bits_per_pixel() / 3;
@@ -103,6 +125,9 @@ fn genpdf(event: FuncInput) -> FuncResponse {
     let img_stream = Stream::new(dict, EMBED_IMAGE.to_vec());
     //let img_stream = xobject::image_from(EMBED_IMAGE.to_vec()).unwrap();
     doc.insert_image(page_id, img_stream, (100.0, 210.0), (100.0+(814.0/3.0), 210.0+(613.0/3.0))).unwrap();
+    */
+
+    insert_img(&mut doc, page_id);
 
     let pages = dictionary! {
         "Type" => "Pages",
@@ -126,6 +151,7 @@ fn genpdf(event: FuncInput) -> FuncResponse {
 }
 
 fn main() {
+
     let handler = WasmHandler::new(&genpdf);
     handler.run_with_format(1024*512, MsgPack);
 
