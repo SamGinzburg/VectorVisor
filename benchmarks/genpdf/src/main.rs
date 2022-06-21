@@ -13,9 +13,11 @@ use serde::Serialize;
 use lopdf::Dictionary;
 use lopdf::Object::Name;
 
+/*
 lazy_static! {
     static ref EMBED_IMAGE: &'static [u8] = include_bytes!("test.jpg");
 }
+*/
 
 #[derive(Debug, Deserialize)]
 struct FuncInput {
@@ -24,9 +26,19 @@ struct FuncInput {
     price: Vec<f64>,
 }
 
+#[derive(Debug, Deserialize)]
+struct BatchInput {
+    inputs: Vec<FuncInput>
+}
+
 #[derive(Debug, Serialize)]
 struct FuncResponse {
     resp: Vec<u8>
+}
+
+#[derive(Debug, Serialize)]
+struct BatchFuncResponse {
+    resp: Vec<FuncResponse>
 }
 
 #[inline(never)]
@@ -81,6 +93,7 @@ fn genpdf(event: FuncInput) -> FuncResponse {
 
     // Add an image
     // The default "insert_image" API results in massive code bloat, adding extra compression routines for no reason
+    /*
     let mut dict = Dictionary::new();
     dict.set("Type", Object::Name(b"XObject".to_vec()));
     dict.set("Subtype", Object::Name(b"Image".to_vec()));
@@ -114,7 +127,7 @@ fn genpdf(event: FuncInput) -> FuncResponse {
     image_ops.push(Operation::new("Q", vec![]));
 
     pdf_ops.extend(image_ops);
-
+    */
     let content = Content {
         operations: pdf_ops,
     };
@@ -126,7 +139,7 @@ fn genpdf(event: FuncInput) -> FuncResponse {
         "Contents" => content_id,
     });
 
-    doc.add_xobject(page_id, img_name.as_bytes(), img_id).unwrap();
+    //doc.add_xobject(page_id, img_name.as_bytes(), img_id).unwrap();
 
     let pages = dictionary! {
         "Type" => "Pages",
@@ -143,15 +156,23 @@ fn genpdf(event: FuncInput) -> FuncResponse {
     doc.trailer.set("Root", catalog_id);
     //doc.compress();
     doc.save_to(&mut result).unwrap();
-    //doc.save("test.pdf").unwrap();
+    doc.save("test.pdf").unwrap();
     //println!("{:?}", result);
 
     FuncResponse{ resp: result }
 }
 
+fn batch_genpdf(inputs: BatchInput) -> BatchFuncResponse {
+    let mut results = vec![];
+    for input in inputs.inputs {
+        results.push(genpdf(input));
+    }
+    return BatchFuncResponse{ resp: results };
+}
+
 fn main() {
 
-    let handler = WasmHandler::new(&genpdf);
+    let handler = WasmHandler::new(&batch_genpdf);
     handler.run_with_format(1024*512, MsgPack);
 
     /*

@@ -24,6 +24,10 @@ type Payload struct {
 	Price []float64 `msgpack:"price"`
 }
 
+type BatchPayload struct {
+	Payload []Payload `msgpack:"inputs"`
+}
+
 var NUM_PARAMS = 64
 
 var client = &http.Client{}
@@ -52,6 +56,16 @@ func CreatePayload() Payload {
 		Text: RandString(10),
 		Purchases: purchases,
 		Price: prices,
+	}
+}
+
+func CreateBatchPayload(n int) BatchPayload {
+	batch := make([]Payload, 0, n)
+	for i := 0; i < n; i++ {
+		batch = append(batch, CreatePayload());
+	}
+	return BatchPayload {
+		Payload: batch,
 	}
 }
 
@@ -181,7 +195,7 @@ func main() {
 
 	reqs := make([][]byte, NUM_PARAMS)
 	for i := 0; i < NUM_PARAMS; i++ {
-		p := CreatePayload()
+		p := CreateBatchPayload(128)
 		request_body, _ := msgpack.Marshal(p)
 		reqs[i] = request_body
 	}
