@@ -156,7 +156,7 @@ fn genpdf(event: FuncInput) -> FuncResponse {
     doc.trailer.set("Root", catalog_id);
     //doc.compress();
     doc.save_to(&mut result).unwrap();
-    doc.save("test.pdf").unwrap();
+    //doc.save("test.pdf").unwrap();
     //println!("{:?}", result);
 
     FuncResponse{ resp: result }
