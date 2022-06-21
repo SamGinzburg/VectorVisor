@@ -280,6 +280,48 @@ def plot_batch_times():
 
     plt.clf()
 
+def plot_roofline(gpu_bench_rps, gpu_on_dev_exe, gpu_e2e, vmcount, is_gpu):
+    plt.figure(figsize=(8, 6)) 
+    # [scrypt_gpu, pbkdf2_gpu, imageblur_gpu, imageblur_bmp_gpu, imagehash_gpu, imagehash_modified_gpu, histogram_gpu, lz4_gpu, strings_gpu]
+    bench_names = ('Scrypt', 'Pbkdf2', 'Blur-Jpeg', 'Blur-Bmp', 'PHash', 'PHash-Modified', 'Histogram', 'LZ4', 'Strings')
+    input_sizes = np.array([80 * 256, 32, 94 * 1024, 184 * 1024, 73 * 1024, 184 * 1024, 20 * 1024 * 4, 200 * 1024, 64*1024])
+    # Ratio of on_dev_exe to input size vs. RPS?
+    print (gpu_e2e)
+    if is_gpu:
+        #intensity =  (np.array(gpu_on_dev_exe) * 1000) / (input_sizes * vmcount)
+        intensity = np.array(gpu_bench_rps) / (input_sizes*vmcount)
+    else:
+        intensity =  (np.array(gpu_on_dev_exe) * 1000) / (input_sizes)
+
+    #rps = (input_sizes * vmcount) / 1024 / 1024 / gpu_bench_rps
+    #rps =  (vmcount*input_sizes)/1024/1024 / (1/(np.array(gpu_bench_rps) / vmcount))
+    #rps = (1/(np.array(gpu_bench_rps) / vmcount))
+    #rps = (gpu_on_dev_exe / (1/(np.array(gpu_bench_rps) / vmcount)))
+    rps = np.array(gpu_bench_rps)
+    print (rps)
+    print (gpu_bench_rps)
+    for idx in range(len(bench_names)):
+        #if idx != 1:
+        plt.scatter(intensity[idx], rps[idx], label=bench_names[idx])
+
+    #plt.yticks(np.arange(0, 1.0, 0.2))
+    #plt.xticks(np.arange(10e-5, 1e2, 1))
+    #plt.xticks(np.arange(0, 1, 0.1))
+    #plt.yticks(np.arange(0, 1.1, 0.1))
+
+    plt.xscale(value='log')
+    plt.legend()
+    plt.grid(zorder=-50)
+    plt.ylabel('RPS')
+    plt.xlabel('Operational Intensity (RPS/byte)')
+    if is_gpu:
+        dev_name = "gpu"
+    else:
+        dev_name = "cpu"
+    plt.savefig(input_dir+"/roofline_{dev}.eps".format(dev=dev_name), bbox_inches='tight')
+    plt.savefig(input_dir+"/roofline_{dev}.png".format(dev=dev_name), bbox_inches='tight')
+    plt.clf()
+
 # scrypt
 scrypt_gpu = parse_file("gpu_bench_scrypt")
 scrypt_cpu_wasm = parse_file("cpu_bench_scrypt")
@@ -412,3 +454,9 @@ latency_throughput(gpu_latency, gpu_rps, cpu_x86_latency, cpu_x86_rps, cpu_wasm_
 plot_compile_times()
 
 plot_batch_times()
+
+# generate roofline curve
+plot_roofline(gpu_rps, gpu_device_exe, gpu_latency, vmcount, True)
+
+
+plot_roofline(cpu_x86_rps_device, cpu_device_exe, cpu_x86_latency, [4] * len(cpu_x86_rps_device), False)
