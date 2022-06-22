@@ -38,6 +38,7 @@ use crossbeam::channel::Receiver as SyncReceiver;
 use crossbeam::channel::Sender as SyncSender;
 use tokio::sync::mpsc::{Receiver, Sender};
 
+use std::process;
 use std::cell::UnsafeCell;
 use std::collections::BTreeSet;
 use std::collections::HashSet;
@@ -594,6 +595,7 @@ impl OpenCLRunner {
         globals_buffer_size: u32,
         compile_flags: String,
         link_flags: String,
+        jitcache: bool,
     ) -> (ProgramType, ocl::core::DeviceId) {
         let dev_type = ocl::core::get_device_info(&device_id, ocl::core::DeviceInfo::Type);
         let dev_name = ocl::core::get_device_info(&device_id, ocl::core::DeviceInfo::Name);
@@ -1040,6 +1042,11 @@ impl OpenCLRunner {
                 ProgramType::Partitioned(final_hashmap, kernel_partition_mappings.clone(), data_segment.to_vec())
             }
         };
+
+        // If we are only generate the JIT cache, exit now
+        if jitcache {
+            process::exit(0);
+        }
 
         return (program_to_run, device_id);
     }

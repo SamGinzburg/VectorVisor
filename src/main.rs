@@ -183,6 +183,14 @@ fn main() {
             .multiple(false)
             .number_of_values(1)
             .takes_value(true))
+        .arg(Arg::with_name("jitcache")
+            .long("jt")
+            .value_name("Flag to exit after JITing OpenCL kernel")
+            .default_value("false")
+            .help("This flag only generates the JIT cache for an OpenCL kernel and exits")
+            .multiple(false)
+            .number_of_values(1)
+            .takes_value(true))
         // experimental parameter for fast loading of programs
         .arg(Arg::with_name("partition")
             .long("partition")
@@ -344,6 +352,7 @@ fn main() {
     let force_inline = value_t!(matches.value_of("forceinline"), bool).unwrap_or_else(|e| e.exit());
     let partition = value_t!(matches.value_of("partition"), bool).unwrap_or_else(|e| e.exit());
     let wasmtime = value_t!(matches.value_of("wasmtime"), bool).unwrap_or_else(|e| e.exit());
+    let jitcache = value_t!(matches.value_of("jitcache"), bool).unwrap_or_else(|e| e.exit());
     let serverless = value_t!(matches.value_of("serverless"), bool).unwrap_or_else(|e| e.exit());
     let hcall_size = value_t!(matches.value_of("hcallsize"), usize).unwrap_or_else(|e| e.exit());
     let batch_submit_ip = value_t!(matches.value_of("ip"), String).unwrap_or_else(|e| e.exit());
@@ -784,6 +793,7 @@ fn main() {
             globals_buffer_size,
             compile_args.clone(),
             link_args.clone(),
+            jitcache,
         );
 
         rayon::ThreadPoolBuilder::new()
