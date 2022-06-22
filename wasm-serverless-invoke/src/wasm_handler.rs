@@ -248,8 +248,8 @@ impl<'a, T1: DeserializeOwned, T2: Serialize> WasmHandler<T1, T2> {
         let mut server_sender_vec = vec![];
         let mut vm_recv_vec = vec![];
         for _ in 0..num_cpu_threads {
-            let (sender, recv): (tokio::sync::mpsc::Sender<(Vec<u8>, usize)>,
-                                 tokio::sync::mpsc::Receiver<(Vec<u8>, usize)>) = mpsc::channel(16384);
+            let (sender, recv): (tokio::sync::mpsc::Sender<(Vec<u8>, usize, String)>,
+                                 tokio::sync::mpsc::Receiver<(Vec<u8>, usize, String)>) = mpsc::channel(16384);
             server_sender_vec.push(AsyncMutex::new(sender));
             vm_recv_vec.push(Mutex::new(recv));
         }
@@ -260,8 +260,8 @@ impl<'a, T1: DeserializeOwned, T2: Serialize> WasmHandler<T1, T2> {
         let mut vm_sender_vec = vec![];
         let mut server_recv_vec = vec![];
         for _ in 0..num_cpu_threads {
-            let (sender, recv): (tokio::sync::mpsc::Sender<(Vec<u8>, usize, u64, u64, u64, u64)>,
-                                 tokio::sync::mpsc::Receiver<(Vec<u8>, usize, u64, u64, u64, u64)>) = mpsc::channel(16384);
+            let (sender, recv): (tokio::sync::mpsc::Sender<(Vec<u8>, usize, u64, u64, u64, u64, String, u32)>,
+                                 tokio::sync::mpsc::Receiver<(Vec<u8>, usize, u64, u64, u64, u64, String, u32)>) = mpsc::channel(16384);
             vm_sender_vec.push(Mutex::new(sender));
             server_recv_vec.push(AsyncMutex::new(recv));
         }
@@ -294,7 +294,7 @@ impl<'a, T1: DeserializeOwned, T2: Serialize> WasmHandler<T1, T2> {
                 loop {
                     // Get input from server
                     let chan = vm_recv_mutex.get(vm_idx).unwrap();
-                    let (msg, msg_len) = chan.lock().unwrap().blocking_recv().unwrap();
+                    let (msg, msg_len, req_id) = chan.lock().unwrap().blocking_recv().unwrap();
                     // Deserialize inputs...
             		let tsc = curr_time_invoke.clone();
                     *tsc.lock().unwrap() = Utc::now().timestamp_nanos();
@@ -344,7 +344,7 @@ impl<'a, T1: DeserializeOwned, T2: Serialize> WasmHandler<T1, T2> {
 
                     chan.lock().unwrap().blocking_send((response,
                                                         resp_len,
-                                                        device_execution_time.try_into().unwrap(), 0, 0, 0)).unwrap();
+                                                        device_execution_time.try_into().unwrap(), 0, 0, 0, req_id, 0)).unwrap();
                 }
             });
             handles.push(handle);
