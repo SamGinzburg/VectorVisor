@@ -473,7 +473,7 @@ fn main() {
                     num_compiled_funcs,
                     _kernel_hashmap,
                     _kernel_compile_stats,
-                    _kernel_partition_mappings,
+                    kernel_partition_mappings,
                     data_segment
                 ) = ast.write_opencl_file(
                     hcall_size.try_into().unwrap(),
@@ -503,7 +503,10 @@ fn main() {
                 println!("interleave: {}", interleave);
 
                 (
-                    InputProgram::Text(compiled_kernel.clone(), fastcall_header.clone(), data_segment),
+                    InputProgram::Text(kernel_partition_mappings,
+                                       compiled_kernel.clone(),
+                                       fastcall_header.clone(),
+                                       data_segment),
                     entry_point,
                     num_compiled_funcs,
                     globals_buffer_size,
@@ -530,7 +533,7 @@ fn main() {
                     num_compiled_funcs,
                     _kernel_hashmap,
                     _kernel_compile_stats,
-                    _kernel_partition_mappings,
+                    kernel_partition_mappings,
                     data_segment,
                 ) = ast.write_opencl_file(
                     hcall_size.try_into().unwrap(),
@@ -560,7 +563,10 @@ fn main() {
                 println!("interleave: {}", interleave);
 
                 (
-                    InputProgram::Text(compiled_kernel.clone(), fastcall_header.clone(), data_segment),
+                    InputProgram::Text(kernel_partition_mappings,
+                                       compiled_kernel.clone(),
+                                       fastcall_header.clone(),
+                                       data_segment),
                     entry_point,
                     num_compiled_funcs,
                     globals_buffer_size,
@@ -706,7 +712,9 @@ fn main() {
                 let program: SeralizedProgram = bincode::deserialize(&filedata).unwrap();
                 println!("Loaded program with entry point: {}, num_compiled_funcs: {}, globals_buffer_size: {}, interleave: {}", program.entry_point, program.num_compiled_funcs, program.globals_buffer_size, program.interleave);
                 (
-                    InputProgram::Binary(program.program_data, program.data_segment),
+                    InputProgram::Binary(program.kernel_partition_mappings,
+                                         program.program_data,
+                                         program.data_segment),
                     program.entry_point,
                     program.num_compiled_funcs,
                     program.globals_buffer_size,
