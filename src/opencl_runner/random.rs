@@ -34,41 +34,15 @@ impl Random {
         let raw_mem: &mut [u8] = unsafe { memory.data_unchecked_mut() };
 
         // If the VM is masked off, don't try to run the syscall
-        if !vm_ctx.no_resp {
-            let random_len = if hypercall.is_interleaved_mem > 0 {
-                Interleave::read_u32(
-                    hcall_buf,
-                    0,
-                    hypercall.num_total_vms,
-                    vm_idx,
-                    hypercall.is_interleaved_mem,
-                )
-            } else {
-                LittleEndian::read_u32(&hcall_buf[0..4])
-            };
+        hcall_buf = &mut hcall_buf
+            [(vm_idx * hcall_buf_size) as usize..((vm_idx + 1) * hcall_buf_size) as usize];
+        let random_len = LittleEndian::read_u32(&hcall_buf[0..4]);
+        let buf = &GuestPtr::new(&wasm_mem, 0);
+        let _result = ctx.random_get(buf, random_len).unwrap();
 
-            let buf = &GuestPtr::new(&wasm_mem, 0);
-            let _result = ctx.random_get(buf, random_len).unwrap();
-
-            // now copy the random data back to the hcall_buffer
-            if hypercall.is_interleaved_mem > 0 {
-                for offset in 0..(random_len as usize) {
-                    Interleave::write_u8(
-                        hcall_buf,
-                        offset.try_into().unwrap(),
-                        hypercall.num_total_vms,
-                        raw_mem[offset],
-                        vm_idx,
-                        hypercall.is_interleaved_mem,
-                    );
-                }
-            } else {
-                hcall_buf = &mut hcall_buf
-                    [(vm_idx * hcall_buf_size) as usize..((vm_idx + 1) * hcall_buf_size) as usize];
-                hcall_buf[0..(random_len as usize)]
-                    .clone_from_slice(&raw_mem[0..(random_len as usize)]);
-            }
-        }
+        // now copy the random data back to the hcall_buffer
+        hcall_buf[0..(random_len as usize)]
+            .clone_from_slice(&raw_mem[0..(random_len as usize)]);
 
         sender
             .send({ HyperCallResult::new(0, vm_idx, WasiSyscalls::RandomGet) })

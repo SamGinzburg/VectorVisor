@@ -36,47 +36,15 @@ impl Clock {
         let raw_mem: &mut [u8] = unsafe { memory.data_unchecked_mut() };
 
         // If the VM is masked off, don't try to run the syscall
-        let clock_id = if hypercall.is_interleaved_mem > 0 {
-            Interleave::read_u32(
-                hcall_buf,
-                0,
-                hypercall.num_total_vms,
-                vm_idx,
-                hypercall.is_interleaved_mem,
-            )
-        } else {
-            LittleEndian::read_u32(&hcall_buf[0..4])
-        };
-
-        let precision = if hypercall.is_interleaved_mem > 0 {
-            Interleave::read_u64(
-                hcall_buf,
-                4,
-                hypercall.num_total_vms,
-                vm_idx,
-                hypercall.is_interleaved_mem,
-            )
-        } else {
-            LittleEndian::read_u64(&hcall_buf[4..12])
-        };
+        hcall_buf = &mut hcall_buf[(vm_idx * hcall_buf_size) as usize..((vm_idx + 1) * hcall_buf_size) as usize];
+       
+        let clock_id = LittleEndian::read_u32(&hcall_buf[0..4]);
+        let precision = LittleEndian::read_u64(&hcall_buf[4..12]);
 
         let timestamp = ctx.clock_time_get(Clockid::try_from(clock_id as i32).unwrap(), precision).unwrap();
         // now copy the random data back to the hcall_buffer
-        if hypercall.is_interleaved_mem > 0 {
-            Interleave::write_u64(
-                hcall_buf,
-                0,
-                hypercall.num_total_vms,
-                timestamp.try_into().unwrap(),
-                vm_idx,
-                hypercall.is_interleaved_mem,
-            );
-        } else {
-            hcall_buf = &mut hcall_buf
-                [(vm_idx * hcall_buf_size) as usize..((vm_idx + 1) * hcall_buf_size) as usize];
-            hcall_buf[0..8]
-                .clone_from_slice(&timestamp.to_le_bytes());
-        }
+        hcall_buf[0..8]
+            .clone_from_slice(&timestamp.to_le_bytes());
 
         sender
             .send({ HyperCallResult::new(0, vm_idx, WasiSyscalls::ClockTimeGet) })

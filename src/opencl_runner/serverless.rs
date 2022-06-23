@@ -26,6 +26,12 @@ impl Serverless {
         hypercall: &mut HyperCall,
         sender: &Sender<HyperCallResult>,
     ) -> () {
+        // If other non-invoke calls need to be dispatched, perform a no-op and return.
+        // This call will be executed later when ready
+        if hypercall.non_serverless_invoke_call_found {
+            return;
+        }
+        
         // store this in the vmctx for when we return
         *Arc::make_mut(&mut vm_ctx.timestamp_counter) = hypercall.timestamp_counter;
         *Arc::make_mut(&mut vm_ctx.queue_submit_counter) = hypercall.queue_submit_delta;

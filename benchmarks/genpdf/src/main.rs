@@ -91,7 +91,7 @@ fn genpdf(event: FuncInput) -> FuncResponse {
         idx -= 12;
     }
     pdf_ops.extend(purchase_ops);
-
+    /*
     let mut image_ops: Vec<Operation> = vec![];
 
     // Add an image
@@ -130,7 +130,7 @@ fn genpdf(event: FuncInput) -> FuncResponse {
     image_ops.push(Operation::new("Q", vec![]));
 
     pdf_ops.extend(image_ops);
-
+    */
     let content = Content {
         operations: pdf_ops,
     };
@@ -142,7 +142,7 @@ fn genpdf(event: FuncInput) -> FuncResponse {
         "Contents" => content_id,
     });
 
-    doc.add_xobject(page_id, img_name.as_bytes(), img_id).unwrap();
+    //doc.add_xobject(page_id, img_name.as_bytes(), img_id).unwrap();
 
     let pages = dictionary! {
         "Type" => "Pages",
@@ -157,13 +157,14 @@ fn genpdf(event: FuncInput) -> FuncResponse {
         "Pages" => pages_id,
     });
     doc.trailer.set("Root", catalog_id);
-    doc.compress();
+
+    //doc.compress();
+
     doc.save_to(&mut result).unwrap();
     //doc.save("test.pdf").unwrap();
     //println!("{:?}", result);
 
     let tag = auth::authenticate(&AUTH_KEY, &result).unwrap();
-
 
     FuncResponse{ resp: result, tag: tag.unprotected_as_bytes().to_vec() }
 }

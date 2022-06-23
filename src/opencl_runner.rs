@@ -16,7 +16,7 @@ use wasi_fd::WasiFd;
 use interleave_offsets::Interleave;
 
 use std::ffi::CString;
-
+use std::convert::TryFrom;
 use ocl::core::ArgVal;
 use ocl::core::Event;
 
@@ -1144,11 +1144,16 @@ impl OpenCLRunner {
         /*
          * Allocate the data_segment buffer
          */
+        let data_seg_buffer_len = if data_segment.len() == 0 {
+            1
+        } else {
+            data_segment.len() as usize
+        };
         let data_segment_buffer = unsafe {
             ocl::core::create_buffer::<_, u8>(
                 ctx,
                 ocl::core::MEM_READ_WRITE | ocl::core::MEM_ALLOC_HOST_PTR,
-                data_segment.len() as usize,
+                data_seg_buffer_len,
                 None,
             )
             .unwrap()
@@ -1738,7 +1743,11 @@ impl OpenCLRunner {
              */
 
             // for each VM, add to the set of kernels that we need to run next
+            let mut non_serverless_invoke_call_found = false;
             for idx in 0..(self.num_vms as usize * mexec) {
+                if hypercall_num_temp[idx] != 9999 {
+                    non_serverless_invoke_call_found = true;
+                }
                 // For each VM, add the next function to run to the divergence stack
                 // If the following conditions are met:
                 // 1) We are not blocked on a hypercall
@@ -1833,6 +1842,32 @@ impl OpenCLRunner {
                 vmm_overhead += (vmm_pre_overhead_end - vmm_pre_overhead).as_nanos();
             }
 
+            /*
+             * For serverless_invoke we can only copy inputs to the GPU using our async API if
+             * we have no other calls to dispatch. So if we see >0 non-invoke calls we block
+             * VMs waiting for inputs until we are ready.
+             */
+            if non_serverless_invoke_call_found {
+                for idx in 0..(self.num_vms as usize * mexec) {
+                    if hypercall_num_temp[idx] == (WasiSyscalls::ServerlessInvoke as i32) {
+                        entry_point_temp[idx] = ((-1) as i32) as u32;
+                    }
+                }
+            }
+
+            let mut resp_ctr = 0;
+            let mut rand_ctr = 0;
+            let mut invoke = 0;
+            for call in &hypercall_num_temp {
+                if *call == 10000 {
+                    resp_ctr += 1;
+                } else if *call == 6 {
+                    rand_ctr += 1;
+                } else if *call == 9999 {
+                    invoke += 1;
+                }
+            }
+
             // read the hypercall_buffer
             let start_hcall_dispatch = std::time::Instant::now();
             unsafe {
@@ -1840,18 +1875,16 @@ impl OpenCLRunner {
                 let overhead_buf: &mut [u64] = *overhead_tracker_buffer.buf.get();
 
                 // We don't need to read previous buffer values for serverless invoke
-                //if hypercall_num_temp[0] != 9999 {
-                    ocl::core::enqueue_read_buffer(
-                        &queue,
-                        &hypercall_buffer,
-                        true,
-                        0,
-                        buf,
-                        None::<Event>,
-                        None::<&mut Event>,
-                    )
-                    .unwrap();
-                //}
+                ocl::core::enqueue_read_buffer(
+                    &queue,
+                    &hypercall_buffer,
+                    false,
+                    0,
+                    buf,
+                    None::<Event>,
+                    None::<&mut Event>,
+                )
+                .unwrap();
                 ocl::core::enqueue_read_buffer(
                     &queue,
                     &buffers.sp,
@@ -1862,18 +1895,16 @@ impl OpenCLRunner {
                     None::<&mut Event>,
                 )
                 .unwrap();
-                //if hypercall_num_temp[0] == 10000 {
-                    ocl::core::enqueue_read_buffer(
-                        &queue,
-                        &buffers.overhead_tracker,
-                        true,
-                        0,
-                        overhead_buf,
-                        None::<Event>,
-                        None::<&mut Event>,
-                    )
-                    .unwrap();
-                //}
+                ocl::core::enqueue_read_buffer(
+                    &queue,
+                    &buffers.overhead_tracker,
+                    true,
+                    0,
+                    overhead_buf,
+                    None::<Event>,
+                    None::<&mut Event>,
+                )
+                .unwrap();
             }
 
             num_batches += 1;
@@ -1886,19 +1917,7 @@ impl OpenCLRunner {
 
             let start_hcall_dispatch2 = std::time::Instant::now();
             vm_slice.as_slice().iter().for_each(|vm_idx| {
-                let hypercall_id = match hypercall_num_temp[*vm_idx as usize * mexec] as i64 {
-                    0 => WasiSyscalls::FdWrite,
-                    1 => WasiSyscalls::ProcExit,
-                    2 => WasiSyscalls::EnvironSizeGet,
-                    3 => WasiSyscalls::EnvironGet,
-                    4 => WasiSyscalls::FdPrestatGet,
-                    5 => WasiSyscalls::FdPrestatDirName,
-                    6 => WasiSyscalls::RandomGet,
-                    7 => WasiSyscalls::ClockTimeGet,
-                    9999 => WasiSyscalls::ServerlessInvoke,
-                    10000 => WasiSyscalls::ServerlessResponse,
-                    _ => WasiSyscalls::InvalidHyperCallNum,
-                };
+                let hypercall_id = WasiSyscalls::try_from(hypercall_num_temp[*vm_idx as usize * mexec]).unwrap();
 
                 let hcall = Box::new(HyperCall::new(
                     (*vm_idx as u32).clone(),
@@ -1913,13 +1932,13 @@ impl OpenCLRunner {
                     hcall_read_buffer.clone(),
                     queue,
                     overhead_tracker_buffer.clone(),
+                    non_serverless_invoke_call_found,
                 ));
-                let serverless_invoke = if hypercall_num_temp[*vm_idx as usize] == 9999 {
+                let serverless_invoke = if hypercall_num_temp[*vm_idx as usize] == (WasiSyscalls::ServerlessInvoke as i32) {
                     true
                 } else {
                     false
                 };
-
                 hcall_sender_vec[*vm_idx as usize]
                     .send((hcall, serverless_invoke))
                     .unwrap();
@@ -1940,15 +1959,21 @@ impl OpenCLRunner {
             let mut num_hcall_resp = 0;
             // count how many serverless response calls we get
             for hypercall_idx in 0..hypercall_num_temp.len() / mexec {
-                match hypercall_num_temp[hypercall_idx * mexec] {
+                match WasiSyscalls::try_from(hypercall_num_temp[hypercall_idx * mexec]).unwrap() {
                     // We are performing async responses for all serverless_response calls
-                    10000 => {
+                    WasiSyscalls::ServerlessResponse => {
                         for m in 0..mexec {
                             hypercall_num_temp[hypercall_idx * mexec + m] = -1;
                         }
                         hypercall_retval_temp[hypercall_idx] = 0;
                         num_hcall_resp += 1;
-                    }
+                    },
+                    WasiSyscalls::ServerlessInvoke => {
+                        // no-ops for serverless invoke calls that are still blocked
+                        if !non_serverless_invoke_call_found {
+                            number_hcalls_blocking += 1;
+                        }
+                    },
                     _ => {
                         number_hcalls_blocking += 1;
                     }
@@ -2028,7 +2053,7 @@ impl OpenCLRunner {
                 // if number_hcalls_blocking == 0, then that means every hcall was a response,
                 // and we can skip writing this buffer back to the VM
                 if number_hcalls_blocking > 0 {
-                    let hcall_buf = if is_serverless_invoke {
+                    let hcall_buf = if is_serverless_invoke && !non_serverless_invoke_call_found {
                         &*hcall_async_buffer.buf.get()
                     } else {
                         &*hcall_read_buffer.buf.get()
@@ -2044,7 +2069,7 @@ impl OpenCLRunner {
                         None::<&mut Event>,
                     )
                     .unwrap();
-                    if is_serverless_invoke {
+                    if is_serverless_invoke && !non_serverless_invoke_call_found {
                         invoke_complete.broadcast(true);
                         is_serverless_invoke = false;
                     }

@@ -544,15 +544,8 @@ pub fn emit_random_get_pre(
     let random_buf_len = stack_ctx.vstack_peak(StackType::i32, 0);
 
     // copy the buf len over so we know how many random bytes to generate
-    ret_str += &format!(
-        "\t{};\n",
-        emit_write_u32(
-            "(ulong)(hypercall_buffer)",
-            "(ulong)(hypercall_buffer)",
-            &random_buf_len,
-            "warp_idx"
-        )
-    );
+    ret_str += &format!("\t*({}) = {};\n",
+                        "(global uint*)((global char*)hypercall_buffer+(hcall_size*warp_idx))", &random_buf_len);
 
     ret_str
 }
@@ -569,12 +562,12 @@ pub fn emit_random_get_post(
     let result_register = stack_ctx.vstack_alloc(StackType::i32);
 
     // Copy the random bytes back from the hcall_buf to the heap
-    ret_str += &format!("\t___private_memcpy((ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), warp_idx, read_idx);\n",
-                        "(ulong)((global char *)hypercall_buffer)", // src
+    ret_str += &format!("\t___private_memcpy_cpu2gpu((ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), warp_idx, read_idx, thread_idx, scratch_space);\n",
+                        "(ulong)((global char *)hypercall_buffer + (hcall_size*warp_idx))", // src
                         "hypercall_buffer", // mem_start_src
-                        &format!("(global char *)heap_u32+{}", random_buf_ptr), //dst
+                        &format!("(global char *)heap_u32+{}", &random_buf_ptr), //dst
                         "heap_u32", // mem_start_dst
-                        &random_buf_len);
+                        &random_buf_len); // number of bytes read;
 
     // return the error code associated with random_get
     ret_str += &format!("\t{} = {};\n", result_register, "hcall_ret_val");
@@ -592,25 +585,11 @@ pub fn emit_clock_time_get_pre(
     let _offset = stack_ctx.vstack_peak(StackType::i32, 0);
     let clock_id = stack_ctx.vstack_peak(StackType::i32, 1);
     let precision = stack_ctx.vstack_pop(StackType::i64);
+    ret_str += &format!("\t*({}) = {};\n",
+                        "(global uint*)((global char*)hypercall_buffer+(hcall_size*warp_idx))", &clock_id);
 
-    ret_str += &format!(
-        "\t{};\n",
-        emit_write_u32(
-            "(ulong)(hypercall_buffer)",
-            "(ulong)(hypercall_buffer)",
-            &clock_id,
-            "warp_idx"
-        )
-    );
-    ret_str += &format!(
-        "\t{};\n",
-        emit_write_u64(
-            "(ulong)(hypercall_buffer+1)",
-            "(ulong)(hypercall_buffer)",
-            &precision,
-            "warp_idx"
-        )
-    );
+    ret_str += &format!("\t*({}) = {};\n",
+                        "(global uint*)((global char*)hypercall_buffer+(hcall_size*warp_idx)+4)", &precision);
 
     ret_str
 }
@@ -625,12 +604,9 @@ pub fn emit_clock_time_get_post(
     let offset = stack_ctx.vstack_pop(StackType::i32);
     let _clock_id = stack_ctx.vstack_pop(StackType::i32);
     let result_register = stack_ctx.vstack_alloc(StackType::i32);
-
-    let timestamp = &emit_read_u64(
-        "(ulong)(hypercall_buffer)",
-        "(ulong)(hypercall_buffer)",
-        "warp_idx",
-    );
+    
+    let timestamp = &format!("\t*({})\n",
+                             "(global ulong*)((global char*)hypercall_buffer+(hcall_size*warp_idx))");
 
     ret_str += &format!(
         "\t{};\n",
@@ -641,6 +617,7 @@ pub fn emit_clock_time_get_post(
             "warp_idx"
         )
     );
+
     ret_str += &format!("\t{} = {};\n", result_register, "hcall_ret_val");
 
     ret_str

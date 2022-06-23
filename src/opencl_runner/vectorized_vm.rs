@@ -29,8 +29,11 @@ use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::convert::TryFrom;
+use num_enum::TryFromPrimitive;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq, TryFromPrimitive)]
+#[repr(i32)]
 pub enum WasiSyscalls {
     FdWrite = 0,
     ProcExit = 1,
@@ -64,6 +67,7 @@ pub struct HyperCall<'a> {
     pub hypercall_buffer: Arc<UnsafeCellWrapper<u8>>,
     pub queue: &'a CommandQueue,
     pub overhead_tracker: Arc<UnsafeCellWrapper<u64>>,
+    pub non_serverless_invoke_call_found: bool,
 }
 
 impl<'a> HyperCall<'a> {
@@ -80,6 +84,7 @@ impl<'a> HyperCall<'a> {
         hypercall_buffer: Arc<UnsafeCellWrapper<u8>>,
         queue: &'a CommandQueue,
         overhead_tracker: Arc<UnsafeCellWrapper<u64>>,
+        non_serverless_invoke_call_found: bool,
     ) -> HyperCall<'a> {
         HyperCall {
             vm_id: vm_id,
@@ -94,6 +99,7 @@ impl<'a> HyperCall<'a> {
             called_fns: called_funcs,
             queue: queue,
             overhead_tracker: overhead_tracker,
+            non_serverless_invoke_call_found: non_serverless_invoke_call_found,
         }
     }
 }
@@ -103,6 +109,7 @@ impl fmt::Debug for HyperCall<'_> {
         f.debug_struct("HyperCall")
             .field("vm_id", &self.vm_id)
             .field("syscall_id", &(self.syscall as u8))
+            .field("non_serverless_invoke_call_found", &self.non_serverless_invoke_call_found)
             .finish()
     }
 }

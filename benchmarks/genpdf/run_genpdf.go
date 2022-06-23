@@ -47,8 +47,8 @@ func CreatePayload() Payload {
 	prices := make([]float64, 0, 10)
 	max := 15.00
 	min := 7.00
-	for i := 0; i < 10; i++ {
-		purchases = append(purchases, RandString(7));
+	for i := 0; i < 20; i++ {
+		purchases = append(purchases, RandString(15));
 		prices = append(prices, min + rand.Float64() * (max - min));
 	}
 
@@ -95,11 +95,11 @@ func IssueRequests(ip string, port int, req [][]byte, exec_time chan<- float64, 
 			continue
 		}
 		/*
-			body, err := ioutil.ReadAll(resp.Body)
-			if err != nil {
-				panic(err)
-			}
-			_ = body
+		body, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			panic(err)
+		}
+		_ = body
 		*/
 		resp.Body.Close()
 		read_secs := time.Since(start_read)
