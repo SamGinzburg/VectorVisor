@@ -10,3 +10,4 @@ lopdf = { version = "0.27.0" }
 wasm-serverless-invoke = { path = "../../wasm-serverless-invoke" }
 serde = { version = "1.0.62", features = ["derive"] }
 lazy_static = "1.4.0"
+orion = "0.17.1"

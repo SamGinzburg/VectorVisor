@@ -12,9 +12,13 @@ use serde::Deserialize;
 use serde::Serialize;
 use lopdf::Dictionary;
 use lopdf::Object::Name;
+use orion::auth;
+use orion::aead::SecretKey;
+use orion::hazardous::mac::blake2b::Tag;
 
 lazy_static! {
     static ref EMBED_IMAGE: &'static [u8] = include_bytes!("test.jpg");
+    static ref AUTH_KEY: SecretKey  = auth::SecretKey::default();
 }
 
 #[derive(Debug, Deserialize)]
@@ -31,7 +35,8 @@ struct BatchInput {
 
 #[derive(Debug, Serialize)]
 struct FuncResponse {
-    resp: Vec<u8>
+    resp: Vec<u8>,
+    tag: Vec<u8>,
 }
 
 #[derive(Debug, Serialize)]
@@ -157,7 +162,10 @@ fn genpdf(event: FuncInput) -> FuncResponse {
     //doc.save("test.pdf").unwrap();
     //println!("{:?}", result);
 
-    FuncResponse{ resp: result }
+    let tag = auth::authenticate(&AUTH_KEY, &result).unwrap();
+
+
+    FuncResponse{ resp: result, tag: tag.unprotected_as_bytes().to_vec() }
 }
 
 fn batch_genpdf(inputs: BatchInput) -> BatchFuncResponse {
