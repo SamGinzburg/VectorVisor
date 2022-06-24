@@ -95,6 +95,7 @@ userdata_ubuntu = """#cloud-config
      - cd /tmp
      - sudo apt update
      - sudo apt install -y git
+     - sudo apt install -y git-lfs
      - sudo apt install -y htop
      - sudo apt install -y gcc
      - sudo apt install -y curl
@@ -109,8 +110,12 @@ userdata_ubuntu = """#cloud-config
      - tar -xzvf binaryen-version_100-x86_64-linux.tar.gz
      - cargo install wasm-snip
      - cd /tmp/VectorVisor/
+     - git lfs pull
      - sudo ~/.cargo/bin/cargo build --release
      - cd benchmarks/
+     - mkdir -p ~/.nv/ComputeCache/
+     - tar -zxvf nvcache.backup -C ~/.nv/ComputeCache/ .
+     - tar -zxvf nvbin.backup
      - cd json-compression-lz4/
      - ~/.cargo/bin/cargo build --release
      - ~/.cargo/bin/wasm-snip target/wasm32-wasi/release/json-compression.wasm {snip_args} -o target/wasm32-wasi/release/json-compression.wasm -p {snip_custom}
