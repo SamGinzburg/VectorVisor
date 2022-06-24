@@ -23,15 +23,15 @@ function cachebin() {
   cargo run --release -- -i a10g_$1-opt.wasm --heap=$2 --stack=$3 --hcallsize=$4 --vmcount=$6 --partition=false --maxdup=0 --jt=true --interleave=4
 }
 
-#cachebin "imagehash" "4194304" "131072" "262144" "3072" "4608"
-#cachebin "imagehash-modified" "4194304" "131072" "262144" "3072" "4608"
-#cachebin "imageblur" "4194304" "262144" "409600" "3072" "4608"
-#cachebin "imageblur-bmp" "4194304" "262144" "409600" "3072" "4608"
-#cachebin "json-compression" "4194304" "131072" "524288" "3072" "4608"
-#cachebin "pbkdf2" "3145728" "262144" "131072" "4096" "6144"
-#cachebin "scrypt" "3145728" "262144" "131072" "4096" "6144"
-#cachebin "average" "3145728" "131072" "262144" "4096" "5120"
-#cachebin "nlp-count-vectorizer" "4194304" "131072" "524288" "3072" "4608"
+cachebin "imagehash" "4194304" "131072" "262144" "3072" "4608"
+cachebin "imagehash-modified" "4194304" "131072" "262144" "3072" "4608"
+cachebin "imageblur" "4194304" "262144" "409600" "3072" "4608"
+cachebin "imageblur-bmp" "4194304" "262144" "409600" "3072" "4608"
+cachebin "json-compression" "4194304" "131072" "524288" "3072" "4608"
+cachebin "pbkdf2" "3145728" "262144" "131072" "4096" "6144"
+cachebin "scrypt" "3145728" "262144" "131072" "4096" "6144"
+cachebin "average" "3145728" "131072" "262144" "4096" "5120"
+cachebin "nlp-count-vectorizer" "4194304" "131072" "524288" "3072" "4608"
 cachebin "genpdf" "3145728" "131072" "262144" "2048" "3072"
 
 # Save the generated *.bin files
