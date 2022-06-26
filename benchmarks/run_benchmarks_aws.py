@@ -92,6 +92,8 @@ userdata_ubuntu = """#cloud-config
      - sudo su
      - sudo whoami
      - export HOME=/root
+     - export CUDA_CACHE_MAXSIZE=4294967296
+     - export CUDA_CACHE_PATH=~/.nv/ComputeCache/
      - cd /tmp
      - sudo apt update
      - sudo apt install -y git
@@ -153,8 +155,8 @@ userdata_ubuntu = """#cloud-config
      - cd ..
      - cd imageblur-bmp/
      - ~/.cargo/bin/cargo build --release
-     - ~/.cargo/bin/wasm-snip target/wasm32-wasi/release/imageblur.wasm {snip_args} --snip-rust-fmt-code -o target/wasm32-wasi/release/imageblur.wasm -p {snip_custom}
-     - /tmp/binaryen-version_100/bin/wasm-opt target/wasm32-wasi/release/imageblur.wasm {opt} -c -o target/wasm32-wasi/release/imageblur-opt.wasm
+     - ~/.cargo/bin/wasm-snip target/wasm32-wasi/release/imageblur-bmp.wasm {snip_args} --snip-rust-fmt-code -o target/wasm32-wasi/release/imageblur-bmp.wasm -p {snip_custom}
+     - /tmp/binaryen-version_100/bin/wasm-opt target/wasm32-wasi/release/imageblur-bmp.wasm {opt} -c -o target/wasm32-wasi/release/imageblur-opt.wasm
      - cd ..
      - cd imagehash/
      - sudo ~/.cargo/bin/cargo build --release
@@ -163,8 +165,8 @@ userdata_ubuntu = """#cloud-config
      - cd ..
      - cd imagehash-modified/
      - sudo ~/.cargo/bin/cargo build --release
-     - ~/.cargo/bin/wasm-snip target/wasm32-wasi/release/imagehash.wasm {snip_args} --snip-rust-fmt-code -o target/wasm32-wasi/release/imagehash.wasm -p {snip_custom}
-     - /tmp/binaryen-version_100/bin/wasm-opt target/wasm32-wasi/release/imagehash.wasm {opt} -c -o target/wasm32-wasi/release/imagehash-opt.wasm
+     - ~/.cargo/bin/wasm-snip target/wasm32-wasi/release/imagehash-modified.wasm {snip_args} --snip-rust-fmt-code -o target/wasm32-wasi/release/imagehash-modified.wasm -p {snip_custom}
+     - /tmp/binaryen-version_100/bin/wasm-opt target/wasm32-wasi/release/imagehash-modified.wasm {opt} -c -o target/wasm32-wasi/release/imagehash-opt.wasm
 """.format(opt=OPT_LEVEL, snip_args=WASM_SNIP_ARGS, snip_custom=WASM_SNIP_CUSTOM)
 
 
@@ -389,7 +391,7 @@ def run_pbkdf2_bench():
     x=$(cloud-init status)
     done
 
-    /tmp/VectorVisor/target/release/vectorvisor --input /tmp/VectorVisor/benchmarks/pbkdf2/target/wasm32-wasi/release/pbkdf2-opt.wasm --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=131072 --partition=true --partitions={maxfuncs} --maxloc={maxloc} --serverless=true --vmcount={vmcount} --vmgroups=1 --maxdup=3 --lgroup={lgroup} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} &> /tmp/pbkdf2.log &
+    /tmp/VectorVisor/target/release/vectorvisor --input /tmp/VectorVisor/benchmarks/pbkdf2-opt.wasm.bin --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=131072 --partition=false --serverless=true --vmcount={vmcount} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} &> /tmp/pbkdf2.log &
     """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, \
                maxfuncs=999, maxloc=maxloc*10, vmcount=vmcount)
 
@@ -1189,7 +1191,8 @@ us-east-1 AMI: ami-094c089c38ed069f2
 """
 
 if region == "us-east-1":
-    gpu_ami = 'ami-09a83b91fc98e860f'
+    #gpu_ami = 'ami-09a83b91fc98e860f'
+    gpu_ami = 'ami-02e8976fea9b1f568'
 elif region == "us-east-2":
     gpu_ami = 'ami-01463836f7041cd10'
 
@@ -1282,7 +1285,7 @@ while True:
 
 ssm_client = boto3.client('ssm', region_name=region)
 
-run_image_hash_bench(run_modified = False)
+run_pbkdf2_bench()
 
 cleanup()
 
