@@ -284,6 +284,11 @@ func main() {
 	}
 
 	<-bench_timer.C
+
+	for i := 0; i < num_vms; i++ {
+		termination_chan <- true
+	}
+
 	batches_completed := len(ch_exec_time)
 	fmt.Printf("Benchmark complete: %d requests completed\n", batches_completed)
 	exec_time := 0.0
@@ -316,15 +321,10 @@ func main() {
 	unique_fns = unique_fns / float64(batches_completed)
 	req_queue_time = req_queue_time / float64(batches_completed)
 	device_time = device_time / float64(batches_completed)
-    overhead = overhead / float64(batches_completed)
-    compile = compile / float64(batches_completed)
+	overhead = overhead / float64(batches_completed)
+	compile = compile / float64(batches_completed)
 
 	fmt.Printf("duration: %f\n", duration)
-
-	for i := 0; i < num_vms; i++ {
-		termination_chan <- true
-	}
-
 	// calculate the total RPS
 	total_rps := (float64(batches_completed)) / duration
 	fmt.Printf("Total RPS: %f\n", total_rps)

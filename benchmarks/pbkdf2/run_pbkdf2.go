@@ -272,17 +272,6 @@ func main() {
 	overhead := 0.0
 	compile := 0.0
 
-	// first batch is a cold-start and not representative
-	<-ch_exec_time
-	<-ch_latency
-	<-ch_queue_time
-	<-ch_submit
-	<-ch_unique_fns
-	<-ch_req_queue_time
-	<-ch_device_time
-	<-ch_overhead
-	batches_completed -= 1;
-
 	for i := 0; i < batches_completed; i++ {
 		exec_time += <-ch_exec_time
 		latency += <-ch_latency
@@ -308,7 +297,7 @@ func main() {
 
 	fmt.Printf("duration: %f\n", duration)
 	// calculate the total RPS
-	total_rps := (float64(batches_completed+1)) / duration
+	total_rps := (float64(batches_completed)) / duration
 	fmt.Printf("Total RPS: %f\n", total_rps)
 	fmt.Printf("On device execution time: %f\n", exec_time)
 	fmt.Printf("Average request latency: %f\n", latency)
