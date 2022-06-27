@@ -596,7 +596,7 @@ impl OpenCLRunner {
         compile_flags: String,
         link_flags: String,
         jitcache: bool,
-    ) -> (ProgramType, ocl::core::DeviceId) {
+    ) -> (ProgramType, ocl::core::DeviceId, u128) {
         let dev_type = ocl::core::get_device_info(&device_id, ocl::core::DeviceInfo::Type);
         let dev_name = ocl::core::get_device_info(&device_id, ocl::core::DeviceInfo::Name);
         let vendor = ocl::core::get_device_info(&device_id, ocl::core::DeviceInfo::Vendor);
@@ -628,6 +628,8 @@ impl OpenCLRunner {
         println!("OpenCL Extensions: {:?}", extensions);
         println!("Compile Flags: {:?}", compile_flags);
         println!("Link Flags: {:?}", link_flags);
+
+        let compile_time_start = std::time::Instant::now();
 
         // compile the GPU kernel(s)
         let program_to_run = match &self.input_program {
@@ -1044,11 +1046,13 @@ impl OpenCLRunner {
         };
 
         // If we are only generate the JIT cache, exit now
+
+        let compile_time_end = std::time::Instant::now();
         if jitcache {
             process::exit(0);
         }
 
-        return (program_to_run, device_id);
+        return (program_to_run, device_id, (compile_time_end-compile_time_start).as_nanos());
     }
 
     /*

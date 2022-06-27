@@ -63,6 +63,7 @@ impl BatchSubmitServer {
         queue_time: u128,
         device_time: u128,
         overhead_time: u64,
+	compile_time: u128,
     ) -> warp::http::Response<Body> {
         let mut final_resp = Response::builder().status(StatusCode::OK);
         {
@@ -95,6 +96,10 @@ impl BatchSubmitServer {
                 "overhead_time_ns",
                 warp::http::HeaderValue::from_str(&overhead_time.to_string()).unwrap(),
             );
+	    headers.insert(
+                "compile_time_ns",
+                warp::http::HeaderValue::from_str(&compile_time.to_string()).unwrap(),
+            );
         }
 
         final_resp.body(Body::from(resp)).unwrap()
@@ -107,6 +112,7 @@ impl BatchSubmitServer {
         vm_queue: Arc<VmQueue>,
         sender: Arc<Vec<Mutex<Sender<(bytes::Bytes, usize, String)>>>>,
         receiver: Arc<Vec<Mutex<Receiver<VmSenderType>>>>,
+	compile_time: u128,
     ) -> Result<impl warp::Reply, warp::Rejection> {
         //dbg!(&vm_idx);
         // Get an available VM first
@@ -163,6 +169,7 @@ impl BatchSubmitServer {
                     (req_start - req_queue).as_nanos(),
                     (req_end - req_queue).as_nanos(),
                     overhead_time_ns,
+		    compile_time,
                 ));
             }
         }
@@ -179,6 +186,7 @@ impl BatchSubmitServer {
         num_vms: u32,
         server_ip: String,
         server_port: String,
+	compile_time: u128,
     ) -> () {
         tokio::runtime::Builder::new_multi_thread()
             //.worker_threads(4)
@@ -199,6 +207,7 @@ impl BatchSubmitServer {
                     let warp_queue = warp::any().map(move || Arc::clone(&queue));
                     let warp_senders = warp::any().map(move || Arc::clone(&sender));
                     let warp_receivers = warp::any().map(move || Arc::clone(&receiver));
+                    let compile_time = warp::any().map(move || compile_time.clone());
 
                     let vm_idx_counter = Arc::new(AtomicU64::new(0));
 
@@ -216,6 +225,7 @@ impl BatchSubmitServer {
                         .and(warp_queue)
                         .and(warp_senders)
                         .and(warp_receivers)
+			.and(compile_time)
                         .and_then(BatchSubmitServer::response);
 
                     let is_active_param = warp::any().map(move || Arc::clone(&is_active));

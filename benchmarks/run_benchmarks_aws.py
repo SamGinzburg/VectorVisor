@@ -112,12 +112,9 @@ userdata_ubuntu = """#cloud-config
      - tar -xzvf binaryen-version_100-x86_64-linux.tar.gz
      - cargo install wasm-snip
      - cd /tmp/VectorVisor/
-     - git lfs pull
      - sudo ~/.cargo/bin/cargo build --release
      - cd benchmarks/
      - mkdir -p ~/.nv/ComputeCache/
-     - tar -zxvf nvcache.backup -C ~/.nv/ComputeCache/ .
-     - tar -zxvf nvbin.backup
      - cd json-compression-lz4/
      - ~/.cargo/bin/cargo build --release
      - ~/.cargo/bin/wasm-snip target/wasm32-wasi/release/json-compression.wasm {snip_args} -o target/wasm32-wasi/release/json-compression.wasm -p {snip_custom}
@@ -391,7 +388,7 @@ def run_pbkdf2_bench():
     x=$(cloud-init status)
     done
 
-    /tmp/VectorVisor/target/release/vectorvisor --input /tmp/VectorVisor/benchmarks/pbkdf2-opt.wasm.bin --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=131072 --partition=false --serverless=true --vmcount={vmcount} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} &> /tmp/pbkdf2.log &
+    /tmp/VectorVisor/target/release/vectorvisor --input /tmp/VectorVisor/benchmarks/pbkdf2/target/wasm32-wasi/release/pbkdf2-opt.wasm --maxdup=0 --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=131072 --partition=false --serverless=true --vmcount={vmcount} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --rt=200 &> /tmp/pbkdf2.log &
     """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, \
                maxfuncs=999, maxloc=maxloc*10, vmcount=vmcount)
 

@@ -2,8 +2,6 @@ package main
 
 import (
 	"bytes"
-	b64 "encoding/base64"
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"math/rand"
@@ -11,19 +9,20 @@ import (
 	"os"
 	"strconv"
 	"time"
+	msgpack "github.com/vmihailenco/msgpack/v5"
 )
 
 type payload struct {
-	Text string `json:"password"`
+	Text string `msgpack:"password"`
 }
 
 type Message struct {
-	Req_id int    `json:"req_id"`
-	Req    string `json:"req"`
+	Req_id int    `msgpack:"req_id"`
+	Req    string `msgpack:"req"`
 }
 
 type MessageBatch struct {
-	Requests []Message `json:"requests"`
+	Requests []Message `msgpack:"requests"`
 }
 
 type VmmResponse struct {
@@ -54,7 +53,7 @@ func RandString(n int) string {
 	for i := range b {
 		b[i] = letterRunes[rand.Intn(len(letterRunes))]
 	}
-	return b64.StdEncoding.EncodeToString([]byte(string(b)))
+	return string(b)
 }
 
 func IssueRequests(ip string, port int, req [][]byte, exec_time chan<- float64, latency chan<- float64, queue_time chan<- float64, submit_count chan<- float64, unique_fns chan<- float64, request_queue_time chan<- float64, device_time_ch chan<- float64, overhead_ch chan<- float64, end_chan chan bool) {
@@ -183,7 +182,7 @@ func main() {
 	reqs := make([][]byte, NUM_PARAMS)
 	for i := 0; i < NUM_PARAMS; i++ {
 		p := payload{Text: RandString(32)}
-		request_body, _ := json.Marshal(p)
+		request_body, _ := msgpack.Marshal(p)
 		reqs[i] = request_body
 	}
 

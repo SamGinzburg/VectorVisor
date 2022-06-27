@@ -783,7 +783,7 @@ fn main() {
             entry_point,
             file.clone(),
         );
-        let (program, device_id) = runner.setup_kernel(
+        let (program, device_id, compile_time) = runner.setup_kernel(
             context,
             device_id,
             fname,
@@ -866,6 +866,7 @@ fn main() {
                             num_vms,
                             batch_submit_ip_clone.clone(),
                             port.clone(),
+			    compile_time.clone(),
                         );
                     });
                 }
@@ -952,6 +953,7 @@ fn main() {
                     num_threads.try_into().unwrap(),
                     batch_submit_ip,
                     batch_submit_port.to_string(),
+ 		    0 as u128,
                 );
             });
         }
