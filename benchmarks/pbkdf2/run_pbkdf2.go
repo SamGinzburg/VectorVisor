@@ -12,8 +12,12 @@ import (
 	msgpack "github.com/vmihailenco/msgpack/v5"
 )
 
-type payload struct {
+type Payload struct {
 	Text string `msgpack:"password"`
+}
+
+type PayloadBatch struct {
+	batch []Payload `msgpack:"batch"`
 }
 
 type Message struct {
@@ -48,12 +52,22 @@ func RandIntSlice(n int) []int {
 // https://stackoverflow.com/questions/22892120/how-to-generate-a-random-string-of-a-fixed-length-in-go
 var letterRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 
-func RandString(n int) string {
+func RandString(n int) Payload {
 	b := make([]rune, n)
 	for i := range b {
 		b[i] = letterRunes[rand.Intn(len(letterRunes))]
 	}
-	return string(b)
+	return Payload{Text: string(b)}
+}
+
+func RandBatch(n int) PayloadBatch {
+	batch := make([]Payload, 0, n)
+	for i := 0; i < n; i++ {
+		batch = append(batch, RandString(32));
+	}
+	return PayloadBatch {
+		batch: batch,
+	}
 }
 
 func IssueRequests(ip string, port int, req [][]byte, exec_time chan<- float64, latency chan<- float64, queue_time chan<- float64, submit_count chan<- float64, unique_fns chan<- float64, request_queue_time chan<- float64, device_time_ch chan<- float64, overhead_ch chan<- float64, compile_ch chan<- float64, end_chan chan bool) {
@@ -188,7 +202,7 @@ func main() {
 
 	reqs := make([][]byte, NUM_PARAMS)
 	for i := 0; i < NUM_PARAMS; i++ {
-		p := payload{Text: RandString(32)}
+		p := RandBatch(10)
 		request_body, _ := msgpack.Marshal(p)
 		reqs[i] = request_body
 	}

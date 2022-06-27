@@ -31,9 +31,20 @@ struct FuncInput {
    password: String,
 }
 
+
+#[derive(Debug, Deserialize)]
+struct BatchInput {
+   hash: Vec<FuncInput>,
+}
+
 #[derive(Debug, Serialize)]
 struct FuncResponse {
     resp: Vec<u8>,
+}
+
+#[derive(Debug, Serialize)]
+struct BatchResponse {
+    resp: Vec<FuncResponse>,
 }
 
 #[inline(never)]
@@ -50,7 +61,16 @@ fn hash_input_password(event: FuncInput) -> FuncResponse {
     FuncResponse { resp: password_hash.as_bytes().to_vec() }
 }
 
+#[inline(never)]
+fn handle_batch(event: BatchInput) -> BatchResponse {
+    let mut res = vec![];
+    for input in event.hash {
+	res.push(hash_input_password(input));
+    }
+    BatchResponse { resp: res }
+}
+
 fn main() {
-    let handler = WasmHandler::new(&hash_input_password);
+    let handler = WasmHandler::new(&handle_batch);
     handler.run_with_format(1024*1024, MsgPack);
 }
