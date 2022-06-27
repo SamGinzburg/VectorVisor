@@ -108,8 +108,8 @@ userdata_ubuntu = """#cloud-config
      - . $HOME/.cargo/env
      - sudo ~/.cargo/bin/rustup target add wasm32-wasi
      - git clone https://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:x-oauth-basic@github.com/SamGinzburg/VectorVisor.git
-     - wget https://github.com/WebAssembly/binaryen/releases/download/version_100/binaryen-version_100-x86_64-linux.tar.gz
-     - tar -xzvf binaryen-version_100-x86_64-linux.tar.gz
+     - wget https://github.com/WebAssembly/binaryen/releases/download/version_109/binaryen-version_109-x86_64-linux.tar.gz
+     - tar -xzvf binaryen-version_109-x86_64-linux.tar.gz
      - cargo install wasm-snip
      - cd /tmp/VectorVisor/
      - sudo ~/.cargo/bin/cargo build --release
@@ -118,52 +118,57 @@ userdata_ubuntu = """#cloud-config
      - cd json-compression-lz4/
      - ~/.cargo/bin/cargo build --release
      - ~/.cargo/bin/wasm-snip target/wasm32-wasi/release/json-compression.wasm {snip_args} -o target/wasm32-wasi/release/json-compression.wasm -p {snip_custom}
-     - /tmp/binaryen-version_100/bin/wasm-opt target/wasm32-wasi/release/json-compression.wasm {opt} -c -o target/wasm32-wasi/release/json-compression-opt.wasm
+     - /tmp/binaryen-version_109/bin/wasm-opt target/wasm32-wasi/release/json-compression.wasm {opt} -c -o target/wasm32-wasi/release/json-compression-opt.wasm
      - cd ..
      - cd json-compression/
      - ~/.cargo/bin/cargo build --release
      - ~/.cargo/bin/wasm-snip target/wasm32-wasi/release/json-compression.wasm {snip_args} -o target/wasm32-wasi/release/json-compression.wasm -p {snip_custom}
-     - /tmp/binaryen-version_100/bin/wasm-opt target/wasm32-wasi/release/json-compression.wasm {opt} -c -o target/wasm32-wasi/release/json-compression-opt.wasm
+     - /tmp/binaryen-version_109/bin/wasm-opt target/wasm32-wasi/release/json-compression.wasm {opt} -c -o target/wasm32-wasi/release/json-compression-opt.wasm
      - cd ..
      - cd average/
      - ~/.cargo/bin/cargo build --release
      - ~/.cargo/bin/wasm-snip target/wasm32-wasi/release/average.wasm {snip_args} -o target/wasm32-wasi/release/average.wasm -p {snip_custom}
-     - /tmp/binaryen-version_100/bin/wasm-opt target/wasm32-wasi/release/average.wasm {opt} -c -o target/wasm32-wasi/release/average-opt.wasm
+     - /tmp/binaryen-version_109/bin/wasm-opt target/wasm32-wasi/release/average.wasm {opt} -c -o target/wasm32-wasi/release/average-opt.wasm
      - cd ..
      - cd pbkdf2/
      - ~/.cargo/bin/cargo build --release
      - ~/.cargo/bin/wasm-snip target/wasm32-wasi/release/pbkdf2.wasm {snip_args} -o target/wasm32-wasi/release/pbkdf2.wasm -p {snip_custom}
-     - /tmp/binaryen-version_100/bin/wasm-opt target/wasm32-wasi/release/pbkdf2.wasm {opt} -c -o target/wasm32-wasi/release/pbkdf2-opt.wasm
+     - /tmp/binaryen-version_109/bin/wasm-opt target/wasm32-wasi/release/pbkdf2.wasm {opt} -c -o target/wasm32-wasi/release/pbkdf2-opt.wasm
      - cd ..
      - cd scrypt/
      - ~/.cargo/bin/cargo build --release
      - ~/.cargo/bin/wasm-snip target/wasm32-wasi/release/scrypt.wasm {snip_args} -o target/wasm32-wasi/release/scrypt.wasm -p {snip_custom}
-     - /tmp/binaryen-version_100/bin/wasm-opt target/wasm32-wasi/release/scrypt.wasm {opt} -c -o target/wasm32-wasi/release/scrypt-opt.wasm
+     - /tmp/binaryen-version_109/bin/wasm-opt target/wasm32-wasi/release/scrypt.wasm {opt} -c -o target/wasm32-wasi/release/scrypt-opt.wasm
      - cd ..
      - cd nlp-count-vectorizer/
      - ~/.cargo/bin/cargo build --release
      - ~/.cargo/bin/wasm-snip target/wasm32-wasi/release/nlp-count-vectorizer.wasm {snip_args} -o target/wasm32-wasi/release/nlp-count-vectorizer.wasm -p {snip_custom}
-     - /tmp/binaryen-version_100/bin/wasm-opt target/wasm32-wasi/release/nlp-count-vectorizer.wasm {opt} -c -o target/wasm32-wasi/release/nlp-count-vectorizer-opt.wasm
+     - /tmp/binaryen-version_109/bin/wasm-opt target/wasm32-wasi/release/nlp-count-vectorizer.wasm {opt} -c -o target/wasm32-wasi/release/nlp-count-vectorizer-opt.wasm
      - cd ..
      - cd imageblur/
      - sudo ~/.cargo/bin/cargo build --release
      - ~/.cargo/bin/wasm-snip target/wasm32-wasi/release/imageblur.wasm {snip_args} --snip-rust-fmt-code -o target/wasm32-wasi/release/imageblur.wasm -p {snip_custom}
-     - /tmp/binaryen-version_100/bin/wasm-opt target/wasm32-wasi/release/imageblur.wasm {opt} -c -o target/wasm32-wasi/release/imageblur-opt.wasm
+     - /tmp/binaryen-version_109/bin/wasm-opt target/wasm32-wasi/release/imageblur.wasm {opt} -c -o target/wasm32-wasi/release/imageblur-opt.wasm
      - cd ..
      - cd imageblur-bmp/
      - ~/.cargo/bin/cargo build --release
      - ~/.cargo/bin/wasm-snip target/wasm32-wasi/release/imageblur-bmp.wasm {snip_args} --snip-rust-fmt-code -o target/wasm32-wasi/release/imageblur-bmp.wasm -p {snip_custom}
-     - /tmp/binaryen-version_100/bin/wasm-opt target/wasm32-wasi/release/imageblur-bmp.wasm {opt} -c -o target/wasm32-wasi/release/imageblur-opt.wasm
+     - /tmp/binaryen-version_109/bin/wasm-opt target/wasm32-wasi/release/imageblur-bmp.wasm {opt} -c -o target/wasm32-wasi/release/imageblur-opt.wasm
      - cd ..
      - cd imagehash/
      - sudo ~/.cargo/bin/cargo build --release
      - ~/.cargo/bin/wasm-snip target/wasm32-wasi/release/imagehash.wasm {snip_args} --snip-rust-fmt-code -o target/wasm32-wasi/release/imagehash.wasm -p {snip_custom}
-     - /tmp/binaryen-version_100/bin/wasm-opt target/wasm32-wasi/release/imagehash.wasm {opt} -c -o target/wasm32-wasi/release/imagehash-opt.wasm
+     - /tmp/binaryen-version_109/bin/wasm-opt target/wasm32-wasi/release/imagehash.wasm {opt} -c -o target/wasm32-wasi/release/imagehash-opt.wasm
      - cd ..
      - cd imagehash-modified/
      - sudo ~/.cargo/bin/cargo build --release
      - ~/.cargo/bin/wasm-snip target/wasm32-wasi/release/imagehash-modified.wasm {snip_args} --snip-rust-fmt-code -o target/wasm32-wasi/release/imagehash-modified.wasm -p {snip_custom}
-     - /tmp/binaryen-version_100/bin/wasm-opt target/wasm32-wasi/release/imagehash-modified.wasm {opt} -c -o target/wasm32-wasi/release/imagehash-opt.wasm
+     - /tmp/binaryen-version_109/bin/wasm-opt target/wasm32-wasi/release/imagehash-modified.wasm {opt} -c -o target/wasm32-wasi/release/imagehash-opt.wasm
+     - cd ..
+     - cd genpdf/
+     - sudo ~/.cargo/bin/cargo build --release
+     - ~/.cargo/bin/wasm-snip target/wasm32-wasi/release/genpdf.wasm {snip_args} -o target/wasm32-wasi/release/genpdf.wasm -p {snip_custom}
+     - /tmp/binaryen-version_109/bin/wasm-opt target/wasm32-wasi/release/genpdf.wasm {opt} -c -o target/wasm32-wasi/release/genpdf-opt.wasm
 """.format(opt=OPT_LEVEL, snip_args=WASM_SNIP_ARGS, snip_custom=WASM_SNIP_CUSTOM)
 
 
@@ -630,8 +635,136 @@ def run_lz4_bench():
     with open(temp_dir+"cpu_x86_bench_lz4.txt", "w") as text_file:
         text_file.write(str(output))
 
-def run_average_bench():
+def run_genpdf_bench():
+    if run_a10g:
+        vmcount = 5120
+    else:
+        vmcount = 4096
 
+    run_genpdf_command_x86 = """#!/bin/bash
+    sudo su
+    ulimit -n 65536
+    x=$(cloud-init status)
+    until [ "$x" == "status: done" ]; do
+    sleep 10
+    x=$(cloud-init status)
+    done
+
+    cd /tmp/VectorVisor/benchmarks/genpdf/
+    ~/.cargo/bin/cargo run --release --target x86_64-unknown-linux-gnu &> /tmp/genpdf.log &
+    """.format(fastreply=fastreply)
+
+    run_genpdf_command_wasmtime = """#!/bin/bash
+    sudo su
+    ulimit -n 65536
+    x=$(cloud-init status)
+    until [ "$x" == "status: done" ]; do
+    sleep 10
+    x=$(cloud-init status)
+    done
+
+    /tmp/VectorVisor/target/release/vectorvisor --input /tmp/VectorVisor/benchmarks/genpdf/target/wasm32-wasi/release/genpdf-opt.wasm --ip=0.0.0.0 --heap=3145728 --stack=131072 --hcallsize=262144 --partition=true --serverless=true --vmcount=4096 --wasmtime=true --fastreply={fastreply} &> /tmp/genpdf.log &
+    """.format(fastreply=fastreply)
+
+    run_command(run_genpdf_command_wasmtime, "run_average_command_wasmtime", cpu_bench_instance[0].id)
+
+    run_genpdf_command = """#!/bin/bash
+    sudo su
+    ulimit -n 65536
+    x=$(cloud-init status)
+    until [ "$x" == "status: done" ]; do
+    sleep 10
+    x=$(cloud-init status)
+    done
+
+    /tmp/VectorVisor/target/release/vectorvisor --input /tmp/VectorVisor/benchmarks/genpdf/target/wasm32-wasi/release/genpdf-opt.wasm --ip=0.0.0.0 --heap=3145728 --stack=131072 --hcallsize=262144 --partition=true --serverless=true --vmcount={vmcount} --wasmtime=false --maxdup=2 --lgroup={lgroup} --partitions={maxfuncs} --maxloc={maxloc} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} --rt=200 &> /tmp/genpdf.log &
+    """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, \
+               maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount)
+
+    run_command(run_genpdf_command, "run_average_command", gpu_instance[0].id)
+
+    # Now set up the invoker
+
+    run_invoker = """#!/bin/bash
+    sudo su
+    ulimit -n 65536
+    mkdir -p ~/gocache/
+    mkdir -p ~/gopath/
+    mkdir -p ~/xdg/
+    export GOCACHE=~/gocache/
+    export GOPATH=~/gopath/
+    export XDG_CACHE_HOME=~/xdg/
+
+    x=$(cloud-init status)
+    until [ "$x" == "status: done" ]; do
+    sleep 10
+    x=$(cloud-init status)
+    done
+
+    cd /tmp/VectorVisor/benchmarks/genpdf/
+
+    /usr/local/go/bin/go run /tmp/VectorVisor/benchmarks/genpdf/run_genpdf.go {addr} 8000 {target_rps} 1 {duration}
+    """.format(addr=gpu_instance[0].private_dns_name, target_rps=vmcount*2, duration=benchmark_duration)
+
+
+    command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
+
+    time.sleep(20)
+
+    # Block until benchmark is complete
+    output = block_on_command(command_id, invoker_instance[0].id)
+    print (output)
+
+    # save output
+    with open(temp_dir+"gpu_bench_genpdf.txt", "w") as text_file:
+        text_file.write(str(output))
+
+    run_invoker_wasmtime = """#!/bin/bash
+    sudo su
+    ulimit -n 65536
+    mkdir -p ~/gocache/
+    mkdir -p ~/gopath/
+    mkdir -p ~/xdg/
+    export GOCACHE=~/gocache/
+    export GOPATH=~/gopath/
+    export XDG_CACHE_HOME=~/xdg/
+
+    x=$(cloud-init status)
+    until [ "$x" == "status: done" ]; do
+    sleep 10
+    x=$(cloud-init status)
+    done
+
+    cd /tmp/VectorVisor/benchmarks/genpdf/
+
+    /usr/local/go/bin/go run /tmp/VectorVisor/benchmarks/genpdf/run_genpdf.go {addr} 8000 {target_rps} 1 {duration}
+    """.format(addr=cpu_bench_instance[0].private_dns_name, target_rps=target_rps_cpu, duration=benchmark_duration)
+
+    command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
+
+    time.sleep(20)
+
+    # Block until benchmark is complete
+    output = block_on_command(command_id, invoker_instance[0].id)
+    print (output)
+    # save output
+    with open(temp_dir+"cpu_bench_genpdf.txt", "w") as text_file:
+        text_file.write(str(output))
+
+    cleanup()
+
+    run_command(run_genpdf_command_x86, "run_genpdf_command_x86", cpu_bench_instance[0].id)
+    
+    command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
+
+    time.sleep(20)
+    output = block_on_command(command_id, invoker_instance[0].id)
+    print (output)
+    # save output
+    with open(temp_dir+"cpu_x86_bench_genpdf.txt", "w") as text_file:
+        text_file.write(str(output))
+
+def run_average_bench():
     if run_a10g:
         vmcount = 5120
     else:
@@ -1303,9 +1436,13 @@ while True:
 
 ssm_client = boto3.client('ssm', region_name=region)
 
-run_pbkdf2_bench()
+run_genpdf_bench()
 
 cleanup()
+
+#run_pbkdf2_bench()
+
+#cleanup()
 
 # run image hash bench
 

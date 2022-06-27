@@ -32,7 +32,7 @@ cachebin "pbkdf2" "3145728" "262144" "131072" "4096" "6144"
 cachebin "scrypt" "3145728" "262144" "131072" "4096" "6144"
 cachebin "average" "3145728" "131072" "262144" "4096" "5120"
 cachebin "nlp-count-vectorizer" "4194304" "131072" "524288" "3072" "4608"
-cachebin "genpdf" "3145728" "131072" "262144" "2048" "3072"
+cachebin "genpdf" "3145728" "131072" "262144" "4096" "5120"
 
 # Save the generated *.bin files
 tar -zcvf nvbin.backup $( find -name "*.bin" )
