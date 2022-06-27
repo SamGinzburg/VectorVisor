@@ -388,7 +388,7 @@ def run_pbkdf2_bench():
     x=$(cloud-init status)
     done
 
-    /tmp/VectorVisor/target/release/vectorvisor --input /tmp/VectorVisor/benchmarks/pbkdf2/target/wasm32-wasi/release/pbkdf2-opt.wasm --maxdup=0 --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=131072 --partition=false --serverless=true --vmcount={vmcount} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --rt=200 &> /tmp/pbkdf2.log &
+    /tmp/VectorVisor/target/release/vectorvisor --input /tmp/VectorVisor/benchmarks/pbkdf2/target/wasm32-wasi/release/pbkdf2-opt.wasm --maxdup=0 --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=16384 --partition=false --serverless=true --vmcount={vmcount} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --rt=200 &> /tmp/pbkdf2.log &
     """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, \
                maxfuncs=999, maxloc=maxloc*10, vmcount=vmcount)
 

@@ -34,7 +34,7 @@ struct FuncInput {
 
 #[derive(Debug, Deserialize)]
 struct BatchInput {
-   hash: Vec<FuncInput>,
+   batch: Vec<FuncInput>,
 }
 
 #[derive(Debug, Serialize)]
@@ -64,7 +64,7 @@ fn hash_input_password(event: FuncInput) -> FuncResponse {
 #[inline(never)]
 fn handle_batch(event: BatchInput) -> BatchResponse {
     let mut res = vec![];
-    for input in event.hash {
+    for input in event.batch {
 	res.push(hash_input_password(input));
     }
     BatchResponse { resp: res }

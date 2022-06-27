@@ -17,7 +17,7 @@ type Payload struct {
 }
 
 type PayloadBatch struct {
-	batch []Payload `msgpack:"batch"`
+	Batch []Payload `msgpack:"batch"`
 }
 
 type Message struct {
@@ -66,7 +66,7 @@ func RandBatch(n int) PayloadBatch {
 		batch = append(batch, RandString(32));
 	}
 	return PayloadBatch {
-		batch: batch,
+		Batch: batch,
 	}
 }
 
@@ -255,6 +255,11 @@ func main() {
 	}
 
 	<-bench_timer.C
+
+	for i := 0; i < num_vms; i++ {
+		termination_chan <- true
+	}
+
 	batches_completed := len(ch_exec_time)
 	fmt.Printf("Benchmark complete: %d requests completed\n", batches_completed)
 	exec_time := 0.0
@@ -266,6 +271,17 @@ func main() {
 	device_time := 0.0
 	overhead := 0.0
 	compile := 0.0
+
+	// first batch is a cold-start and not representative
+	<-ch_exec_time
+	<-ch_latency
+	<-ch_queue_time
+	<-ch_submit
+	<-ch_unique_fns
+	<-ch_req_queue_time
+	<-ch_device_time
+	<-ch_overhead
+	batches_completed -= 1;
 
 	for i := 0; i < batches_completed; i++ {
 		exec_time += <-ch_exec_time
@@ -287,17 +303,12 @@ func main() {
 	unique_fns = unique_fns / float64(batches_completed)
 	req_queue_time = req_queue_time / float64(batches_completed)
 	device_time = device_time / float64(batches_completed)
-    overhead = overhead / float64(batches_completed)
-    compile = compile / float64(batches_completed)
+	overhead = overhead / float64(batches_completed)
+	compile = compile / float64(batches_completed)
 
 	fmt.Printf("duration: %f\n", duration)
-
-	for i := 0; i < num_vms; i++ {
-		termination_chan <- true
-	}
-
 	// calculate the total RPS
-	total_rps := (float64(batches_completed)) / duration
+	total_rps := (float64(batches_completed+1)) / duration
 	fmt.Printf("Total RPS: %f\n", total_rps)
 	fmt.Printf("On device execution time: %f\n", exec_time)
 	fmt.Printf("Average request latency: %f\n", latency)
