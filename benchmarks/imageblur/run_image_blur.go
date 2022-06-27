@@ -49,7 +49,7 @@ func RandImage(n int) string {
 	return b64.StdEncoding.EncodeToString([]byte(file_data))
 }
 
-func IssueRequests(ip string, port int, req [][]byte, exec_time chan<- float64, latency chan<- float64, queue_time chan<- float64, submit_count chan<- float64, unique_fns chan<- float64, request_queue_time chan<- float64, device_time_ch chan<- float64, overhead_ch chan<- float64, end_chan chan bool) {
+func IssueRequests(ip string, port int, req [][]byte, exec_time chan<- float64, latency chan<- float64, queue_time chan<- float64, submit_count chan<- float64, unique_fns chan<- float64, request_queue_time chan<- float64, device_time_ch chan<- float64, overhead_ch chan<- float64, compile_ch chan<- float64, end_chan chan bool) {
 	addr := fmt.Sprintf("http://%s:%d/batch_submit/", ip, port)
 	http_request, _ := http.NewRequest("GET", addr, nil)
 	http_request.Header.Add("Content-Type", "application/json; charset=utf-8")
@@ -61,6 +61,7 @@ func IssueRequests(ip string, port int, req [][]byte, exec_time chan<- float64, 
 	req_queue_time := 0.0
 	device_time := 0.0
 	overhead_time := 0.0
+	compile_time := 0.0
 
 	for {
 		http_request.Body = ioutil.NopCloser(bytes.NewReader(req[rand.Intn(NUM_PARAMS)]))
@@ -100,6 +101,12 @@ func IssueRequests(ip string, port int, req [][]byte, exec_time chan<- float64, 
 		req_queue_time, _ = strconv.ParseFloat(resp.Header.Get("req_queue_time"), 64)
 		device_time, _ = strconv.ParseFloat(resp.Header.Get("device_time"), 64)
 		overhead_time, _ = strconv.ParseFloat(resp.Header.Get("overhead_time_ns"), 64)
+		compile_time, _ = strconv.ParseFloat(resp.Header.Get("compile_time_ns"), 64)
+		select {
+		case compile_ch <- compile_time:
+		default:
+			return
+		}
 		select {
 		case overhead_ch <- overhead_time:
 		default:
@@ -205,6 +212,7 @@ func main() {
 	//fmt.Printf("server is active... starting benchmark\n")
 	time.Sleep(5000 * time.Millisecond)
 
+
 	ch_exec_time := make(chan float64, 1000000)
 	ch_latency := make(chan float64, 1000000)
 	ch_queue_time := make(chan float64, 1000000)
@@ -213,6 +221,7 @@ func main() {
 	ch_req_queue_time := make(chan float64, 1000000)
 	ch_device_time := make(chan float64, 1000000)
 	ch_overhead := make(chan float64, 1000000)
+	ch_compile := make(chan float64, 1000000)
 
 	termination_chan := make(chan bool, num_vms)
 
@@ -220,7 +229,7 @@ func main() {
 	bench_timer := time.NewTimer(benchmark_duration)
 	for vmgroup := 0; vmgroup < num_vmgroups; vmgroup++ {
 		for i := 0; i < num_vms; i++ {
-			go IssueRequests(os.Args[1], port+vmgroup, reqs, ch_exec_time, ch_latency, ch_queue_time, ch_submit, ch_unique_fns, ch_req_queue_time, ch_device_time, ch_overhead, termination_chan)
+			go IssueRequests(os.Args[1], port+vmgroup, reqs, ch_exec_time, ch_latency, ch_queue_time, ch_submit, ch_unique_fns, ch_req_queue_time, ch_device_time, ch_overhead, ch_compile, termination_chan)
 		}
 	}
 
@@ -235,6 +244,7 @@ func main() {
 	req_queue_time := 0.0
 	device_time := 0.0
 	overhead := 0.0
+	compile := 0.0
 
 	for i := 0; i < batches_completed; i++ {
 		exec_time += <-ch_exec_time
@@ -245,6 +255,7 @@ func main() {
 		req_queue_time += <-ch_req_queue_time
 		device_time += <-ch_device_time
 		overhead += <-ch_overhead
+		compile += <-ch_compile
 	}
 
 	duration := float64(benchmark_duration.Seconds())
@@ -256,6 +267,7 @@ func main() {
 	req_queue_time = req_queue_time / float64(batches_completed)
 	device_time = device_time / float64(batches_completed)
     overhead = overhead / float64(batches_completed)
+    compile = compile / float64(batches_completed)
 
 	fmt.Printf("duration: %f\n", duration)
 
@@ -274,7 +286,8 @@ func main() {
 	fmt.Printf("Request Queue Time: %f\n", req_queue_time)
 	fmt.Printf("Device Time: %f\n", device_time)
 	fmt.Printf("overhead: %f\n", overhead)
-
+	fmt.Printf("compile time: %f\n", compile)
+	
 	/*
 		on_device_compute_time := 0.0
 		device_queue_overhead := 0.0
