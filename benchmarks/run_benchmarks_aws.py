@@ -477,6 +477,27 @@ def run_pbkdf2_bench():
     with open(temp_dir+"cpu_x86_bench_pbkdf2.txt", "w") as text_file:
         text_file.write(str(output))
 
+    # we need to kill the running VV instance first
+    cleanup()
+
+    run_invoker_hashcat = """#!/bin/bash
+	    sudo su
+	    ulimit -n 65536
+	    apt install -y hashcat
+	    hashcat -b -m 9200
+	    """
+
+    command_id = run_command(run_invoker_hashcat, "run hashcat", gpu_instance[0].id)
+
+    time.sleep(20)
+
+    # Block until benchmark is complete
+    output = block_on_command(command_id, gpu_instance[0].id)
+    print (output)
+    with open(temp_dir+"hashcat_bench_pbkdf2.txt", "w") as text_file:
+        text_file.write(str(output))
+
+
 def run_lz4_bench():
     if run_a10g:
         vmcount = 4608
@@ -1337,6 +1358,14 @@ cleanup()
 run_image_blur_bench(run_bmp = False)
 
 cleanup()
+
+# run pbkdf2 bench
+# pbkdf2 needs to be run last because it also installs hashcat / pocl to benchmark against at the end
+run_pbkdf2_bench()
+
+cleanup()
+
+
 
 """
 
