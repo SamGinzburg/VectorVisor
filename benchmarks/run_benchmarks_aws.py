@@ -22,14 +22,15 @@ maxloc = 2000000
 #maxfuncs = 999
 #maxloc = 20000000
 benchmark_duration = 300
-run_a10g = False
+run_a10g = True
+run_amd = False
+
 if run_a10g:
     maxdemospace = 0
     local_group_size = 16
 else:
     maxdemospace = 0
     local_group_size = 64
-
 
 today = datetime.now()
 temp_dir = today.strftime("%d_%m_%Y_%H_%M_%S_bench_results/")
@@ -677,7 +678,7 @@ def run_genpdf_bench():
     x=$(cloud-init status)
     done
 
-    /tmp/VectorVisor/target/release/vectorvisor --input /tmp/VectorVisor/benchmarks/genpdf/target/wasm32-wasi/release/genpdf-opt.wasm --ip=0.0.0.0 --heap=3145728 --stack=131072 --hcallsize=262144 --partition=true --serverless=true --vmcount={vmcount} --wasmtime=false --maxdup=2 --lgroup={lgroup} --partitions={maxfuncs} --maxloc={maxloc} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} --rt=200 &> /tmp/genpdf.log &
+    /tmp/VectorVisor/target/release/vectorvisor --input /tmp/VectorVisor/benchmarks/genpdf/target/wasm32-wasi/release/genpdf-opt.wasm --ip=0.0.0.0 --heap=3000000 --stack=131072 --hcallsize=200000 --partition=true --serverless=true --vmcount={vmcount} --wasmtime=false --maxdup=2 --lgroup={lgroup} --partitions={maxfuncs} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} --rt=200 &> /tmp/genpdf.log &
     """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, \
                maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount)
 
@@ -1376,8 +1377,13 @@ if region == "us-east-1":
 elif region == "us-east-2":
     cpu_ami = 'ami-028dbc12531690cf4'
 
+if run_amd:
+    cpu_vm = "c5a.xlarge"
+else:
+    cpu_vm = "c5.xlarge"
+
 cpu_bench_instance = ec2.create_instances(ImageId=cpu_ami,
-                                InstanceType="c5a.xlarge",
+                                InstanceType=cpu_vm,
                                 MinCount=1,
                                 MaxCount=1,
                                 UserData=userdata_ubuntu,
@@ -1436,21 +1442,6 @@ while True:
 
 ssm_client = boto3.client('ssm', region_name=region)
 
-run_genpdf_bench()
-
-cleanup()
-
-#run_pbkdf2_bench()
-
-#cleanup()
-
-# run image hash bench
-
-#run_image_hash_bench(run_modified = True)
-
-#cleanup()
-
-"""
 # run image hash bench
 run_image_hash_bench(run_modified = False)
 
@@ -1496,15 +1487,15 @@ run_image_blur_bench(run_bmp = False)
 
 cleanup()
 
+run_genpdf_bench()
+
+cleanup()
+
 # run pbkdf2 bench
 # pbkdf2 needs to be run last because it also installs hashcat / pocl to benchmark against at the end
 run_pbkdf2_bench()
 
 cleanup()
-
-
-
-"""
 
 # clean up all instances at end
 ec2.instances.filter(InstanceIds = instance_id_list).terminate()
