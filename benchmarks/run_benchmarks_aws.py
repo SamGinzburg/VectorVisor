@@ -940,7 +940,7 @@ def run_image_hash_bench(run_modified = False):
     x=$(cloud-init status)
     done
 
-    /tmp/VectorVisor/target/release/vectorvisor --input {imagehash_path}target/wasm32-wasi/release/imagehash-opt.wasm --ip=0.0.0.0 --heap=4194304 --stack=131072 --hcallsize=262144 --partition=true --serverless=true --vmcount={vmcount} --vmgroups=1 --maxdup=3 --disablefastcalls=false --partitions={maxfuncs} --maxloc={maxloc} --lgroup={lgroup} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} --rt=200 &> /tmp/imagehash.log &
+    /tmp/VectorVisor/target/release/vectorvisor --input {imagehash_path}target/wasm32-wasi/release/imagehash-opt.wasm --ip=0.0.0.0 --heap=4194304 --stack=131072 --hcallsize=262144 --partition=true --serverless=true --vmcount={vmcount} --vmgroups=1 --maxdup=2 --partitions={maxfuncs} --maxloc={maxloc} --lgroup={lgroup} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} --rt=200 &> /tmp/imagehash.log &
     """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, imagehash_path=imagehash_path, maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount)
 
     run_command(run_image_command, "run_imagehash_gpu_command", gpu_instance[0].id)
@@ -1090,7 +1090,7 @@ def run_image_blur_bench(run_bmp = False):
     x=$(cloud-init status)
     done
 
-    /tmp/VectorVisor/target/release/vectorvisor --input {bin_path} --ip=0.0.0.0 --heap=4194304 --stack=262144 --hcallsize=409600 --partition=true --serverless=true --vmcount={vmcount} --vmgroups=1 --maxdup=3 --disablefastcalls=false --partitions={maxfuncs} --maxloc={maxloc} --lgroup={lgroup} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} &> /tmp/imageblur.log &
+    /tmp/VectorVisor/target/release/vectorvisor --input {bin_path} --ip=0.0.0.0 --heap=4194304 --stack=262144 --hcallsize=409600 --partition=true --serverless=true --vmcount={vmcount} --vmgroups=1 --maxdup=2 --disablefastcalls=false --partitions={maxfuncs} --maxloc={maxloc} --lgroup={lgroup} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} &> /tmp/imageblur.log &
     """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, bin_path=bin_path, maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount)
 
     run_command(run_image_command, "run_imageblur_gpu_command", gpu_instance[0].id)
