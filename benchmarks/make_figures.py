@@ -38,12 +38,16 @@ def parse_file(f_name):
             queue_submit_time = float(re.search(r'queue\ssubmit\stime:\s(.*?)\\n', data).group(1))
             buffer_time = float(re.search(r'Request\sQueue\sTime:\s(.*?)\\n', data).group(1))
             device_time = float(re.search(r'Device\sTime:\s(.*?)\\n', data).group(1))
+            overhead_time = float(re.search(r'overhead:\s(.*?)\\n', data).group(1))
+            compile_time = float(re.search(r'compile\stime:\s(.*?)\\n', data).group(1))
             ret['rps'] = rps
             ret['on_dev_exe_time'] = on_dev_exe_time
             ret['latency'] = latency
             ret['queue_submit_time'] = queue_submit_time
             ret['buffer_time'] = buffer_time
             ret['device_time'] = device_time
+            ret['overhead'] = overhead_time
+            ret['compile_time'] = compile_time
         except Exception:
             print ("{n} was not parsed properly".format(n=f_name))
     return ret
@@ -113,7 +117,7 @@ def plot_bars(gpu_latency, cpu_wasm_latency, cpu_x86_latency, figname):
     plt.savefig(input_dir+"/{name}.png".format(name=figname))
     plt.clf()
 
-def latency_breakdown(device_exe_time, buffer_time, vmm_overhead, queue_submit, net_latency, name, scale=30):
+def latency_breakdown(device_exe_time, buffer_time, vmm_overhead, queue_submit, overhead, net_latency, name, scale=30):
     N = 9
     plt.figure(figsize=(14, 6))
     
@@ -132,19 +136,24 @@ def latency_breakdown(device_exe_time, buffer_time, vmm_overhead, queue_submit, 
     combined = list( map(add, queue_submit, buffer_time) )
     combined = list( map(add, combined, net_latency) )
 
-    p1 = plt.bar(ind, device_exe_time, width)
+    p1 = plt.bar(ind, overhead, width)
     for idx in range(N):
-        p1[idx].set_color('lightgray')
+        p1[idx].set_color('blue')
 
-    p2 = plt.bar(ind, vmm_overhead, width,
+    p2 = plt.bar(ind, device_exe_time, width,
+                bottom=np.asarray(overhead))
+    for idx in range(N):
+        p2[idx].set_color('lightgray')
+
+    p3 = plt.bar(ind, vmm_overhead, width,
                 bottom=np.asarray(device_exe_time))
     for idx in range(N):
-        p2[idx].set_color('black')
+        p3[idx].set_color('black')
 
-    p3 = plt.bar(ind, combined, width,
+    p4 = plt.bar(ind, combined, width,
                 bottom=np.asarray(device_exe_time)+np.asarray(vmm_overhead))
     for idx in range(N):
-        p3[idx].set_color('green')
+        p4[idx].set_color('green')
 
     bench_names = ('Scrypt', 'Pbkdf2', 'Blur-Jpeg', 'Blur-Bmp', 'PHash', 'PHash-Modified', 'Histogram', 'LZ4', 'Strings')
     print ("Latency breakdown: {x}".format(x=name))
@@ -165,8 +174,8 @@ def latency_breakdown(device_exe_time, buffer_time, vmm_overhead, queue_submit, 
         plt.title('GPU (NVIDIA T4) Latency Breakdown')
 
     plt.xticks(ind, ('Scrypt', 'Pbkdf2', 'Blur-Jpeg', 'Blur-Bmp', 'PHash', 'PHash-Modified', 'Histogram', 'LZ4', 'Strings'))
-    plt.yticks(np.arange(0, 36, 5))
-    plt.legend((p3[0], p2[0], p1[0]), ('Other', 'VMM Overhead', 'On Device Execution Time'))
+    plt.yticks(np.arange(0, 80, 5))
+    plt.legend((p4[0], p3[0], p2[0], p1[0]), ('Other', 'VMM Overhead', 'On Device Execution Time', 'VectorVisor CPS Overhead'))
 
     #plt.grid()
     plt.grid(zorder=-50)
@@ -410,32 +419,36 @@ gpu_buffer_time = []
 gpu_qsubmit = []
 gpu_vmm_overhead = []
 gpu_net_latency = []
+gpu_overhead = []
 for d, v in zip(gpu_list, vmcount):
-    gpu_device_exe.append(d['on_dev_exe_time'] / (10 ** 9))
+    gpu_device_exe.append((d['on_dev_exe_time'] - d['overhead']) / (10 ** 9))
     gpu_buffer_time.append(d['buffer_time'] / (10 ** 9))
     gpu_qsubmit.append(d['queue_submit_time'] / (10 ** 9))
     # vmm overhead = device_time - queue_submit_time - buffer_time - exe_time
     gpu_vmm_overhead.append((d['device_time'] - d['queue_submit_time'] - d['buffer_time'] - d['on_dev_exe_time']) / (10 ** 9))
     gpu_net_latency.append((d['latency'] - d['device_time']) / (10 ** 9))
+    gpu_overhead.append(d['overhead'] / (10 ** 9))
 
-latency_breakdown(gpu_device_exe, gpu_buffer_time, gpu_vmm_overhead, gpu_qsubmit, gpu_net_latency, "gpu", scale=60)
+latency_breakdown(gpu_device_exe, gpu_buffer_time, gpu_vmm_overhead, gpu_qsubmit, gpu_overhead, gpu_net_latency, "gpu", scale=60)
 
 cpu_device_exe = []
 cpu_buffer_time = []
 cpu_qsubmit = []
 cpu_vmm_overhead = []
 cpu_net_latency = []
+cpu_overhead = []
 for d, v in zip(cpu_x86_list, vmcount):
-    cpu_device_exe.append(d['on_dev_exe_time'] / (10 ** 9))
+    cpu_device_exe.append((d['on_dev_exe_time'] - d['overhead']) / (10 ** 9))
     #cpu_buffer_time.append(d['buffer_time'] / (10 ** 9))
     cpu_buffer_time.append(0)
     cpu_qsubmit.append(d['queue_submit_time'] / (10 ** 9))
     # vmm overhead = device_time - queue_submit_time - buffer_time - exe_time
     cpu_vmm_overhead.append((d['device_time'] - d['queue_submit_time'] - d['buffer_time'] - d['on_dev_exe_time']) / (10 ** 9))
     cpu_net_latency.append((d['latency'] - d['device_time']) / (10 ** 9))
+    cpu_overhead.append(d['overhead'] / (10 ** 9))
 
 
-latency_breakdown(cpu_device_exe, cpu_buffer_time, cpu_vmm_overhead, cpu_qsubmit, cpu_net_latency, "cpu_x86", scale=1)
+latency_breakdown(cpu_device_exe, cpu_buffer_time, cpu_vmm_overhead, cpu_qsubmit, cpu_overhead, cpu_net_latency, "cpu_x86", scale=1)
 
 gpu_latency = []
 cpu_x86_latency = []
