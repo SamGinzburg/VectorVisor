@@ -572,8 +572,8 @@ def run_lz4_bench():
 
     cd /tmp/VectorVisor/benchmarks/json-compression/
 
-    /usr/local/go/bin/go run /tmp/VectorVisor/benchmarks/json-compression/run_json_lz4.go {addr} 8000 {target_rps} 1 {duration} {input_size}
-    """.format(addr=gpu_instance[0].private_dns_name, input_size=200, target_rps=vmcount*2, duration=benchmark_duration)
+    /usr/local/go/bin/go run /tmp/VectorVisor/benchmarks/json-compression/run_lz4.go {addr} 8000 {target_rps} 1 {duration} /tmp/VectorVisor/benchmarks/json-compression/smaller_tweets.txt {input_size}
+    """.format(addr=gpu_instance[0].private_dns_name, input_size=2000, target_rps=vmcount, duration=benchmark_duration)
 
 
     command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
@@ -606,8 +606,8 @@ def run_lz4_bench():
 
     cd /tmp/VectorVisor/benchmarks/json-compression/
 
-    /usr/local/go/bin/go run /tmp/VectorVisor/benchmarks/json-compression/run_json_lz4.go {addr} 8000 {target_rps} 1 {duration} {input_size}
-    """.format(addr=cpu_bench_instance[0].private_dns_name, input_size=200, target_rps=target_rps_cpu, duration=benchmark_duration)
+    /usr/local/go/bin/go run /tmp/VectorVisor/benchmarks/json-compression/run_lz4.go {addr} 8000 {target_rps} 1 {duration} /tmp/VectorVisor/benchmarks/json-compression/smaller_tweets.txt {input_size}
+    """.format(addr=cpu_bench_instance[0].private_dns_name, input_size=2000, target_rps=target_rps_cpu, duration=benchmark_duration)
 
     command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
 
@@ -896,7 +896,7 @@ def run_average_bench():
 
 def run_image_hash_bench(run_modified = False):
     if run_a10g:
-        vmcount = 4608
+        vmcount = 4096
     else:
         vmcount = 3072
     
@@ -947,6 +947,9 @@ def run_image_hash_bench(run_modified = False):
 
     # Now set up the invoker
 
+    if not run_modified:
+        vmcount = vmcount*2
+
     run_invoker = """#!/bin/bash
     sudo su
     ulimit -n 65536
@@ -966,7 +969,7 @@ def run_image_hash_bench(run_modified = False):
     cd {imagehash_path}
 
     /usr/local/go/bin/go run run_image_hash.go {addr} 8000 {target_rps} 1 {duration}
-    """.format(addr=gpu_instance[0].private_dns_name, input_size=1000, target_rps=vmcount*2, imagehash_path=imagehash_path, duration=benchmark_duration)
+    """.format(addr=gpu_instance[0].private_dns_name, input_size=1000, target_rps=vmcount, imagehash_path=imagehash_path, duration=benchmark_duration)
 
     command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
 
@@ -1043,7 +1046,7 @@ def run_image_hash_bench(run_modified = False):
 
 def run_image_blur_bench(run_bmp = False):
     if run_a10g:
-        vmcount = 4608
+        vmcount = 4096
     else:
         vmcount = 3072
 
@@ -1453,11 +1456,6 @@ run_image_hash_bench(run_modified = True)
 
 cleanup()
 
-# run pbkdf2 bench
-run_pbkdf2_bench()
-
-cleanup()
-
 # run scrypt bench
 run_scrypt_bench()
 
@@ -1487,9 +1485,8 @@ run_image_blur_bench(run_bmp = False)
 
 cleanup()
 
-run_genpdf_bench()
-
-cleanup()
+#run_genpdf_bench()
+#cleanup()
 
 # run pbkdf2 bench
 # pbkdf2 needs to be run last because it also installs hashcat / pocl to benchmark against at the end

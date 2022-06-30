@@ -1,20 +1,24 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	b64 "encoding/base64"
-	"encoding/json"
+	"encoding/csv"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"math/rand"
 	"net/http"
 	"os"
 	"strconv"
 	"time"
+
+	msgpack "github.com/vmihailenco/msgpack/v5"
 )
 
 type payload struct {
-	Text string `json:"encoded_str"`
+	Text []string `msgpack:"tweets"`
 }
 
 type Message struct {
@@ -55,6 +59,15 @@ func RandString(n int) string {
 		b[i] = letterRunes[rand.Intn(len(letterRunes))]
 	}
 	return b64.StdEncoding.EncodeToString([]byte(string(b)))
+}
+
+func GetTweetVec(n int, compiled_tweets []string) []string {
+	tweets := make([]string, n)
+	for i := range tweets {
+		//tweets[i] = compiled_tweets[0]
+		tweets[i] = compiled_tweets[rand.Intn(len(compiled_tweets))]
+	}
+	return tweets
 }
 
 func IssueRequests(ip string, port int, req [][]byte, exec_time chan<- float64, latency chan<- float64, queue_time chan<- float64, submit_count chan<- float64, unique_fns chan<- float64, request_queue_time chan<- float64, device_time_ch chan<- float64, overhead_ch chan<- float64, compile_ch chan<- float64, end_chan chan bool) {
@@ -187,16 +200,39 @@ func main() {
 		os.Exit(2)
 	}
 
-	input_size, err := strconv.Atoi(os.Args[6])
+	// Read the tweets
+	tsv, err := os.Open(os.Args[6])
+	if err != nil {
+		panic(err)
+	}
+
+	input_size, err := strconv.Atoi(os.Args[7])
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(2)
 	}
 
+	tweets := make([]string, 0)
+	r := bufio.NewReader(tsv)
+	csv_reader := csv.NewReader(r)
+	csv_reader.Comma = '\t'
+	for {
+		record, err := csv_reader.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			continue
+		}
+		tweets = append(tweets, record[2])
+	}
+
+	//fmt.Println("%s\n", tweets[:100])
+
 	reqs := make([][]byte, NUM_PARAMS)
 	for i := 0; i < NUM_PARAMS; i++ {
-		p := payload{Text: RandString(1024 * input_size)}
-		request_body, _ := json.Marshal(p)
+		p := payload{Text: GetTweetVec(input_size, tweets)}
+		request_body, _ := msgpack.Marshal(p)
 		reqs[i] = request_body
 	}
 
