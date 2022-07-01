@@ -9,5 +9,4 @@ edition = "2018"
 [dependencies]
 wasm-serverless-invoke = { path = "../../wasm-serverless-invoke" }
 serde = { version = "1.0.62", features = ["derive"] }
-base64 = "0.13.0"
-lz4_flex = "0.7.5"
+lz4_flex = { version = "0.9.3", default-features = false }

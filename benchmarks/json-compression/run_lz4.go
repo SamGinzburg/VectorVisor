@@ -13,7 +13,6 @@ import (
 	"os"
 	"strconv"
 	"time"
-
 	msgpack "github.com/vmihailenco/msgpack/v5"
 )
 
@@ -63,10 +62,13 @@ func RandString(n int) string {
 
 func GetTweetVec(n int, compiled_tweets []string) []string {
 	tweets := make([]string, n)
+	size := 0
 	for i := range tweets {
 		//tweets[i] = compiled_tweets[0]
 		tweets[i] = compiled_tweets[rand.Intn(len(compiled_tweets))]
+		size += len(tweets[i])
 	}
+	fmt.Printf("size: %d\n", size)
 	return tweets
 }
 

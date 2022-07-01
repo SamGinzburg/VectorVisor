@@ -365,7 +365,6 @@ checksum = "dd25036021b0de88a0aff6b850051563c6516d0bf53f8638938edbb9de732736"
 name = "json-compression"
 version = "0.1.0"
 dependencies = [
- "base64",
  "lz4_flex",
  "serde",
  "wasm-serverless-invoke",
@@ -403,9 +402,9 @@ dependencies = [
 
 [[package]]
 name = "lz4_flex"
-version = "0.7.5"
+version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "05304f8e67dfc93d1b4b990137fd1a7a4c6ad44b60a9c486c8c4486f9d2027ae"
+checksum = "74141c8af4bb8136dafb5705826bdd9dce823021db897c1129191804140ddf84"
 
 [[package]]
 name = "matches"

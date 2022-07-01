@@ -1,11 +1,8 @@
-extern crate base64;
-
 use wasm_serverless_invoke::wasm_handler;
 use wasm_serverless_invoke::wasm_handler::WasmHandler;
 use wasm_serverless_invoke::wasm_handler::SerializationFormat::MsgPack;
 use serde::Deserialize;
 use serde::Serialize;
-use base64::encode;
 use lz4_flex::{compress};
 
 #[derive(Debug, Deserialize)]
@@ -30,5 +27,5 @@ fn compress_msgpack(event: FuncInput) -> FuncResponse {
 
 fn main() {
     let handler = WasmHandler::new(&compress_msgpack);
-    handler.run_with_format(1024*1024, MsgPack);
+    handler.run_with_format(1024*512, MsgPack);
 }
