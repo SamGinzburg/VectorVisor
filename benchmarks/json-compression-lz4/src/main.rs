@@ -2,30 +2,33 @@ extern crate base64;
 
 use wasm_serverless_invoke::wasm_handler;
 use wasm_serverless_invoke::wasm_handler::WasmHandler;
-use serde_json::Value;
-use serde_json::json;
-
-
+use wasm_serverless_invoke::wasm_handler::SerializationFormat::MsgPack;
+use serde::Deserialize;
+use serde::Serialize;
 use base64::encode;
 use lz4_flex::{compress};
 
-fn compress_json(event: Value) -> Value {
-    let response = match event.get("text") {
-        Some(Value::String(str)) => {
-            let compressed_str = compress(&str.as_bytes());
-            let result = encode(compressed_str);
-            json!(result)
-        },
-        _ => {
-            // input is not a string we can compress!, no-op
-            json!(null)
-        }
-    };
+#[derive(Debug, Deserialize)]
+struct FuncInput {
+    tweets: Vec<String>
+}
 
-    response
+#[derive(Debug, Serialize)]
+struct FuncResponse {
+    encoded_resp: Vec<Vec<u8>>
+}
+
+#[inline(never)]
+fn compress_msgpack(event: FuncInput) -> FuncResponse {
+    let mut resp = vec![];
+    for tweet in event.tweets {
+        let compressed_str = compress(&tweet.as_bytes());
+        resp.push(compressed_str);
+    }
+    FuncResponse { encoded_resp: resp }
 }
 
 fn main() {
-    let handler = WasmHandler::new(&compress_json);
-    handler.run(1024*1024);
+    let handler = WasmHandler::new(&compress_msgpack);
+    handler.run_with_format(1024*1024, MsgPack);
 }
