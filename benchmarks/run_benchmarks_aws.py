@@ -1445,6 +1445,11 @@ while True:
 
 ssm_client = boto3.client('ssm', region_name=region)
 
+run_lz4_bench()
+
+cleanup()
+
+"""
 # run image hash bench
 run_image_hash_bench(run_modified = False)
 
@@ -1493,6 +1498,6 @@ cleanup()
 run_pbkdf2_bench()
 
 cleanup()
-
+"""
 # clean up all instances at end
 ec2.instances.filter(InstanceIds = instance_id_list).terminate()
