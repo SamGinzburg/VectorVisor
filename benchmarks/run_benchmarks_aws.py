@@ -1323,7 +1323,7 @@ def run_nlp_count_bench():
     with open(temp_dir+"cpu_x86_bench_nlp.txt", "w") as text_file:
         text_file.write(str(output))
 
-def run_membench():
+def run_membench(membench_interleave=4):
     if run_a10g:
         vmcount = 6144
     else:
@@ -1339,7 +1339,7 @@ def run_membench():
     done
 
     /tmp/VectorVisor/target/release/vectorvisor --input /tmp/VectorVisor/examples/mem/memloop.wat --ip=0.0.0.0 --heap=3145728 --stack=1024 --hcallsize=1024 --partition=false --serverless=true --vmcount={vmcount} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} &> test.log && tail -n 30 test.log
-    """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount)
+    """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=membench_interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount)
 
     command_id = run_command(run_membench_command, "run_membench", gpu_instance[0].id)
 
@@ -1350,7 +1350,7 @@ def run_membench():
     print (output)
 
     # save output
-    with open(temp_dir+"gpu_membench.txt", "w") as text_file:
+    with open(temp_dir+"gpu_membench_{interleave}.txt".format(interleave=membench_interleave), "w") as text_file:
         text_file.write(str(output))
 
     run_membench_command = """#!/bin/bash
@@ -1363,7 +1363,7 @@ def run_membench():
     done
 
     /tmp/VectorVisor/target/release/vectorvisor --input /tmp/VectorVisor/examples/mem/memloop_unroll.wat --ip=0.0.0.0 --heap=3145728 --stack=1024 --hcallsize=1024 --partition=false --serverless=true --vmcount={vmcount} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} &> test.log && tail -n 30 test.log
-    """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount)
+    """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=membench_interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount)
 
     command_id = run_command(run_membench_command, "run_membench_unroll", gpu_instance[0].id)
 
@@ -1374,7 +1374,7 @@ def run_membench():
     print (output)
 
     # save output
-    with open(temp_dir+"gpu_membench_unroll.txt", "w") as text_file:
+    with open(temp_dir+"gpu_membench_unroll_{interleave}.txt".format(interleave=membench_interleave), "w") as text_file:
         text_file.write(str(output))
 
 
@@ -1388,7 +1388,7 @@ def run_membench():
     done
 
     /tmp/VectorVisor/target/release/vectorvisor --input /tmp/VectorVisor/examples/mem/memloop64.wat --ip=0.0.0.0 --heap=3145728 --stack=1024 --hcallsize=1024 --partition=false --serverless=true --vmcount={vmcount} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} &> test.log && tail -n 30 test.log
-    """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount)
+    """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=membench_interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount)
 
     command_id = run_command(run_membench_command, "run_membench64", gpu_instance[0].id)
 
@@ -1399,10 +1399,32 @@ def run_membench():
     print (output)
 
     # save output
-    with open(temp_dir+"gpu_membench64.txt", "w") as text_file:
+    with open(temp_dir+"gpu_membench64_{interleave}.txt".format(interleave=membench_interleave), "w") as text_file:
         text_file.write(str(output))
 
+    run_membench_command = """#!/bin/bash
+    sudo su
+    ulimit -n 65536
+    x=$(cloud-init status)
+    until [ "$x" == "status: done" ]; do
+    sleep 10
+    x=$(cloud-init status)
+    done
 
+    /tmp/VectorVisor/target/release/vectorvisor --input /tmp/VectorVisor/examples/mem/memloop64_unroll.wat --ip=0.0.0.0 --heap=3145728 --stack=1024 --hcallsize=1024 --partition=false --serverless=true --vmcount={vmcount} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} &> test.log && tail -n 30 test.log
+    """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=membench_interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount)
+
+    command_id = run_command(run_membench_command, "run_membench64_unroll", gpu_instance[0].id)
+
+    time.sleep(5)
+
+    # Block until benchmark is complete
+    output = block_on_command(command_id, gpu_instance[0].id)
+    print (output)
+
+    # save output
+    with open(temp_dir+"gpu_membench64_unroll_{interleave}.txt".format(interleave=membench_interleave), "w") as text_file:
+        text_file.write(str(output))
 
 
 """
@@ -1527,9 +1549,18 @@ while True:
 
 ssm_client = boto3.client('ssm', region_name=region)
 
-run_membench()
+run_membench(membench_interleave=1)
 
 cleanup()
+
+run_membench(membench_interleave=4)
+
+cleanup()
+
+run_membench(membench_interleave=8)
+
+cleanup()
+
 """
 # run image hash bench
 run_image_hash_bench(run_modified = False)
