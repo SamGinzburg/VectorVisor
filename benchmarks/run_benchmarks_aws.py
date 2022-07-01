@@ -546,7 +546,7 @@ def run_lz4_bench():
     x=$(cloud-init status)
     done
 
-    /tmp/VectorVisor/target/release/vectorvisor --input /tmp/VectorVisor/benchmarks/json-compression-lz4/target/wasm32-wasi/release/json-compression-opt.wasm --ip=0.0.0.0 --heap=4194304 --stack=131072 --hcallsize=524288 --partition=true --serverless=true --vmcount={vmcount} --vmgroups=1 --maxdup=3 --partitions={maxfuncs} --maxloc={maxloc} --lgroup={lgroup} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} --rt=200 &> /tmp/json-compression.log &
+    /tmp/VectorVisor/target/release/vectorvisor --input /tmp/VectorVisor/benchmarks/json-compression-lz4/target/wasm32-wasi/release/json-compression-opt.wasm --ip=0.0.0.0 --heap=4194304 --stack=131072 --hcallsize=262144 --partition=true --serverless=true --vmcount={vmcount} --vmgroups=1 --maxdup=3 --partitions={maxfuncs} --maxloc={maxloc} --lgroup={lgroup} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} --rt=200 &> /tmp/json-compression.log &
     """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, \
                maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount)
 
@@ -573,7 +573,7 @@ def run_lz4_bench():
     cd /tmp/VectorVisor/benchmarks/json-compression-lz4/
 
     /usr/local/go/bin/go run /tmp/VectorVisor/benchmarks/json-compression-lz4/run_lz4.go {addr} 8000 {target_rps} 1 {duration} /tmp/VectorVisor/benchmarks/json-compression/smaller_tweets.txt {input_size}
-    """.format(addr=gpu_instance[0].private_dns_name, input_size=2500, target_rps=vmcount, duration=benchmark_duration)
+    """.format(addr=gpu_instance[0].private_dns_name, input_size=2500, target_rps=vmcount*2, duration=benchmark_duration)
 
 
     command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
@@ -1445,11 +1445,6 @@ while True:
 
 ssm_client = boto3.client('ssm', region_name=region)
 
-run_lz4_bench()
-
-cleanup()
-
-"""
 # run image hash bench
 run_image_hash_bench(run_modified = False)
 
@@ -1498,6 +1493,5 @@ cleanup()
 run_pbkdf2_bench()
 
 cleanup()
-"""
 # clean up all instances at end
 ec2.instances.filter(InstanceIds = instance_id_list).terminate()
