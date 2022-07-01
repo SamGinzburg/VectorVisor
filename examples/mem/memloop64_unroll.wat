@@ -14,7 +14,7 @@
 	;; store values
 	loop
 		local.get 0
-		i32.const 16
+		i32.const 32
 		i32.add
 		local.tee 0
 		local.get 0
@@ -22,19 +22,9 @@
 		i32.add
 		local.get 0
 		;; store to mem
-		i32.load
-		i32.store
+		i64.load
+		i64.store
 		;; unroll 1
-		local.get 0
-		local.get 1
-		i32.add
-		i32.const 4
-		i32.add
-		local.get 0
-		;; store to mem
-		i32.load
-		i32.store
-		;; unroll 2
 		local.get 0
 		local.get 1
 		i32.add
@@ -42,18 +32,28 @@
 		i32.add
 		local.get 0
 		;; store to mem
-		i32.load
-		i32.store
+		i64.load
+		i64.store
+		;; unroll 2
+		local.get 0
+		local.get 1
+		i32.add
+		i32.const 16
+		i32.add
+		local.get 0
+		;; store to mem
+		i64.load
+		i64.store
 		;; unroll 3
 		local.get 0
 		local.get 1
 		i32.add
-		i32.const 12
+		i32.const 24
 		i32.add
 		local.get 0
 		;; store to mem
-		i32.load
-		i32.store
+		i64.load
+		i64.store
 		local.get 1
 		i32.ne
 		br_if 0
