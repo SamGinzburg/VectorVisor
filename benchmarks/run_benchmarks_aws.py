@@ -9,7 +9,7 @@ from datetime import date, datetime
 target_rps = 3072
 target_rps_cpu = 1024
 TIMEOUT_MINUTES = 120
-interleave = 4
+interleave = 8
 #local_group_size = 999999
 is_pretty = "true"
 fastreply = "true"
@@ -22,7 +22,7 @@ maxloc = 2000000
 #maxfuncs = 999
 #maxloc = 20000000
 benchmark_duration = 300
-run_a10g = False
+run_a10g = True
 run_amd = False
 
 if run_a10g:
@@ -1549,19 +1549,6 @@ while True:
 
 ssm_client = boto3.client('ssm', region_name=region)
 
-run_membench(membench_interleave=1)
-
-cleanup()
-
-run_membench(membench_interleave=4)
-
-cleanup()
-
-run_membench(membench_interleave=8)
-
-cleanup()
-
-"""
 # run image hash bench
 run_image_hash_bench(run_modified = False)
 
@@ -1610,7 +1597,6 @@ cleanup()
 run_pbkdf2_bench()
 
 cleanup()
-"""
 
 # clean up all instances at end
 ec2.instances.filter(InstanceIds = instance_id_list).terminate()
