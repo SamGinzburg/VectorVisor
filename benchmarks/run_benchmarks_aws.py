@@ -22,7 +22,7 @@ maxloc = 2000000
 #maxfuncs = 999
 #maxloc = 20000000
 benchmark_duration = 300
-run_a10g = True
+run_a10g = False
 run_amd = False
 
 if run_a10g:
@@ -1323,6 +1323,88 @@ def run_nlp_count_bench():
     with open(temp_dir+"cpu_x86_bench_nlp.txt", "w") as text_file:
         text_file.write(str(output))
 
+def run_membench():
+    if run_a10g:
+        vmcount = 6144
+    else:
+        vmcount = 4096
+
+    run_membench_command = """#!/bin/bash
+    sudo su
+    ulimit -n 65536
+    x=$(cloud-init status)
+    until [ "$x" == "status: done" ]; do
+    sleep 10
+    x=$(cloud-init status)
+    done
+
+    /tmp/VectorVisor/target/release/vectorvisor --input /tmp/VectorVisor/examples/mem/memloop.wat --ip=0.0.0.0 --heap=3145728 --stack=1024 --hcallsize=1024 --partition=false --serverless=true --vmcount={vmcount} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} &> test.log && tail -n 30 test.log
+    """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount)
+
+    command_id = run_command(run_membench_command, "run_membench", gpu_instance[0].id)
+
+    time.sleep(5)
+
+    # Block until benchmark is complete
+    output = block_on_command(command_id, gpu_instance[0].id)
+    print (output)
+
+    # save output
+    with open(temp_dir+"gpu_membench.txt", "w") as text_file:
+        text_file.write(str(output))
+
+    run_membench_command = """#!/bin/bash
+    sudo su
+    ulimit -n 65536
+    x=$(cloud-init status)
+    until [ "$x" == "status: done" ]; do
+    sleep 10
+    x=$(cloud-init status)
+    done
+
+    /tmp/VectorVisor/target/release/vectorvisor --input /tmp/VectorVisor/examples/mem/memloop_unroll.wat --ip=0.0.0.0 --heap=3145728 --stack=1024 --hcallsize=1024 --partition=false --serverless=true --vmcount={vmcount} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} &> test.log && tail -n 30 test.log
+    """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount)
+
+    command_id = run_command(run_membench_command, "run_membench_unroll", gpu_instance[0].id)
+
+    time.sleep(5)
+
+    # Block until benchmark is complete
+    output = block_on_command(command_id, gpu_instance[0].id)
+    print (output)
+
+    # save output
+    with open(temp_dir+"gpu_membench_unroll.txt", "w") as text_file:
+        text_file.write(str(output))
+
+
+    run_membench_command = """#!/bin/bash
+    sudo su
+    ulimit -n 65536
+    x=$(cloud-init status)
+    until [ "$x" == "status: done" ]; do
+    sleep 10
+    x=$(cloud-init status)
+    done
+
+    /tmp/VectorVisor/target/release/vectorvisor --input /tmp/VectorVisor/examples/mem/memloop64.wat --ip=0.0.0.0 --heap=3145728 --stack=1024 --hcallsize=1024 --partition=false --serverless=true --vmcount={vmcount} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} &> test.log && tail -n 30 test.log
+    """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount)
+
+    command_id = run_command(run_membench_command, "run_membench64", gpu_instance[0].id)
+
+    time.sleep(5)
+
+    # Block until benchmark is complete
+    output = block_on_command(command_id, gpu_instance[0].id)
+    print (output)
+
+    # save output
+    with open(temp_dir+"gpu_membench64.txt", "w") as text_file:
+        text_file.write(str(output))
+
+
+
+
 """
 Create VMs for the test
 1 GPU VM, 1 CPU VM, and 1 VM for issuing requests
@@ -1445,6 +1527,10 @@ while True:
 
 ssm_client = boto3.client('ssm', region_name=region)
 
+run_membench()
+
+cleanup()
+"""
 # run image hash bench
 run_image_hash_bench(run_modified = False)
 
@@ -1493,5 +1579,7 @@ cleanup()
 run_pbkdf2_bench()
 
 cleanup()
+"""
+
 # clean up all instances at end
 ec2.instances.filter(InstanceIds = instance_id_list).terminate()

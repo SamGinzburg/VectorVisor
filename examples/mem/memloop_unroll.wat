@@ -22,8 +22,17 @@
 		i32.add
 		local.get 0
 		;; store to mem
-		i64.load
-		i64.store
+		i32.load
+		i32.store
+		local.get 0
+		local.get 1
+		i32.add
+		i32.const 4
+		i32.add
+		local.get 0
+		;; store to mem
+		i32.load
+		i32.store
 		local.get 1
 		i32.ne
 		br_if 0
