@@ -70,7 +70,7 @@ func GetTweetVec(n int, compiled_tweets []string) []string {
 	return tweets
 }
 
-func IssueRequests(ip string, port int, req [][]byte, req_len []uint32, exec_time chan<- float64, latency chan<- float64, queue_time chan<- float64, submit_count chan<- float64, unique_fns chan<- float64, request_queue_time chan<- float64, device_time_ch chan<- float64, overhead_ch chan<- float64, compile_ch chan<- float64, req_size_ch chan<- uint32, end_chan chan bool) {
+func IssueRequests(ip string, port int, req [][]byte, req_len []uint64, exec_time chan<- float64, latency chan<- float64, queue_time chan<- float64, submit_count chan<- float64, unique_fns chan<- float64, request_queue_time chan<- float64, device_time_ch chan<- float64, overhead_ch chan<- float64, compile_ch chan<- float64, req_size_ch chan<- uint64, end_chan chan bool) {
 	addr := fmt.Sprintf("http://%s:%d/batch_submit/", ip, port)
 	http_request, _ := http.NewRequest("GET", addr, nil)
 	http_request.Header.Add("Content-Type", "application/json; charset=utf-8")
@@ -237,7 +237,7 @@ func main() {
 	//fmt.Println("%s\n", tweets[:100])
 
 	reqs := make([][]byte, NUM_PARAMS)
-	reqs_size := make([]uint32, NUM_PARAMS)
+	reqs_size := make([]uint64, NUM_PARAMS)
 
 	for i := 0; i < NUM_PARAMS; i++ {
 		p := payload{Text: GetTweetVec(input_size, tweets)}
@@ -248,7 +248,7 @@ func main() {
 			b := []byte(t)
 			req_len += len(b)
 		}
-		reqs_size[i] = uint32(req_len)
+		reqs_size[i] = uint64(req_len)
 	}
 
 	tr := &http.Transport{
@@ -286,7 +286,7 @@ func main() {
 	ch_req_queue_time := make(chan float64, 1000000)
 	ch_device_time := make(chan float64, 1000000)
 	ch_overhead := make(chan float64, 1000000)
-	ch_size := make(chan uint32, 1000000)
+	ch_size := make(chan uint64, 1000000)
 	ch_compile := make(chan float64, 1000000)
 
 	termination_chan := make(chan bool, num_vms)
@@ -316,7 +316,7 @@ func main() {
 	device_time := 0.0
 	overhead := 0.0
 	compile := 0.0
-	bytes_compressed := uint32(0)
+	bytes_compressed := uint64(0)
 
 	for i := 0; i < batches_completed; i++ {
 		exec_time += <-ch_exec_time
@@ -328,7 +328,7 @@ func main() {
 		device_time += <-ch_device_time
 		overhead += <-ch_overhead
 		compile += <-ch_compile
-		bytes_compressed += uint32(<-ch_size)
+		bytes_compressed += uint64(<-ch_size)
 	}
 
 	duration := float64(benchmark_duration.Seconds())

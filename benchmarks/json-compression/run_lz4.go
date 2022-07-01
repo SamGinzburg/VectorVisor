@@ -13,6 +13,7 @@ import (
 	"os"
 	"strconv"
 	"time"
+
 	msgpack "github.com/vmihailenco/msgpack/v5"
 )
 
@@ -62,17 +63,14 @@ func RandString(n int) string {
 
 func GetTweetVec(n int, compiled_tweets []string) []string {
 	tweets := make([]string, n)
-	size := 0
 	for i := range tweets {
 		//tweets[i] = compiled_tweets[0]
 		tweets[i] = compiled_tweets[rand.Intn(len(compiled_tweets))]
-		size += len(tweets[i])
 	}
-	fmt.Printf("size: %d\n", size)
 	return tweets
 }
 
-func IssueRequests(ip string, port int, req [][]byte, exec_time chan<- float64, latency chan<- float64, queue_time chan<- float64, submit_count chan<- float64, unique_fns chan<- float64, request_queue_time chan<- float64, device_time_ch chan<- float64, overhead_ch chan<- float64, compile_ch chan<- float64, end_chan chan bool) {
+func IssueRequests(ip string, port int, req [][]byte, req_len []uint64, exec_time chan<- float64, latency chan<- float64, queue_time chan<- float64, submit_count chan<- float64, unique_fns chan<- float64, request_queue_time chan<- float64, device_time_ch chan<- float64, overhead_ch chan<- float64, compile_ch chan<- float64, req_size_ch chan<- uint64, end_chan chan bool) {
 	addr := fmt.Sprintf("http://%s:%d/batch_submit/", ip, port)
 	http_request, _ := http.NewRequest("GET", addr, nil)
 	http_request.Header.Add("Content-Type", "application/json; charset=utf-8")
@@ -87,7 +85,9 @@ func IssueRequests(ip string, port int, req [][]byte, exec_time chan<- float64, 
 	compile_time := 0.0
 
 	for {
-		http_request.Body = ioutil.NopCloser(bytes.NewReader(req[rand.Intn(NUM_PARAMS)]))
+		req_id := rand.Intn(NUM_PARAMS)
+		req_size := req_len[req_id]
+		http_request.Body = ioutil.NopCloser(bytes.NewReader(req[req_id]))
 		start_read := time.Now()
 		_ = start_read
 		resp, err := client.Do(http_request)
@@ -125,6 +125,11 @@ func IssueRequests(ip string, port int, req [][]byte, exec_time chan<- float64, 
 		device_time, _ = strconv.ParseFloat(resp.Header.Get("device_time"), 64)
 		overhead_time, _ = strconv.ParseFloat(resp.Header.Get("overhead_time_ns"), 64)
 		compile_time, _ = strconv.ParseFloat(resp.Header.Get("compile_time_ns"), 64)
+		select {
+		case req_size_ch <- req_size:
+		default:
+			return
+		}
 		select {
 		case compile_ch <- compile_time:
 		default:
@@ -232,10 +237,18 @@ func main() {
 	//fmt.Println("%s\n", tweets[:100])
 
 	reqs := make([][]byte, NUM_PARAMS)
+	reqs_size := make([]uint64, NUM_PARAMS)
+
 	for i := 0; i < NUM_PARAMS; i++ {
 		p := payload{Text: GetTweetVec(input_size, tweets)}
 		request_body, _ := msgpack.Marshal(p)
 		reqs[i] = request_body
+		req_len := 0
+		for _, t := range p.Text {
+			b := []byte(t)
+			req_len += len(b)
+		}
+		reqs_size[i] = uint64(req_len)
 	}
 
 	tr := &http.Transport{
@@ -273,6 +286,7 @@ func main() {
 	ch_req_queue_time := make(chan float64, 1000000)
 	ch_device_time := make(chan float64, 1000000)
 	ch_overhead := make(chan float64, 1000000)
+	ch_size := make(chan uint64, 1000000)
 	ch_compile := make(chan float64, 1000000)
 
 	termination_chan := make(chan bool, num_vms)
@@ -281,7 +295,7 @@ func main() {
 	bench_timer := time.NewTimer(benchmark_duration)
 	for vmgroup := 0; vmgroup < num_vmgroups; vmgroup++ {
 		for i := 0; i < num_vms; i++ {
-			go IssueRequests(os.Args[1], port+vmgroup, reqs, ch_exec_time, ch_latency, ch_queue_time, ch_submit, ch_unique_fns, ch_req_queue_time, ch_device_time, ch_overhead, ch_compile, termination_chan)
+			go IssueRequests(os.Args[1], port+vmgroup, reqs, reqs_size, ch_exec_time, ch_latency, ch_queue_time, ch_submit, ch_unique_fns, ch_req_queue_time, ch_device_time, ch_overhead, ch_compile, ch_size, termination_chan)
 		}
 	}
 
@@ -302,6 +316,7 @@ func main() {
 	device_time := 0.0
 	overhead := 0.0
 	compile := 0.0
+	bytes_compressed := uint64(0)
 
 	for i := 0; i < batches_completed; i++ {
 		exec_time += <-ch_exec_time
@@ -313,6 +328,7 @@ func main() {
 		device_time += <-ch_device_time
 		overhead += <-ch_overhead
 		compile += <-ch_compile
+		bytes_compressed += uint64(<-ch_size)
 	}
 
 	duration := float64(benchmark_duration.Seconds())
@@ -339,6 +355,7 @@ func main() {
 	fmt.Printf("Device Time: %f\n", device_time)
 	fmt.Printf("overhead: %f\n", overhead)
 	fmt.Printf("compile time: %f\n", compile)
+	fmt.Printf("Total Throughput (bytes/s): %f\n", float64(bytes_compressed) / duration)
 
 	/*
 		on_device_compute_time := 0.0
