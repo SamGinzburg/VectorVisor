@@ -215,6 +215,7 @@ fn emit_write_u32_body(
     mexec: usize,
     emit_aligned: bool,
     emit_checked: bool,
+    emit_volatile: bool,
 ) -> String {
     let mut result = String::from("");
 
@@ -286,10 +287,17 @@ fn emit_write_u32_body(
             } else if emit_aligned {
                 result += &format!("\t{}\n",
                             "global uchar *write_addr = ((global uchar*)(((addr-mem_start)/4)*(NUM_THREADS*4) + (warp_id*4) + mem_start));");
-                result += &format!(
-                    "\t{}\n",
-                    "*((global uint*)((global uchar*)write_addr)) = value;"
-                );
+		if emit_volatile {
+		    result += &format!(
+		        "\t{}\n",
+		        "*((global volatile uint*)((global uchar*)write_addr)) = value;"
+		    );
+		} else {
+		    result += &format!(
+		        "\t{}\n",
+		        "*((global uint*)((global uchar*)write_addr)) = value;"
+		    );
+		}
             } else {
                 result += &format!(
                     "\t{}\n",
@@ -372,10 +380,17 @@ fn emit_write_u32_body(
                     "\t{}\n",
                     "write_addr += GET_POW2_OFFSET((addr-mem_start), 8);"
                 );
-                result += &format!(
-                    "\t{}\n",
-                    "*((global uint*)((global uchar*)write_addr)) = value;"
-                );
+		if emit_volatile {
+                    result += &format!(
+                        "\t{}\n",
+                        "*((global volatile uint*)((global uchar*)write_addr)) = value;"
+                    );
+		} else {
+ 		    result += &format!(
+                        "\t{}\n",
+                        "*((global uint*)((global uchar*)write_addr)) = value;"
+                    );
+		}
             } else {
                 result += &format!("\t{}\n",
                                 "global uchar *write_addr = ((global uchar*)(((addr-mem_start)/8)*(NUM_THREADS*8) + (warp_id*8) + mem_start));");
@@ -419,6 +434,7 @@ fn emit_write_u64_body(
     mexec: usize,
     emit_aligned: bool,
     emit_checked: bool,
+    emit_volatile: bool,
 ) -> String {
     let mut result = String::from("");
 
@@ -527,8 +543,13 @@ fn emit_write_u64_body(
                     "\t{}\n",
                     "*((global uint*)((global uint*)write_addr)) = value & 0xFFFFFFFF;"
                 );
-                result += &format!("\t{}\n",
-                            "*((global uint*)((global uint*)write_addr+NUM_THREADS)) = (value >> 32) & 0xFFFFFFFF;");
+		if emit_volatile {
+                    result += &format!("\t{}\n",
+                                "*((global volatile uint*)((global volatile uint*)write_addr+NUM_THREADS)) = (value >> 32) & 0xFFFFFFFF;");
+		} else {
+ 		    result += &format!("\t{}\n",
+                                "*((global uint*)((global uint*)write_addr+NUM_THREADS)) = (value >> 32) & 0xFFFFFFFF;");
+		}
             } else {
                 result += &format!("\t{}\n",
                                 "global uchar *write_addr = ((global uchar*)(((addr-mem_start)/4)*(NUM_THREADS*4) + (warp_id*4) + mem_start));");
@@ -591,10 +612,17 @@ fn emit_write_u64_body(
                     "\t{}\n",
                     "write_addr += GET_POW2_OFFSET((addr-mem_start), 8);"
                 );
-                result += &format!(
-                    "\t{}\n",
-                    "*((global ulong*)((global uchar*)write_addr)) = value;"
-                );
+		if emit_volatile {
+                    result += &format!(
+                        "\t{}\n",
+                        "*((global volatile ulong*)((global uchar*)write_addr)) = value;"
+                    );
+		} else {
+		    result += &format!(
+                        "\t{}\n",
+                        "*((global ulong*)((global uchar*)write_addr)) = value;"
+                    );
+		}
             } else {
                 result += &format!("\t{}\n",
                                 "global uchar *write_addr = ((global uchar*)(((addr-mem_start)/8)*(NUM_THREADS*8) + (warp_id*8) + mem_start));");
@@ -824,6 +852,7 @@ fn emit_read_u32_body(
     mexec: usize,
     emit_aligned: bool,
     emit_checked: bool,
+    emit_volatile: bool,
 ) -> String {
     let mut result = String::from("");
     match interleave {
@@ -885,10 +914,18 @@ fn emit_read_u32_body(
             } else if emit_aligned {
                 result += &format!("\t{}\n",
                                 "global uchar *read_addr = ((global uchar*)(((addr-mem_start)/4)*(NUM_THREADS*4) + (warp_id*4) + mem_start));");
-                result += &format!(
-                    "\t{}\n",
-                    "return *((global uint*)((global uint*)read_addr));"
-                );
+		if emit_volatile {
+                    result += &format!(
+                        "\t{}\n",
+                        "return *((global volatile uint*)((global uint*)read_addr));"
+                    );
+		} else {
+		    result += &format!(
+                        "\t{}\n",
+                        "return *((global uint*)((global uint*)read_addr));"
+                    );
+		}
+		
             } else {
                 result += &format!("\t{}\n",
                                 "global uchar *cell1 = ((global uchar*)(((addr-mem_start)/4)*(NUM_THREADS*4) + (warp_id*4) + mem_start));");
@@ -944,10 +981,17 @@ fn emit_read_u32_body(
                     "\t{}\n",
                     "read_addr += GET_POW2_OFFSET((addr-mem_start), 8);"
                 );
-                result += &format!(
-                    "\t{}\n",
-                    "return *((global uint*)((global uchar*)read_addr));"
-                );
+		if emit_volatile {
+                    result += &format!(
+                        "\t{}\n",
+                        "return *((global volatile uint*)((global uchar*)read_addr));"
+                    );
+		} else {
+                    result += &format!(
+                        "\t{}\n",
+                        "return *((global uint*)((global uchar*)read_addr));"
+                    );
+		}
             } else {
                 result += &format!("\t{}\n",
                                 "global uchar *cell1 = ((global uchar*)(((addr-mem_start)/8)*(NUM_THREADS*8) + (warp_id*8) + mem_start));");
@@ -997,6 +1041,7 @@ fn emit_read_u64_body(
     mexec: usize,
     emit_aligned: bool,
     emit_checked: bool,
+    emit_volatile: bool,
 ) -> String {
     let mut result = String::from("");
 
@@ -1229,10 +1274,17 @@ fn emit_read_u64_body(
                     "\t{}\n",
                     "read_addr += GET_POW2_OFFSET((addr-mem_start), 8);"
                 );
-                result += &format!(
-                    "\t{}\n",
-                    "return *((global ulong*)((global uchar*)read_addr));"
-                );
+		if emit_volatile {
+                    result += &format!(
+                        "\t{}\n",
+                        "return *((global volatile ulong*)((global uchar*)read_addr));"
+                    );
+		} else {
+                    result += &format!(
+                        "\t{}\n",
+                        "return *((global ulong*)((global uchar*)read_addr));"
+                    );
+		}
             } else {
                 result += &format!("\t{}\n",
                                 "global uchar *cell1 = ((global uchar*)(((addr-mem_start)/8)*(NUM_THREADS*8) + (warp_id*8) + mem_start));");
@@ -1270,6 +1322,7 @@ pub fn generate_read_write_calls(
     interleave: u32,
     local_work_group: usize,
     mexec: usize,
+    volatile: bool,
     _debug: bool,
 ) -> String {
     let mut result = String::from("");
@@ -1346,7 +1399,7 @@ pub fn generate_read_write_calls(
                         "void write_u32(ulong addr, ulong mem_start, uint value, uint warp_id, uint read_idx, uint thread_idx, local ulong2 *scratch_space) {");
     result += &format!(
         "{}",
-        emit_write_u32_body(interleave, local_work_group, mexec, false, false)
+        emit_write_u32_body(interleave, local_work_group, mexec, false, false, volatile)
     );
     result += &format!("\n{}\n", "}");
 
@@ -1354,7 +1407,7 @@ pub fn generate_read_write_calls(
                         "inline void write_u32_aligned(ulong addr, ulong mem_start, uint value, uint warp_id, uint read_idx, uint thread_idx, local ulong2 *scratch_space) {");
     result += &format!(
         "{}",
-        emit_write_u32_body(interleave, local_work_group, mexec, true, false)
+        emit_write_u32_body(interleave, local_work_group, mexec, true, false, volatile)
     );
     result += &format!("\n{}\n", "}");
 
@@ -1362,7 +1415,7 @@ pub fn generate_read_write_calls(
                         "inline void write_u32_aligned_checked(ulong addr, ulong mem_start, uint value, uint warp_id, uint read_idx, uint thread_idx, local ulong2 *scratch_space) {");
     result += &format!(
         "{}",
-        emit_write_u32_body(interleave, local_work_group, mexec, true, true)
+        emit_write_u32_body(interleave, local_work_group, mexec, true, true, volatile)
     );
     result += &format!("\n{}\n", "}");
 
@@ -1370,7 +1423,7 @@ pub fn generate_read_write_calls(
                         "void write_u64(ulong addr, ulong mem_start, ulong value, uint warp_id, uint read_idx, uint thread_idx, local ulong2 *scratch_space) {");
     result += &format!(
         "{}",
-        emit_write_u64_body(interleave, local_work_group, mexec, false, false)
+        emit_write_u64_body(interleave, local_work_group, mexec, false, false, volatile)
     );
     result += &format!("\n{}\n", "}");
 
@@ -1378,7 +1431,7 @@ pub fn generate_read_write_calls(
                         "inline void write_u64_aligned(ulong addr, ulong mem_start, ulong value, uint warp_id, uint read_idx, uint thread_idx, local ulong2 *scratch_space) {");
     result += &format!(
         "{}",
-        emit_write_u64_body(interleave, local_work_group, mexec, true, false)
+        emit_write_u64_body(interleave, local_work_group, mexec, true, false, volatile)
     );
     result += &format!("\n{}\n", "}");
 
@@ -1386,7 +1439,7 @@ pub fn generate_read_write_calls(
                         "inline void write_u64_aligned_checked(ulong addr, ulong mem_start, ulong value, uint warp_id, uint read_idx, uint thread_idx, local ulong2 *scratch_space) {");
     result += &format!(
         "{}",
-        emit_write_u64_body(interleave, local_work_group, mexec, true, true)
+        emit_write_u64_body(interleave, local_work_group, mexec, true, true, volatile)
     );
     result += &format!("\n{}\n", "}");
 
@@ -1462,7 +1515,7 @@ pub fn generate_read_write_calls(
                         "uint read_u32(ulong addr, ulong mem_start, uint warp_id, uint read_idx, uint thread_idx, local ulong2 *scratch_space) {");
     result += &format!(
         "{}",
-        emit_read_u32_body(interleave, local_work_group, mexec, false, false)
+        emit_read_u32_body(interleave, local_work_group, mexec, false, false, volatile)
     );
     result += &format!("\n{}", "}");
 
@@ -1470,7 +1523,7 @@ pub fn generate_read_write_calls(
                         "inline uint read_u32_aligned(ulong addr, ulong mem_start, uint warp_id, uint read_idx, uint thread_idx, local ulong2 *scratch_space) {");
     result += &format!(
         "{}",
-        emit_read_u32_body(interleave, local_work_group, mexec, true, false)
+        emit_read_u32_body(interleave, local_work_group, mexec, true, false, volatile)
     );
     result += &format!("\n{}", "}");
 
@@ -1478,7 +1531,7 @@ pub fn generate_read_write_calls(
                         "inline uint read_u32_aligned_checked(ulong addr, ulong mem_start, uint warp_id, uint read_idx, uint thread_idx, local ulong2 *scratch_space) {");
     result += &format!(
         "{}",
-        emit_read_u32_body(interleave, local_work_group, mexec, true, true)
+        emit_read_u32_body(interleave, local_work_group, mexec, true, true, volatile)
     );
     result += &format!("\n{}", "}");
 
@@ -1486,7 +1539,7 @@ pub fn generate_read_write_calls(
                         "ulong read_u64(ulong addr, ulong mem_start, uint warp_id, uint read_idx, uint thread_idx, local ulong2 *scratch_space) {");
     result += &format!(
         "{}",
-        emit_read_u64_body(interleave, local_work_group, mexec, false, false)
+        emit_read_u64_body(interleave, local_work_group, mexec, false, false, volatile)
     );
     result += &format!("\n{}\n", "}");
 
@@ -1494,7 +1547,7 @@ pub fn generate_read_write_calls(
                         "inline ulong read_u64_aligned(ulong addr, ulong mem_start, uint warp_id, uint read_idx, uint thread_idx, local ulong2 *scratch_space) {");
     result += &format!(
         "{}",
-        emit_read_u64_body(interleave, local_work_group, mexec, true, false)
+        emit_read_u64_body(interleave, local_work_group, mexec, true, false, volatile)
     );
     result += &format!("\n{}\n", "}");
 
@@ -1502,7 +1555,7 @@ pub fn generate_read_write_calls(
                         "inline ulong read_u64_aligned_checked(ulong addr, ulong mem_start, uint warp_id, uint read_idx, uint thread_idx, local ulong2 *scratch_space) {");
     result += &format!(
         "{}",
-        emit_read_u64_body(interleave, local_work_group, mexec, true, true)
+        emit_read_u64_body(interleave, local_work_group, mexec, true, true, volatile)
     );
     result += &format!("\n{}\n", "}");
 

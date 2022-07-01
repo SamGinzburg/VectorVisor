@@ -2175,6 +2175,7 @@ __attribute__((always_inline)) void {}(global uint   *stack_u32,
         is_gpu: bool,
         debug: bool,
         is_nvidia_gpu: bool,
+	emit_volatile_reads_writes: bool,
     ) -> (
         String,
         String,
@@ -2280,13 +2281,13 @@ ulong get_clock() {
         write!(
             output,
             "{}",
-            generate_read_write_calls(&self, interleave, local_work_group, mexec, debug)
+            generate_read_write_calls(&self, interleave, local_work_group, mexec, emit_volatile_reads_writes, debug)
         )
         .unwrap();
         write!(
             header,
             "{}",
-            generate_read_write_calls(&self, interleave, local_work_group, mexec, debug)
+            generate_read_write_calls(&self, interleave, local_work_group, mexec, emit_volatile_reads_writes, debug)
         )
         .unwrap();
 

@@ -159,7 +159,6 @@ pub fn emit_memload_i32(
 
     let i_load = stack_ctx.vstack_pop(StackType::i32);
     let result_register = stack_ctx.vstack_alloc(StackType::i32);
-
     let read = if !writer.pretty_input_wasm || args.align < 4 {
         format!(
             "({})",
