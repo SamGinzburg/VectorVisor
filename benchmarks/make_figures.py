@@ -31,6 +31,21 @@ print (cpu_type)
 interleave = args['interleave']
 print (cpu_type)
 
+def parse_membench(f_name):
+    ret = 0.0
+    with open (input_dir+"/{name}.txt".format(name=f_name), "r") as myfile:
+        try:
+            data = myfile.read().replace("\'", "\"")
+            execution_time = float(re.search(r'kernel_exec_time:\s(.*?)\\n', data).group(1))
+            if gpu_type == "t4":
+                ret = "{:0.2f}".format(2*1024*1024*4096 / execution_time)
+            else:
+                ret = "{:0.2f}".format(2*1024*1024*6144 / execution_time)
+        except Exception:
+            print ("{n} was not parsed properly".format(n=f_name))
+    return ret
+
+
 def parse_file(f_name):
     ret = dict()
     with open (input_dir+"/{name}.txt".format(name=f_name), "r") as myfile:
@@ -444,6 +459,22 @@ def dump_table(gpu_rps_vals, x86_rps_vals, wasm_rps_vals, interleave):
     print ("WASM")
     print (wasm_cpu_str_start)
 
+# membench
+try:
+    interleave1 = [parse_membench("gpu_membench_1"), parse_membench("gpu_membench_unroll_1"),
+    parse_membench("gpu_membench64_1"), parse_membench("gpu_membench64_unroll_1")]
+    interleave4 = [parse_membench("gpu_membench_4"), parse_membench("gpu_membench_unroll_4"),
+    parse_membench("gpu_membench64_4"), parse_membench("gpu_membench64_unroll_4")]
+    interleave8 = [parse_membench("gpu_membench_8"), parse_membench("gpu_membench_unroll_8"),
+    parse_membench("gpu_membench64_8"), parse_membench("gpu_membench64_unroll_8")]
+
+    print ("Bandwidth results for: {}".format(gpu_type))
+    print (interleave1)
+    print (interleave4)
+    print (interleave8)
+except:
+    pass
+
 # scrypt
 scrypt_gpu = parse_file("gpu_bench_scrypt")
 scrypt_cpu_wasm = parse_file("cpu_bench_scrypt")
@@ -488,6 +519,7 @@ lz4_cpu_x86 = parse_file("cpu_x86_bench_lz4")
 strings_gpu = parse_file("gpu_bench_nlp")
 strings_cpu_wasm = parse_file("cpu_bench_nlp")
 strings_cpu_x86 = parse_file("cpu_x86_bench_nlp")
+
 
 # genpdf
 """
