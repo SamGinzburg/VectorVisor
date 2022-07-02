@@ -539,14 +539,18 @@ fn emit_write_u64_body(
             } else if emit_aligned {
                 result += &format!("\t{}\n",
                             "global uchar *write_addr = ((global uchar*)(((addr-mem_start)/4)*(NUM_THREADS*4) + (warp_id*4) + mem_start));");
-                result += &format!(
-                    "\t{}\n",
-                    "*((global uint*)((global uint*)write_addr)) = value & 0xFFFFFFFF;"
-                );
 		if emit_volatile {
+ 		    result += &format!(
+                        "\t{}\n",
+                        "*((global volatile uint*)((global volatile uint*)write_addr)) = value & 0xFFFFFFFF;"
+                    );
                     result += &format!("\t{}\n",
                                 "*((global volatile uint*)((global volatile uint*)write_addr+NUM_THREADS)) = (value >> 32) & 0xFFFFFFFF;");
 		} else {
+ 		    result += &format!(
+                        "\t{}\n",
+                        "*((global uint*)((global uint*)write_addr)) = value & 0xFFFFFFFF;"
+                    );
  		    result += &format!("\t{}\n",
                                 "*((global uint*)((global uint*)write_addr+NUM_THREADS)) = (value >> 32) & 0xFFFFFFFF;");
 		}
@@ -1187,15 +1191,27 @@ fn emit_read_u64_body(
                 result += &format!("\t{}\n",
                                 "global uchar *read_addr = ((global uchar*)(((addr-mem_start)/4)*(NUM_THREADS*4) + (warp_id*4) + mem_start));");
                 result += &format!("\t{}\n", "ulong temp = 0;");
-                result += &format!(
-                    "\t{}\n",
-                    "temp += *((global uint*)((global uint*)read_addr+NUM_THREADS));"
-                );
-                result += &format!("\t{}\n", "temp  = temp << 32;");
-                result += &format!(
-                    "\t{}\n",
-                    "temp += *((global uint*)((global uint*)read_addr));"
-                );
+		if emit_volatile {
+                    result += &format!(
+                        "\t{}\n",
+                        "temp += *((global volatile uint*)((global uint*)read_addr+NUM_THREADS));"
+                    );
+                    result += &format!("\t{}\n", "temp  = temp << 32;");
+                    result += &format!(
+                        "\t{}\n",
+                        "temp += *((global volatile uint*)((global uint*)read_addr));"
+                    );
+		} else {
+                    result += &format!(
+                        "\t{}\n",
+                        "temp += *((global uint*)((global uint*)read_addr+NUM_THREADS));"
+                    );
+                    result += &format!("\t{}\n", "temp  = temp << 32;");
+                    result += &format!(
+                        "\t{}\n",
+                        "temp += *((global uint*)((global uint*)read_addr));"
+                    );
+		}
                 result += &format!("\t{}\n", "return temp;");
             } else {
                 result += &format!("\t{}\n",
