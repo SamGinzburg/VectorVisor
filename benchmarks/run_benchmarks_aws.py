@@ -22,8 +22,8 @@ maxloc = 2000000
 #maxfuncs = 999
 #maxloc = 20000000
 benchmark_duration = 300
-run_a10g = False
-run_amd = True
+run_a10g = True
+run_amd = False
 
 if run_a10g:
     maxdemospace = 0
