@@ -15,6 +15,7 @@ parser = argparse.ArgumentParser(description='generate graphs')
 parser.add_argument("--input_dir", required=True)
 parser.add_argument("--gpu", required=True)
 parser.add_argument("--cpu", required=True)
+parser.add_argument("--interleave", required=True)
 
 args = vars(parser.parse_args())
 
@@ -25,6 +26,9 @@ gpu_type = args['gpu']
 print (gpu_type)
 
 cpu_type = args['cpu']
+print (cpu_type)
+
+interleave = args['interleave']
 print (cpu_type)
 
 def parse_file(f_name):
@@ -76,7 +80,9 @@ def plot_bars(gpu_latency, cpu_wasm_latency, cpu_x86_latency, figname):
 
     plt.ylabel('Log Norm Throughput')
     plt.title('GPU (g4dn.xlarge) vs. CPU Application Throughput (c5.xlarge)')
+    #plt.xticks(x_axis/2, ('Scrypt', 'Pbkdf2', 'Blur-Jpeg', 'Blur-Bmp', 'PHash', 'PHash-Modified', 'Histogram', 'LZ4', 'Strings', 'Genpdf'))
     plt.xticks(x_axis/2, ('Scrypt', 'Pbkdf2', 'Blur-Jpeg', 'Blur-Bmp', 'PHash', 'PHash-Modified', 'Histogram', 'LZ4', 'Strings'))
+
     ax = plt.gca()
     ax.set_yticks([1, 1.5, 2, 3, 5, 10, 20, 25, 50])
     ax.get_yaxis().set_major_formatter(matplotlib.ticker.FuncFormatter(lambda x, p: "{num}x".format(num=x)))
@@ -118,7 +124,7 @@ def plot_bars(gpu_latency, cpu_wasm_latency, cpu_x86_latency, figname):
     plt.clf()
 
 def latency_breakdown(device_exe_time, buffer_time, vmm_overhead, queue_submit, overhead, net_latency, name, scale=30):
-    N = 9
+    N = len(device_exe_time)
     plt.figure(figsize=(14, 6))
     
     plt.rc('xtick', labelsize=12)
@@ -155,7 +161,9 @@ def latency_breakdown(device_exe_time, buffer_time, vmm_overhead, queue_submit, 
     for idx in range(N):
         p4[idx].set_color('green')
 
+    #bench_names = ('Scrypt', 'Pbkdf2', 'Blur-Jpeg', 'Blur-Bmp', 'PHash', 'PHash-Modified', 'Histogram', 'LZ4', 'Strings', 'Genpdf')
     bench_names = ('Scrypt', 'Pbkdf2', 'Blur-Jpeg', 'Blur-Bmp', 'PHash', 'PHash-Modified', 'Histogram', 'LZ4', 'Strings')
+
     print ("Latency breakdown: {x}".format(x=name))
     print ("on-device exe frac")
     for idx in range(N):
@@ -173,7 +181,9 @@ def latency_breakdown(device_exe_time, buffer_time, vmm_overhead, queue_submit, 
     else:
         plt.title('GPU (NVIDIA T4) Latency Breakdown')
 
+    #plt.xticks(ind, ('Scrypt', 'Pbkdf2', 'Blur-Jpeg', 'Blur-Bmp', 'PHash', 'PHash-Modified', 'Histogram', 'LZ4', 'Strings', 'Genpdf'))
     plt.xticks(ind, ('Scrypt', 'Pbkdf2', 'Blur-Jpeg', 'Blur-Bmp', 'PHash', 'PHash-Modified', 'Histogram', 'LZ4', 'Strings'))
+
     plt.yticks(np.arange(0, 80, 5))
     plt.legend((p4[0], p3[0], p2[0], p1[0]), ('Other', 'VMM Overhead', 'On Device Execution Time', 'VectorVisor CPS Overhead'))
 
@@ -207,6 +217,65 @@ def latency_throughput(gpu_latency, gpu_throughput, cpu_x86_latency, cpu_x86_thr
         ax.grid(True)
     plt.legend()
     plt.savefig(input_dir+"/latency_throughput.eps")
+    plt.clf()
+
+def plot_memory_bandwidth():
+    #plt.figure(figsize=(14, 6))
+
+    ind = np.arange(4) * 10
+    width = 0.5
+    spacing = 0.75
+    ind2 = ind + spacing
+    ind3 = ind2 + spacing
+    ind4 = ind3 + spacing
+    ind5 = ind4 + spacing
+    ind6 = ind5 + spacing
+
+    ind_ticks = (ind + ind6) / 2
+    
+
+    plt.rc('xtick', labelsize=12)
+    plt.rc('ytick', labelsize=12)
+    plt.rc('axes', titlesize=20)
+    plt.rc('axes', labelsize=20)
+
+    nvidia_t4_1 = [51.8, 145.9, 101.3, 143.7]
+    nvidia_t4_4 = [63.9, 100.5, 96.5, 264.6]
+    nvidia_t4_8 = [81.5, 97.1, 128.8, 218.4]
+
+    nvidia_a10g_1 = [105.2, 265.7, 172.9, 395.1]
+    nvidia_a10g_4 = [125.6, 221.7, 215.6, 532.5]
+    nvidia_a10g_8 = [172.0, 214.7, 231.0, 412.6]
+
+    plt.title('VectorVisor Memory Bandwidth Benchmarks')
+
+    plt.xticks(ind_ticks, ('Membench', 'Membench-Unroll', 'Membench64', 'Membench64-Unroll'))
+    plt.yticks(np.arange(0, 800, 50))
+
+    plt.ylabel('Memory Bandwidth (GB/s)')
+    plt.xlabel('Memory Benchmarks')
+
+    colors = plt.cm.viridis(np.linspace(0, 1, 12))
+
+    nvidia_t4_1 = plt.bar(ind, nvidia_t4_1, width, color=colors[0])
+    nvidia_t4_4 = plt.bar(ind2, nvidia_t4_4, width, color=colors[1])
+    nvidia_t4_8 = plt.bar(ind3, nvidia_t4_8, width, color=colors[2])
+    nvidia_a10g_1 = plt.bar(ind4, nvidia_a10g_1, width, color=colors[3])
+    nvidia_a10g_4 = plt.bar(ind5, nvidia_a10g_4, width, color=colors[4])
+    nvidia_a10g_8 = plt.bar(ind6, nvidia_a10g_8, width, color=colors[5])
+    t4_line = plt.axhline(y=320, color='r', linestyle='dashed')
+    a10g_line = plt.axhline(y=600, color='b', linestyle='-')
+
+    plt.grid(zorder=-50)
+    plt.legend((nvidia_t4_1[0], nvidia_t4_4[0], nvidia_t4_8[0], nvidia_a10g_1[0], nvidia_a10g_4[0], nvidia_a10g_8[0], t4_line, a10g_line),
+               ('NVIDIA T4 (Interleave=1)', 'NVIDIA T4 (Interleave=4)', 'NVIDIA T4 (Interleave=8)',
+                'NVIDIA A10G (Interleave=1)', 'NVIDIA A10G (Interleave=4)', 'NVIDIA A10G (Interleave=8)',
+                'NVIDIA T4 Theoretical Max Bandwidth', 'NVIDIA A10G Theoretical Max Bandwidth'))
+
+
+    plt.savefig(input_dir+"/memory_bandwidth.eps", bbox_inches='tight')
+    plt.savefig(input_dir+"/memory_bandwidth.png", bbox_inches='tight')
+
     plt.clf()
 
 def plot_compile_times():
@@ -292,6 +361,7 @@ def plot_batch_times():
 def plot_roofline(gpu_bench_rps, gpu_on_dev_exe, gpu_e2e, vmcount, is_gpu):
     plt.figure(figsize=(8, 6)) 
     # [scrypt_gpu, pbkdf2_gpu, imageblur_gpu, imageblur_bmp_gpu, imagehash_gpu, imagehash_modified_gpu, histogram_gpu, lz4_gpu, strings_gpu]
+    #bench_names = ('Scrypt', 'Pbkdf2', 'Blur-Jpeg', 'Blur-Bmp', 'PHash', 'PHash-Modified', 'Histogram', 'LZ4', 'Strings', 'Genpdf')
     bench_names = ('Scrypt', 'Pbkdf2', 'Blur-Jpeg', 'Blur-Bmp', 'PHash', 'PHash-Modified', 'Histogram', 'LZ4', 'Strings')
     input_sizes = np.array([80 * 256, 32, 94 * 1024, 184 * 1024, 73 * 1024, 184 * 1024, 20 * 1024 * 4, 200 * 1024, 64*1024])
     # Ratio of on_dev_exe to input size vs. RPS?
@@ -330,6 +400,49 @@ def plot_roofline(gpu_bench_rps, gpu_on_dev_exe, gpu_e2e, vmcount, is_gpu):
     plt.savefig(input_dir+"/roofline_{dev}.eps".format(dev=dev_name), bbox_inches='tight')
     plt.savefig(input_dir+"/roofline_{dev}.png".format(dev=dev_name), bbox_inches='tight')
     plt.clf()
+
+def dump_table(gpu_rps_vals, x86_rps_vals, wasm_rps_vals, interleave):
+    gpu_str_start = "\small \systemname{} & \small "
+    x86_cpu_str_start = "\small CPU (x86-64) & \small "
+    wasm_cpu_str_start = "\small CPU (x86-64) & \small "
+
+    if gpu_type == "a10g":
+        gpu_str_start += "NVIDIA A10G & \small {interleave} & ".format(interleave=interleave)
+    else:
+        gpu_str_start += "NVIDIA T4 & \small {interleave} & ".format(interleave=interleave)
+
+
+    if cpu_type == "intel":
+        x86_cpu_str_start += "Intel & \small N/A & "
+        wasm_cpu_str_start += "Intel & \small N/A & "
+    else:
+        x86_cpu_str_start += "AMD & \small N/A & "
+        wasm_cpu_str_start += "AMD & \small N/A & "
+
+    for value in gpu_rps_vals:
+        if value != gpu_rps_vals[-1]:
+            gpu_str_start += r"\small {:0.2f} & ".format(value)
+        else:
+            gpu_str_start += r"\small {:0.2f} \\".format(value)
+
+    for value in x86_rps_vals:
+        if value != x86_rps_vals[-1]:
+            x86_cpu_str_start += r"\small {:0.2f} & ".format(value)
+        else:
+            x86_cpu_str_start += r"\small {:0.2f} \\".format(value)
+
+    for value in wasm_rps_vals:
+        if value != wasm_rps_vals[-1]:
+            wasm_cpu_str_start += r"\small {:0.2f} & ".format(value)
+        else:
+            wasm_cpu_str_start += r"\small {:0.2f} \\".format(value)
+
+    print ("GPU")
+    print (gpu_str_start)
+    print ("x86")
+    print (x86_cpu_str_start)
+    print ("WASM")
+    print (wasm_cpu_str_start)
 
 # scrypt
 scrypt_gpu = parse_file("gpu_bench_scrypt")
@@ -376,10 +489,24 @@ strings_gpu = parse_file("gpu_bench_nlp")
 strings_cpu_wasm = parse_file("cpu_bench_nlp")
 strings_cpu_x86 = parse_file("cpu_x86_bench_nlp")
 
+# genpdf
+"""
+genpdf_gpu = parse_file("gpu_bench_genpdf")
+genpdf_cpu_wasm = parse_file("cpu_bench_genpdf")
+genpdf_cpu_x86 = parse_file("cpu_x86_bench_genpdf")
+"""
+"""
+vmcount = [4096, 4096, 3072, 3072, 3072, 3072, 4096, 3072, 3072, 4096]
+gpu_list = [scrypt_gpu, pbkdf2_gpu, imageblur_gpu, imageblur_bmp_gpu, imagehash_gpu, imagehash_modified_gpu, histogram_gpu, lz4_gpu, strings_gpu, genpdf_gpu]
+cpu_wasm_list = [scrypt_cpu_wasm, pbkdf2_cpu_wasm, imageblur_cpu_wasm, imageblur_bmp_cpu_wasm, imagehash_cpu_wasm, imagehash_modified_cpu_wasm, histogram_cpu_wasm, lz4_cpu_wasm, strings_cpu_wasm, genpdf_cpu_wasm]
+cpu_x86_list = [scrypt_cpu_x86, pbkdf2_cpu_x86, imageblur_cpu_x86, imageblur_bmp_cpu_x86, imagehash_cpu_x86, imagehash_modified_cpu_x86, histogram_cpu_x86, lz4_cpu_x86, strings_cpu_x86, genpdf_cpu_x86]
+"""
 vmcount = [4096, 4096, 3072, 3072, 3072, 3072, 4096, 3072, 3072]
 gpu_list = [scrypt_gpu, pbkdf2_gpu, imageblur_gpu, imageblur_bmp_gpu, imagehash_gpu, imagehash_modified_gpu, histogram_gpu, lz4_gpu, strings_gpu]
 cpu_wasm_list = [scrypt_cpu_wasm, pbkdf2_cpu_wasm, imageblur_cpu_wasm, imageblur_bmp_cpu_wasm, imagehash_cpu_wasm, imagehash_modified_cpu_wasm, histogram_cpu_wasm, lz4_cpu_wasm, strings_cpu_wasm]
 cpu_x86_list = [scrypt_cpu_x86, pbkdf2_cpu_x86, imageblur_cpu_x86, imageblur_bmp_cpu_x86, imagehash_cpu_x86, imagehash_modified_cpu_x86, histogram_cpu_x86, lz4_cpu_x86, strings_cpu_x86]
+
+
 gpu_rps = []
 cpu_wasm_rps = []
 cpu_x86_rps = []
@@ -473,3 +600,21 @@ plot_roofline(gpu_rps, gpu_device_exe, gpu_latency, vmcount, True)
 
 
 plot_roofline(cpu_x86_rps_device, cpu_device_exe, cpu_x86_latency, [4] * len(cpu_x86_rps_device), False)
+
+dump_table(gpu_rps, cpu_x86_rps, cpu_wasm_rps, interleave)
+
+print ("Throughput / $ results")
+
+if gpu_type == "a10g":
+    gpu_price = 1.006
+else:
+    gpu_price = 0.526
+
+if cpu_type == "intel":
+    cpu_price = 0.17
+else:
+    cpu_price = 0.154
+
+plot_memory_bandwidth()
+
+dump_table(np.array(gpu_rps) / gpu_price, np.array(cpu_x86_rps) / cpu_price, np.array(cpu_wasm_rps) / cpu_price, interleave)
