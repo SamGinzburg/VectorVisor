@@ -9,7 +9,7 @@ from datetime import date, datetime
 target_rps = 3072
 target_rps_cpu = 1024
 TIMEOUT_MINUTES = 120
-interleave = 8
+interleave = 4
 #local_group_size = 999999
 is_pretty = "true"
 fastreply = "true"
@@ -1561,6 +1561,11 @@ run_membench(membench_interleave=8)
 
 cleanup()
 
+run_lz4_bench()
+
+cleanup()
+
+"""
 # run image hash bench
 run_image_hash_bench(run_modified = False)
 
@@ -1609,6 +1614,7 @@ cleanup()
 run_pbkdf2_bench()
 
 cleanup()
+"""
 
 # clean up all instances at end
 ec2.instances.filter(InstanceIds = instance_id_list).terminate()
