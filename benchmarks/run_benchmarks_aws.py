@@ -22,8 +22,9 @@ maxloc = 2000000
 #maxfuncs = 999
 #maxloc = 20000000
 benchmark_duration = 300
-run_a10g = True
+run_a10g = False
 run_amd = False
+run_latency_breakdown = True
 
 if run_a10g:
     maxdemospace = 0
@@ -266,6 +267,9 @@ def run_scrypt_bench():
 
     run_command(run_scrypt_command, "scrypt_gpu", gpu_instance[0].id)
 
+    if not run_latency_breakdown:
+        vmcount=vmcount*2
+
     # now run the invoker(s) for pbkdf2
     run_invoker = """#!/bin/bash
     sudo su
@@ -286,7 +290,7 @@ def run_scrypt_bench():
     cd /tmp/VectorVisor/benchmarks/scrypt/
 
     /usr/local/go/bin/go run /tmp/VectorVisor/benchmarks/scrypt/run_scrypt.go {addr} 8000 {target_rps} 1 {duration} {hashes}
-    """.format(addr=gpu_instance[0].private_dns_name, target_rps=vmcount*2, duration=benchmark_duration, hashes=256)
+    """.format(addr=gpu_instance[0].private_dns_name, target_rps=vmcount, duration=benchmark_duration, hashes=256)
 
     command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
 
@@ -399,6 +403,9 @@ def run_pbkdf2_bench():
                maxfuncs=999, maxloc=maxloc*10, vmcount=vmcount)
 
     run_command(run_pbkdf2_command, "pbkdf2_gpu", gpu_instance[0].id)
+    
+    if not run_latency_breakdown:
+        vmcount = vmcount*2
 
     # now run the invoker(s) for pbkdf2
     run_invoker = """#!/bin/bash
@@ -420,7 +427,7 @@ def run_pbkdf2_bench():
     cd /tmp/VectorVisor/benchmarks/pbkdf2/
 
     /usr/local/go/bin/go run /tmp/VectorVisor/benchmarks/pbkdf2/run_pbkdf2.go {addr} 8000 {target_rps} 1 {duration}
-    """.format(addr=gpu_instance[0].private_dns_name, target_rps=vmcount*2, duration=benchmark_duration)
+    """.format(addr=gpu_instance[0].private_dns_name, target_rps=vmcount, duration=benchmark_duration)
 
     command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
 
@@ -553,6 +560,8 @@ def run_lz4_bench():
     run_command(run_json_lz4_command, "run_json_lz4_command", gpu_instance[0].id)
 
     # Now set up the invoker
+    if not run_latency_breakdown:
+        vmcount = vmcount*2
 
     run_invoker = """#!/bin/bash
     sudo su
@@ -573,7 +582,7 @@ def run_lz4_bench():
     cd /tmp/VectorVisor/benchmarks/json-compression-lz4/
 
     /usr/local/go/bin/go run /tmp/VectorVisor/benchmarks/json-compression-lz4/run_lz4.go {addr} 8000 {target_rps} 1 {duration} /tmp/VectorVisor/benchmarks/json-compression/smaller_tweets.txt {input_size}
-    """.format(addr=gpu_instance[0].private_dns_name, input_size=2000, target_rps=vmcount*2, duration=benchmark_duration)
+    """.format(addr=gpu_instance[0].private_dns_name, input_size=2000, target_rps=vmcount, duration=benchmark_duration)
 
 
     command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
@@ -685,7 +694,8 @@ def run_genpdf_bench():
     run_command(run_genpdf_command, "run_average_command", gpu_instance[0].id)
 
     # Now set up the invoker
-
+    if not run_latency_breakdown:
+        vmcount = vmcount*2
     run_invoker = """#!/bin/bash
     sudo su
     ulimit -n 65536
@@ -705,7 +715,7 @@ def run_genpdf_bench():
     cd /tmp/VectorVisor/benchmarks/genpdf/
 
     /usr/local/go/bin/go run /tmp/VectorVisor/benchmarks/genpdf/run_genpdf.go {addr} 8000 {target_rps} 1 {duration}
-    """.format(addr=gpu_instance[0].private_dns_name, target_rps=vmcount*2, duration=benchmark_duration)
+    """.format(addr=gpu_instance[0].private_dns_name, target_rps=vmcount, duration=benchmark_duration)
 
 
     command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
@@ -814,7 +824,8 @@ def run_average_bench():
     run_command(run_average_command, "run_average_command", gpu_instance[0].id)
 
     # Now set up the invoker
-
+    if not run_latency_breakdown:
+        vmcount = vmcount*2
     run_invoker = """#!/bin/bash
     sudo su
     ulimit -n 65536
@@ -834,7 +845,7 @@ def run_average_bench():
     cd /tmp/VectorVisor/benchmarks/average/
 
     /usr/local/go/bin/go run /tmp/VectorVisor/benchmarks/average/run_average_bench.go {addr} 8000 {target_rps} 1 {duration} {input_size}
-    """.format(addr=gpu_instance[0].private_dns_name, input_size=20, target_rps=vmcount*2, duration=benchmark_duration)
+    """.format(addr=gpu_instance[0].private_dns_name, input_size=20, target_rps=vmcount, duration=benchmark_duration)
 
 
     command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
@@ -947,7 +958,7 @@ def run_image_hash_bench(run_modified = False):
 
     # Now set up the invoker
 
-    if not run_modified:
+    if not run_modified and not run_latency_breakdown:
         vmcount = vmcount*2
 
     run_invoker = """#!/bin/bash
@@ -1099,6 +1110,8 @@ def run_image_blur_bench(run_bmp = False):
     run_command(run_image_command, "run_imageblur_gpu_command", gpu_instance[0].id)
 
     # Now set up the invoker
+    if not run_latency_breakdown:
+        vmcount = vmcount*2
 
     run_invoker = """#!/bin/bash
     sudo su
@@ -1119,7 +1132,7 @@ def run_image_blur_bench(run_bmp = False):
     cd {exe_path}
 
     /usr/local/go/bin/go run run_image_blur.go {addr} 8000 {target_rps} 1 {duration}
-    """.format(addr=gpu_instance[0].private_dns_name, input_size=1000, target_rps=vmcount*2, exe_path=exe_path, duration=benchmark_duration)
+    """.format(addr=gpu_instance[0].private_dns_name, input_size=1000, target_rps=vmcount, exe_path=exe_path, duration=benchmark_duration)
 
 
     command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
@@ -1561,11 +1574,6 @@ run_membench(membench_interleave=8)
 
 cleanup()
 
-run_lz4_bench()
-
-cleanup()
-
-"""
 # run image hash bench
 run_image_hash_bench(run_modified = False)
 
@@ -1614,7 +1622,6 @@ cleanup()
 run_pbkdf2_bench()
 
 cleanup()
-"""
 
 # clean up all instances at end
 ec2.instances.filter(InstanceIds = instance_id_list).terminate()
