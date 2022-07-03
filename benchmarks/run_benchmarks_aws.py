@@ -2,6 +2,7 @@ import boto3
 import time
 import os
 from datetime import date, datetime
+import re
 
 # Benchmark constants
 # target rps is really just the number of concurrent invokers
@@ -25,6 +26,7 @@ benchmark_duration = 300
 run_a10g = False
 run_amd = False
 run_latency_breakdown = True
+run_only_membench = True
 
 if run_a10g:
     maxdemospace = 0
@@ -87,8 +89,32 @@ userdata = """#cloud-config
      - ~/.cargo/bin/cargo build --release
 """ % region
 
-
-userdata_ubuntu = """#cloud-config
+if run_only_membench: 
+    userdata_ubuntu = """#cloud-config
+    runcmd:
+     - whoami
+     - sudo su
+     - sudo whoami
+     - export HOME=/root
+     - export CUDA_CACHE_MAXSIZE=4294967296
+     - export CUDA_CACHE_PATH=~/.nv/ComputeCache/
+     - cd /tmp
+     - sudo apt update
+     - sudo apt install -y git
+     - sudo apt install -y git-lfs
+     - sudo apt install -y htop
+     - sudo apt install -y gcc
+     - sudo apt install -y curl
+     - sudo apt install -y clinfo
+     - sudo curl https://sh.rustup.rs -sSf | sh -s -- -y
+     - . $HOME/.cargo/env
+     - sudo ~/.cargo/bin/rustup target add wasm32-wasi
+     - git clone https://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:x-oauth-basic@github.com/SamGinzburg/VectorVisor.git
+     - cd /tmp/VectorVisor/
+     - sudo ~/.cargo/bin/cargo build --release
+""".format(opt=OPT_LEVEL, snip_args=WASM_SNIP_ARGS, snip_custom=WASM_SNIP_CUSTOM)
+else:
+    userdata_ubuntu = """#cloud-config
     runcmd:
      - whoami
      - sudo su
@@ -172,7 +198,6 @@ userdata_ubuntu = """#cloud-config
      - ~/.cargo/bin/wasm-snip target/wasm32-wasi/release/genpdf.wasm {snip_args} -o target/wasm32-wasi/release/genpdf.wasm -p {snip_custom}
      - /tmp/binaryen-version_109/bin/wasm-opt target/wasm32-wasi/release/genpdf.wasm {opt} -c -o target/wasm32-wasi/release/genpdf-opt.wasm
 """.format(opt=OPT_LEVEL, snip_args=WASM_SNIP_ARGS, snip_custom=WASM_SNIP_CUSTOM)
-
 
 def run_command(command, command_name, instance_id):
     while True:
@@ -1354,17 +1379,17 @@ def run_membench(membench_interleave=4):
     /tmp/VectorVisor/target/release/vectorvisor --input /tmp/VectorVisor/examples/mem/memloop.wat --ip=0.0.0.0 --heap=3145728 --stack=1024 --hcallsize=1024 --partition=false --serverless=true --volatile=true --vmcount={vmcount} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} &> test.log && tail -n 30 test.log
     """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=membench_interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount)
 
-    command_id = run_command(run_membench_command, "run_membench", gpu_instance[0].id)
-
-    time.sleep(5)
-
-    # Block until benchmark is complete
-    output = block_on_command(command_id, gpu_instance[0].id)
-    print (output)
-
-    # save output
-    with open(temp_dir+"gpu_membench_{interleave}.txt".format(interleave=membench_interleave), "w") as text_file:
-        text_file.write(str(output))
+    for idx in range(50):
+        command_id = run_command(run_membench_command, "run_membench", gpu_instance[0].id)
+        time.sleep(2)
+        # Block until benchmark is complete
+        output = block_on_command(command_id, gpu_instance[0].id)['StandardOutputContent']
+        output = output.replace("\'", "\"")
+        output = float(re.search(r'kernel_exec_time:\s(.*?)\n', output).group(1))
+        print (output)
+        # save output
+        with open(temp_dir+"gpu_membench_{interleave}.txt".format(interleave=membench_interleave), "a") as text_file:
+            text_file.write(str(output) + "\n")
 
     run_membench_command = """#!/bin/bash
     sudo su
@@ -1378,17 +1403,17 @@ def run_membench(membench_interleave=4):
     /tmp/VectorVisor/target/release/vectorvisor --input /tmp/VectorVisor/examples/mem/memloop_unroll.wat --ip=0.0.0.0 --heap=3145728 --stack=1024 --hcallsize=1024 --partition=false --serverless=true --volatile=true --vmcount={vmcount} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} &> test.log && tail -n 30 test.log
     """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=membench_interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount)
 
-    command_id = run_command(run_membench_command, "run_membench_unroll", gpu_instance[0].id)
-
-    time.sleep(5)
-
-    # Block until benchmark is complete
-    output = block_on_command(command_id, gpu_instance[0].id)
-    print (output)
-
-    # save output
-    with open(temp_dir+"gpu_membench_unroll_{interleave}.txt".format(interleave=membench_interleave), "w") as text_file:
-        text_file.write(str(output))
+    for idx in range(50):
+        command_id = run_command(run_membench_command, "run_membench_unroll", gpu_instance[0].id)
+        time.sleep(2)
+        # Block until benchmark is complete
+        output = block_on_command(command_id, gpu_instance[0].id)['StandardOutputContent']
+        output = output.replace("\'", "\"")
+        output = float(re.search(r'kernel_exec_time:\s(.*?)\n', output).group(1))   
+        print (output)
+        # save output
+        with open(temp_dir+"gpu_membench_unroll_{interleave}.txt".format(interleave=membench_interleave), "a") as text_file:
+            text_file.write(str(output) + "\n")
 
 
     run_membench_command = """#!/bin/bash
@@ -1403,17 +1428,18 @@ def run_membench(membench_interleave=4):
     /tmp/VectorVisor/target/release/vectorvisor --input /tmp/VectorVisor/examples/mem/memloop64.wat --ip=0.0.0.0 --heap=3145728 --stack=1024 --hcallsize=1024 --partition=false --serverless=true --volatile=true --vmcount={vmcount} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} &> test.log && tail -n 30 test.log
     """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=membench_interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount)
 
-    command_id = run_command(run_membench_command, "run_membench64", gpu_instance[0].id)
+    for idx in range(50):
+        command_id = run_command(run_membench_command, "run_membench64", gpu_instance[0].id)
+        time.sleep(2)
+        # Block until benchmark is complete
+        output = block_on_command(command_id, gpu_instance[0].id)['StandardOutputContent']
+        output = output.replace("\'", "\"")
+        output = float(re.search(r'kernel_exec_time:\s(.*?)\n', output).group(1))   
+        print (output)
+        # save output
+        with open(temp_dir+"gpu_membench64_{interleave}.txt".format(interleave=membench_interleave), "a") as text_file:
+            text_file.write(str(output) + "\n")
 
-    time.sleep(5)
-
-    # Block until benchmark is complete
-    output = block_on_command(command_id, gpu_instance[0].id)
-    print (output)
-
-    # save output
-    with open(temp_dir+"gpu_membench64_{interleave}.txt".format(interleave=membench_interleave), "w") as text_file:
-        text_file.write(str(output))
 
     run_membench_command = """#!/bin/bash
     sudo su
@@ -1427,17 +1453,17 @@ def run_membench(membench_interleave=4):
     /tmp/VectorVisor/target/release/vectorvisor --input /tmp/VectorVisor/examples/mem/memloop64_unroll.wat --ip=0.0.0.0 --heap=3145728 --stack=1024 --hcallsize=1024 --partition=false --serverless=true --volatile=true --vmcount={vmcount} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} &> test.log && tail -n 30 test.log
     """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=membench_interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount)
 
-    command_id = run_command(run_membench_command, "run_membench64_unroll", gpu_instance[0].id)
-
-    time.sleep(5)
-
-    # Block until benchmark is complete
-    output = block_on_command(command_id, gpu_instance[0].id)
-    print (output)
-
-    # save output
-    with open(temp_dir+"gpu_membench64_unroll_{interleave}.txt".format(interleave=membench_interleave), "w") as text_file:
-        text_file.write(str(output))
+    for idx in range(50):
+        command_id = run_command(run_membench_command, "run_membench64_unroll", gpu_instance[0].id)
+        time.sleep(2)
+        # Block until benchmark is complete
+        output = block_on_command(command_id, gpu_instance[0].id)['StandardOutputContent']
+        output = output.replace("\'", "\"")
+        output = float(re.search(r'kernel_exec_time:\s(.*?)\n', output).group(1)) 
+        print (output)
+        # save output
+        with open(temp_dir+"gpu_membench64_unroll_{interleave}.txt".format(interleave=membench_interleave), "a") as text_file:
+            text_file.write(str(output)+"\n")
 
 
 """
@@ -1574,6 +1600,7 @@ run_membench(membench_interleave=8)
 
 cleanup()
 
+"""
 # run image hash bench
 run_image_hash_bench(run_modified = False)
 
@@ -1622,6 +1649,7 @@ cleanup()
 run_pbkdf2_bench()
 
 cleanup()
+"""
 
 # clean up all instances at end
 ec2.instances.filter(InstanceIds = instance_id_list).terminate()
