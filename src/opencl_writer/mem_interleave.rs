@@ -1351,7 +1351,11 @@ pub fn generate_read_write_calls(
 
     match interleave {
         0 | 1 | 4 | 8 => {
-            result += &format!("\t{}", "*((global uchar*)addr) = value;");
+  	    if volatile {
+                result += &format!("\t{}", "*((global volatile uchar*)addr) = value;");
+	    } else {
+                result += &format!("\t{}", "*((global uchar*)addr) = value;");
+	    }
         }
         _ => panic!("Unsupported read/write interleave"),
     }
@@ -1467,7 +1471,11 @@ pub fn generate_read_write_calls(
     );
     match interleave {
         0 | 1 | 4 | 8 => {
-            result += &format!("\t{}", "return *((global uchar*)addr);");
+	    if volatile {
+                result += &format!("\t{}", "return *((global volatile uchar*)addr);");
+	    } else {
+                result += &format!("\t{}", "return *((global uchar*)addr);");
+	    }
         }
         _ => panic!("Unsupported read/write interleave"),
     }
