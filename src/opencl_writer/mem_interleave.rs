@@ -597,10 +597,12 @@ fn emit_write_u64_body(
                 result += &format!("\t{}\n", "if (IS_ALIGNED_POW2((ulong)addr, 8)) {");
                 result += &format!("\t\t{}\n",
                             "global uchar *write_addr = ((global uchar*)(((addr-mem_start)/8)*(NUM_THREADS*8) + (warp_id*8) + mem_start));");
-                result += &format!(
+                /*
+		result += &format!(
                     "\t\t{}\n",
                     "write_addr += GET_POW2_OFFSET((addr-mem_start), 8);"
                 );
+		*/
                 result += &format!(
                     "\t\t{}\n",
                     "*((global ulong*)((global uchar*)write_addr)) = value;"
@@ -612,10 +614,12 @@ fn emit_write_u64_body(
             } else if emit_aligned {
                 result += &format!("\t{}\n",
                             "global uchar *write_addr = ((global uchar*)(((addr-mem_start)/8)*(NUM_THREADS*8) + (warp_id*8) + mem_start));");
-                result += &format!(
+                /*
+		result += &format!(
                     "\t{}\n",
                     "write_addr += GET_POW2_OFFSET((addr-mem_start), 8);"
                 );
+		*/
 		if emit_volatile {
                     result += &format!(
                         "\t{}\n",
@@ -1272,10 +1276,12 @@ fn emit_read_u64_body(
                 result += &format!("\t{}\n", "if (IS_ALIGNED_POW2((ulong)addr, 8)) {");
                 result += &format!("\t\t{}\n",
                                 "global uchar *read_addr = ((global uchar*)(((addr-mem_start)/8)*(NUM_THREADS*8) + (warp_id*8) + mem_start));");
-                result += &format!(
+                /*
+		result += &format!(
                     "\t\t{}\n",
                     "read_addr += GET_POW2_OFFSET((addr-mem_start), 8);"
                 );
+		*/
                 result += &format!(
                     "\t\t{}\n",
                     "return *((global ulong*)((global uchar*)read_addr));"
@@ -1286,10 +1292,12 @@ fn emit_read_u64_body(
             } else if emit_aligned {
                 result += &format!("\t{}\n",
                                 "global uchar *read_addr = ((global uchar*)(((addr-mem_start)/8)*(NUM_THREADS*8) + (warp_id*8) + mem_start));");
-                result += &format!(
+                /*
+		result += &format!(
                     "\t{}\n",
                     "read_addr += GET_POW2_OFFSET((addr-mem_start), 8);"
                 );
+		*/
 		if emit_volatile {
                     result += &format!(
                         "\t{}\n",
