@@ -3,6 +3,49 @@ import time
 import os
 from datetime import date, datetime
 import re
+import argparse
+
+parser = argparse.ArgumentParser(description='run benchmarks')
+parser.add_argument("--gpu", required=True)
+parser.add_argument("--cpu", required=True)
+parser.add_argument("--interleave", required=True)
+parser.add_argument("--membench", required=False)
+parser.add_argument("--breakdown", required=False)
+
+args = vars(parser.parse_args())
+
+gpu = args['gpu']
+cpu = args['cpu']
+interleave = args['interleave']
+membench = args['membench']
+breakdown = args['breakdown']
+
+print (gpu)
+print (cpu)
+print (interleave)
+print (membench)
+print (breakdown)
+
+if gpu == "t4":
+    run_a10g = False
+else:
+    run_a10g = True
+
+if cpu == "intel":
+    run_amd = False
+else:
+    run_amd = True
+
+if breakdown:
+    run_latency_breakdown = True
+else:
+    run_latency_breakdown = False
+
+if membench:
+    run_only_membench = True
+else:
+    run_only_membench = False
+
 
 # Benchmark constants
 # target rps is really just the number of concurrent invokers
@@ -23,10 +66,6 @@ maxloc = 2000000
 #maxfuncs = 999
 #maxloc = 20000000
 benchmark_duration = 300
-run_a10g = True
-run_amd = False
-run_latency_breakdown = True
-run_only_membench = True
 
 if run_a10g:
     maxdemospace = 0
@@ -36,7 +75,7 @@ else:
     local_group_size = 64
 
 today = datetime.now()
-temp_dir = today.strftime("%d_%m_%Y_%H_%M_%S_bench_results/")
+temp_dir = today.strftime("%d_%m_%Y_%H_%M_%S_bench_results_{gpu}_{cpu}_{interleave}/".format(gpu=gpu, cpu=cpu, interleave=interleave))
 
 if os.path.isdir(temp_dir):
     print ("Temp dir: {d} exists already".format(d=temp_dir))
