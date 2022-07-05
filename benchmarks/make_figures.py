@@ -35,15 +35,24 @@ def parse_membench(f_name):
     ret = 0.0
     with open (input_dir+"/{name}.txt".format(name=f_name), "r") as myfile:
         try:
-            data = myfile.read().replace("\'", "\"")
-            execution_time = float(re.search(r'kernel_exec_time:\s(.*?)\\n', data).group(1))
             if gpu_type == "t4":
-                ret = "{:0.2f}".format(2*1024*1024*4096 / execution_time)
+                data = [2*1024*1024*4096 / float(val) if val != '' else None for val in myfile.read().split("\n")]
             else:
-                ret = "{:0.2f}".format(2*1024*1024*6144 / execution_time)
+                data = [2*1024*1024*6144 / float(val) if val != '' else None for val in myfile.read().split("\n")]
+
+            data = np.array(list(filter(lambda x: x != None, data)))
+            #execution_time = float(re.search(r'kernel_exec_time:\s(.*?)\\n', data).group(1))
+            execution_time = np.average(data)
+            stddev = np.std(data)
+            if gpu_type == "t4":
+                ret = "{:0.2f}".format(execution_time)
+                stddev = "{:0.2f}".format(stddev)
+            else:
+                ret = "{:0.2f}".format(execution_time)
+                stddev = "{:0.2f}".format(stddev)
         except Exception:
             print ("{n} was not parsed properly".format(n=f_name))
-    return ret
+    return ret, stddev
 
 
 def parse_file(f_name):
@@ -59,6 +68,7 @@ def parse_file(f_name):
             device_time = float(re.search(r'Device\sTime:\s(.*?)\\n', data).group(1))
             overhead_time = float(re.search(r'overhead:\s(.*?)\\n', data).group(1))
             compile_time = float(re.search(r'compile\stime:\s(.*?)\\n', data).group(1))
+            ret['name'] = f_name
             ret['rps'] = rps
             ret['on_dev_exe_time'] = on_dev_exe_time
             ret['latency'] = latency
@@ -140,9 +150,9 @@ def plot_bars(gpu_latency, cpu_wasm_latency, cpu_x86_latency, figname):
 
 def latency_breakdown(device_exe_time, buffer_time, vmm_overhead, queue_submit, overhead, net_latency, name, scale=30):
     N = len(device_exe_time)
-    plt.figure(figsize=(14, 6))
+    plt.figure(figsize=(7, 4))
     
-    plt.rc('xtick', labelsize=12)
+    plt.rc('xtick', labelsize=10)
     plt.rc('ytick', labelsize=12)
     plt.rc('axes', titlesize=16)
     plt.rc('axes', labelsize=16)
@@ -189,7 +199,7 @@ def latency_breakdown(device_exe_time, buffer_time, vmm_overhead, queue_submit, 
 
 
 
-    plt.xlabel('Benchmark')
+    #plt.xlabel('Benchmark')
     plt.ylabel('Average Latency (s)')
     if gpu_type == "a10g":
         plt.title('GPU (NVIDIA A10G) Latency Breakdown')
@@ -197,13 +207,14 @@ def latency_breakdown(device_exe_time, buffer_time, vmm_overhead, queue_submit, 
         plt.title('GPU (NVIDIA T4) Latency Breakdown')
 
     #plt.xticks(ind, ('Scrypt', 'Pbkdf2', 'Blur-Jpeg', 'Blur-Bmp', 'PHash', 'PHash-Modified', 'Histogram', 'LZ4', 'Strings', 'Genpdf'))
-    plt.xticks(ind, ('Scrypt', 'Pbkdf2', 'Blur-Jpeg', 'Blur-Bmp', 'PHash', 'PHash-Modified', 'Histogram', 'LZ4', 'Strings'))
+    plt.xticks(ind, ('Scrypt', 'Pbkdf2', 'Blur-Jpeg', 'Blur-Bmp', 'PHash', 'PHash-Modified', 'Histogram', 'LZ4', 'Strings'), rotation=50)
 
-    plt.yticks(np.arange(0, 80, 5))
-    plt.legend((p4[0], p3[0], p2[0], p1[0]), ('Other', 'VMM Overhead', 'On Device Execution Time', 'VectorVisor CPS Overhead'))
+    plt.yticks(np.arange(0, 60, 5))
+    plt.legend((p4[0], p3[0], p2[0], p1[0]), ('Other', 'VMM Overhead', 'On Device Execution Time', 'Continuations Overhead'))
 
     #plt.grid()
     plt.grid(zorder=-50)
+    plt.gcf().subplots_adjust(bottom=0.25)
     plt.savefig(input_dir+"/{name}_latency_breakdown.eps".format(name=name))
     plt.savefig(input_dir+"/{name}_latency_breakdown.png".format(name=name))
     plt.clf()
@@ -238,55 +249,86 @@ def plot_memory_bandwidth():
     #plt.figure(figsize=(14, 6))
 
     ind = np.arange(4) * 10
-    width = 0.5
-    spacing = 0.75
+    width = 2
+    spacing = 2.25
     ind2 = ind + spacing
     ind3 = ind2 + spacing
     ind4 = ind3 + spacing
     ind5 = ind4 + spacing
     ind6 = ind5 + spacing
 
-    ind_ticks = (ind + ind6) / 2
+    ind_ticks = (ind + ind3) / 2
     
+    plt.rc('xtick', labelsize=18)
+    plt.rc('ytick', labelsize=18)
+    plt.rc('axes', titlesize=18)
+    plt.rc('axes', labelsize=18)
 
-    plt.rc('xtick', labelsize=12)
-    plt.rc('ytick', labelsize=12)
-    plt.rc('axes', titlesize=20)
-    plt.rc('axes', labelsize=20)
+    nvidia_t4_1 = [62.69, 109.23, 101.07, 150.85]
+    nvidia_t4_4 = [66.98, 109.15, 107.43, 179.07]
+    nvidia_t4_8 = [82.75, 101.42, 117.32, 181.07]
 
-    nvidia_t4_1 = [51.8, 145.9, 101.3, 143.7]
-    nvidia_t4_4 = [63.9, 100.5, 96.5, 264.6]
-    nvidia_t4_8 = [81.5, 97.1, 128.8, 218.4]
+    nvidia_t4_1_std = [2.13, 8.45, 5.65, 5.95]
+    nvidia_t4_4_std = [4.72, 12.29, 9.43, 19.80]
+    nvidia_t4_8_std = [7.10, 11.46, 10.08, 19.63]
 
-    nvidia_a10g_1 = [105.2, 265.7, 172.9, 395.1]
-    nvidia_a10g_4 = [125.6, 221.7, 215.6, 532.5]
-    nvidia_a10g_8 = [172.0, 214.7, 231.0, 412.6]
+    nvidia_a10g_1 = [105.74, 187.22, 168.49, 303.99]
+    nvidia_a10g_4 = [125.57, 221.58, 214.62, 384.05]
+    nvidia_a10g_8 = [171.98, 214.72, 230.92, 414.87]
 
-    plt.title('VectorVisor Memory Bandwidth Benchmarks')
+    nvidia_a10g_1_std = [0.13, 0.20, 0.74, 1.60]
+    nvidia_a10g_4_std = [0.06, 0.17, 0.23, 0.74]
+    nvidia_a10g_8_std = [0.08, 0.15, 0.12, 0.44]
 
-    plt.xticks(ind_ticks, ('Membench', 'Membench-Unroll', 'Membench64', 'Membench64-Unroll'))
-    plt.yticks(np.arange(0, 800, 50))
+    fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(16, 6))
 
-    plt.ylabel('Memory Bandwidth (GB/s)')
-    plt.xlabel('Memory Benchmarks')
+    axes[0].set_xticks(ind_ticks)
+    axes[1].set_xticks(ind_ticks)
+    axes[0].set_xticklabels(('Membench', 'Membench-Unroll', 'Membench64', 'Membench64-Unroll'), rotation=50)
+    axes[1].set_xticklabels(('Membench', 'Membench-Unroll', 'Membench64', 'Membench64-Unroll'), rotation=50)
+
+    axes[0].set_ylim(0, 650)
+    axes[1].set_ylim(0, 650)
+
+    """
+    axes[0].set_xticklabels(ind_ticks, ('Membench', 'Membench-Unroll', 'Membench64', 'Membench64-Unroll'))
+    axes[0].set_yticks(np.arange(0, 800, 50))
+    axes[1].set_xticklabels(ind_ticks, ('Membench', 'Membench-Unroll', 'Membench64', 'Membench64-Unroll'))
+    axes[1].set_yticks(np.arange(0, 800, 50))
+    """
+    
+    #axes[1].yaxis.set_visible(False)
+    #plt.subplots_adjust(wspace=0.05)
+
+    axes[0].set_ylabel('Memory Bandwidth (GB/s)')
+    #axes[0].set_xlabel('Memory Benchmarks')
+    #axes[1].set_ylabel('Memory Bandwidth (GB/s)')
+    #axes[1].set_xlabel('Memory Benchmarks')
+    axes[0].set_title('NVIDIA T4')
+    axes[1].set_title('NVIDIA A10G')
 
     colors = plt.cm.viridis(np.linspace(0, 1, 12))
 
-    nvidia_t4_1 = plt.bar(ind, nvidia_t4_1, width, color=colors[0])
-    nvidia_t4_4 = plt.bar(ind2, nvidia_t4_4, width, color=colors[1])
-    nvidia_t4_8 = plt.bar(ind3, nvidia_t4_8, width, color=colors[2])
-    nvidia_a10g_1 = plt.bar(ind4, nvidia_a10g_1, width, color=colors[3])
-    nvidia_a10g_4 = plt.bar(ind5, nvidia_a10g_4, width, color=colors[4])
-    nvidia_a10g_8 = plt.bar(ind6, nvidia_a10g_8, width, color=colors[5])
-    t4_line = plt.axhline(y=320, color='r', linestyle='dashed')
-    a10g_line = plt.axhline(y=600, color='b', linestyle='-')
+    nvidia_t4_1 = axes[0].bar(ind, nvidia_t4_1, width, color=colors[0], yerr=nvidia_t4_1_std, capsize=6)
+    nvidia_t4_4 = axes[0].bar(ind2, nvidia_t4_4, width, color=colors[4], yerr=nvidia_t4_4_std, capsize=6)
+    nvidia_t4_8 = axes[0].bar(ind3, nvidia_t4_8, width, color=colors[8], yerr=nvidia_t4_8_std, capsize=6)
+    nvidia_a10g_1 = axes[1].bar(ind, nvidia_a10g_1, width, color=colors[0], yerr=nvidia_a10g_1_std, capsize=6)
+    nvidia_a10g_4 = axes[1].bar(ind2, nvidia_a10g_4, width, color=colors[4], yerr=nvidia_a10g_4_std, capsize=6)
+    nvidia_a10g_8 = axes[1].bar(ind3, nvidia_a10g_8, width, color=colors[8], yerr=nvidia_a10g_8_std, capsize=6)
+    t4_line = axes[0].axhline(y=320, color='b', linestyle='-')
+    t4_line_approx = axes[0].axhline(y=220.16, color='black', linestyle='dashed')
 
-    plt.grid(zorder=-50)
-    plt.legend((nvidia_t4_1[0], nvidia_t4_4[0], nvidia_t4_8[0], nvidia_a10g_1[0], nvidia_a10g_4[0], nvidia_a10g_8[0], t4_line, a10g_line),
-               ('NVIDIA T4 (Interleave=1)', 'NVIDIA T4 (Interleave=4)', 'NVIDIA T4 (Interleave=8)',
-                'NVIDIA A10G (Interleave=1)', 'NVIDIA A10G (Interleave=4)', 'NVIDIA A10G (Interleave=8)',
-                'NVIDIA T4 Theoretical Max Bandwidth', 'NVIDIA A10G Theoretical Max Bandwidth'))
+    a10g_line = axes[1].axhline(y=600, color='b', linestyle='-')
 
+    axes[0].grid(zorder=-50)
+    axes[1].grid(zorder=-50)
+
+    axes[0].legend((nvidia_t4_1[0], nvidia_t4_4[0], nvidia_t4_8[0], t4_line, t4_line_approx),
+               ('Interleave = 1 Byte', 'Interleave = 4 Bytes', 'Interleave = 8 Bytes','Theoretical Max Bandwidth', 'Prev. Measured Max Bandwidth'),
+               loc = "upper left", prop={'size': 18})
+    axes[1].legend((nvidia_a10g_1[0], nvidia_a10g_4[0], nvidia_a10g_8[0], a10g_line),
+               ('Interleave = 1 Byte', 'Interleave = 4 Bytes', 'Interleave = 8 Bytes','Theoretical Max Bandwidth'),
+               loc = "upper left", bbox_to_anchor=(0,0.9), prop={'size': 18})
 
     plt.savefig(input_dir+"/memory_bandwidth.eps", bbox_inches='tight')
     plt.savefig(input_dir+"/memory_bandwidth.png", bbox_inches='tight')
@@ -336,7 +378,7 @@ def plot_compile_times():
     plt.clf()
 
 def plot_batch_times():
-    #plt.figure(figsize=(14, 6))
+    plt.figure(figsize=(6, 4))
 
     ind = np.arange(9)    # the x locations for the groups
     width = 0.175
@@ -468,11 +510,40 @@ try:
     interleave8 = [parse_membench("gpu_membench_8"), parse_membench("gpu_membench_unroll_8"),
     parse_membench("gpu_membench64_8"), parse_membench("gpu_membench64_unroll_8")]
 
-    print ("Bandwidth results for: {}".format(gpu_type))
+    print ("Bandwidth average results for: {}".format(gpu_type))
+
+
+    if gpu_type == "t4":
+        interleave1_str = "nvidia_t4_1 = [{}, {}, {}, {}]".format(*[val[0] for val in interleave1])
+        interleave4_str = "nvidia_t4_4 = [{}, {}, {}, {}]".format(*[val[0] for val in interleave4])
+        interleave8_str = "nvidia_t4_8 = [{}, {}, {}, {}]".format(*[val[0] for val in interleave8])
+    else:
+        interleave1_str = "nvidia_a10g_1 = [{}, {}, {}, {}]".format(*[val[0] for val in interleave1])
+        interleave4_str = "nvidia_a10g_4 = [{}, {}, {}, {}]".format(*[val[0] for val in interleave4])
+        interleave8_str = "nvidia_a10g_8 = [{}, {}, {}, {}]".format(*[val[0] for val in interleave8])
+
+    print (interleave1_str)
+    print (interleave4_str)
+    print (interleave8_str)
+
+    if gpu_type == "t4":
+        interleave1 = "nvidia_t4_1_std = [{}, {}, {}, {}]".format(*[val[1] for val in interleave1])
+        interleave4 = "nvidia_t4_4_std = [{}, {}, {}, {}]".format(*[val[1] for val in interleave4])
+        interleave8 = "nvidia_t4_8_std = [{}, {}, {}, {}]".format(*[val[1] for val in interleave8])
+    else:
+        interleave1 = "nvidia_a10g_1_std = [{}, {}, {}, {}]".format(*[val[1] for val in interleave1])
+        interleave4 = "nvidia_a10g_4_std = [{}, {}, {}, {}]".format(*[val[1] for val in interleave4])
+        interleave8 = "nvidia_a10g_8_std = [{}, {}, {}, {}]".format(*[val[1] for val in interleave8])
+
+    print ("Bandwidth stddev results for: {}".format(gpu_type))
+
     print (interleave1)
     print (interleave4)
     print (interleave8)
-except:
+
+    plot_memory_bandwidth()
+except Exception as e:
+    print (e)
     pass
 
 # scrypt
@@ -533,11 +604,12 @@ gpu_list = [scrypt_gpu, pbkdf2_gpu, imageblur_gpu, imageblur_bmp_gpu, imagehash_
 cpu_wasm_list = [scrypt_cpu_wasm, pbkdf2_cpu_wasm, imageblur_cpu_wasm, imageblur_bmp_cpu_wasm, imagehash_cpu_wasm, imagehash_modified_cpu_wasm, histogram_cpu_wasm, lz4_cpu_wasm, strings_cpu_wasm, genpdf_cpu_wasm]
 cpu_x86_list = [scrypt_cpu_x86, pbkdf2_cpu_x86, imageblur_cpu_x86, imageblur_bmp_cpu_x86, imagehash_cpu_x86, imagehash_modified_cpu_x86, histogram_cpu_x86, lz4_cpu_x86, strings_cpu_x86, genpdf_cpu_x86]
 """
+
+
 vmcount = [4096, 4096, 3072, 3072, 3072, 3072, 4096, 3072, 3072]
 gpu_list = [scrypt_gpu, pbkdf2_gpu, imageblur_gpu, imageblur_bmp_gpu, imagehash_gpu, imagehash_modified_gpu, histogram_gpu, lz4_gpu, strings_gpu]
 cpu_wasm_list = [scrypt_cpu_wasm, pbkdf2_cpu_wasm, imageblur_cpu_wasm, imageblur_bmp_cpu_wasm, imagehash_cpu_wasm, imagehash_modified_cpu_wasm, histogram_cpu_wasm, lz4_cpu_wasm, strings_cpu_wasm]
 cpu_x86_list = [scrypt_cpu_x86, pbkdf2_cpu_x86, imageblur_cpu_x86, imageblur_bmp_cpu_x86, imagehash_cpu_x86, imagehash_modified_cpu_x86, histogram_cpu_x86, lz4_cpu_x86, strings_cpu_x86]
-
 
 gpu_rps = []
 cpu_wasm_rps = []
@@ -579,15 +651,20 @@ gpu_qsubmit = []
 gpu_vmm_overhead = []
 gpu_net_latency = []
 gpu_overhead = []
-for d, v in zip(gpu_list, vmcount):
+for d, v in zip(gpu_list, vmcount):        
     gpu_device_exe.append((d['on_dev_exe_time'] - d['overhead']) / (10 ** 9))
     gpu_buffer_time.append(d['buffer_time'] / (10 ** 9))
     gpu_qsubmit.append(d['queue_submit_time'] / (10 ** 9))
     # vmm overhead = device_time - queue_submit_time - buffer_time - exe_time
+
+    # imagehash, strings are the only benchmarks that didn't have 2x req volume, so control for that...
+    # dev time and req latency must be / 2 on average
     gpu_vmm_overhead.append((d['device_time'] - d['queue_submit_time'] - d['buffer_time'] - d['on_dev_exe_time']) / (10 ** 9))
     gpu_net_latency.append((d['latency'] - d['device_time']) / (10 ** 9))
+
     gpu_overhead.append(d['overhead'] / (10 ** 9))
 
+print ("latency breakdown: ", gpu_vmm_overhead)
 latency_breakdown(gpu_device_exe, gpu_buffer_time, gpu_vmm_overhead, gpu_qsubmit, gpu_overhead, gpu_net_latency, "gpu", scale=60)
 
 cpu_device_exe = []
@@ -646,7 +723,5 @@ if cpu_type == "intel":
     cpu_price = 0.17
 else:
     cpu_price = 0.154
-
-plot_memory_bandwidth()
 
 dump_table(np.array(gpu_rps) / gpu_price, np.array(cpu_x86_rps) / cpu_price, np.array(cpu_wasm_rps) / cpu_price, interleave)
