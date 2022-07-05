@@ -378,7 +378,7 @@ def plot_compile_times():
     plt.clf()
 
 def plot_batch_times():
-    plt.figure(figsize=(6, 4))
+    plt.figure(figsize=(8, 4))
 
     ind = np.arange(9)    # the x locations for the groups
     width = 0.175
@@ -398,11 +398,11 @@ def plot_batch_times():
 
     batch_sizes = [64, 128, 256, 512, 1024, 2048]
 
-    plt.title('Batch Size vs. RPS (NVIDIA RTX 2080 Ti)')
+    # plt.title('Batch Size vs. RPS (NVIDIA RTX 2080 Ti)')
     p1 = plt.plot(batch_sizes, times_scrypt, marker='*', markersize=12)
     p2 = plt.plot(batch_sizes, times_imageblur_bmp, marker='s', markersize=8)
     p3 = plt.plot(batch_sizes, times_phash_modified, marker='D', markersize=8)
-    plt.legend((p2[0], p3[0], p1[0]), ('Blur-Bmp', 'PHash-Modified', 'Scrypt'))
+    plt.legend((p2[0], p3[0], p1[0]), ('Blur-Bmp', 'PHash-Modified', 'Scrypt'), prop={'size': 14})
     plt.xlabel('Batch Size')
     plt.ylabel('RPS')
 
