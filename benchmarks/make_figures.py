@@ -280,12 +280,13 @@ def plot_memory_bandwidth():
     nvidia_a10g_4_std = [0.06, 0.17, 0.23, 0.74]
     nvidia_a10g_8_std = [0.08, 0.15, 0.12, 0.44]
 
-    fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(16, 6))
+    fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(12.75, 5))
+    fig.tight_layout()
 
     axes[0].set_xticks(ind_ticks)
     axes[1].set_xticks(ind_ticks)
-    axes[0].set_xticklabels(('Membench', 'Membench-Unroll', 'Membench64', 'Membench64-Unroll'), rotation=50)
-    axes[1].set_xticklabels(('Membench', 'Membench-Unroll', 'Membench64', 'Membench64-Unroll'), rotation=50)
+    axes[0].set_xticklabels(('Membench', 'Membench-Unroll', 'Membench64', 'Membench64-Unroll'), rotation=20)
+    axes[1].set_xticklabels(('Membench', 'Membench-Unroll', 'Membench64', 'Membench64-Unroll'), rotation=20)
 
     axes[0].set_ylim(0, 650)
     axes[1].set_ylim(0, 650)
