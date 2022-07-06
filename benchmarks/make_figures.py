@@ -353,22 +353,22 @@ def plot_compile_times():
     compile_times_1 = [12.18, 16.05, 25.65, 20.62, 32.2, 61.85, 17.02, 13.25, 18.15]
     compile_times_4 = [7.65, 12.77, 16.3, 28.78, 10, 22.23, 8.38, 11.02, 9.97]
 
-    plt.title('GPU (RTX 2080 Ti) Compile Times')
+    # plt.title('GPU (RTX 2080 Ti) Compile Times')
 
     plt.yticks(ind_ticks, ('Scrypt', 'Pbkdf2', 'Blur-Jpeg', 'Blur-Bmp', 'PHash', 'PHash-Modified', 'Histogram', 'LZ4', 'Strings'))
     plt.xticks(np.arange(0, 80, 15))
     plt.ylabel('Benchmark')
     plt.xlabel('Compile Time (min)')
-    p1 = plt.barh(ind, compile_times_1, width)
+    p1 = plt.barh(ind, compile_times_4, width)
     for idx in range(9):
         p1[idx].set_color('green')
 
-    p2 = plt.barh(ind2, compile_times_4, width)
+    p2 = plt.barh(ind2, compile_times_1, width)
     for idx in range(9):
         p2[idx].set_color('black')
 
     plt.legend()
-    plt.legend((p2[0], p1[0]), ('Interleave = 4', 'Interleave = 1'))
+    plt.legend((p2[0], p1[0]), ('Interleave = 1', 'Interleave = 4'), prop={'size': 14})
 
     plt.grid(zorder=-50)
 
