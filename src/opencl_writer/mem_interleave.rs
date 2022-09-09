@@ -1934,3 +1934,17 @@ pub fn emit_write_u64_aligned_checked(
         addr, mem_start, value, warp_id
     )
 }
+
+pub fn emit_intra_vm_memcpy(
+    src_addr: &str,
+    src_mem_start: &str,
+    dst_addr: &str,
+    dst_mem_start: &str,
+    buf_len_bytes: &str,
+    warp_id: &str,
+) -> String {
+    format!(
+        "___private_memcpy({}, {}, {}, {}, {}, {}, read_idx);",
+        src_addr, src_mem_start, dst_addr, dst_mem_start, buf_len_bytes, warp_id
+    )
+}
