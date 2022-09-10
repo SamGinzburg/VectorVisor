@@ -446,7 +446,19 @@ impl<'a> StackCtx {
                     stack_sizes.pop();
                     current_i32_count -= 1;
                     current_f32_count -= 1;
-                }
+                },
+		wast::Instruction::MemoryFill(_memarg) => {
+			stack_sizes.pop();
+			stack_sizes.pop();
+			stack_sizes.pop();
+                    	current_i32_count -= 3;
+		},
+		wast::Instruction::MemoryCopy(_memarg) => {
+			stack_sizes.pop();
+			stack_sizes.pop();
+			stack_sizes.pop();
+                    	current_i32_count -= 3;
+		},
                 /*
                  * As of right now we only support i32 globals anyways...
                  * TODO: for future support of globals, check for other types here

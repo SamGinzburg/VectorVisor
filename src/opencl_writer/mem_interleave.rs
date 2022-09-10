@@ -1347,22 +1347,44 @@ pub fn generate_bulkmem(fill: Option<String>) -> String {
     let name = match fill {
         None => {
             result += &format!("\n{}\n",
-            "void ___private_bulk_memcpy(ulong src, ulong mem_start_src, ulong dst, ulong mem_start_dst, ulong buf_len_bytes, uint warp_id, uint read_idx) {",
+            "void ___private_bulk_memcpy(ulong src, ulong mem_start_src, ulong dst, ulong mem_start_dst, ulong buf_len_bytes, uint warp_id, uint read_idx, uint thread_idx, local ulong2 *scratch_space) {",
             );
         },
         _    => {
             result += &format!("\n{}\n",
-            "void ___private_bulk_memfill(ulong src, ulong mem_start_src, ulong dst, ulong mem_start_dst, uchar value, ulong buf_len_bytes, uint warp_id, uint read_idx) {",
+            "void ___private_bulk_memfill(ulong dst, ulong mem_start_dst, uchar value, ulong buf_len_bytes, uint warp_id, uint read_idx, uint thread_idx, local ulong2 *scratch_space) {",
             );
         }
     };
 
     result += &format!("\t{}\n", "uint counter = 0;");
-    // fastpass for u32 ops
-    result += &format!(
-        "\t{}\n",
-        "if (buf_len_bytes > 4 && IS_ALIGNED_POW2((ulong)src, 4)) {"
-    );
+    match fill.clone() {
+        Some(value) => {
+            result += &format!("\t{}\n", "uint fillval = value << 24;");
+	    result += &format!("\t{}\n", "fillval += value << 16;");
+	    result += &format!("\t{}\n", "fillval += value << 8;");
+	    result += &format!("\t{}\n", "fillval += value;");
+        },
+        _    => {
+        }
+    };
+
+    // fastpath for u32 ops
+    match fill {
+	None => {
+    	    result += &format!(
+        	"\t{}\n",
+        	"if (buf_len_bytes > 4 && IS_ALIGNED_POW2((ulong)src, 4) && IS_ALIGNED_POW2((ulong)dst, 4)) {"
+    	    );
+	},
+	_ => {
+    	    result += &format!(
+        	"\t{}\n",
+        	"if (buf_len_bytes > 4 && IS_ALIGNED_POW2((ulong)dst, 4)) {"
+    	    );
+	}
+    };
+
     result += &format!(
         "\t\t{}\n",
         "for (; counter < (buf_len_bytes-GET_POW2_OFFSET(buf_len_bytes, 4)); counter+=4) {"
@@ -1372,7 +1394,7 @@ pub fn generate_bulkmem(fill: Option<String>) -> String {
             result += &format!(
                 "\t\t\t{};\n",
                 &emit_write_u32_aligned("(ulong)(dst+counter)", "(ulong)(mem_start_dst)",
-                        &value,
+                        &"fillval",
                         "warp_id"),
             );
         },
@@ -1388,9 +1410,8 @@ pub fn generate_bulkmem(fill: Option<String>) -> String {
 
     result += &format!("\t\t{}\n", "}");
     result += &format!("\t{}\n", "}");
-
+ 
     // slow path for remaining ops
-    result += &format!("\t{}\n", "dst_tmp = (uchar*)(dst_tmp_uint);");
     result += &format!("\t{}\n", "for (; counter < buf_len_bytes; counter++) {");
 
     match fill {
@@ -1398,7 +1419,7 @@ pub fn generate_bulkmem(fill: Option<String>) -> String {
             result += &format!(
                 "\t\t{};\n",
                 &emit_write_u8("(ulong)(dst+counter)", "(ulong)(mem_start_dst)",
-                                &value,
+                                &"value",
                                 "warp_id")
             );
         },
@@ -1688,7 +1709,7 @@ pub fn generate_read_write_calls(
     result += &format!("\n{}\n", "}");
 
     // emit bulk memory operations
-    result += &generate_bulkmem(Some("memfill"));
+    result += &generate_bulkmem(Some("memfill".to_string()));
     result += &generate_bulkmem(None);
 
 
@@ -2025,14 +2046,12 @@ pub fn emit_intra_vm_memcpy(
     warp_id: &str,
 ) -> String {
     format!(
-        "___private_bulk_memcpy({}, {}, {}, {}, {}, {}, read_idx);",
+        "___private_bulk_memcpy({}, {}, {}, {}, {}, {}, read_idx, thread_idx, scratch_space);",
         src_addr, src_mem_start, dst_addr, dst_mem_start, buf_len_bytes, warp_id
     )
 }
 
 pub fn emit_intra_vm_memfill(
-    src_addr: &str,
-    src_mem_start: &str,
     dst_addr: &str,
     dst_mem_start: &str,
     value: &str,
@@ -2040,7 +2059,7 @@ pub fn emit_intra_vm_memfill(
     warp_id: &str,
 ) -> String {
     format!(
-        "___private_bulk_memfill({}, {}, {}, {}, {}, {}, {}, read_idx);",
-        src_addr, src_mem_start, dst_addr, dst_mem_start, value, buf_len_bytes, warp_id
+        "___private_bulk_memfill({}, {}, {}, {}, {}, read_idx, thread_idx, scratch_space);",
+        dst_addr, dst_mem_start, value, buf_len_bytes, warp_id
     )
 }

@@ -5,7 +5,7 @@ use crate::opencl_writer::StackType;
 use crate::opencl_writer::mem_interleave::*;
 
 use wast::MemArg;
-use wast::MemoryArg;
+use wast::{MemoryArg, MemoryCopy};
 
 // Functions for loading from memory
 
@@ -968,4 +968,34 @@ pub fn emit_mem_size(
 ) -> String {
     let result_register = stack_ctx.vstack_alloc(StackType::i32);
     format!("\t{} = {};\n", result_register, "*current_mem_size")
+}
+
+pub fn emit_memcpy(
+    _writer: &opencl_writer::OpenCLCWriter,
+    stack_ctx: &mut StackCtx,
+    _arg: &MemoryCopy,
+    _debug: bool,
+) -> String {
+    let n_bytes = stack_ctx.vstack_pop(StackType::i32);
+    let src = stack_ctx.vstack_pop(StackType::i32);
+    let dst = stack_ctx.vstack_pop(StackType::i32);
+    emit_intra_vm_memcpy(&format!("((global char*)(heap_u32)+{})", src), "(global char*)(heap_u32)",
+			 &format!("((global char*)(heap_u32)+{})", dst), "(global char*)(heap_u32)",
+			 &n_bytes,
+			 "warp_idx")
+}
+
+pub fn emit_memfill(
+    _writer: &opencl_writer::OpenCLCWriter,
+    stack_ctx: &mut StackCtx,
+    _arg: &MemoryArg,
+    _debug: bool,
+) -> String {
+    let n_bytes = stack_ctx.vstack_pop(StackType::i32);
+    let val = stack_ctx.vstack_pop(StackType::i32);
+    let dst = stack_ctx.vstack_pop(StackType::i32);
+    emit_intra_vm_memfill(&format!("((global char*)(heap_u32)+{})", dst), "(global char*)(heap_u32)",
+			  &val,
+			  &n_bytes,
+			  "warp_idx")
 }

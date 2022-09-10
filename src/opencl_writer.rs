@@ -433,6 +433,12 @@ impl<'a> OpenCLCWriter<'_> {
             wast::Instruction::F32Store(memarg) => {
                 emit_memstore_f32(self, stack_ctx, memarg, debug)
             }
+	    wast::Instruction::MemoryCopy(memarg) => {
+		emit_memcpy(self, stack_ctx, memarg, debug)
+	    }
+	    wast::Instruction::MemoryFill(memarg) => {
+		emit_memfill(self, stack_ctx, memarg, debug)
+	    }
             wast::Instruction::GlobalGet(idx) => match idx {
                 wast::Index::Id(id) => {
                     emit_global_get(self, stack_ctx, id.name(), global_mappings, debug)
