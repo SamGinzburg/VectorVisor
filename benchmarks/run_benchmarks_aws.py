@@ -1493,7 +1493,7 @@ def run_membench(membench_interleave=4):
 
     for idx in range(50):
         command_id = run_command(run_membench_command, "run_membench64_unroll", gpu_instance[0].id)
-        time.sleep(2)
+        time.sleep(3)
         # Block until benchmark is complete
         output = block_on_command(command_id, gpu_instance[0].id)['StandardOutputContent']
         output = output.replace("\'", "\"")
@@ -1649,7 +1649,9 @@ run_image_hash_bench(run_modified = True)
 
 cleanup()
 
-
+if run_only_membench:
+    ec2.instances.filter(InstanceIds = instance_id_list).terminate()
+    exit()
 """
 # run image hash bench
 run_image_hash_bench(run_modified = False)
