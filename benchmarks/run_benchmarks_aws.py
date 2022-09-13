@@ -11,6 +11,7 @@ parser.add_argument("--cpu", required=True)
 parser.add_argument("--interleave", required=True)
 parser.add_argument("--membench", required=False)
 parser.add_argument("--breakdown", required=False)
+parser.add_argument("--dir", required=False)
 
 args = vars(parser.parse_args())
 
@@ -19,12 +20,14 @@ cpu = args['cpu']
 interleave = args['interleave']
 membench = args['membench']
 breakdown = args['breakdown']
+outdir = args['dir']
 
 print (gpu)
 print (cpu)
 print (interleave)
 print (membench)
 print (breakdown)
+print ("dir: ", outdir)
 
 if gpu == "t4":
     run_a10g = False
@@ -65,6 +68,7 @@ maxloc = 2000000
 #maxfuncs = 999
 #maxloc = 20000000
 benchmark_duration = 300
+NUM_REPEAT=5
 
 if run_a10g:
     maxdemospace = 0
@@ -74,7 +78,11 @@ else:
     local_group_size = 64
 
 today = datetime.now()
-temp_dir = today.strftime("%d_%m_%Y_%H_%M_%S_bench_results_{gpu}_{cpu}_{interleave}/".format(gpu=gpu, cpu=cpu, interleave=interleave))
+
+if outdir is None:
+    temp_dir = today.strftime("%d_%m_%Y_%H_%M_%S_bench_results_{gpu}_{cpu}_{interleave}/".format(gpu=gpu, cpu=cpu, interleave=interleave))
+else:
+    temp_dir = outdir
 
 if os.path.isdir(temp_dir):
     print ("Temp dir: {d} exists already".format(d=temp_dir))
@@ -1045,21 +1053,22 @@ def run_image_hash_bench(run_modified = False):
     /usr/local/go/bin/go run run_image_hash.go {addr} 8000 {target_rps} 1 {duration}
     """.format(addr=gpu_instance[0].private_dns_name, input_size=1000, target_rps=vmcount, imagehash_path=imagehash_path, duration=benchmark_duration)
 
-    command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
+    for idx in range(NUM_REPEAT):
+        command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
 
-    time.sleep(20)
+        time.sleep(20)
 
-    # Block until benchmark is complete
-    output = block_on_command(command_id, invoker_instance[0].id)
-    print (output)
+        # Block until benchmark is complete
+        output = block_on_command(command_id, invoker_instance[0].id)
+        print (output)
 
-    # save output
-    if run_modified:
-        with open(temp_dir+"gpu_bench_imagehash_modified.txt", "w") as text_file:
-            text_file.write(str(output))
-    else:
-        with open(temp_dir+"gpu_bench_imagehash.txt", "w") as text_file:
-            text_file.write(str(output))
+        # save output
+        if run_modified:
+            with open(temp_dir+"gpu_bench_imagehash_modified_{idx}.txt".format(idx=idx), "w") as text_file:
+                text_file.write(str(output))
+        else:
+            with open(temp_dir+"gpu_bench_imagehash_{idx}.txt".format(idx=idx), "w") as text_file:
+                text_file.write(str(output))
 
     run_command(run_image_command_wasmtime, "run_imagehash_command_x86", cpu_bench_instance[0].id)
 
@@ -1083,40 +1092,41 @@ def run_image_hash_bench(run_modified = False):
 
     /usr/local/go/bin/go run run_image_hash.go {addr} 8000 {target_rps} 1 {duration}
     """.format(addr=cpu_bench_instance[0].private_dns_name, input_size=1000, target_rps=target_rps_cpu, imagehash_path=imagehash_path, duration=benchmark_duration)
+    for idx in range(NUM_REPEAT):
+        command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
 
-    command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
+        time.sleep(20)
 
-    time.sleep(20)
-
-    # Block until benchmark is complete
-    output = block_on_command(command_id, invoker_instance[0].id)
-    print (output)
-    # save output
-    if run_modified:
-        with open(temp_dir+"cpu_bench_imagehash_modified.txt", "w") as text_file:
-            text_file.write(str(output))
-    else:
-        with open(temp_dir+"cpu_bench_imagehash.txt", "w") as text_file:
-            text_file.write(str(output))
+        # Block until benchmark is complete
+        output = block_on_command(command_id, invoker_instance[0].id)
+        print (output)
+        # save output
+        if run_modified:
+            with open(temp_dir+"cpu_bench_imagehash_modified_{idx}.txt".format(idx=idx), "w") as text_file:
+                text_file.write(str(output))
+        else:
+            with open(temp_dir+"cpu_bench_imagehash_{idx}.txt".format(idx=idx), "w") as text_file:
+                text_file.write(str(output))
 
     cleanup()
 
-    run_command(run_image_command_x86, "run_imagehash_command_x86", cpu_bench_instance[0].id)
+    for idx in range(NUM_REPEAT):
+        run_command(run_image_command_x86, "run_imagehash_command_x86", cpu_bench_instance[0].id)
 
-    command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
+        command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
 
-    time.sleep(20)
+        time.sleep(20)
 
-    # Block until benchmark is complete
-    output = block_on_command(command_id, invoker_instance[0].id)
-    print (output)
-    # save output
-    if run_modified:
-        with open(temp_dir+"cpu_x86_bench_imagehash_modified.txt", "w") as text_file:
-            text_file.write(str(output))
-    else:
-        with open(temp_dir+"cpu_x86_bench_imagehash.txt", "w") as text_file:
-            text_file.write(str(output))
+        # Block until benchmark is complete
+        output = block_on_command(command_id, invoker_instance[0].id)
+        print (output)
+        # save output
+        if run_modified:
+            with open(temp_dir+"cpu_x86_bench_imagehash_modified_{idx}.txt".format(idx=idx), "w") as text_file:
+                text_file.write(str(output))
+        else:
+            with open(temp_dir+"cpu_x86_bench_imagehash_{idx}.txt".format(idx=idx), "w") as text_file:
+                text_file.write(str(output))
 
 def run_image_blur_bench(run_bmp = False):
     if run_a10g:
@@ -1639,24 +1649,18 @@ run_membench(membench_interleave=8)
 
 cleanup()
 """
-run_image_hash_bench(run_modified = False)
-
-cleanup()
-
-# run image hash bench
-
-run_image_hash_bench(run_modified = True)
-
-cleanup()
 
 if run_only_membench:
     ec2.instances.filter(InstanceIds = instance_id_list).terminate()
     exit()
-"""
+
+
 # run image hash bench
 run_image_hash_bench(run_modified = False)
 
 cleanup()
+
+"""
 
 # run image hash bench
 
@@ -1702,5 +1706,6 @@ run_pbkdf2_bench()
 
 cleanup()
 """
+
 # clean up all instances at end
 ec2.instances.filter(InstanceIds = instance_id_list).terminate()

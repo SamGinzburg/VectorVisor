@@ -1109,8 +1109,8 @@ impl OpenCLRunner {
             Arc::new(UnsafeCellWrapper::new(overhead_tracker));
         let hcall_read_buffer: Arc<UnsafeCellWrapper<u8>> =
             Arc::new(UnsafeCellWrapper::new(hypercall_buffer_read_buffer));
-        let hcall_async_buffer: Arc<UnsafeCellWrapper<u8>> =
-            Arc::new(UnsafeCellWrapper::new(hypercall_input_buffer));
+        let hcall_async_buffer: Arc<Mutex<UnsafeCellWrapper<u8>>> =
+            Arc::new(Mutex::new(UnsafeCellWrapper::new(hypercall_input_buffer)));
 
         let mut total_gpu_execution_time: u64 = 0;
         let mut queue_submit_delta: u64 = 0;
@@ -1299,7 +1299,7 @@ impl OpenCLRunner {
                                         let wasi_context = &mut worker_vms[worker_vm_idx];
                                         // Queue the input in the VM
                                         let buffer = async_buffer.clone();
-                                        let deref_buf = unsafe { &mut *buffer.buf.get() };
+                                        let deref_buf = unsafe { &mut *buffer.lock().unwrap().buf.get() };
                                         wasi_context.queue_request(msg, *deref_buf, uuid);
                                         recv_reqs += 1;
                                         is_empty_vm.insert(worker_vm_idx);
@@ -2058,7 +2058,7 @@ impl OpenCLRunner {
                 // and we can skip writing this buffer back to the VM
                 if number_hcalls_blocking > 0 {
                     let hcall_buf = if is_serverless_invoke && !non_serverless_invoke_call_found {
-                        &*hcall_async_buffer.buf.get()
+                        &*hcall_async_buffer.lock().unwrap().buf.get()
                     } else {
                         &*hcall_read_buffer.buf.get()
                     };
