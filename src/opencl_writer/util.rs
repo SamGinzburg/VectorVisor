@@ -32,5 +32,6 @@ pub fn format_fn_name(fn_name: &str) -> String {
         .replace(")", "")
         .replace("[", "")
         .replace("]", "")
+        .replace("#", "_hash_")
         .replace("-", "_")
 }
