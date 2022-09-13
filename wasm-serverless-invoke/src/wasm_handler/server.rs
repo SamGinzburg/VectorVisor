@@ -13,6 +13,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use warp::http::{Response, StatusCode};
 use warp::hyper::Body;
 use uuid::Uuid;
+use core::task::Poll;
 
 pub struct FunctionServer {}
 
@@ -42,7 +43,10 @@ impl FunctionServer {
         final_resp.body(Body::from(resp)).unwrap()
     }
 
-    async fn response(body: bytes::Bytes, vm_idx: usize, sender: Arc<Vec<Mutex<Sender<(Vec<u8>, usize, String)>>>>, receiver: Arc<Vec<Mutex<Receiver<(Vec<u8>, usize, u64, u64, u64, u64, String, u32)>>>>) -> Result<impl warp::Reply, warp::Rejection> {
+    async fn response(body: bytes::Bytes,
+                      vm_idx: usize, sender: Arc<Vec<Mutex<Sender<(Vec<u8>, usize, String)>>>>,
+                      receiver: Arc<Vec<Mutex<Receiver<(Vec<u8>, usize, u64, u64, u64, u64, String, u32)>>>>,
+                      hashmaps: Arc<Vec<Mutex<HashMap<String, (Vec<u8>, usize, u64, u64, u64, u64, String, u32)>>>>) -> Result<impl warp::Reply, warp::Rejection> {
         // Get an available VM first
         let tx: &Mutex<Sender<(Vec<u8>, usize, String)>> = (*sender).get(vm_idx).unwrap();
         let rx: &Mutex<Receiver<(Vec<u8>, usize, u64, u64, u64, u64, String, u32)>> = (*receiver).get(vm_idx).unwrap();
@@ -67,10 +71,49 @@ impl FunctionServer {
             _recycle_count,
         )) = rx.lock().await.recv().await
         {
+            let mut hashmap = (*hashmaps).get(vm_idx).unwrap().lock().await;
+
             if uuid == req_id {
                 let req_end = std::time::Instant::now();
                 return Ok(FunctionServer::create_response(resp, on_dev_time, queue_submit_time, num_queue_submits, num_unique_fns, (req_start-req_queue).as_nanos(), (req_end-req_queue).as_nanos()))
+            } else {
+                hashmap.insert(uuid.clone(), (
+                    resp,
+                    len,
+                    on_dev_time,
+                    queue_submit_time,
+                    num_queue_submits,
+                    num_unique_fns,
+                    uuid,
+                    _recycle_count,
+                ));
             }
+
+            match hashmap.remove(&req_id) {
+                Some((
+                    resp,
+                    len,
+                    on_dev_time,
+                    queue_submit_time,
+                    num_queue_submits,
+                    num_unique_fns,
+                    uuid,
+                    _recycle_count,
+                )) => {
+                    let req_end = std::time::Instant::now();    
+                    return Ok(FunctionServer::create_response(resp,
+                                                              on_dev_time,
+                                                              queue_submit_time,
+                                                              num_queue_submits,
+                                                              num_unique_fns,
+                                                              (req_start-req_queue).as_nanos(),
+                                                              (req_end-req_queue).as_nanos()))
+                },
+                _ => {
+                    continue;
+                },
+            }
+
         }
 
         panic!("This line in batch server should not be reached")
@@ -93,9 +136,15 @@ impl FunctionServer {
 
                         (current_idx % num_vms_u64) as usize
                     });
+                    let mut hashmaps = vec![];
+                    for i in 0..num_vms {
+                        hashmaps.push(Mutex::new(HashMap::new()));
+                    }
+                    let mut hashmap_vec: Arc<Vec<Mutex<HashMap<String, (Vec<u8>, usize, u64, u64, u64, u64, String, u32)>>>> = Arc::new(hashmaps);
+                    let hashmaps = warp::any().map(move || hashmap_vec.clone());
 
                     let batch_submit = warp::path!("batch_submit")
-                                        .and(warp::body::bytes()).and(warp_scheduler).and(warp_senders).and(warp_receivers).and_then(FunctionServer::response);
+                                        .and(warp::body::bytes()).and(warp_scheduler).and(warp_senders).and(warp_receivers).and(hashmaps).and_then(FunctionServer::response);
 
 
                     let is_active_param = warp::any().map(move || Arc::clone(&is_active));
