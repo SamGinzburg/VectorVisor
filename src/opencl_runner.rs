@@ -1854,6 +1854,7 @@ impl OpenCLRunner {
             if non_serverless_invoke_call_found {
                 for idx in 0..(self.num_vms as usize * mexec) {
                     if hypercall_num_temp[idx] == (WasiSyscalls::ServerlessInvoke as i32) {
+			println!("non serverless invoke call found!!!");
                         entry_point_temp[idx] = ((-1) as i32) as u32;
                     }
                 }

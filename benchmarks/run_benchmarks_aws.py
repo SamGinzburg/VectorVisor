@@ -12,6 +12,7 @@ parser.add_argument("--interleave", required=True)
 parser.add_argument("--membench", required=False)
 parser.add_argument("--breakdown", required=False)
 parser.add_argument("--dir", required=False)
+parser.add_argument("--skip-membench", required=False)
 
 args = vars(parser.parse_args())
 
@@ -21,13 +22,15 @@ interleave = args['interleave']
 membench = args['membench']
 breakdown = args['breakdown']
 outdir = args['dir']
+skip_membench = args['skip_membench']
 
-print (gpu)
-print (cpu)
-print (interleave)
-print (membench)
-print (breakdown)
+print ("gpu: ", gpu)
+print ("cpu: ", cpu)
+print ("interleave: ", interleave)
+print ("membench: ", membench)
+print ("run latency breakdown: ", breakdown)
 print ("dir: ", outdir)
+print ("skip_membench: ", skip_membench)
 
 if gpu == "t4":
     run_a10g = False
@@ -67,7 +70,7 @@ maxfuncs = 50
 maxloc = 2000000
 #maxfuncs = 999
 #maxloc = 20000000
-benchmark_duration = 300
+benchmark_duration = 900
 NUM_REPEAT=5
 
 if run_a10g:
@@ -1070,6 +1073,8 @@ def run_image_hash_bench(run_modified = False):
             with open(temp_dir+"gpu_bench_imagehash_{idx}.txt".format(idx=idx), "w") as text_file:
                 text_file.write(str(output))
 
+        time.sleep(60)
+
     run_command(run_image_command_wasmtime, "run_imagehash_command_x86", cpu_bench_instance[0].id)
 
     run_invoker_wasmtime = """#!/bin/bash
@@ -1108,6 +1113,8 @@ def run_image_hash_bench(run_modified = False):
             with open(temp_dir+"cpu_bench_imagehash_{idx}.txt".format(idx=idx), "w") as text_file:
                 text_file.write(str(output))
 
+        time.sleep(60)
+
     cleanup()
 
     for idx in range(NUM_REPEAT):
@@ -1127,6 +1134,8 @@ def run_image_hash_bench(run_modified = False):
         else:
             with open(temp_dir+"cpu_x86_bench_imagehash_{idx}.txt".format(idx=idx), "w") as text_file:
                 text_file.write(str(output))
+
+        time.sleep(60)
 
 def run_image_blur_bench(run_bmp = False):
     if run_a10g:
@@ -1636,21 +1645,20 @@ while True:
 
 ssm_client = boto3.client('ssm', region_name=region)
 
-"""
-run_membench(membench_interleave=1)
+if skip_membench is None:
+    run_membench(membench_interleave=1)
 
-cleanup()
+    cleanup()
 
-run_membench(membench_interleave=4)
+    run_membench(membench_interleave=4)
 
-cleanup()
+    cleanup()
 
-run_membench(membench_interleave=8)
+    run_membench(membench_interleave=8)
 
-cleanup()
-"""
+    cleanup()
 
-if run_only_membench:
+if run_only_membench and skip_membench is None:
     ec2.instances.filter(InstanceIds = instance_id_list).terminate()
     exit()
 
