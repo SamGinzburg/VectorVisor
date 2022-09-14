@@ -504,19 +504,19 @@ fn emit_write_u64_body(
                         "\t{}\n",
                         "fast_write_u8(addr, mem_start, value & 0xFF, warp_id);"
                     );
-                    result += &format!("\t{}",
+                    result += &format!("\t{}\n",
                                 "fast_write_u8((ulong)(((char*)addr)+NUM_THREADS), mem_start, (value >> 8) & 0xFF, warp_id);");
                     result += &format!("\t{}\n",
                                 "fast_write_u8((ulong)(((char*)addr)+NUM_THREADS*2), mem_start, (value >> 16) & 0xFF, warp_id);");
-                    result += &format!("\t{}",
+                    result += &format!("\t{}\n",
                                 "fast_write_u8((ulong)(((char*)addr)+NUM_THREADS*3), mem_start, (value >> 24) & 0xFF, warp_id);");
                     result += &format!("\t{}\n",
                                 "fast_write_u8((ulong)(((char*)addr)+NUM_THREADS*4), mem_start, (value >> 32) & 0xFF, warp_id);");
-                    result += &format!("\t{}",
+                    result += &format!("\t{}\n",
                                 "fast_write_u8((ulong)(((char*)addr)+NUM_THREADS*5), mem_start, (value >> 40) & 0xFF, warp_id);");
                     result += &format!("\t{}\n",
                                 "fast_write_u8((ulong)(((char*)addr)+NUM_THREADS*6), mem_start, (value >> 48) & 0xFF, warp_id);");
-                    result += &format!("\t{}",
+                    result += &format!("\t{}\n",
                                 "fast_write_u8((ulong)(((char*)addr)+NUM_THREADS*7), mem_start, (value >> 56) & 0xFF, warp_id);");
                 }
             }

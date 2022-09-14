@@ -1,12 +1,12 @@
 use crate::opencl_writer;
 use crate::opencl_writer::StackCtx;
 use crate::opencl_writer::StackType;
-use wast::V128Const;
+use wast::core::*;
 
 pub fn emit_v128_const(
     _writer: &opencl_writer::OpenCLCWriter,
     stack_ctx: &mut StackCtx,
-    const_type: &wast::V128Const,
+    const_type: &V128Const,
     _debug: bool,
 ) -> String {
     let result_register = stack_ctx.vstack_alloc(StackType::u128);

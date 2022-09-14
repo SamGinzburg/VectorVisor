@@ -2,7 +2,10 @@ use crate::opencl_writer;
 use crate::opencl_writer::format_fn_name;
 use crate::opencl_writer::WASI_SNAPSHOT_PREVIEW1;
 use std::collections::{HashMap, HashSet};
-use wast::Index::{Id, Num};
+
+use wast::core::*;
+use wast::token::Index::*;
+use wast::token::Index;
 
 /*
  * Our CPS-style transform is too expensive for most function calls, so we perform some basic static analysis
@@ -47,18 +50,18 @@ pub enum FastcallPassStatus {
 fn is_fastcall(
     writer: &opencl_writer::OpenCLCWriter,
     func_name: String,
-    func: &wast::Func,
+    func: &Func,
     fastcall_set: &mut HashSet<String>,
     indirect_calls: &mut HashSet<String>,
     start_func: String,
-    indirect_call_mapping: &HashMap<u32, &wast::Index>,
+    indirect_call_mapping: &HashMap<u32, &Index>,
 ) -> FastcallPassStatus {
     match (&func.kind, &func.id, &func.ty) {
-        (wast::FuncKind::Import(_), _, _) => {
+        (FuncKind::Import(_), _, _) => {
             panic!("InlineImport functions not yet implemented (fastcall pass)");
         }
-        (wast::FuncKind::Inline { locals, expression }, _, typeuse) => {
-            let mut local_type_info: HashMap<String, wast::ValType> = HashMap::new();
+        (FuncKind::Inline { locals, expression }, _, typeuse) => {
+            let mut local_type_info: HashMap<String, ValType> = HashMap::new();
             let mut param_idx = 0;
             match typeuse.clone().inline {
                 Some(params) => {
@@ -90,11 +93,11 @@ fn is_fastcall(
             let mut size = 0;
             for (_, t) in local_type_info {
                 size += match t {
-                    wast::ValType::I32 => 4,
-                    wast::ValType::I64 => 8,
-                    wast::ValType::F32 => 4,
-                    wast::ValType::F64 => 8,
-                    wast::ValType::V128 => 16,
+                    ValType::I32 => 4,
+                    ValType::I64 => 8,
+                    ValType::F32 => 4,
+                    ValType::F64 => 8,
+                    ValType::V128 => 16,
                     _ => panic!("Unimplemented type in fastcall pass"),
                 };
             }
@@ -119,10 +122,10 @@ fn is_fastcall(
             let mut ambiguous_dep_list = HashSet::new();
             for instruction in expression.instrs.iter() {
                 match instruction {
-                    wast::Instruction::Call(idx) => {
+                    Instruction::Call(idx) => {
                         let id = match idx {
-                            wast::Index::Id(id) => format_fn_name(id.name()),
-                            wast::Index::Num(val, _) => format!("func_{}", val),
+                            Index::Id(id) => format_fn_name(id.name()),
+                            Index::Num(val, _) => format!("func_{}", val),
                             _ => panic!("Unable to get Id for function call: {:?}", idx),
                         };
 
@@ -166,7 +169,7 @@ fn is_fastcall(
                             ambiguous_dep_list.insert(id.to_string());
                         }
                     }
-                    wast::Instruction::CallIndirect(call_indirect) => {
+                    Instruction::CallIndirect(call_indirect) => {
                         let mut matching_types = 0;
                         // Check to see if this call_indirect has 0 targets (and will always fault)
                         // If so, we can emit this as a fastcall
@@ -191,15 +194,15 @@ fn is_fastcall(
                                 // We only need to call functions with matching type signatures, the rest would trap
                                 for func_id in indirect_call_mapping.values() {
                                     let f_name = match func_id {
-                                        wast::Index::Id(id) => format_fn_name(id.name()),
-                                        wast::Index::Num(val, _) => format!("func_{}", val),
+                                        Index::Id(id) => format_fn_name(id.name()),
+                                        Index::Num(val, _) => format!("func_{}", val),
                                     };
                                     let func_type_signature =
                                         &writer.func_map.get(&f_name).unwrap().ty;
 
                                     let func_type_index = match func_type_signature.index {
-                                        Some(wast::Index::Id(id)) => id.name().to_string(),
-                                        Some(wast::Index::Num(val, _)) => format!("t{}", val),
+                                        Some(Index::Id(id)) => id.name().to_string(),
+                                        Some(Index::Num(val, _)) => format!("t{}", val),
                                         None => panic!("Only type indicies supported for call_indirect in vstack pass"),
                                     };
 
@@ -236,10 +239,10 @@ fn is_fastcall(
  */
 pub fn compute_fastcall_set(
     writer: &opencl_writer::OpenCLCWriter,
-    func_map: &HashMap<String, wast::Func>,
+    func_map: &HashMap<String, Func>,
     indirect_calls: &mut HashSet<String>,
     start_func: String,
-    indirect_call_mapping: &HashMap<u32, &wast::Index>,
+    indirect_call_mapping: &HashMap<u32, &Index>,
 ) -> HashSet<String> {
     let mut called_funcs = HashSet::new();
     let mut known_bad_calls = HashSet::new();

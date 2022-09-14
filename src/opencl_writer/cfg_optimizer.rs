@@ -6,6 +6,9 @@ use std::collections::HashSet;
 use std::convert::TryInto;
 use std::iter::FromIterator;
 
+use wast::core::*;
+use wast::token::Index;
+
 /*
  * Get the names of:
  * - Called functions inside loops, Called functions
@@ -13,10 +16,10 @@ use std::iter::FromIterator;
 pub fn get_called_funcs(
     writer_ctx: &OpenCLCWriter,
     indirect_call_mapping: &Vec<String>,
-    func: &wast::Func,
+    func: &Func,
     fastcalls: &HashSet<String>,
-    func_map: &HashMap<String, wast::Func>,
-    imports_map: &HashMap<String, (&str, Option<&str>, wast::ItemSig)>,
+    func_map: &HashMap<String, Func>,
+    imports_map: &HashMap<String, (&str, Option<&str>, ItemSig)>,
     visited_funcs: &mut HashSet<String>,
 ) -> (Vec<String>, Vec<String>) {
     let mut fn_call_in_loop: Vec<String> = vec![];
@@ -25,18 +28,18 @@ pub fn get_called_funcs(
     let mut control_stack: Vec<bool> = vec![];
     let mut nested_loop_count = 0;
     match (&func.kind, &func.id, &func.ty) {
-        (wast::FuncKind::Import(_), _, _) => {
+        (FuncKind::Import(_), _, _) => {
             // In this case, we have an InlineImport of the form:
             // (func (type 3) (import "foo" "bar"))
             panic!("InlineImport functions not yet implemented");
         }
-        (wast::FuncKind::Inline { locals, expression }, _, _typeuse) => {
+        (FuncKind::Inline { locals, expression }, _, _typeuse) => {
             for instr in expression.instrs.iter() {
                 match instr {
-                    wast::Instruction::Call(idx) => {
+                    Instruction::Call(idx) => {
                         let id: &str = &match idx {
-                            wast::Index::Id(id) => format_fn_name(id.name()),
-                            wast::Index::Num(val, _) => format!("func_{}", val),
+                            Index::Id(id) => format_fn_name(id.name()),
+                            Index::Num(val, _) => format!("func_{}", val),
                         };
 
                         // Only count non-fastcalls and non-syscalls
@@ -79,24 +82,24 @@ pub fn get_called_funcs(
                             }
                         }
                     }
-                    wast::Instruction::Block(_) => {
+                    Instruction::Block(_) => {
                         // track blocks too, since they are part of the control stack
                         control_stack.push(false);
                     }
-                    wast::Instruction::Loop(_) => {
+                    Instruction::Loop(_) => {
                         // track if we are in a loop or not
                         nested_loop_count += 1;
                         control_stack.push(true);
                     }
-                    wast::Instruction::If(_) => {
+                    Instruction::If(_) => {
                         control_stack.push(false);
                     }
-                    wast::Instruction::End(_) => {
+                    Instruction::End(_) => {
                         if control_stack.pop().unwrap() {
                             nested_loop_count -= 1;
                         }
                     }
-                    wast::Instruction::CallIndirect(call_indirect) => {
+                    Instruction::CallIndirect(call_indirect) => {
                         // Add possible indirect targets to the partition that match type
                         // signatures
                         match (
@@ -105,12 +108,12 @@ pub fn get_called_funcs(
                         ) {
                             (Some(index), _) => {
                                 let type_index = match index {
-                                    wast::Index::Num(n, _) => format!("t{}", n),
-                                    wast::Index::Id(i) => i.name().to_string(),
+                                    Index::Num(n, _) => format!("t{}", n),
+                                    Index::Id(i) => i.name().to_string(),
                                 };
 
                                 let indirect_func_type = match writer_ctx.types.get(&type_index).unwrap() {
-                                    wast::TypeDef::Func(ft) => ft,
+                                    TypeDef::Func(ft) => ft,
                                     _ => panic!("Indirect call cannot have a type of something other than a func"),
                                 };
 
@@ -119,8 +122,8 @@ pub fn get_called_funcs(
                                         &writer_ctx.func_map.get(&f_name as &str).unwrap().ty;
 
                                     let func_type_index = match func_type_signature.index {
-                                        Some(wast::Index::Id(id)) => id.name().to_string(),
-                                        Some(wast::Index::Num(val, _)) => format!("t{}", val),
+                                        Some(Index::Id(id)) => id.name().to_string(),
+                                        Some(Index::Num(val, _)) => format!("t{}", val),
                                         None => panic!("Only type indicies supported for call_indirect in get_called_funcs: {:?}", func_type_signature),
                                     };
 
@@ -177,10 +180,10 @@ pub fn form_partitions(
     local_size_limit: u32,
     func_names: Vec<String>,
     fastcalls: &HashSet<String>,
-    func_map: &HashMap<String, wast::Func>,
-    imports_map: &HashMap<String, (&str, Option<&str>, wast::ItemSig)>,
+    func_map: &HashMap<String, Func>,
+    imports_map: &HashMap<String, (&str, Option<&str>, ItemSig)>,
     kernel_compile_stats: &mut HashMap<u32, (u32, u32, u32, u32, u32, u32, u32)>,
-    indirect_call_mapping: &HashMap<u32, &wast::Index>,
+    indirect_call_mapping: &HashMap<u32, &Index>,
 ) -> Vec<(u32, HashSet<String>)> {
     let mut func_set = HashSet::<String>::from_iter(func_names.clone());
     let mut partitions: Vec<(u32, HashSet<String>)> = vec![];
@@ -189,8 +192,8 @@ pub fn form_partitions(
     let mut indirect_call_mapping_formatted: Vec<String> = vec![];
     for func_id in indirect_call_mapping.values() {
         let f_name = match func_id {
-            wast::Index::Id(id) => format_fn_name(id.name()),
-            wast::Index::Num(val, _) => format!("func_{}", val),
+            Index::Id(id) => format_fn_name(id.name()),
+            Index::Num(val, _) => format!("func_{}", val),
         };
         indirect_call_mapping_formatted.push(f_name);
     }

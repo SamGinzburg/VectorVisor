@@ -14,13 +14,18 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::convert::TryInto;
 
+use wast::core::ModuleKind::{Binary, Text};
+use wast::core::*;
+use wast::core::ExportKind;
+use wast::token::Index;
+
 pub fn function_stats(
     writer_ctx: &OpenCLCWriter,
     curr_fn_name: String,
-    func: &wast::Func,
+    func: &Func,
     fastcalls: &HashSet<String>,
-    func_map: &HashMap<String, wast::Func>,
-    indirect_call_mapping: &HashMap<u32, &wast::Index>,
+    func_map: &HashMap<String, Func>,
+    indirect_call_mapping: &HashMap<u32, &Index>,
 ) -> (u32, u32, u32, u32, u32, u32, u32) {
     return function_stats_helper(writer_ctx, curr_fn_name, func, fastcalls, func_map, indirect_call_mapping, &mut HashSet::new())
 }
@@ -28,10 +33,10 @@ pub fn function_stats(
 pub fn function_stats_helper(
     writer_ctx: &OpenCLCWriter,
     curr_fn_name: String,
-    func: &wast::Func,
+    func: &Func,
     fastcalls: &HashSet<String>,
-    func_map: &HashMap<String, wast::Func>,
-    indirect_call_mapping: &HashMap<u32, &wast::Index>,
+    func_map: &HashMap<String, Func>,
+    indirect_call_mapping: &HashMap<u32, &Index>,
     visited: &mut HashSet<String>,
 ) -> (u32, u32, u32, u32, u32, u32, u32) {
     let mut total_instr_count: u32;
@@ -43,19 +48,19 @@ pub fn function_stats_helper(
     let mut total_local_size: u32 = 0;
 
     match (&func.kind, &func.id, &func.ty) {
-        (wast::FuncKind::Import(_), _, _) => {
+        (FuncKind::Import(_), _, _) => {
             // In this case, we have an InlineImport of the form:
             // (func (type 3) (import "foo" "bar"))
             panic!("InlineImport functions not yet implemented");
         }
-        (wast::FuncKind::Inline { locals, expression }, _, _) => {
+        (FuncKind::Inline { locals, expression }, _, _) => {
             for local in locals {
                 total_local_size += match local.ty {
-                    wast::ValType::I32 => 4,
-                    wast::ValType::F32 => 4,
-                    wast::ValType::I64 => 8,
-                    wast::ValType::F64 => 8,
-                    wast::ValType::V128 => 16,
+                    ValType::I32 => 4,
+                    ValType::F32 => 4,
+                    ValType::I64 => 8,
+                    ValType::F64 => 8,
+                    ValType::V128 => 16,
                     _ => panic!("Unknown stack type (compile_stats)"),
                 };
             }
@@ -63,10 +68,10 @@ pub fn function_stats_helper(
             total_instr_count = expression.instrs.len().try_into().unwrap();
             for instr in expression.instrs.iter() {
                 match instr {
-                    wast::Instruction::Call(idx) => {
+                    Instruction::Call(idx) => {
                         let id: &str = &match idx {
-                            wast::Index::Id(id) => format_fn_name(id.name()),
-                            wast::Index::Num(val, _) => format!("func_{}", val),
+                            Index::Id(id) => format_fn_name(id.name()),
+                            Index::Num(val, _) => format!("func_{}", val),
                         };
 
                         if fastcalls.contains(id) && !visited.contains(id) {
@@ -103,7 +108,7 @@ pub fn function_stats_helper(
                             total_func_count += 1;
                         }
                     }
-                    wast::Instruction::CallIndirect(call_indirect) => {
+                    Instruction::CallIndirect(call_indirect) => {
                         // Check how many fastcalls we are emitting here
 
                         match (
@@ -113,27 +118,27 @@ pub fn function_stats_helper(
                             (Some(index), _) => {
                                 // if we have an index, we need to look it up in the global structure
                                 let type_index = match index {
-                                    wast::Index::Num(n, _) => format!("t{}", n),
-                                    wast::Index::Id(i) => i.name().to_string(),
+                                    Index::Num(n, _) => format!("t{}", n),
+                                    Index::Id(i) => i.name().to_string(),
                                 };
 
                                 let indirect_func_type = match writer_ctx.types.get(&type_index).unwrap() {
-                                    wast::TypeDef::Func(ft) => ft,
+                                    TypeDef::Func(ft) => ft,
                                     _ => panic!("Indirect call cannot have a type of something other than a func"),
                                 };
 
                                 // We only need to call functions with matching type signatures, the rest would trap
                                 for func_id in indirect_call_mapping.values() {
                                     let f_name = match func_id {
-                                        wast::Index::Id(id) => format_fn_name(id.name()),
-                                        wast::Index::Num(val, _) => format!("func_{}", val),
+                                        Index::Id(id) => format_fn_name(id.name()),
+                                        Index::Num(val, _) => format!("func_{}", val),
                                     };
                                     let func_type_signature =
                                         &writer_ctx.func_map.get(&f_name).unwrap().ty;
 
                                     let _func_type_index = match func_type_signature.index {
-                                        Some(wast::Index::Id(id)) => id.name().to_string(),
-                                        Some(wast::Index::Num(val, _)) => format!("t{}", val),
+                                        Some(Index::Id(id)) => id.name().to_string(),
+                                        Some(Index::Num(val, _)) => format!("t{}", val),
                                         None => panic!("Only type indicies supported for call_indirect in vstack pass"),
                                     };
 
@@ -165,8 +170,8 @@ pub fn function_stats_helper(
 
                         total_indirect_count += 1;
                     }
-                    wast::Instruction::Block(_) => total_block_count += 1,
-                    wast::Instruction::Loop(_) => total_loop_count += 1,
+                    Instruction::Block(_) => total_block_count += 1,
+                    Instruction::Loop(_) => total_loop_count += 1,
                     _ => (),
                 }
             }

@@ -9,8 +9,12 @@ use crate::opencl_writer::StackCtx;
 use crate::opencl_writer::StackType;
 use std::collections::{HashMap, HashSet};
 
-use wast::Index::*;
-use wast::TypeDef::*;
+use wast::core::*;
+use wast::token::Index::*;
+use wast::token::Index;
+use wast::core::ModuleKind::{Binary, Text};
+use wast::core::*;
+use wast::core::ExportKind;
 
 /*
  * Notes on Irreducible Control Flow (ICF):
@@ -31,7 +35,7 @@ use wast::TypeDef::*;
 
 pub fn get_return_size(
     writer: &opencl_writer::OpenCLCWriter,
-    ty: &wast::TypeUse<wast::FunctionType>,
+    ty: &TypeUse<FunctionType>,
 ) -> u32 {
     match ty.clone().inline {
         Some(r) => {
@@ -49,7 +53,7 @@ pub fn get_return_size(
             };
 
             let func_type = match writer.types.get(&ty_name).unwrap() {
-                Func(f) => f,
+                wast::core::TypeDef::Func(f) => f,
                 _ => panic!("non-function type found for function in get_return_size"),
             };
 
@@ -66,7 +70,7 @@ pub fn get_return_size(
 
 pub fn get_func_params(
     writer: &opencl_writer::OpenCLCWriter,
-    ty: &wast::TypeUse<wast::FunctionType>,
+    ty: &TypeUse<FunctionType>,
 ) -> Vec<StackType> {
     let mut return_params = vec![];
 
@@ -79,7 +83,7 @@ pub fn get_func_params(
             };
 
             let func_type = match writer.types.get(&type_index).unwrap() {
-                Func(ft) => ft,
+                TypeDef::Func(ft) => ft,
                 _ => panic!("Indirect call cannot have a type of something other than a func"),
             };
 
@@ -101,7 +105,7 @@ pub fn get_func_params(
 
 pub fn get_func_result(
     writer: &opencl_writer::OpenCLCWriter,
-    ty: &wast::TypeUse<wast::FunctionType>,
+    ty: &TypeUse<FunctionType>,
 ) -> Option<StackType> {
     let mut ret_val = None;
 
@@ -114,7 +118,7 @@ pub fn get_func_result(
             };
 
             let func_type = match writer.types.get(&type_index).unwrap() {
-                Func(ft) => ft,
+                TypeDef::Func(ft) => ft,
                 _ => panic!("get_func_result cannot have a type of something other than a func"),
             };
             if func_type.results.len() > 0 {
@@ -137,7 +141,7 @@ pub fn emit_fn_call(
     writer: &opencl_writer::OpenCLCWriter,
     stack_ctx: &mut StackCtx,
     fn_name: String,
-    idx: wast::Index,
+    idx: Index,
     call_ret_map: &mut HashMap<&str, u32>,
     call_ret_idx: &mut u32,
     function_id_map: &HashMap<&str, u32>,
@@ -149,8 +153,8 @@ pub fn emit_fn_call(
 ) -> String {
     let mut ret_str = String::from("");
     let id = &match idx {
-        wast::Index::Id(id) => format_fn_name(id.name()),
-        wast::Index::Num(val, _) => format!("func_{}", val),
+        Index::Id(id) => format_fn_name(id.name()),
+        Index::Num(val, _) => format!("func_{}", val),
     };
 
     // if the func has calling parameters, set those up
@@ -191,14 +195,14 @@ pub fn emit_fn_call(
         // if we cannot find the type signature, we need to look it up to check for the param offset
         None => {
             let fn_type_id = match func_type_signature.index {
-                Some(wast::Index::Id(id)) => id.name().to_string(),
-                Some(wast::Index::Num(n, _)) => format!("t{}", n),
+                Some(Index::Id(id)) => id.name().to_string(),
+                Some(Index::Num(n, _)) => format!("t{}", n),
                 None => format!(""),
             };
 
             let function_type = writer.types.get(&fn_type_id);
             match function_type {
-                Some(wast::TypeDef::Func(ft)) => {
+                Some(TypeDef::Func(ft)) => {
                     for parameter in ft.params.to_vec() {
                         match parameter {
                             (_, _, t) => {
@@ -589,13 +593,13 @@ pub fn function_unwind(
     writer: &opencl_writer::OpenCLCWriter,
     stack_ctx: &mut StackCtx,
     fn_name: &str,
-    func_ret_info: &Option<wast::FunctionType>,
+    func_ret_info: &Option<FunctionType>,
     is_start_fn: bool,
     is_fastcall: bool,
     _debug: bool,
 ) -> String {
     let mut final_str = String::from("");
-    let results: Vec<wast::ValType> = match func_ret_info {
+    let results: Vec<ValType> = match func_ret_info {
         Some(s) => (*s.results).to_vec(),
         None => {
             vec![]
@@ -636,7 +640,7 @@ pub fn function_unwind(
         // Get the return type
         if results.len() > 0 {
             match results[0] {
-                wast::ValType::I32 => {
+                ValType::I32 => {
                     let reg = if !stack_ctx.vstack_is_empty(StackType::i32) {
                         stack_ctx.vstack_pop(StackType::i32)
                     } else {
@@ -644,7 +648,7 @@ pub fn function_unwind(
                     };
                     final_str += &format!("\treturn {};\n", reg);
                 }
-                wast::ValType::I64 => {
+                ValType::I64 => {
                     let reg = if !stack_ctx.vstack_is_empty(StackType::i64) {
                         stack_ctx.vstack_pop(StackType::i64)
                     } else {
@@ -652,7 +656,7 @@ pub fn function_unwind(
                     };
                     final_str += &format!("\treturn {};\n", reg);
                 }
-                wast::ValType::F32 => {
+                ValType::F32 => {
                     let reg = if !stack_ctx.vstack_is_empty(StackType::f32) {
                         stack_ctx.vstack_pop(StackType::f32)
                     } else {
@@ -660,7 +664,7 @@ pub fn function_unwind(
                     };
                     final_str += &format!("\treturn {};\n", reg);
                 }
-                wast::ValType::F64 => {
+                ValType::F64 => {
                     let reg = if !stack_ctx.vstack_is_empty(StackType::f64) {
                         stack_ctx.vstack_pop(StackType::f64)
                     } else {
@@ -677,7 +681,7 @@ pub fn function_unwind(
         let mut offset;
         for value in results {
             match value {
-                wast::ValType::I32 => {
+                ValType::I32 => {
                     // compute the offset to read from the bottom of the stack
                     let reg = if !stack_ctx.vstack_is_empty(StackType::i32) {
                         stack_ctx.vstack_pop(StackType::i32)
@@ -727,7 +731,7 @@ pub fn function_unwind(
                     final_str += &format!("\t{};\n", offset);
                     sp_counter += 2;
                 }
-                wast::ValType::I64 => {
+                ValType::I64 => {
                     // compute the offset to read from the bottom of the stack
                     let reg = if !stack_ctx.vstack_is_empty(StackType::i64) {
                         stack_ctx.vstack_pop(StackType::i64)
@@ -765,7 +769,7 @@ pub fn function_unwind(
                     final_str += &format!("\t{};\n", offset);
                     sp_counter += 2;
                 }
-                wast::ValType::F32 => {
+                ValType::F32 => {
                     if sp_counter > 0 {
                         let read_sfp = emit_read_u32_aligned(
                             "(ulong)(stack_frames+*sfp)",
@@ -809,7 +813,7 @@ pub fn function_unwind(
                     final_str += &format!("\t}}\n");
                     sp_counter += 2;
                 }
-                wast::ValType::F64 => {
+                ValType::F64 => {
                     if sp_counter > 0 {
                         let read_sfp = emit_read_u32_aligned(
                             "(ulong)(stack_frames+*sfp)",
@@ -853,7 +857,7 @@ pub fn function_unwind(
                     final_str += &format!("\t}}\n");
                     sp_counter += 2;
                 }
-                wast::ValType::V128 => {
+                ValType::V128 => {
                     // compute the offset to read from the bottom of the stack
                     let reg = if !stack_ctx.vstack_is_empty(StackType::u128) {
                         stack_ctx.vstack_pop(StackType::u128)
@@ -962,10 +966,10 @@ pub fn function_unwind(
 pub fn emit_call_indirect(
     writer: &opencl_writer::OpenCLCWriter,
     stack_ctx: &mut StackCtx,
-    call_indirect: &wast::CallIndirect,
+    call_indirect: &CallIndirect,
     curr_fn_name: String,
     fastcalls: &HashSet<String>,
-    table: &HashMap<u32, &wast::Index>,
+    table: &HashMap<u32, &Index>,
     call_ret_map: &mut HashMap<&str, u32>,
     call_ret_idx: &mut u32,
     call_indirect_count: &mut u32,
@@ -999,7 +1003,7 @@ pub fn emit_call_indirect(
             };
 
             let func_type = match writer.types.get(&type_index).unwrap() {
-                Func(ft) => ft,
+                TypeDef::Func(ft) => ft,
                 _ => panic!("Indirect call cannot have a type of something other than a func"),
             };
 
@@ -1042,13 +1046,13 @@ pub fn emit_call_indirect(
      */
     for (_key, value) in table {
         let f_name = match **value {
-            wast::Index::Id(id) => format_fn_name(id.name()),
-            wast::Index::Num(val, _) => format!("func_{}", val),
+            Index::Id(id) => format_fn_name(id.name()),
+            Index::Num(val, _) => format!("func_{}", val),
         };
         let func_type_signature = &writer.func_map.get(&f_name).unwrap().ty;
         let _func_type_index = match func_type_signature.index {
-            Some(wast::Index::Id(id)) => id.name().to_string(),
-            Some(wast::Index::Num(val, _)) => format!("t{}", val),
+            Some(Index::Id(id)) => id.name().to_string(),
+            Some(Index::Num(val, _)) => format!("t{}", val),
             None => panic!(
                 "Only type indicies supported for call_indirect in call_indirect (functions.rs)"
             ),
@@ -1175,13 +1179,13 @@ pub fn emit_call_indirect(
     // generate all of the cases in the table, all uninitialized values will trap to the default case
     for (key, value) in table {
         let f_name = match **value {
-            wast::Index::Id(id) => format_fn_name(id.name()),
-            wast::Index::Num(val, _) => format!("func_{}", val),
+            Index::Id(id) => format_fn_name(id.name()),
+            Index::Num(val, _) => format!("func_{}", val),
         };
         let func_type_signature = &writer.func_map.get(&f_name).unwrap().ty;
         let func_type_index = match func_type_signature.index {
-            Some(wast::Index::Id(id)) => id.name().to_string(),
-            Some(wast::Index::Num(val, _)) => format!("t{}", val),
+            Some(Index::Id(id)) => id.name().to_string(),
+            Some(Index::Num(val, _)) => format!("t{}", val),
             None => panic!(
                 "Only type indicies supported for call_indirect in call_indirect (functions.rs)"
             ),

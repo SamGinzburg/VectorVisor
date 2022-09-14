@@ -3,13 +3,16 @@ use crate::opencl_writer::format_fn_name;
 use crate::opencl_writer::function_unwind;
 use crate::opencl_writer::get_func_result;
 use crate::opencl_writer::mem_interleave::emit_write_u64_aligned;
-use crate::opencl_writer::Regex;
 use crate::opencl_writer::StackCtx;
 use crate::opencl_writer::StackType;
 use crate::opencl_writer::WasmHypercallId;
 
 use std::collections::HashMap;
 use std::convert::TryInto;
+
+use wast::core::*;
+use wast::token::Index;
+use wast::token::Id;
 
 /*
  * Every time we encounter a Loop, Block, or If statement, we store the entry on the control stack
@@ -71,7 +74,7 @@ pub fn emit_return(
 pub fn emit_br(
     _writer: &opencl_writer::OpenCLCWriter,
     stack_ctx: &mut StackCtx,
-    idx: wast::Index,
+    idx: Index,
     fn_name: &str,
     control_stack: &mut Vec<ControlStackEntryType>,
     function_id_map: HashMap<&str, u32>,
@@ -107,8 +110,8 @@ pub fn emit_br(
         block_result_type,
         result_register,
     ) = match idx {
-        wast::Index::Id(id) => temp_map.get(id.name()).unwrap(),
-        wast::Index::Num(value, _) => control_stack
+        Index::Id(id) => temp_map.get(id.name()).unwrap(),
+        Index::Num(value, _) => control_stack
             .get(control_stack.len() - 1 - value as usize)
             .unwrap(),
     };
@@ -216,7 +219,7 @@ pub fn emit_br(
 pub fn emit_br_if(
     writer: &opencl_writer::OpenCLCWriter,
     stack_ctx: &mut StackCtx,
-    idx: wast::Index,
+    idx: Index,
     fn_name: &str,
     control_stack: &mut Vec<ControlStackEntryType>,
     function_id_map: HashMap<&str, u32>,
@@ -249,7 +252,7 @@ pub fn emit_br_if(
 pub fn emit_end<'a>(
     _writer: &opencl_writer::OpenCLCWriter<'a>,
     stack_ctx: &mut StackCtx,
-    _id: &Option<wast::Id<'a>>,
+    _id: &Option<Id<'a>>,
     label: &str,
     block_type: u32,
     fn_name: &str,
@@ -373,7 +376,7 @@ pub fn emit_loop(
     writer: &opencl_writer::OpenCLCWriter,
     stack_ctx: &mut StackCtx,
     control_stack: &mut Vec<ControlStackEntryType>,
-    block: &wast::BlockType,
+    block: &BlockType,
     label: String,
     loop_branch_idx: &mut u32,
     fn_name: &str,
@@ -471,7 +474,7 @@ pub fn emit_loop(
 pub fn emit_block(
     writer: &opencl_writer::OpenCLCWriter,
     stack_ctx: &mut StackCtx,
-    block: &wast::BlockType,
+    block: &BlockType,
     _label: String,
     _branch_idx_u32: u32,
     _fn_name: &str,
@@ -502,7 +505,7 @@ pub fn emit_if(
     writer: &opencl_writer::OpenCLCWriter,
     label: String,
     fn_name: String,
-    block: &wast::BlockType,
+    block: &BlockType,
     control_stack: &mut Vec<ControlStackEntryType>,
     if_name_count: &mut u32,
     stack_ctx: &mut StackCtx,
@@ -592,7 +595,7 @@ pub fn emit_else(
 pub fn emit_br_table(
     writer: &opencl_writer::OpenCLCWriter,
     stack_ctx: &mut StackCtx,
-    table_indicies: &wast::BrTableIndices,
+    table_indicies: &BrTableIndices,
     fn_name: &str,
     control_stack: &mut Vec<ControlStackEntryType>,
     function_id_map: HashMap<&str, u32>,

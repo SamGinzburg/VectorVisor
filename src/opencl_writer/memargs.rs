@@ -4,8 +4,7 @@ use crate::opencl_writer::StackType;
 
 use crate::opencl_writer::mem_interleave::*;
 
-use wast::MemArg;
-use wast::{MemoryArg, MemoryCopy};
+use wast::core::*;
 
 // Functions for loading from memory
 

@@ -6,6 +6,8 @@ use crate::opencl_writer::StackType;
 use crate::opencl_writer::ValType;
 
 use std::collections::HashMap;
+use wast::core::*;
+
 
 pub fn emit_local_get(
     _writer: &opencl_writer::OpenCLCWriter,
@@ -25,23 +27,23 @@ pub fn emit_local_get(
     };
 
     match t {
-        wast::ValType::I32 => {
+        ValType::I32 => {
             let register = stack_ctx.vstack_alloc(StackType::i32);
             format!("\t{} = {};\n", register, local_id)
         }
-        wast::ValType::I64 => {
+        ValType::I64 => {
             let register = stack_ctx.vstack_alloc(StackType::i64);
             format!("\t{} = {};\n", register, local_id)
         }
-        wast::ValType::F32 => {
+        ValType::F32 => {
             let register = stack_ctx.vstack_alloc(StackType::f32);
             format!("\t{} = {};\n", register, local_id)
         }
-        wast::ValType::F64 => {
+        ValType::F64 => {
             let register = stack_ctx.vstack_alloc(StackType::f64);
             format!("\t{} = {};\n", register, local_id)
         }
-        wast::ValType::V128 => {
+        ValType::V128 => {
             let register = stack_ctx.vstack_alloc(StackType::u128);
             format!("\t{} = {};\n", register, local_id)
         }
@@ -74,23 +76,23 @@ pub fn emit_local_set(
     };
 
     match t {
-        wast::ValType::I32 => {
+        ValType::I32 => {
             let register = stack_ctx.vstack_pop(StackType::i32);
             format!("\t{} = {};\n{}", local_id, register, cache)
         },
-        wast::ValType::I64 => {
+        ValType::I64 => {
             let register = stack_ctx.vstack_pop(StackType::i64);
             format!("\t{} = {};\n{}", local_id, register, cache)
         },
-        wast::ValType::F32 => {
+        ValType::F32 => {
             let register = stack_ctx.vstack_pop(StackType::f32);
             format!("\t{} = {};\n{}", local_id, register, cache)
         },
-        wast::ValType::F64 => {
+        ValType::F64 => {
             let register = stack_ctx.vstack_pop(StackType::f64);
             format!("\t{} = {};\n{}", local_id, register, cache)
         },
-        wast::ValType::V128 => {
+        ValType::V128 => {
             let register = stack_ctx.vstack_pop(StackType::u128);
             format!("\t{} = {};\n{}", local_id, register, cache)
         },
@@ -117,11 +119,11 @@ pub fn emit_local_tee(
     };
 
     let register = match t {
-        wast::ValType::I32 => stack_ctx.vstack_peak(StackType::i32, 0),
-        wast::ValType::I64 => stack_ctx.vstack_peak(StackType::i64, 0),
-        wast::ValType::F32 => stack_ctx.vstack_peak(StackType::f32, 0),
-        wast::ValType::F64 => stack_ctx.vstack_peak(StackType::f64, 0),
-        wast::ValType::V128 => stack_ctx.vstack_peak(StackType::u128, 0),
+        ValType::I32 => stack_ctx.vstack_peak(StackType::i32, 0),
+        ValType::I64 => stack_ctx.vstack_peak(StackType::i64, 0),
+        ValType::F32 => stack_ctx.vstack_peak(StackType::f32, 0),
+        ValType::F64 => stack_ctx.vstack_peak(StackType::f64, 0),
+        ValType::V128 => stack_ctx.vstack_peak(StackType::u128, 0),
         _ => panic!("emit_local_tee type not handled"),
     };
 
@@ -134,7 +136,7 @@ pub fn emit_local_tee(
 
 pub fn emit_local(
     _writer: &opencl_writer::OpenCLCWriter,
-    local: &wast::Local,
+    local: &Local,
     _debug: bool,
 ) -> String {
     /*
@@ -143,7 +145,7 @@ pub fn emit_local(
      *
      */
     match local.ty {
-        wast::ValType::I32 => String::from(format!(
+        ValType::I32 => String::from(format!(
             "\t{};\n\t{}\n",
             &emit_write_u32_aligned(
                 "(ulong)(stack_u32+*sp)",
@@ -153,7 +155,7 @@ pub fn emit_local(
             ),
             "*sp += 2;"
         )),
-        wast::ValType::I64 => String::from(format!(
+        ValType::I64 => String::from(format!(
             "\t{};\n\t{}\n",
             &emit_write_u64(
                 "(ulong)(stack_u32+*sp)",
@@ -163,7 +165,7 @@ pub fn emit_local(
             ),
             "*sp += 2;"
         )),
-        wast::ValType::F32 => String::from(format!(
+        ValType::F32 => String::from(format!(
             "\t{};\n\t{}\n",
             &emit_write_u32_aligned(
                 "(ulong)(stack_u32+*sp)",
@@ -173,7 +175,7 @@ pub fn emit_local(
             ),
             "*sp += 2;"
         )),
-        wast::ValType::F64 => String::from(format!(
+        ValType::F64 => String::from(format!(
             "\t{};\n\t{}\n",
             &emit_write_u64(
                 "(ulong)(stack_u32+*sp)",
@@ -183,7 +185,7 @@ pub fn emit_local(
             ),
             "*sp += 2;"
         )),
-        wast::ValType::V128 => String::from(format!(
+        ValType::V128 => String::from(format!(
             "\t{};\n\t{}\n\t{};\n\t{}\n",
             &emit_write_u64(
                 "(ulong)(stack_u32+*sp)",
@@ -200,7 +202,7 @@ pub fn emit_local(
             ),
             "*sp += 2;"
         )),
-        _ => panic!(),
+        _ => panic!("emit local type not supported"),
     }
 }
 

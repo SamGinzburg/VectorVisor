@@ -8,7 +8,7 @@ edition = "2018"
 
 [dependencies]
 num_enum = "0.5.7"
-wast = "27.0.0"
+wast = "46.0.0"
 regex = "1"
 lazy_static = "1.4.0"
 ocl = "0.19"

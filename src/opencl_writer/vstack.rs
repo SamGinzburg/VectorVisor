@@ -16,10 +16,9 @@ use crate::opencl_writer::get_func_result;
 use crate::opencl_writer::OpenCLCWriter;
 use crate::opencl_writer::WASI_SNAPSHOT_PREVIEW1;
 
-use wast::Index::Id;
-use wast::Index::Num;
-use wast::Instruction;
-use wast::ValType;
+use wast::token::Index::*;
+use wast::token::Index;
+use wast::core::*;
 
 use crate::opencl_writer::format_fn_name;
 use core::ops::Range;
@@ -151,7 +150,7 @@ impl<'a> StackCtx {
         is_param: &HashMap<String, bool>,
         fastcalls: HashSet<String>,
         param_offset: i32,
-        indirect_call_mapping: &HashMap<u32, &wast::Index>,
+        indirect_call_mapping: &HashMap<u32, &Index>,
         curr_fn_name: String,
         reduction_size: &mut u32,
         local_work_group: usize,
@@ -287,19 +286,19 @@ impl<'a> StackCtx {
             max_value_u128: &mut u32,
         ) -> () {
             match valtype {
-                wast::ValType::I32 => {
+                ValType::I32 => {
                     update_counter(curr_value_i32, max_value_i32);
                 }
-                wast::ValType::F32 => {
+                ValType::F32 => {
                     update_counter(curr_value_f32, max_value_f32);
                 }
-                wast::ValType::I64 => {
+                ValType::I64 => {
                     update_counter(curr_value_i64, max_value_i64);
                 }
-                wast::ValType::F64 => {
+                ValType::F64 => {
                     update_counter(curr_value_f64, max_value_f64);
                 }
-                wast::ValType::V128 => {
+                ValType::V128 => {
                     update_counter(curr_value_u128, max_value_u128);
                 }
                 _ => panic!("vstack update by valtype error"),
@@ -309,190 +308,190 @@ impl<'a> StackCtx {
         // for each instr,
         for instruction in instructions.iter() {
             match instruction {
-                wast::Instruction::Nop => {
+                Instruction::Nop => {
                     // No-op
                 }
-                wast::Instruction::Drop => {
+                Instruction::Drop => {
                     stack_sizes.pop().unwrap();
                 }
-                wast::Instruction::I32Store(_memarg) => {
+                Instruction::I32Store(_memarg) => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     current_i32_count -= 2;
                 }
-                wast::Instruction::I32Store8(_memarg) => {
+                Instruction::I32Store8(_memarg) => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     current_i32_count -= 2;
                 }
-                wast::Instruction::I64Store8(_memarg) => {
+                Instruction::I64Store8(_memarg) => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     current_i32_count -= 1;
                     current_i64_count -= 1;
                 }
-                wast::Instruction::I64Store16(_memarg) => {
+                Instruction::I64Store16(_memarg) => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     current_i32_count -= 1;
                     current_i64_count -= 1;
                 }
-                wast::Instruction::I32Store16(_memarg) => {
+                Instruction::I32Store16(_memarg) => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     current_i32_count -= 2;
                 }
-                wast::Instruction::I64Store32(_memarg) => {
+                Instruction::I64Store32(_memarg) => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     current_i32_count -= 1;
                     current_i64_count -= 1;
                 }
-                wast::Instruction::I32Load(_memarg) => {
+                Instruction::I32Load(_memarg) => {
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i32);
                     // no-op
                 }
-                wast::Instruction::I32Load8u(_memarg) => {
+                Instruction::I32Load8u(_memarg) => {
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i32);
                     // no-op
                 }
-                wast::Instruction::I64Load16u(_memarg) => {
+                Instruction::I64Load16u(_memarg) => {
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i64);
                     current_i32_count -= 1;
                     update_counter(&mut current_i64_count, &mut max_i64_count);
                 }
-                wast::Instruction::I64Load16s(_memarg) => {
+                Instruction::I64Load16s(_memarg) => {
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i64);
                     current_i32_count -= 1;
                     update_counter(&mut current_i64_count, &mut max_i64_count);
                 }
-                wast::Instruction::I32Load16u(_memarg) => {
+                Instruction::I32Load16u(_memarg) => {
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i32);
                     // no-op
                 }
-                wast::Instruction::I32Load16s(_memarg) => {
+                Instruction::I32Load16s(_memarg) => {
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i32);
                     // no-op
                 }
-                wast::Instruction::I32Load8s(_memarg) => {
+                Instruction::I32Load8s(_memarg) => {
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i32);
                     // no-op
                 }
-                wast::Instruction::I64Load8u(_memarg) => {
+                Instruction::I64Load8u(_memarg) => {
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i64);
 
                     current_i32_count -= 1;
                     update_counter(&mut current_i64_count, &mut max_i64_count);
                 }
-                wast::Instruction::I64Load8s(_memarg) => {
+                Instruction::I64Load8s(_memarg) => {
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i64);
 
                     current_i32_count -= 1;
                     update_counter(&mut current_i64_count, &mut max_i64_count);
                 }
-                wast::Instruction::I64Load32u(_memarg) => {
+                Instruction::I64Load32u(_memarg) => {
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i64);
                     current_i32_count -= 1;
                     update_counter(&mut current_i64_count, &mut max_i64_count);
                 }
-                wast::Instruction::I64Load32s(_memarg) => {
+                Instruction::I64Load32s(_memarg) => {
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i64);
                     current_i32_count -= 1;
                     update_counter(&mut current_i64_count, &mut max_i64_count);
                 }
-                wast::Instruction::I64Load(_memarg) => {
+                Instruction::I64Load(_memarg) => {
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i64);
                     current_i32_count -= 1;
                     update_counter(&mut current_i64_count, &mut max_i64_count);
                 }
-                wast::Instruction::F64Load(_memarg) => {
+                Instruction::F64Load(_memarg) => {
                     stack_sizes.pop();
                     stack_sizes.push(StackType::f64);
                     current_i32_count -= 1;
                     update_counter(&mut current_f64_count, &mut max_f64_count);
                 }
-                wast::Instruction::F32Load(_memarg) => {
+                Instruction::F32Load(_memarg) => {
                     stack_sizes.pop();
                     stack_sizes.push(StackType::f32);
                     current_i32_count -= 1;
                     update_counter(&mut current_f32_count, &mut max_f32_count);
                 }
-                wast::Instruction::I64Store(_memarg) => {
+                Instruction::I64Store(_memarg) => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     current_i32_count -= 1;
                     current_i64_count -= 1;
                 }
-                wast::Instruction::F64Store(_memarg) => {
+                Instruction::F64Store(_memarg) => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     current_i32_count -= 1;
                     current_f64_count -= 1;
                 }
-                wast::Instruction::F32Store(_memarg) => {
+                Instruction::F32Store(_memarg) => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     current_i32_count -= 1;
                     current_f32_count -= 1;
                 },
-		wast::Instruction::MemoryFill(_memarg) => {
-			stack_sizes.pop();
-			stack_sizes.pop();
-			stack_sizes.pop();
-                    	current_i32_count -= 3;
-		},
-		wast::Instruction::MemoryCopy(_memarg) => {
-			stack_sizes.pop();
-			stack_sizes.pop();
-			stack_sizes.pop();
-                    	current_i32_count -= 3;
-		},
+                Instruction::MemoryFill(_memarg) => {
+                    stack_sizes.pop();
+                    stack_sizes.pop();
+                    stack_sizes.pop();
+                    current_i32_count -= 3;
+                },
+                Instruction::MemoryCopy(_memarg) => {
+                    stack_sizes.pop();
+                    stack_sizes.pop();
+                    stack_sizes.pop();
+                    current_i32_count -= 3;
+                },
                 /*
                  * As of right now we only support i32 globals anyways...
                  * TODO: for future support of globals, check for other types here
                  */
-                wast::Instruction::GlobalGet(_idx) => {
+                Instruction::GlobalGet(_idx) => {
                     update_counter(&mut current_i32_count, &mut max_i32_count);
                     stack_sizes.push(StackType::i32);
                 },
-                wast::Instruction::GlobalSet(_idx) => {
+                Instruction::GlobalSet(_idx) => {
                     current_i32_count -= 1;
                     stack_sizes.pop().unwrap();
                 },
-                wast::Instruction::I32Const(_val) => {
+                Instruction::I32Const(_val) => {
                     stack_sizes.push(StackType::i32);
                     update_counter(&mut current_i32_count, &mut max_i32_count);
                 },
-                wast::Instruction::I64Const(_val) => {
+                Instruction::I64Const(_val) => {
                     stack_sizes.push(StackType::i64);
                     update_counter(&mut current_i64_count, &mut max_i64_count);
                 },
-                wast::Instruction::F32Const(_val) => {
+                Instruction::F32Const(_val) => {
                     stack_sizes.push(StackType::f32);
                     update_counter(&mut current_f32_count, &mut max_f32_count);
                 },
-                wast::Instruction::F64Const(_val) => {
+                Instruction::F64Const(_val) => {
                     stack_sizes.push(StackType::f64);
                     update_counter(&mut current_f64_count, &mut max_f64_count);
                 },
-                wast::Instruction::V128Const(_) => {
+                Instruction::V128Const(_) => {
                     stack_sizes.push(StackType::u128);
                     update_counter(&mut current_u128_count, &mut max_u128_count);
                 },
-                wast::Instruction::LocalGet(idx) => match idx {
-                    wast::Index::Id(id) => {
+                Instruction::LocalGet(idx) => match idx {
+                    Index::Id(id) => {
                         stack_sizes.push(StackCtx::convert_wast_types(
                             local_param_types.get(&id.name().to_string()).unwrap(),
                         ));
@@ -511,7 +510,7 @@ impl<'a> StackCtx {
                             &mut max_u128_count,
                         );
                     }
-                    wast::Index::Num(value, _) => {
+                    Index::Num(value, _) => {
                         let id = match is_param.get(&format!("l{}", value)) {
                             Some(false) => {
                                 format!("l{}", value)
@@ -538,10 +537,10 @@ impl<'a> StackCtx {
                         );
                     }
                 },
-                wast::Instruction::LocalSet(idx) => {
+                Instruction::LocalSet(idx) => {
                     stack_sizes.pop().unwrap();
                     match idx {
-                        wast::Index::Id(id) => {
+                        Index::Id(id) => {
                             write_locals.insert(id.name().to_string());
                             match local_param_types.get(&id.name().to_string()).unwrap() {
                                 ValType::I32 => {
@@ -562,7 +561,7 @@ impl<'a> StackCtx {
                                 _ => panic!("Unknown local size found (vstack init)"),
                             }
                         }
-                        wast::Index::Num(value, _) => {
+                        Index::Num(value, _) => {
                             let id = match is_param.get(&format!("l{}", value)) {
                                 Some(false) => {
                                     format!("l{}", value)
@@ -592,12 +591,12 @@ impl<'a> StackCtx {
                         }
                     }
                 }
-                wast::Instruction::LocalTee(idx) => {
+                Instruction::LocalTee(idx) => {
                     // LocalTee just peaks the last item on the stack and sets a local value
                     // No stack allocs occur
                     let id: String = match idx {
-                        wast::Index::Id(id) => id.name().to_string(),
-                        wast::Index::Num(val, _) => match is_param.get(&format!("l{}", val)) {
+                        Index::Id(id) => id.name().to_string(),
+                        Index::Num(val, _) => match is_param.get(&format!("l{}", val)) {
                             Some(false) => {
                                 format!("l{}", val)
                             }
@@ -607,115 +606,115 @@ impl<'a> StackCtx {
                     };
                     write_locals.insert(id.clone());
                 }
-                wast::Instruction::I32Add => {
+                Instruction::I32Add => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i32);
                     current_i32_count -= 1;
                 }
-                wast::Instruction::I32Mul => {
+                Instruction::I32Mul => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i32);
                     current_i32_count -= 1;
                 }
-                wast::Instruction::I64Mul => {
+                Instruction::I64Mul => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i64);
 
                     current_i64_count -= 1;
                 }
-                wast::Instruction::I32Sub => {
+                Instruction::I32Sub => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i32);
                     current_i32_count -= 1;
                 }
-                wast::Instruction::I64Add => {
+                Instruction::I64Add => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i64);
 
                     current_i64_count -= 1;
                 }
-                wast::Instruction::F64Max => {
+                Instruction::F64Max => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::f64);
                     current_f64_count -= 1;
                 }
-                wast::Instruction::F64Min => {
+                Instruction::F64Min => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::f64);
                     current_f64_count -= 1;
                 }
-                wast::Instruction::F32Max => {
+                Instruction::F32Max => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::f32);
                     current_f32_count -= 1;
                 }
-                wast::Instruction::F32Min => {
+                Instruction::F32Min => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::f32);
                     current_f32_count -= 1;
                 }
-                wast::Instruction::F64Add => {
+                Instruction::F64Add => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::f64);
                     current_f64_count -= 1;
                 }
-                wast::Instruction::F64Sub => {
+                Instruction::F64Sub => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::f64);
                     current_f64_count -= 1;
                 }
-                wast::Instruction::F32Add => {
+                Instruction::F32Add => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::f32);
                     current_f32_count -= 1;
                 }
-                wast::Instruction::F32Sub => {
+                Instruction::F32Sub => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::f32);
                     current_f32_count -= 1;
                 }
-                wast::Instruction::F32Mul => {
+                Instruction::F32Mul => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::f32);
                     current_f32_count -= 1;
                 }
-                wast::Instruction::F64Div => {
+                Instruction::F64Div => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::f64);
                     current_f64_count -= 1;
                 }
-                wast::Instruction::F32Div => {
+                Instruction::F32Div => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::f32);
                     current_f32_count -= 1;
                 }
-                wast::Instruction::F64Mul => {
+                Instruction::F64Mul => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::f64);
                     current_f64_count -= 1;
                 }
-                wast::Instruction::F32Trunc => {}
-                wast::Instruction::F64Trunc => {}
-                wast::Instruction::F64Neg => {}
-                wast::Instruction::F32Neg => {}
-                wast::Instruction::F64Ne => {
+                Instruction::F32Trunc => {}
+                Instruction::F64Trunc => {}
+                Instruction::F64Neg => {}
+                Instruction::F32Neg => {}
+                Instruction::F64Ne => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i32);
@@ -723,7 +722,7 @@ impl<'a> StackCtx {
                     current_f64_count -= 2;
                     update_counter(&mut current_i32_count, &mut max_i32_count);
                 }
-                wast::Instruction::F32Ne => {
+                Instruction::F32Ne => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i32);
@@ -731,285 +730,285 @@ impl<'a> StackCtx {
                     current_f32_count -= 2;
                     update_counter(&mut current_i32_count, &mut max_i32_count);
                 }
-                wast::Instruction::F64Lt => {
+                Instruction::F64Lt => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i32);
                     current_f64_count -= 2;
                     update_counter(&mut current_i32_count, &mut max_i32_count);
                 }
-                wast::Instruction::F64Gt => {
+                Instruction::F64Gt => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i32);
                     current_f64_count -= 2;
                     update_counter(&mut current_i32_count, &mut max_i32_count);
                 }
-                wast::Instruction::F32Gt => {
+                Instruction::F32Gt => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i32);
                     current_f32_count -= 2;
                     update_counter(&mut current_i32_count, &mut max_i32_count);
                 }
-                wast::Instruction::F32Lt => {
+                Instruction::F32Lt => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i32);
                     current_f32_count -= 2;
                     update_counter(&mut current_i32_count, &mut max_i32_count);
                 }
-                wast::Instruction::F64Le => {
+                Instruction::F64Le => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i32);
                     current_f64_count -= 2;
                     update_counter(&mut current_i32_count, &mut max_i32_count);
                 }
-                wast::Instruction::F64Ge => {
+                Instruction::F64Ge => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i32);
                     current_f64_count -= 2;
                     update_counter(&mut current_i32_count, &mut max_i32_count);
                 }
-                wast::Instruction::F32Le => {
+                Instruction::F32Le => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i32);
                     current_f32_count -= 2;
                     update_counter(&mut current_i32_count, &mut max_i32_count);
                 }
-                wast::Instruction::F32Ge => {
+                Instruction::F32Ge => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i32);
                     current_f32_count -= 2;
                     update_counter(&mut current_i32_count, &mut max_i32_count);
                 }
-                wast::Instruction::I64LtU => {
+                Instruction::I64LtU => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i32);
                     current_i64_count -= 2;
                     update_counter(&mut current_i32_count, &mut max_i32_count);
                 }
-                wast::Instruction::I64Eq => {
+                Instruction::I64Eq => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i32);
                     current_i64_count -= 2;
                     update_counter(&mut current_i32_count, &mut max_i32_count);
                 }
-                wast::Instruction::F64Eq => {
+                Instruction::F64Eq => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i32);
                     current_f64_count -= 2;
                     update_counter(&mut current_i32_count, &mut max_i32_count);
                 }
-                wast::Instruction::F32Eq => {
+                Instruction::F32Eq => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i32);
                     current_f32_count -= 2;
                     update_counter(&mut current_i32_count, &mut max_i32_count);
                 }
-                wast::Instruction::I32TruncF64U => {
+                Instruction::I32TruncF64U => {
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i32);
                     current_f64_count -= 1;
                     update_counter(&mut current_i32_count, &mut max_i32_count);
                 }
-                wast::Instruction::I64TruncF64U => {
+                Instruction::I64TruncF64U => {
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i64);
                     current_f64_count -= 1;
                     update_counter(&mut current_i64_count, &mut max_i64_count);
                 }
-                wast::Instruction::I32TruncF64S => {
+                Instruction::I32TruncF64S => {
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i32);
                     current_f64_count -= 1;
                     update_counter(&mut current_i32_count, &mut max_i32_count);
                 }
-                wast::Instruction::I64TruncF64S => {
+                Instruction::I64TruncF64S => {
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i64);
                     current_f64_count -= 1;
                     update_counter(&mut current_i64_count, &mut max_i64_count);
                 }
-                wast::Instruction::I64Ne => {
+                Instruction::I64Ne => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i32);
                     current_i64_count -= 2;
                     update_counter(&mut current_i32_count, &mut max_i32_count);
                 }
-                wast::Instruction::I64DivU => {
+                Instruction::I64DivU => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i64);
 
                     current_i64_count -= 1;
                 }
-                wast::Instruction::I32Eqz => {
+                Instruction::I32Eqz => {
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i32);
 
                     // no-op
                 }
-                wast::Instruction::I64Eqz => {
+                Instruction::I64Eqz => {
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i32);
 
                     current_i64_count -= 1;
                     update_counter(&mut current_i32_count, &mut max_i32_count);
                 }
-                wast::Instruction::I32And => {
+                Instruction::I32And => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i32);
                     current_i32_count -= 1;
                 }
-                wast::Instruction::I64And => {
+                Instruction::I64And => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i64);
 
                     current_i64_count -= 1;
                 }
-                wast::Instruction::I32Ne => {
+                Instruction::I32Ne => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i32);
                     current_i32_count -= 1;
                 }
-                wast::Instruction::I32LtU => {
+                Instruction::I32LtU => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i32);
                     current_i32_count -= 1;
                 }
-                wast::Instruction::I32LtS => {
+                Instruction::I32LtS => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i32);
                     current_i32_count -= 1;
                 }
-                wast::Instruction::I64LtS => {
+                Instruction::I64LtS => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i32);
                     current_i64_count -= 2;
                     update_counter(&mut current_i32_count, &mut max_i32_count);
                 }
-                wast::Instruction::I32GtU => {
+                Instruction::I32GtU => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i32);
                     current_i32_count -= 1;
                 }
-                wast::Instruction::I64GtU => {
+                Instruction::I64GtU => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i32);
                     current_i64_count -= 2;
                     update_counter(&mut current_i32_count, &mut max_i32_count);
                 }
-                wast::Instruction::I64GtS => {
+                Instruction::I64GtS => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i32);
                     current_i64_count -= 2;
                     update_counter(&mut current_i32_count, &mut max_i32_count);
                 }
-                wast::Instruction::I32GtS => {
+                Instruction::I32GtS => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i32);
                     current_i32_count -= 1;
                 }
-                wast::Instruction::I32LeU => {
+                Instruction::I32LeU => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i32);
                     current_i32_count -= 1;
                 }
-                wast::Instruction::I32LeS => {
+                Instruction::I32LeS => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i32);
                     current_i32_count -= 1;
                 }
-                wast::Instruction::I64LeU => {
+                Instruction::I64LeU => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i32);
                     current_i64_count -= 2;
                     update_counter(&mut current_i32_count, &mut max_i32_count);
                 }
-                wast::Instruction::I64LeS => {
+                Instruction::I64LeS => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i32);
                     current_i64_count -= 2;
                     update_counter(&mut current_i32_count, &mut max_i32_count);
                 }
-                wast::Instruction::I32GeU => {
+                Instruction::I32GeU => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i32);
                     current_i32_count -= 1;
                 }
-                wast::Instruction::I32GeS => {
+                Instruction::I32GeS => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i32);
                     current_i32_count -= 1;
                 }
-                wast::Instruction::I64GeU => {
+                Instruction::I64GeU => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i32);
                     current_i64_count -= 2;
                     update_counter(&mut current_i32_count, &mut max_i32_count);
                 }
-                wast::Instruction::I64GeS => {
+                Instruction::I64GeS => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i32);
                     current_i64_count -= 2;
                     update_counter(&mut current_i32_count, &mut max_i32_count);
                 }
-                wast::Instruction::I32Xor => {
+                Instruction::I32Xor => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i32);
                     current_i32_count -= 1;
                 }
-                wast::Instruction::I32WrapI64 => {
+                Instruction::I32WrapI64 => {
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i32);
                     current_i64_count -= 1;
                     update_counter(&mut current_i32_count, &mut max_i32_count);
                 }
-                wast::Instruction::I64ExtendI32S => {
+                Instruction::I64ExtendI32S => {
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i64);
                     current_i32_count -= 1;
                     update_counter(&mut current_i64_count, &mut max_i64_count);
                 }
-                wast::Instruction::I64ExtendI32U => {
+                Instruction::I64ExtendI32U => {
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i64);
                     current_i32_count -= 1;
                     update_counter(&mut current_i64_count, &mut max_i64_count);
                 }
-                wast::Instruction::Call(idx) => {
+                Instruction::Call(idx) => {
                     let id = match idx {
-                        wast::Index::Id(id) => format_fn_name(id.name()),
-                        wast::Index::Num(val, _) => format!("func_{}", val),
+                        Index::Id(id) => format_fn_name(id.name()),
+                        Index::Num(val, _) => format!("func_{}", val),
                     };
 
                     if writer_ctx.imports_map.contains_key(&id) {
@@ -1143,14 +1142,14 @@ impl<'a> StackCtx {
                                     // if we cannot find the type signature, we need to look it up to check for the param offset
                                     None => {
                                         let fn_type_id = match func_type_signature.index {
-                                            Some(wast::Index::Id(id)) => id.name().to_string(),
-                                            Some(wast::Index::Num(n, _)) => format!("t{}", n),
+                                            Some(Index::Id(id)) => id.name().to_string(),
+                                            Some(Index::Num(n, _)) => format!("t{}", n),
                                             None => format!(""),
                                         };
 
                                         let function_type = writer_ctx.types.get(&fn_type_id);
                                         match function_type {
-                                            Some(wast::TypeDef::Func(ft)) => {
+                                            Some(TypeDef::Func(ft)) => {
                                                 for (_, _, ty) in ft.params.iter() {
                                                     match ty {
                                                         ValType::I32 => {
@@ -1196,7 +1195,7 @@ impl<'a> StackCtx {
                         }
                     }
                 }
-                wast::Instruction::CallIndirect(call_indirect) => {
+                Instruction::CallIndirect(call_indirect) => {
                     let mut matching_types = 0;
                     // Check for types
                     match (
@@ -1211,7 +1210,7 @@ impl<'a> StackCtx {
                             };
 
                             let indirect_func_type = match writer_ctx.types.get(&type_index).unwrap() {
-                                wast::TypeDef::Func(ft) => ft,
+                                TypeDef::Func(ft) => ft,
                                 _ => panic!("Indirect call cannot have a type of something other than a func"),
                             };
 
@@ -1222,15 +1221,15 @@ impl<'a> StackCtx {
                             // We only need to call functions with matching type signatures, the rest would trap
                             for func_id in indirect_call_mapping.values() {
                                 let f_name = match func_id {
-                                    wast::Index::Id(id) => format_fn_name(id.name()),
-                                    wast::Index::Num(val, _) => format!("func_{}", val),
+                                    Index::Id(id) => format_fn_name(id.name()),
+                                    Index::Num(val, _) => format!("func_{}", val),
                                 };
                                 let func_type_signature =
                                     &writer_ctx.func_map.get(&f_name).unwrap().ty;
 
                                 let func_type_index = match func_type_signature.index {
-                                    Some(wast::Index::Id(id)) => id.name().to_string(),
-                                    Some(wast::Index::Num(val, _)) => format!("t{}", val),
+                                    Some(Index::Id(id)) => id.name().to_string(),
+                                    Some(Index::Num(val, _)) => format!("t{}", val),
                                     None => panic!("Only type indicies supported for call_indirect in vstack pass"),
                                 };
 
@@ -1306,21 +1305,21 @@ impl<'a> StackCtx {
                         _ => (),
                     };
                 }
-                wast::Instruction::I32Eq => {
+                Instruction::I32Eq => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i32);
 
                     current_i32_count -= 1;
                 }
-                wast::Instruction::I32Or => {
+                Instruction::I32Or => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i32);
 
                     current_i32_count -= 1;
                 }
-                wast::Instruction::I32ShrU => {
+                Instruction::I32ShrU => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i32);
@@ -1328,7 +1327,7 @@ impl<'a> StackCtx {
                     current_i32_count -= 2;
                     update_counter(&mut current_i32_count, &mut max_i32_count);
                 }
-                wast::Instruction::I64ShrU => {
+                Instruction::I64ShrU => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i64);
@@ -1336,281 +1335,281 @@ impl<'a> StackCtx {
                     current_i64_count -= 2;
                     update_counter(&mut current_i64_count, &mut max_i64_count);
                 }
-                wast::Instruction::I32ShrS => {
+                Instruction::I32ShrS => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i32);
 
                     current_i32_count -= 1;
                 }
-                wast::Instruction::I32Shl => {
+                Instruction::I32Shl => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i32);
 
                     current_i32_count -= 1;
                 }
-                wast::Instruction::I64Shl => {
+                Instruction::I64Shl => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i64);
 
                     current_i64_count -= 1;
                 }
-                wast::Instruction::I32DivU => {
+                Instruction::I32DivU => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i32);
 
                     current_i32_count -= 1;
                 }
-                wast::Instruction::I32DivS => {
+                Instruction::I32DivS => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i32);
 
                     current_i32_count -= 1;
                 }
-                wast::Instruction::I64DivS => {
+                Instruction::I64DivS => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i64);
 
                     current_i64_count -= 1;
                 }
-                wast::Instruction::I32RemU => {
+                Instruction::I32RemU => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i32);
 
                     current_i32_count -= 1;
                 }
-                wast::Instruction::I64RemU => {
+                Instruction::I64RemU => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i64);
 
                     current_i64_count -= 1;
                 }
-                wast::Instruction::I32RemS => {
+                Instruction::I32RemS => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i32);
 
                     current_i32_count -= 1;
                 }
-                wast::Instruction::I64RemS => {
+                Instruction::I64RemS => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i64);
 
                     current_i64_count -= 1;
                 }
-                wast::Instruction::I64ShrS => {
+                Instruction::I64ShrS => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i64);
 
                     current_i64_count -= 1;
                 }
-                wast::Instruction::I64Xor => {
+                Instruction::I64Xor => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i64);
 
                     current_i64_count -= 1;
                 }
-                wast::Instruction::I64Or => {
+                Instruction::I64Or => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i64);
 
                     current_i64_count -= 1;
                 }
-                wast::Instruction::I32Rotl => {
+                Instruction::I32Rotl => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i32);
 
                     current_i32_count -= 1;
                 }
-                wast::Instruction::I64Rotl => {
+                Instruction::I64Rotl => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i64);
 
                     current_i64_count -= 1;
                 }
-                wast::Instruction::I64Sub => {
+                Instruction::I64Sub => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i64);
 
                     current_i64_count -= 1;
                 }
-                wast::Instruction::I64ReinterpretF64 => {
+                Instruction::I64ReinterpretF64 => {
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i64);
 
                     current_f64_count -= 1;
                     update_counter(&mut current_i64_count, &mut max_i64_count);
                 }
-                wast::Instruction::F64ReinterpretI64 => {
+                Instruction::F64ReinterpretI64 => {
                     stack_sizes.pop();
                     stack_sizes.push(StackType::f64);
 
                     current_i64_count -= 1;
                     update_counter(&mut current_f64_count, &mut max_f64_count);
                 }
-                wast::Instruction::F32ReinterpretI32 => {
+                Instruction::F32ReinterpretI32 => {
                     stack_sizes.pop();
                     stack_sizes.push(StackType::f32);
 
                     current_i32_count -= 1;
                     update_counter(&mut current_f32_count, &mut max_f32_count);
                 }
-                wast::Instruction::I32ReinterpretF32 => {
+                Instruction::I32ReinterpretF32 => {
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i32);
 
                     current_f32_count -= 1;
                     update_counter(&mut current_i32_count, &mut max_i32_count);
                 }
-                wast::Instruction::F64Ceil => {
+                Instruction::F64Ceil => {
                     // No-op
                 }
-                wast::Instruction::F32Ceil => {
+                Instruction::F32Ceil => {
                     // No-op
                 }
-                wast::Instruction::F64Floor => {
+                Instruction::F64Floor => {
                     // No-op
                 }
-                wast::Instruction::F32Floor => {
+                Instruction::F32Floor => {
                     // No-op
                 }
-                wast::Instruction::F64PromoteF32 => {
+                Instruction::F64PromoteF32 => {
                     stack_sizes.pop();
                     stack_sizes.push(StackType::f64);
 
                     current_f32_count -= 1;
                     update_counter(&mut current_f64_count, &mut max_f64_count);
                 }
-                wast::Instruction::F32DemoteF64 => {
+                Instruction::F32DemoteF64 => {
                     stack_sizes.pop();
                     stack_sizes.push(StackType::f32);
 
                     current_f64_count -= 1;
                     update_counter(&mut current_f32_count, &mut max_f32_count);
                 }
-                wast::Instruction::I32TruncF32U => {
+                Instruction::I32TruncF32U => {
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i32);
 
                     current_f32_count -= 1;
                     update_counter(&mut current_i32_count, &mut max_i32_count);
                 }
-                wast::Instruction::I64TruncF32U => {
+                Instruction::I64TruncF32U => {
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i64);
 
                     current_f32_count -= 1;
                     update_counter(&mut current_i64_count, &mut max_i64_count);
                 }
-                wast::Instruction::I64TruncF32S => {
+                Instruction::I64TruncF32S => {
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i64);
 
                     current_f32_count -= 1;
                     update_counter(&mut current_i64_count, &mut max_i64_count);
                 }
-                wast::Instruction::I32TruncF32S => {
+                Instruction::I32TruncF32S => {
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i32);
 
                     current_f32_count -= 1;
                     update_counter(&mut current_i32_count, &mut max_i32_count);
                 }
-                wast::Instruction::F64ConvertI32S => {
+                Instruction::F64ConvertI32S => {
                     stack_sizes.pop();
                     stack_sizes.push(StackType::f64);
 
                     current_i32_count -= 1;
                     update_counter(&mut current_f64_count, &mut max_f64_count);
                 }
-                wast::Instruction::F64ConvertI32U => {
+                Instruction::F64ConvertI32U => {
                     stack_sizes.pop();
                     stack_sizes.push(StackType::f64);
 
                     current_i32_count -= 1;
                     update_counter(&mut current_f64_count, &mut max_f64_count);
                 }
-                wast::Instruction::F32ConvertI32U => {
+                Instruction::F32ConvertI32U => {
                     stack_sizes.pop();
                     stack_sizes.push(StackType::f32);
 
                     current_i32_count -= 1;
                     update_counter(&mut current_f32_count, &mut max_f32_count);
                 }
-                wast::Instruction::F32ConvertI64U => {
+                Instruction::F32ConvertI64U => {
                     stack_sizes.pop();
                     stack_sizes.push(StackType::f32);
 
                     current_i64_count -= 1;
                     update_counter(&mut current_f32_count, &mut max_f32_count);
                 }
-                wast::Instruction::F32ConvertI32S => {
+                Instruction::F32ConvertI32S => {
                     stack_sizes.pop();
                     stack_sizes.push(StackType::f32);
 
                     current_i32_count -= 1;
                     update_counter(&mut current_f32_count, &mut max_f32_count);
                 }
-                wast::Instruction::F64ConvertI64U => {
+                Instruction::F64ConvertI64U => {
                     stack_sizes.pop();
                     stack_sizes.push(StackType::f64);
 
                     current_i64_count -= 1;
                     update_counter(&mut current_f64_count, &mut max_f64_count);
                 }
-                wast::Instruction::F64ConvertI64S => {
+                Instruction::F64ConvertI64S => {
                     stack_sizes.pop();
                     stack_sizes.push(StackType::f64);
 
                     current_i64_count -= 1;
                     update_counter(&mut current_f64_count, &mut max_f64_count);
                 }
-                wast::Instruction::F64Sqrt | wast::Instruction::F32Sqrt => {
+                Instruction::F64Sqrt | Instruction::F32Sqrt => {
                     // no-op
                 }
-                wast::Instruction::F32Abs | wast::Instruction::F64Abs => {
+                Instruction::F32Abs | Instruction::F64Abs => {
                     // no-op
                 }
-                wast::Instruction::I32Clz => {
+                Instruction::I32Clz => {
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i32);
                     // no-op
                 }
-                wast::Instruction::I32Popcnt => {
+                Instruction::I32Popcnt => {
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i32);
                     // no-op
                 }
-                wast::Instruction::I64Clz => {
+                Instruction::I64Clz => {
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i64);
                     // no-op
                 }
-                wast::Instruction::I32Ctz => {
+                Instruction::I32Ctz => {
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i32);
                     // no-op
                 }
-                wast::Instruction::I64Ctz => {
+                Instruction::I64Ctz => {
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i64);
                     // no-op
                 }
-                wast::Instruction::If(b) => {
+                Instruction::If(b) => {
                     if_else_branches.push(false);
                     if_idx += 1;
                     if_else_idx_stack.push(if_idx);
@@ -1652,7 +1651,7 @@ impl<'a> StackCtx {
                         current_u128_count.clone(),
                     ));
                 }
-                wast::Instruction::Else(_) => {
+                Instruction::Else(_) => {
                     /*
                      * If we encounter an else:
                      * if_else_idx_stack always points at the most recent if block
@@ -1662,7 +1661,7 @@ impl<'a> StackCtx {
                 /*
                  * Track block & loop starts/ends to minimize intermediate value req
                  */
-                wast::Instruction::Block(b) => {
+                Instruction::Block(b) => {
                     // Get the type of the block
                     let block_type = get_func_result(&writer_ctx, &b.ty);
                     match block_type.clone() {
@@ -1711,7 +1710,7 @@ impl<'a> StackCtx {
                     curr_ctx.push(curr_ctx_idx);
                     curr_ctx_idx += 1;
                 }
-                wast::Instruction::Loop(b) => {
+                Instruction::Loop(b) => {
                     context_map_tainted_loop_map
                         .insert(curr_ctx_idx, tainted_loops.len().try_into().unwrap());
                     tainted_loops.push(false);
@@ -1768,7 +1767,7 @@ impl<'a> StackCtx {
                     // We need to continue here to avoid resetting the empty_loop counter
                     continue;
                 }
-                wast::Instruction::End(_id) => {
+                Instruction::End(_id) => {
                     // As we close loops, keep track so we don't taint them
                     let (
                         _label,
@@ -1825,7 +1824,7 @@ impl<'a> StackCtx {
                         None => (),
                     }
                 }
-                wast::Instruction::Select(_) => {
+                Instruction::Select(_) => {
                     let _c = stack_sizes.pop().unwrap(); // c
                     let arg1 = stack_sizes.pop().unwrap();
                     let arg2 = stack_sizes.pop().unwrap();
@@ -1857,87 +1856,87 @@ impl<'a> StackCtx {
                         }
                     }
                 }
-                wast::Instruction::MemoryGrow(_arg) => {
+                Instruction::MemoryGrow(_arg) => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::i32);
                     // no-op
                 }
-                wast::Instruction::MemorySize(_arg) => {
+                Instruction::MemorySize(_arg) => {
                     stack_sizes.push(StackType::i32);
                     update_counter(&mut current_i32_count, &mut max_i32_count);
                 }
-                wast::Instruction::Return => {}
-                wast::Instruction::Br(idx) => {
+                Instruction::Return => {}
+                Instruction::Br(idx) => {
                     if empty_loop {
                         taint_open_loops(&mut tainted_loops, open_loop_stack.clone());
                     }
                 }
-                wast::Instruction::BrIf(idx) => {
+                Instruction::BrIf(idx) => {
                     stack_sizes.pop().unwrap();
                     current_i32_count -= 1;
                 }
-                wast::Instruction::BrTable(table_idxs) => {
+                Instruction::BrTable(table_idxs) => {
                     stack_sizes.pop().unwrap();
                     current_i32_count -= 1;
                 }
-                wast::Instruction::Unreachable => {
+                Instruction::Unreachable => {
                     if !is_gpu && !fastcalls.contains(&curr_fn_name) {
                         // This happens because unreachable is emitted as a hypercall in this case
                         num_hypercalls += 1;
                     }
                 }
-                wast::Instruction::F32x4Splat => {
+                Instruction::F32x4Splat => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);
                     update_counter(&mut current_u128_count, &mut max_u128_count);
                     current_f32_count -= 1;
                 },
-                wast::Instruction::F32x4Mul => {
+                Instruction::F32x4Mul => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);
                     current_u128_count -= 1;
                 },
-                wast::Instruction::F32x4Add => {
+                Instruction::F32x4Add => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);
                     current_u128_count -= 1;
                 },
-                wast::Instruction::I32x4ExtractLane(laneval) => {
+                Instruction::I32x4ExtractLane(laneval) => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::i32);
                     update_counter(&mut current_i32_count, &mut max_i32_count);
                     current_u128_count -= 1;
                 },
-                wast::Instruction::I64x2ExtractLane(laneval) => {
+                Instruction::I64x2ExtractLane(laneval) => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::i64);
                     update_counter(&mut current_i64_count, &mut max_i64_count);
                     current_u128_count -= 1;
                 },
-                wast::Instruction::F32x4ExtractLane(laneval) => {
+                Instruction::F32x4ExtractLane(laneval) => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::f32);
                     update_counter(&mut current_f32_count, &mut max_f32_count);
                     current_u128_count -= 1;
                 },
-                wast::Instruction::F64x2ExtractLane(laneval) => {
+                Instruction::F64x2ExtractLane(laneval) => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::f64);
                     update_counter(&mut current_f64_count, &mut max_f64_count);
                     current_u128_count -= 1;
                 },
-                wast::Instruction::I32x4ReplaceLane(laneval) => {
+                Instruction::I32x4ReplaceLane(laneval) => {
                     stack_sizes.pop().unwrap();
                 },
-                wast::Instruction::I64x2ReplaceLane(laneval) => {
+                Instruction::I64x2ReplaceLane(laneval) => {
                     stack_sizes.pop().unwrap();
                 },
-                wast::Instruction::F32x4ReplaceLane(laneval) => {
+                Instruction::F32x4ReplaceLane(laneval) => {
                     stack_sizes.pop().unwrap();
                 },
-                wast::Instruction::F64x2ReplaceLane(laneval) => {
+                Instruction::F64x2ReplaceLane(laneval) => {
                     stack_sizes.pop().unwrap();
                 },
                 _ => panic!(
@@ -2367,24 +2366,24 @@ impl<'a> StackCtx {
         }
     }
 
-    pub fn convert_wast_types(ty: &wast::ValType) -> StackType {
+    pub fn convert_wast_types(ty: &ValType) -> StackType {
         match ty {
-            wast::ValType::I32 => StackType::i32,
-            wast::ValType::F32 => StackType::f32,
-            wast::ValType::I64 => StackType::i64,
-            wast::ValType::F64 => StackType::f64,
-            wast::ValType::V128 => StackType::u128,
+            ValType::I32 => StackType::i32,
+            ValType::F32 => StackType::f32,
+            ValType::I64 => StackType::i64,
+            ValType::F64 => StackType::f64,
+            ValType::V128 => StackType::u128,
             _ => panic!("Unknown stack type (vstack)"),
         }
     }
 
-    pub fn convert_stacktypes_valtype(ty: &StackType) -> wast::ValType {
+    pub fn convert_stacktypes_valtype(ty: &StackType) -> ValType {
         match ty {
-            StackType::i32 => wast::ValType::I32,
-            StackType::i64 => wast::ValType::I64,
-            StackType::f32 => wast::ValType::F32,
-            StackType::f64 => wast::ValType::F64,
-            StackType::u128 => wast::ValType::V128,
+            StackType::i32 => ValType::I32,
+            StackType::i64 => ValType::I64,
+            StackType::f32 => ValType::F32,
+            StackType::f64 => ValType::F64,
+            StackType::u128 => ValType::V128,
             _ => panic!("Unknown stack type (convert_stacktypes_valtype)"),
         }
     }

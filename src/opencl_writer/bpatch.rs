@@ -14,20 +14,21 @@ use std::hash::Hasher;
 use std::iter::FromIterator;
 use std::sync::Arc;
 use wast::parser::{self, ParseBuffer};
-use wast::ModuleKind::{Binary, Text};
+use wast::core::ModuleKind::{Binary, Text};
+use wast::core::*;
 use wast::Wat;
 
 pub const PATCH_FILE: &'static str = include_str!("patch/do_reserve_and_handle.wat");
 
-fn get_function_hash(f: wast::Func) -> u64 {
+fn get_function_hash(f: Func) -> u64 {
     let mut hash = DefaultHasher::new();
     match (&f.kind) {
-        (wast::FuncKind::Import(_)) => {
+        (FuncKind::Import(_)) => {
             // In this case, we have an InlineImport of the form:
             // (func (type 3) (import "foo" "bar"))
             panic!("InlineImport functions not yet implemented");
         }
-        (wast::FuncKind::Inline { locals, expression }) => {
+        (FuncKind::Inline { locals, expression }) => {
             for instr in expression.instrs.iter() {
                 hash.write(format!("{:?}", instr).as_bytes());
             }
@@ -38,7 +39,7 @@ fn get_function_hash(f: wast::Func) -> u64 {
 }
 
 impl<'a> OpenCLCWriter<'_> {
-    fn check_param_equivalence(&self, f1: &wast::Func, f2: &wast::Func) -> bool {
+    fn check_param_equivalence(&self, f1: &Func, f2: &Func) -> bool {
         let f1_params = get_func_params(&self, &f1.ty);
         let f2_params = get_func_params(&self, &f2.ty);
         let f1_result = get_func_result(&self, &f1.ty);
@@ -57,11 +58,16 @@ impl<'a> OpenCLCWriter<'_> {
             let pb = Box::leak(Box::new(ParseBuffer::new(PATCH_FILE).unwrap()));
             let module = parser::parse::<Wat>(pb).unwrap();
 
-            match module.module.kind {
+            let module_kind = match module {
+                wast::Wat::Module(m) => m,
+                _ => panic!("VectorVisor currently only operates on modules and not WASM componenets"),
+            };    
+
+            match module_kind.kind {
                 Text(t) => {
                     for item in t {
                         match item {
-                            wast::ModuleField::Func(f) => {
+                            ModuleField::Func(f) => {
                                 let mut f_name = match f.id {
                                     Some(f_id) => f_id.name().to_string(),
                                     // possible TODO: patch using hashed function values?
