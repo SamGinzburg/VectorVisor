@@ -139,17 +139,14 @@ impl BatchSubmitServer {
         // Tokio locks are FIFO, and tokio is cooperatively scheduled
         // The first person to acquire sender is also the first to acquire recv
         let req_queue = std::time::Instant::now();
-        let req_id;
-        let req_start;
-        {
-            let sender = tx.lock().await;
-            req_id = Uuid::new_v4().to_simple().to_string();
-            req_start = std::time::Instant::now();
-            sender
-                .send((body.clone(), body.len(), req_id.clone()))
-                .await
-                .unwrap();
-        }
+        let sender = tx.lock().await;
+        let req_id = Uuid::new_v4().to_simple().to_string();
+        let req_start = std::time::Instant::now();
+        sender
+            .send((body.clone(), body.len(), req_id.clone()))
+            .await
+            .unwrap();
+
 
         while let Some((
             resp,
@@ -162,7 +159,7 @@ impl BatchSubmitServer {
             uuid,
         )) = rx.lock().await.recv().await
         {
-            let mut hashmap = (*hashmaps).get(vm_idx).unwrap().lock().await;
+            //let mut hashmap = (*hashmaps).get(vm_idx).unwrap().lock().await;
             if uuid == req_id {
                 let req_end = std::time::Instant::now();
                 return Ok(BatchSubmitServer::create_response(
@@ -177,6 +174,7 @@ impl BatchSubmitServer {
 		            compile_time,
                 ));
             } else {
+                /*
                 hashmap.insert(uuid.clone(), (
                     resp,
                     len,
@@ -187,8 +185,9 @@ impl BatchSubmitServer {
                     overhead_time_ns,
                     uuid,
                 ));
+                */
             }
-
+            /*
             match hashmap.remove(&req_id) {
                 Some((resp,
                     len,
@@ -216,6 +215,7 @@ impl BatchSubmitServer {
                     continue;
                 },
             }
+            */
         }
 
         Err(warp::reject::custom(LostRequest))

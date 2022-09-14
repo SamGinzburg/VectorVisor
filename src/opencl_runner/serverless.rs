@@ -29,7 +29,6 @@ impl Serverless {
         // If other non-invoke calls need to be dispatched, perform a no-op and return.
         // This call will be executed later when ready
         if hypercall.non_serverless_invoke_call_found {
-            dbg!("non_serverless_invoke_call_found!!!");
             return;
         }
         
