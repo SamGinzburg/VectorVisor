@@ -1905,11 +1905,41 @@ impl<'a> StackCtx {
                         num_hypercalls += 1;
                     }
                 }
+                Instruction::I32x4Splat => {
+                    stack_sizes.pop().unwrap();
+                    stack_sizes.push(StackType::u128);
+                    update_counter(&mut current_u128_count, &mut max_u128_count);
+                    current_i32_count -= 1;
+                },
+                Instruction::I8x16Splat => {
+                    stack_sizes.pop().unwrap();
+                    stack_sizes.push(StackType::u128);
+                    update_counter(&mut current_u128_count, &mut max_u128_count);
+                    current_i32_count -= 1;
+                },
+                Instruction::I16x8Splat => {
+                    stack_sizes.pop().unwrap();
+                    stack_sizes.push(StackType::u128);
+                    update_counter(&mut current_u128_count, &mut max_u128_count);
+                    current_i32_count -= 1;
+                },
                 Instruction::F32x4Splat => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);
                     update_counter(&mut current_u128_count, &mut max_u128_count);
                     current_f32_count -= 1;
+                },
+                Instruction::F64x2Splat => {
+                    stack_sizes.pop().unwrap();
+                    stack_sizes.push(StackType::u128);
+                    update_counter(&mut current_u128_count, &mut max_u128_count);
+                    current_f64_count -= 1;
+                },
+                Instruction::I16x8ShrU => {
+                    stack_sizes.pop().unwrap();
+                    stack_sizes.pop().unwrap();
+                    stack_sizes.push(StackType::u128);
+                    current_u128_count -= 1;
                 },
                 Instruction::I16x8Mul => {
                     stack_sizes.pop().unwrap();
@@ -1984,6 +2014,12 @@ impl<'a> StackCtx {
                     current_u128_count -= 1;
                 },
                 Instruction::V128And => {
+                    stack_sizes.pop().unwrap();
+                    stack_sizes.pop().unwrap();
+                    stack_sizes.push(StackType::u128);
+                    current_u128_count -= 1;
+                },
+                Instruction::V128Or => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);

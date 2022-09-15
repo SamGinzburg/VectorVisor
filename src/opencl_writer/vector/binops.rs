@@ -7,6 +7,7 @@ pub enum VecBinOp {
     Mul,
     NotEquals,
     Shl,
+    ShrU,
     Div,
 }
 
@@ -19,6 +20,7 @@ pub enum VecOpType {
 pub enum V128BinOp {
     Xor,
     And,
+    Or,
 }
 
 pub fn vec_x_by_y_binop(_writer: &opencl_writer::OpenCLCWriter,
@@ -45,9 +47,9 @@ pub fn vec_x_by_y_binop(_writer: &opencl_writer::OpenCLCWriter,
             result += &format!("\t\tint4 *res = &{};\n", result_register);        
         },
         VecOpType::Int16 => {
-            result += &format!("\t\tushort8 *op1 = &{};\n", reg1);
-            result += &format!("\t\tushort8 *op2 = &{};\n", reg2);
-            result += &format!("\t\tushort8 *res = &{};\n", result_register);        
+            result += &format!("\t\tshort8 *op1 = &{};\n", reg1);
+            result += &format!("\t\tshort8 *op2 = &{};\n", reg2);
+            result += &format!("\t\tshort8 *res = &{};\n", result_register);        
         },
     }
 
@@ -70,6 +72,11 @@ pub fn vec_x_by_y_binop(_writer: &opencl_writer::OpenCLCWriter,
         VecBinOp::Shl => {
             format!(
                 "\t\t*res = *op1 << *op2;\n"
+            )
+        },
+        VecBinOp::ShrU => {
+            format!(
+                "\t\t*res = *op1 >> *op2;\n"
             )
         },
         VecBinOp::Div => {
@@ -109,6 +116,11 @@ pub fn v128_binop(_writer: &opencl_writer::OpenCLCWriter,
         V128BinOp::And => {
             format!(
                 "\t\t*res = *op1 & *op2;\n"
+            )
+        },
+        V128BinOp::Or => {
+            format!(
+                "\t\t*res = *op1 | *op2;\n"
             )
         },
     };
