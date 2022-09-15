@@ -70,7 +70,8 @@ maxfuncs = 50
 maxloc = 2000000
 #maxfuncs = 999
 #maxloc = 20000000
-benchmark_duration = 900
+benchmark_duration = 600
+SLEEP_TIME=120
 NUM_REPEAT=5
 
 if run_a10g:
@@ -365,18 +366,21 @@ def run_scrypt_bench():
 
     /usr/local/go/bin/go run /tmp/VectorVisor/benchmarks/scrypt/run_scrypt.go {addr} 8000 {target_rps} 1 {duration} {hashes}
     """.format(addr=gpu_instance[0].private_dns_name, target_rps=vmcount, duration=benchmark_duration, hashes=256)
+    for idx in range(NUM_REPEAT):
+        command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
 
-    command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
+        time.sleep(20)
 
-    time.sleep(20)
+        # Block until benchmark is complete
+        output = block_on_command(command_id, invoker_instance[0].id)
+        print (output)
 
-    # Block until benchmark is complete
-    output = block_on_command(command_id, invoker_instance[0].id)
-    print (output)
+        # save output
+        with open(temp_dir+"gpu_bench_scrypt_{idx}.txt".format(idx=idx), "w") as text_file:
+            text_file.write(str(output))
 
-    # save output
-    with open(temp_dir+"gpu_bench_scrypt.txt", "w") as text_file:
-        text_file.write(str(output))
+        time.sleep(SLEEP_TIME)
+
 
     run_invoker_cpu = """#!/bin/bash
     sudo su
@@ -398,34 +402,39 @@ def run_scrypt_bench():
 
     /usr/local/go/bin/go run /tmp/VectorVisor/benchmarks/scrypt/run_scrypt.go {addr} 8000 {target_rps} 1 {duration} {hashes}
     """.format(addr=cpu_bench_instance[0].private_dns_name, target_rps=target_rps_cpu, duration=benchmark_duration, hashes=256)
+    for idx in range(NUM_REPEAT):
+        command_id = run_command(run_invoker_cpu, "run invoker for cpu", invoker_instance[0].id)
 
-    command_id = run_command(run_invoker_cpu, "run invoker for cpu", invoker_instance[0].id)
+        time.sleep(20)
 
-    time.sleep(20)
+        # Block until benchmark is complete
+        output = block_on_command(command_id, invoker_instance[0].id)
+        print (output)
 
-    # Block until benchmark is complete
-    output = block_on_command(command_id, invoker_instance[0].id)
-    print (output)
+        # save output
+        with open(temp_dir+"cpu_bench_scrypt_{idx}.txt".format(idx=idx), "w") as text_file:
+            text_file.write(str(output))
+        time.sleep(SLEEP_TIME)
 
-    # save output
-    with open(temp_dir+"cpu_bench_scrypt.txt", "w") as text_file:
-        text_file.write(str(output))
 
     cleanup()
 
-    run_command(run_scrypt_command_x86, "scrypt_cpu_x86", cpu_bench_instance[0].id)
-    
-    command_id = run_command(run_invoker_cpu, "run invoker for cpu", invoker_instance[0].id)
+    for idx in range(NUM_REPEAT):
+        run_command(run_scrypt_command_x86, "scrypt_cpu_x86", cpu_bench_instance[0].id)
+        
+        command_id = run_command(run_invoker_cpu, "run invoker for cpu", invoker_instance[0].id)
 
-    time.sleep(20)
+        time.sleep(20)
 
-    # Block until benchmark is complete
-    output = block_on_command(command_id, invoker_instance[0].id)
-    print (output)
+        # Block until benchmark is complete
+        output = block_on_command(command_id, invoker_instance[0].id)
+        print (output)
 
-    # save output
-    with open(temp_dir+"cpu_x86_bench_scrypt.txt", "w") as text_file:
-        text_file.write(str(output))
+        # save output
+        with open(temp_dir+"cpu_x86_bench_scrypt_{idx}.txt".format(idx=idx), "w") as text_file:
+            text_file.write(str(output))
+        time.sleep(SLEEP_TIME)
+
 
 
 
@@ -502,18 +511,21 @@ def run_pbkdf2_bench():
 
     /usr/local/go/bin/go run /tmp/VectorVisor/benchmarks/pbkdf2/run_pbkdf2.go {addr} 8000 {target_rps} 1 {duration}
     """.format(addr=gpu_instance[0].private_dns_name, target_rps=vmcount, duration=benchmark_duration)
+    
+    for idx in range(NUM_REPEAT):
+        command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
 
-    command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
+        time.sleep(20)
 
-    time.sleep(20)
+        # Block until benchmark is complete
+        output = block_on_command(command_id, invoker_instance[0].id)
+        print (output)
 
-    # Block until benchmark is complete
-    output = block_on_command(command_id, invoker_instance[0].id)
-    print (output)
+        # save output
+        with open(temp_dir+"gpu_bench_pbkdf2_{idx}.txt".format(idx=idx), "w") as text_file:
+            text_file.write(str(output))
+        time.sleep(SLEEP_TIME)
 
-    # save output
-    with open(temp_dir+"gpu_bench_pbkdf2.txt", "w") as text_file:
-        text_file.write(str(output))
 
     run_invoker_cpu = """#!/bin/bash
     sudo su
@@ -536,33 +548,39 @@ def run_pbkdf2_bench():
     /usr/local/go/bin/go run /tmp/VectorVisor/benchmarks/pbkdf2/run_pbkdf2.go {addr} 8000 {target_rps} 1 {duration}
     """.format(addr=cpu_bench_instance[0].private_dns_name, target_rps=target_rps_cpu, duration=benchmark_duration)
 
-    command_id = run_command(run_invoker_cpu, "run invoker for cpu", invoker_instance[0].id)
+    for idx in range(NUM_REPEAT):
+        command_id = run_command(run_invoker_cpu, "run invoker for cpu", invoker_instance[0].id)
 
-    time.sleep(20)
+        time.sleep(20)
 
-    # Block until benchmark is complete
-    output = block_on_command(command_id, invoker_instance[0].id)
-    print (output)
+        # Block until benchmark is complete
+        output = block_on_command(command_id, invoker_instance[0].id)
+        print (output)
 
-    # save output
-    with open(temp_dir+"cpu_bench_pbkdf2.txt", "w") as text_file:
-        text_file.write(str(output))
+        # save output
+        with open(temp_dir+"cpu_bench_pbkdf2_{idx}.txt".format(idx=idx), "w") as text_file:
+            text_file.write(str(output))
+        time.sleep(SLEEP_TIME)
+
 
     cleanup()
 
-    run_command(run_pbkdf2_command_x86, "pbkdf2_cpu_x86", cpu_bench_instance[0].id)
-    
-    command_id = run_command(run_invoker_cpu, "run invoker for cpu", invoker_instance[0].id)
+    for idx in range(NUM_REPEAT):
+        run_command(run_pbkdf2_command_x86, "pbkdf2_cpu_x86", cpu_bench_instance[0].id)
+        
+        command_id = run_command(run_invoker_cpu, "run invoker for cpu", invoker_instance[0].id)
 
-    time.sleep(20)
+        time.sleep(20)
 
-    # Block until benchmark is complete
-    output = block_on_command(command_id, invoker_instance[0].id)
-    print (output)
+        # Block until benchmark is complete
+        output = block_on_command(command_id, invoker_instance[0].id)
+        print (output)
 
-    # save output
-    with open(temp_dir+"cpu_x86_bench_pbkdf2.txt", "w") as text_file:
-        text_file.write(str(output))
+        # save output
+        with open(temp_dir+"cpu_x86_bench_pbkdf2_{idx}.txt".format(idx=idx), "w") as text_file:
+            text_file.write(str(output))
+        time.sleep(SLEEP_TIME)
+
 
     # we need to kill the running VV instance first
     cleanup()
@@ -574,15 +592,18 @@ def run_pbkdf2_bench():
 	    hashcat -b -m 9200
 	    """
 
-    command_id = run_command(run_invoker_hashcat, "run hashcat", gpu_instance[0].id)
+    for idx in range(NUM_REPEAT):
+        command_id = run_command(run_invoker_hashcat, "run hashcat", gpu_instance[0].id)
 
-    time.sleep(20)
+        time.sleep(20)
 
-    # Block until benchmark is complete
-    output = block_on_command(command_id, gpu_instance[0].id)
-    print (output)
-    with open(temp_dir+"hashcat_bench_pbkdf2.txt", "w") as text_file:
-        text_file.write(str(output))
+        # Block until benchmark is complete
+        output = block_on_command(command_id, gpu_instance[0].id)
+        print (output)
+        with open(temp_dir+"hashcat_bench_pbkdf2_{idx}.txt".format(idx=idx), "w") as text_file:
+            text_file.write(str(output))
+        time.sleep(SLEEP_TIME)
+
 
 
 def run_lz4_bench():
@@ -658,18 +679,20 @@ def run_lz4_bench():
     /usr/local/go/bin/go run /tmp/VectorVisor/benchmarks/json-compression-lz4/run_lz4.go {addr} 8000 {target_rps} 1 {duration} /tmp/VectorVisor/benchmarks/json-compression/smaller_tweets.txt {input_size}
     """.format(addr=gpu_instance[0].private_dns_name, input_size=2000, target_rps=vmcount, duration=benchmark_duration)
 
+    for idx in range(NUM_REPEAT):
+        command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
 
-    command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
+        time.sleep(20)
 
-    time.sleep(20)
+        # Block until benchmark is complete
+        output = block_on_command(command_id, invoker_instance[0].id)
+        print (output)
 
-    # Block until benchmark is complete
-    output = block_on_command(command_id, invoker_instance[0].id)
-    print (output)
+        # save output
+        with open(temp_dir+"gpu_bench_lz4_{idx}.txt".format(idx=idx), "w") as text_file:
+            text_file.write(str(output))
+        time.sleep(SLEEP_TIME)
 
-    # save output
-    with open(temp_dir+"gpu_bench_lz4.txt", "w") as text_file:
-        text_file.write(str(output))
 
     run_invoker_wasmtime = """#!/bin/bash
     sudo su
@@ -692,32 +715,36 @@ def run_lz4_bench():
     /usr/local/go/bin/go run /tmp/VectorVisor/benchmarks/json-compression-lz4/run_lz4.go {addr} 8000 {target_rps} 1 {duration} /tmp/VectorVisor/benchmarks/json-compression-lz4/smaller_tweets.txt {input_size}
     """.format(addr=cpu_bench_instance[0].private_dns_name, input_size=2000, target_rps=target_rps_cpu, duration=benchmark_duration)
 
-    command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
+    for idx in range(NUM_REPEAT):
+        command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
 
-    time.sleep(20)
+        time.sleep(20)
 
-    # Block until benchmark is complete
-    output = block_on_command(command_id, invoker_instance[0].id)
-    print (output)
-    # save output
-    with open(temp_dir+"cpu_bench_lz4.txt", "w") as text_file:
-        text_file.write(str(output))
+        # Block until benchmark is complete
+        output = block_on_command(command_id, invoker_instance[0].id)
+        print (output)
+        # save output
+        with open(temp_dir+"cpu_bench_lz4_{idx}.txt".format(idx=idx), "w") as text_file:
+            text_file.write(str(output))
+        time.sleep(SLEEP_TIME)
+
 
     cleanup()
 
-    run_command(run_json_lz4_command_x86, "run_json_lz4_command_x86", cpu_bench_instance[0].id)
+    for idx in range(NUM_REPEAT):
+        run_command(run_json_lz4_command_x86, "run_json_lz4_command_x86", cpu_bench_instance[0].id)
 
-    command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
+        command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
 
-    time.sleep(20)
+        time.sleep(20)
 
-    # Block until benchmark is complete
-    output = block_on_command(command_id, invoker_instance[0].id)
+        # Block until benchmark is complete
+        output = block_on_command(command_id, invoker_instance[0].id)
 
-    print (output)
-    # save output
-    with open(temp_dir+"cpu_x86_bench_lz4.txt", "w") as text_file:
-        text_file.write(str(output))
+        print (output)
+        # save output
+        with open(temp_dir+"cpu_x86_bench_lz4_{idx}.txt".format(idx=idx), "w") as text_file:
+            text_file.write(str(output))
 
 def run_genpdf_bench():
     if run_a10g:
@@ -791,18 +818,20 @@ def run_genpdf_bench():
     /usr/local/go/bin/go run /tmp/VectorVisor/benchmarks/genpdf/run_genpdf.go {addr} 8000 {target_rps} 1 {duration}
     """.format(addr=gpu_instance[0].private_dns_name, target_rps=vmcount, duration=benchmark_duration)
 
+    for idx in range(NUM_REPEAT):
+        command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
 
-    command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
+        time.sleep(20)
 
-    time.sleep(20)
+        # Block until benchmark is complete
+        output = block_on_command(command_id, invoker_instance[0].id)
+        print (output)
 
-    # Block until benchmark is complete
-    output = block_on_command(command_id, invoker_instance[0].id)
-    print (output)
+        # save output
+        with open(temp_dir+"gpu_bench_genpdf_{idx}.txt".format(idx=idx), "w") as text_file:
+            text_file.write(str(output))
+        time.sleep(SLEEP_TIME)
 
-    # save output
-    with open(temp_dir+"gpu_bench_genpdf.txt", "w") as text_file:
-        text_file.write(str(output))
 
     run_invoker_wasmtime = """#!/bin/bash
     sudo su
@@ -824,30 +853,35 @@ def run_genpdf_bench():
 
     /usr/local/go/bin/go run /tmp/VectorVisor/benchmarks/genpdf/run_genpdf.go {addr} 8000 {target_rps} 1 {duration}
     """.format(addr=cpu_bench_instance[0].private_dns_name, target_rps=target_rps_cpu, duration=benchmark_duration)
+    for idx in range(NUM_REPEAT):
+        command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
 
-    command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
+        time.sleep(20)
 
-    time.sleep(20)
+        # Block until benchmark is complete
+        output = block_on_command(command_id, invoker_instance[0].id)
+        print (output)
+        # save output
+        with open(temp_dir+"cpu_bench_genpdf_{idx}.txt".format(idx=idx), "w") as text_file:
+            text_file.write(str(output))
+        time.sleep(SLEEP_TIME)
 
-    # Block until benchmark is complete
-    output = block_on_command(command_id, invoker_instance[0].id)
-    print (output)
-    # save output
-    with open(temp_dir+"cpu_bench_genpdf.txt", "w") as text_file:
-        text_file.write(str(output))
 
     cleanup()
 
-    run_command(run_genpdf_command_x86, "run_genpdf_command_x86", cpu_bench_instance[0].id)
-    
-    command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
+    for idx in range(NUM_REPEAT):
+        run_command(run_genpdf_command_x86, "run_genpdf_command_x86", cpu_bench_instance[0].id)
+        
+        command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
 
-    time.sleep(20)
-    output = block_on_command(command_id, invoker_instance[0].id)
-    print (output)
-    # save output
-    with open(temp_dir+"cpu_x86_bench_genpdf.txt", "w") as text_file:
-        text_file.write(str(output))
+        time.sleep(20)
+        output = block_on_command(command_id, invoker_instance[0].id)
+        print (output)
+        # save output
+        with open(temp_dir+"cpu_x86_bench_genpdf_{idx}.txt".format(idx=idx), "w") as text_file:
+            text_file.write(str(output))
+        time.sleep(SLEEP_TIME)
+
 
 def run_average_bench():
     if run_a10g:
@@ -921,18 +955,20 @@ def run_average_bench():
     /usr/local/go/bin/go run /tmp/VectorVisor/benchmarks/average/run_average_bench.go {addr} 8000 {target_rps} 1 {duration} {input_size}
     """.format(addr=gpu_instance[0].private_dns_name, input_size=20, target_rps=vmcount, duration=benchmark_duration)
 
+    for idx in range(NUM_REPEAT):
+        command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
 
-    command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
+        time.sleep(20)
 
-    time.sleep(20)
+        # Block until benchmark is complete
+        output = block_on_command(command_id, invoker_instance[0].id)
+        print (output)
 
-    # Block until benchmark is complete
-    output = block_on_command(command_id, invoker_instance[0].id)
-    print (output)
+        # save output
+        with open(temp_dir+"gpu_bench_average_{idx}.txt".format(idx=idx), "w") as text_file:
+            text_file.write(str(output))
+        time.sleep(SLEEP_TIME)
 
-    # save output
-    with open(temp_dir+"gpu_bench_average.txt", "w") as text_file:
-        text_file.write(str(output))
 
     run_invoker_wasmtime = """#!/bin/bash
     sudo su
@@ -954,30 +990,34 @@ def run_average_bench():
 
     /usr/local/go/bin/go run /tmp/VectorVisor/benchmarks/average/run_average_bench.go {addr} 8000 {target_rps} 1 {duration} {input_size}
     """.format(addr=cpu_bench_instance[0].private_dns_name, input_size=20, target_rps=target_rps_cpu, duration=benchmark_duration)
+    for idx in range(NUM_REPEAT):
+        command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
 
-    command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
+        time.sleep(20)
 
-    time.sleep(20)
+        # Block until benchmark is complete
+        output = block_on_command(command_id, invoker_instance[0].id)
+        print (output)
+        # save output
+        with open(temp_dir+"cpu_bench_average_{idx}.txt".format(idx=idx), "w") as text_file:
+            text_file.write(str(output))
+        time.sleep(SLEEP_TIME)
 
-    # Block until benchmark is complete
-    output = block_on_command(command_id, invoker_instance[0].id)
-    print (output)
-    # save output
-    with open(temp_dir+"cpu_bench_average.txt", "w") as text_file:
-        text_file.write(str(output))
 
     cleanup()
+    for idx in range(NUM_REPEAT):
+        run_command(run_average_command_x86, "run_average_command_x86", cpu_bench_instance[0].id)
+        
+        command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
 
-    run_command(run_average_command_x86, "run_average_command_x86", cpu_bench_instance[0].id)
-    
-    command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
+        time.sleep(20)
+        output = block_on_command(command_id, invoker_instance[0].id)
+        print (output)
+        # save output
+        with open(temp_dir+"cpu_x86_bench_average_{idx}.txt", "w") as text_file:
+            text_file.write(str(output))
+        time.sleep(SLEEP_TIME)
 
-    time.sleep(20)
-    output = block_on_command(command_id, invoker_instance[0].id)
-    print (output)
-    # save output
-    with open(temp_dir+"cpu_x86_bench_average.txt", "w") as text_file:
-        text_file.write(str(output))
 
 def run_image_hash_bench(run_modified = False):
     if run_a10g:
@@ -1073,7 +1113,8 @@ def run_image_hash_bench(run_modified = False):
             with open(temp_dir+"gpu_bench_imagehash_{idx}.txt".format(idx=idx), "w") as text_file:
                 text_file.write(str(output))
 
-        time.sleep(60)
+        time.sleep(SLEEP_TIME)
+
 
     run_command(run_image_command_wasmtime, "run_imagehash_command_x86", cpu_bench_instance[0].id)
 
@@ -1113,7 +1154,8 @@ def run_image_hash_bench(run_modified = False):
             with open(temp_dir+"cpu_bench_imagehash_{idx}.txt".format(idx=idx), "w") as text_file:
                 text_file.write(str(output))
 
-        time.sleep(60)
+        time.sleep(SLEEP_TIME)
+
 
     cleanup()
 
@@ -1135,7 +1177,8 @@ def run_image_hash_bench(run_modified = False):
             with open(temp_dir+"cpu_x86_bench_imagehash_{idx}.txt".format(idx=idx), "w") as text_file:
                 text_file.write(str(output))
 
-        time.sleep(60)
+        time.sleep(SLEEP_TIME)
+
 
 def run_image_blur_bench(run_bmp = False):
     if run_a10g:
@@ -1216,22 +1259,24 @@ def run_image_blur_bench(run_bmp = False):
     /usr/local/go/bin/go run run_image_blur.go {addr} 8000 {target_rps} 1 {duration}
     """.format(addr=gpu_instance[0].private_dns_name, input_size=1000, target_rps=vmcount, exe_path=exe_path, duration=benchmark_duration)
 
+    for idx in range(NUM_REPEAT):
+        command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
 
-    command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
+        time.sleep(20)
 
-    time.sleep(20)
+        # Block until benchmark is complete
+        output = block_on_command(command_id, invoker_instance[0].id)
+        print (output)
 
-    # Block until benchmark is complete
-    output = block_on_command(command_id, invoker_instance[0].id)
-    print (output)
+        # save output
+        if not run_bmp:
+            with open(temp_dir+"gpu_bench_imageblur_{idx}.txt".format(idx=idx), "w") as text_file:
+                text_file.write(str(output))
+        else:
+            with open(temp_dir+"gpu_bench_imageblur_bmp_{idx}.txt".format(idx=idx), "w") as text_file:
+                text_file.write(str(output))
+        time.sleep(SLEEP_TIME)
 
-    # save output
-    if not run_bmp:
-        with open(temp_dir+"gpu_bench_imageblur.txt", "w") as text_file:
-            text_file.write(str(output))
-    else:
-        with open(temp_dir+"gpu_bench_imageblur_bmp.txt", "w") as text_file:
-            text_file.write(str(output))
 
     run_invoker_wasmtime = """#!/bin/bash
     sudo su
@@ -1253,41 +1298,47 @@ def run_image_blur_bench(run_bmp = False):
 
     /usr/local/go/bin/go run run_image_blur.go {addr} 8000 {target_rps} 1 {duration}
     """.format(addr=cpu_bench_instance[0].private_dns_name, input_size=1000, target_rps=target_rps_cpu, exe_path=exe_path, duration=benchmark_duration)
+    
+    for idx in range(NUM_REPEAT):
+        command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
 
-    command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
+        time.sleep(20)
 
-    time.sleep(20)
+        # Block until benchmark is complete
+        output = block_on_command(command_id, invoker_instance[0].id)
+        print (output)
+        # save output
+        if not run_bmp:
+            with open(temp_dir+"cpu_bench_imageblur.txt".format(idx=idx), "w") as text_file:
+                text_file.write(str(output))
+        else:
+            with open(temp_dir+"cpu_bench_imageblur_bmp.txt", "w") as text_file:
+                text_file.write(str(output))
+        time.sleep(SLEEP_TIME)
 
-    # Block until benchmark is complete
-    output = block_on_command(command_id, invoker_instance[0].id)
-    print (output)
-    # save output
-    if not run_bmp:
-        with open(temp_dir+"cpu_bench_imageblur.txt", "w") as text_file:
-            text_file.write(str(output))
-    else:
-        with open(temp_dir+"cpu_bench_imageblur_bmp.txt", "w") as text_file:
-            text_file.write(str(output))
 
 
     cleanup()
 
-    run_command(run_image_command_x86, "run_imageblur_command_x86", cpu_bench_instance[0].id)
+    for idx in range(NUM_REPEAT):
+        run_command(run_image_command_x86, "run_imageblur_command_x86", cpu_bench_instance[0].id)
 
-    command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
+        command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
 
-    time.sleep(20)
+        time.sleep(20)
 
-    # Block until benchmark is complete
-    output = block_on_command(command_id, invoker_instance[0].id)
-    print (output)
-    # save output
-    if not run_bmp:
-        with open(temp_dir+"cpu_x86_bench_imageblur.txt", "w") as text_file:
-            text_file.write(str(output))
-    else:
-        with open(temp_dir+"cpu_x86_bench_imageblur_bmp.txt", "w") as text_file:
-            text_file.write(str(output))
+        # Block until benchmark is complete
+        output = block_on_command(command_id, invoker_instance[0].id)
+        print (output)
+        # save output
+        if not run_bmp:
+            with open(temp_dir+"cpu_x86_bench_imageblur_{idx}.txt".format(idx=idx), "w") as text_file:
+                text_file.write(str(output))
+        else:
+            with open(temp_dir+"cpu_x86_bench_imageblur_bmp_{idx}.txt".format(idx=idx), "w") as text_file:
+                text_file.write(str(output))
+        time.sleep(SLEEP_TIME)
+
 
 def run_nlp_count_bench():
     if run_a10g:
@@ -1359,18 +1410,20 @@ def run_nlp_count_bench():
     /usr/local/go/bin/go run /tmp/VectorVisor/benchmarks/nlp-count-vectorizer/run_nlp.go {addr} 8000 {target_rps} 1 {duration} /tmp/VectorVisor/benchmarks/nlp-count-vectorizer/smaller_tweets.txt {input_size}
     """.format(addr=gpu_instance[0].private_dns_name, input_size=500, target_rps=vmcount, duration=benchmark_duration)
 
+    for idx in range(NUM_REPEAT):
+        command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
 
-    command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
+        time.sleep(20)
 
-    time.sleep(20)
+        # Block until benchmark is complete
+        output = block_on_command(command_id, invoker_instance[0].id)
+        print (output)
 
-    # Block until benchmark is complete
-    output = block_on_command(command_id, invoker_instance[0].id)
-    print (output)
+        # save output
+        with open(temp_dir+"gpu_bench_nlp.txt".format(idx=idx), "w") as text_file:
+            text_file.write(str(output))
+        time.sleep(SLEEP_TIME)
 
-    # save output
-    with open(temp_dir+"gpu_bench_nlp.txt", "w") as text_file:
-        text_file.write(str(output))
 
     run_invoker_wasmtime = """#!/bin/bash
     sudo su
@@ -1392,31 +1445,38 @@ def run_nlp_count_bench():
 
     /usr/local/go/bin/go run /tmp/VectorVisor/benchmarks/nlp-count-vectorizer/run_nlp.go {addr} 8000 {target_rps} 1 {duration} /tmp/VectorVisor/benchmarks/nlp-count-vectorizer/smaller_tweets.txt {input_size}
     """.format(addr=cpu_bench_instance[0].private_dns_name, input_size=500, target_rps=target_rps_cpu, duration=benchmark_duration)
+    
+    for idx in range(NUM_REPEAT):
+        command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
 
-    command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
+        time.sleep(20)
 
-    time.sleep(20)
+        # Block until benchmark is complete
+        output = block_on_command(command_id, invoker_instance[0].id)
+        print (output)
+        # save output
+        with open(temp_dir+"cpu_bench_nlp_{}.txt".format(idx=idx), "w") as text_file:
+            text_file.write(str(output))
+        time.sleep(SLEEP_TIME)
 
-    # Block until benchmark is complete
-    output = block_on_command(command_id, invoker_instance[0].id)
-    print (output)
-    # save output
-    with open(temp_dir+"cpu_bench_nlp.txt", "w") as text_file:
-        text_file.write(str(output))
 
     cleanup()
-    run_command(run_nlp_command_x86, "run_nlp_command_x86", cpu_bench_instance[0].id)
-    
-    command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
 
-    time.sleep(20)
+    for idx in range(NUM_REPEAT):
+        run_command(run_nlp_command_x86, "run_nlp_command_x86", cpu_bench_instance[0].id)
+        
+        command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
 
-    # Block until benchmark is complete
-    output = block_on_command(command_id, invoker_instance[0].id)
-    print (output)
-    # save output
-    with open(temp_dir+"cpu_x86_bench_nlp.txt", "w") as text_file:
-        text_file.write(str(output))
+        time.sleep(20)
+
+        # Block until benchmark is complete
+        output = block_on_command(command_id, invoker_instance[0].id)
+        print (output)
+        # save output
+        with open(temp_dir+"cpu_x86_bench_nlp_{idx}.txt".format(idx=idx), "w") as text_file:
+            text_file.write(str(output))
+        time.sleep(SLEEP_TIME)
+
 
 def run_membench(membench_interleave=4):
     if run_a10g:
