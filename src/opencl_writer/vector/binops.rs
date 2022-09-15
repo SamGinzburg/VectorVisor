@@ -6,11 +6,14 @@ pub enum VecBinOp {
     Add,
     Mul,
     NotEquals,
+    Shl,
+    Div,
 }
 
 pub enum VecOpType {
     Float32,
     Int32,
+    Int16,
 }
 
 pub enum V128BinOp {
@@ -18,7 +21,7 @@ pub enum V128BinOp {
     And,
 }
 
-pub fn x32x4_binop(_writer: &opencl_writer::OpenCLCWriter,
+pub fn vec_x_by_y_binop(_writer: &opencl_writer::OpenCLCWriter,
     stack_ctx: &mut StackCtx,
     binop: VecBinOp,
     op_type: VecOpType,
@@ -31,15 +34,20 @@ pub fn x32x4_binop(_writer: &opencl_writer::OpenCLCWriter,
 
     result += &format!("\t{{\n");
     match op_type {
-        Float32 => {
+        VecOpType::Float32 => {
             result += &format!("\t\tfloat4 *op1 = &{};\n", reg1);
             result += &format!("\t\tfloat4 *op2 = &{};\n", reg2);
             result += &format!("\t\tfloat4 *res = &{};\n", result_register);        
         },
-        Int32 => {
+        VecOpType::Int32 => {
             result += &format!("\t\tint4 *op1 = &{};\n", reg1);
             result += &format!("\t\tint4 *op2 = &{};\n", reg2);
             result += &format!("\t\tint4 *res = &{};\n", result_register);        
+        },
+        VecOpType::Int16 => {
+            result += &format!("\t\tushort8 *op1 = &{};\n", reg1);
+            result += &format!("\t\tushort8 *op2 = &{};\n", reg2);
+            result += &format!("\t\tushort8 *res = &{};\n", result_register);        
         },
     }
 
@@ -57,6 +65,16 @@ pub fn x32x4_binop(_writer: &opencl_writer::OpenCLCWriter,
         VecBinOp::NotEquals => {
             format!(
                 "\t\t*res = *op1 != *op2;\n"
+            )
+        },
+        VecBinOp::Shl => {
+            format!(
+                "\t\t*res = *op1 << *op2;\n"
+            )
+        },
+        VecBinOp::Div => {
+            format!(
+                "\t\t*res = *op1 / *op2;\n"
             )
         },
     };

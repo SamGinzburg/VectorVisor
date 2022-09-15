@@ -1911,6 +1911,30 @@ impl<'a> StackCtx {
                     update_counter(&mut current_u128_count, &mut max_u128_count);
                     current_f32_count -= 1;
                 },
+                Instruction::I16x8Mul => {
+                    stack_sizes.pop().unwrap();
+                    stack_sizes.pop().unwrap();
+                    stack_sizes.push(StackType::u128);
+                    current_u128_count -= 1;
+                },
+                Instruction::I16x8Add => {
+                    stack_sizes.pop().unwrap();
+                    stack_sizes.pop().unwrap();
+                    stack_sizes.push(StackType::u128);
+                    current_u128_count -= 1;
+                },
+                Instruction::I16x8Shl => {
+                    stack_sizes.pop().unwrap();
+                    stack_sizes.pop().unwrap();
+                    stack_sizes.push(StackType::u128);
+                    current_u128_count -= 1;
+                },
+                Instruction::I16x8Ne => {
+                    stack_sizes.pop().unwrap();
+                    stack_sizes.pop().unwrap();
+                    stack_sizes.push(StackType::u128);
+                    current_u128_count -= 1;
+                },
                 Instruction::F32x4Mul => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.pop().unwrap();
@@ -1924,6 +1948,12 @@ impl<'a> StackCtx {
                     current_u128_count -= 1;
                 },
                 Instruction::F32x4Ne => {
+                    stack_sizes.pop().unwrap();
+                    stack_sizes.pop().unwrap();
+                    stack_sizes.push(StackType::u128);
+                    current_u128_count -= 1;
+                },
+                Instruction::I32x4Shl => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);
