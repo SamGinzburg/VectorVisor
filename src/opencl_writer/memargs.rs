@@ -918,6 +918,192 @@ pub fn emit_memstore32_i64(
     ret_str
 }
 
+pub fn emit_memload_u128(
+    writer: &opencl_writer::OpenCLCWriter,
+    stack_ctx: &mut StackCtx,
+    args: &MemArg,
+    _debug: bool,
+) -> String {
+    let mut ret_str = String::from("");
+
+    let i_load = stack_ctx.vstack_pop(StackType::i32);
+    let result_register = stack_ctx.vstack_alloc(StackType::u128);
+
+    // We just use two 8-byte reads for 16-byte values
+    let read_bottom = if !writer.pretty_input_wasm || args.align < 8 {
+        format!(
+            "({})",
+            emit_read_u64_aligned_checked(
+                &format!(
+                    "(ulong)((global char*)heap_u32+{}+(int)({}))",
+                    args.offset, i_load
+                ),
+                "(ulong)(heap_u32)",
+                "warp_idx"
+            )
+        )
+    } else {
+        format!(
+            "({})",
+            emit_read_u64_aligned(
+                &format!(
+                    "(ulong)((global char*)heap_u32+{}+(int)({}))",
+                    args.offset, i_load
+                ),
+                "(ulong)(heap_u32)",
+                "warp_idx"
+            )
+        )
+    };
+
+    let read_top = if !writer.pretty_input_wasm || args.align < 8 {
+        format!(
+            "({})",
+            emit_read_u64_aligned_checked(
+                &format!(
+                    "(ulong)((global char*)heap_u32+{}+(int)({}))",
+                    args.offset+8, i_load
+                ),
+                "(ulong)(heap_u32)",
+                "warp_idx"
+            )
+        )
+    } else {
+        format!(
+            "({})",
+            emit_read_u64_aligned(
+                &format!(
+                    "(ulong)((global char*)heap_u32+{}+(int)({}))",
+                    args.offset+8, i_load
+                ),
+                "(ulong)(heap_u32)",
+                "warp_idx"
+            )
+        )
+    };
+
+    ret_str += &format!("\t{{\n");
+    ret_str += &format!("\t\tulong2 *temp = &{};\n", result_register);
+    ret_str += &format!("\t\t(*temp).x = {};\n", read_bottom);
+    ret_str += &format!("\t\t(*temp).y = {};\n", read_top);
+    ret_str += &format!("\t}}\n");
+
+    ret_str
+}
+
+pub fn emit_memload_u128_zero_64(
+    writer: &opencl_writer::OpenCLCWriter,
+    stack_ctx: &mut StackCtx,
+    args: &MemArg,
+    _debug: bool,
+) -> String {
+    let mut ret_str = String::from("");
+
+    let i_load = stack_ctx.vstack_pop(StackType::i32);
+    let result_register = stack_ctx.vstack_alloc(StackType::u128);
+
+    // We just use two 8-byte reads for 16-byte values
+    let read_bottom = if !writer.pretty_input_wasm || args.align < 8 {
+        format!(
+            "({})",
+            emit_read_u64_aligned_checked(
+                &format!(
+                    "(ulong)((global char*)heap_u32+{}+(int)({}))",
+                    args.offset, i_load
+                ),
+                "(ulong)(heap_u32)",
+                "warp_idx"
+            )
+        )
+    } else {
+        format!(
+            "({})",
+            emit_read_u64_aligned(
+                &format!(
+                    "(ulong)((global char*)heap_u32+{}+(int)({}))",
+                    args.offset, i_load
+                ),
+                "(ulong)(heap_u32)",
+                "warp_idx"
+            )
+        )
+    };
+
+    ret_str += &format!("\t{{\n");
+    ret_str += &format!("\t\tulong2 *temp = &{};\n", result_register);
+    ret_str += &format!("\t\t(*temp).x = {};\n", read_bottom);
+    ret_str += &format!("\t\t(*temp).y = {};\n", 0);
+    ret_str += &format!("\t}}\n");
+
+    ret_str
+}
+
+pub fn emit_memstore_u128(
+    writer: &opencl_writer::OpenCLCWriter,
+    stack_ctx: &mut StackCtx,
+    args: &MemArg,
+    _debug: bool,
+) -> String {
+    let mut ret_str = String::from("");
+
+    let stored_val = stack_ctx.vstack_pop(StackType::u128);
+    let i_load = stack_ctx.vstack_pop(StackType::i32);
+
+    if !writer.pretty_input_wasm || args.align < 8 {
+        ret_str += &format!(
+            "\t{};\n",
+            &emit_write_u64_aligned_checked(
+                &format!(
+                    "(ulong)((global char*)heap_u32+{}+(int)({}))",
+                    args.offset, i_load
+                ),
+                "(ulong)(heap_u32)",
+                &format!("(*(ulong2*)(&{})).x", stored_val),
+                "warp_idx"
+            )
+        );
+        ret_str += &format!(
+            "\t{};\n",
+            &emit_write_u64_aligned_checked(
+                &format!(
+                    "(ulong)((global char*)heap_u32+{}+(int)({}))",
+                    args.offset+8, i_load
+                ),
+                "(ulong)(heap_u32)",
+                &format!("(*(ulong2*)(&{})).y", stored_val),
+                "warp_idx"
+            )
+        );
+    } else {
+        ret_str += &format!(
+            "\t{};\n",
+            &emit_write_u64_aligned(
+                &format!(
+                    "(ulong)((global char*)heap_u32+{}+(int)({}))",
+                    args.offset, i_load
+                ),
+                "(ulong)(heap_u32)",
+                &format!("(*(ulong2*)(&{})).x", stored_val),
+                "warp_idx"
+            )
+        );
+        ret_str += &format!(
+            "\t{};\n",
+            &emit_write_u64_aligned(
+                &format!(
+                    "(ulong)((global char*)heap_u32+{}+(int)({}))",
+                    args.offset+8, i_load
+                ),
+                "(ulong)(heap_u32)",
+                &format!("(*(ulong2*)(&{})).y", stored_val),
+                "warp_idx"
+            )
+        );
+    }
+
+    ret_str
+}
+
 /*
  * This function is essentially a no-op, since we pre-allocate the heaps for all procs!
  * All we do is update the metadata saying that the heap has grown by N pages

@@ -38,6 +38,7 @@ use testops::*;
 use trap::*;
 use unops::*;
 use util::*;
+use vector::shuffle::*;
 use vector::splat::*;
 use vector::binops::*;
 use vector::stackops::*;
@@ -397,6 +398,8 @@ impl<'a> OpenCLCWriter<'_> {
                 emit_memstore32_i64(self, stack_ctx, memarg, debug)
             }
             Instruction::I32Load(memarg) => emit_memload_i32(self, stack_ctx, memarg, debug),
+            Instruction::V128Load(memarg) => emit_memload_u128(self, stack_ctx, memarg, debug),
+            Instruction::V128Load64Zero(memarg) => emit_memload_u128_zero_64(self, stack_ctx, memarg, debug),
             Instruction::I32Load8u(memarg) => {
                 emit_memload_i32_8u(self, stack_ctx, memarg, debug)
             }
@@ -439,12 +442,15 @@ impl<'a> OpenCLCWriter<'_> {
             Instruction::F32Store(memarg) => {
                 emit_memstore_f32(self, stack_ctx, memarg, debug)
             }
-	    Instruction::MemoryCopy(memarg) => {
-		emit_memcpy(self, stack_ctx, memarg, debug)
-	    }
-	    Instruction::MemoryFill(memarg) => {
-		emit_memfill(self, stack_ctx, memarg, debug)
-	    }
+            Instruction::V128Store(memarg) => {
+                emit_memstore_u128(self, stack_ctx, memarg, debug)
+            }
+            Instruction::MemoryCopy(memarg) => {
+                emit_memcpy(self, stack_ctx, memarg, debug)
+            }
+            Instruction::MemoryFill(memarg) => {
+                emit_memfill(self, stack_ctx, memarg, debug)
+            }
             Instruction::GlobalGet(idx) => match idx {
                 Index::Id(id) => {
                     emit_global_get(self, stack_ctx, id.name(), global_mappings, debug)
@@ -970,8 +976,15 @@ impl<'a> OpenCLCWriter<'_> {
                 }
             }
             Instruction::F32x4Splat => f32x4_splat(self, stack_ctx, debug),
-            Instruction::F32x4Mul => f32x4_binop(self, stack_ctx, VecBinOp::Mul, debug),
-            Instruction::F32x4Add => f32x4_binop(self, stack_ctx, VecBinOp::Add, debug),
+            Instruction::F32x4Mul => x32x4_binop(self, stack_ctx, VecBinOp::Mul, VecOpType::Float32, debug),
+            Instruction::F32x4Add => x32x4_binop(self, stack_ctx, VecBinOp::Add, VecOpType::Float32, debug),
+            Instruction::F32x4Ne => x32x4_binop(self, stack_ctx, VecBinOp::NotEquals, VecOpType::Float32, debug),
+            Instruction::I32x4Mul => x32x4_binop(self, stack_ctx, VecBinOp::Mul, VecOpType::Int32, debug),
+            Instruction::I32x4Add => x32x4_binop(self, stack_ctx, VecBinOp::Add, VecOpType::Int32, debug),
+            Instruction::I32x4Ne => x32x4_binop(self, stack_ctx, VecBinOp::NotEquals, VecOpType::Int32, debug),
+            Instruction::V128Xor => v128_binop(self, stack_ctx, V128BinOp::Xor, debug),
+            Instruction::V128And => v128_binop(self, stack_ctx, V128BinOp::And, debug),
+            Instruction::I8x16Shuffle(lanes) => i8x16shuffle(self, stack_ctx, lanes, debug),
             Instruction::I32x4ExtractLane(laneval) => extract_lane(self, stack_ctx, StackType::i32, laneval.lane, debug),
             Instruction::I64x2ExtractLane(laneval) => extract_lane(self, stack_ctx, StackType::i64, laneval.lane, debug),
             Instruction::F32x4ExtractLane(laneval) => extract_lane(self, stack_ctx, StackType::f32, laneval.lane, debug),

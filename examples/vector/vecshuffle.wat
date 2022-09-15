@@ -1,0 +1,11 @@
+(module
+  (func $_start (result v128)
+    (local $l2 v128)
+    ;;(f32.const 0.5)
+    ;;(f32x4.splat)
+    (v128.const i32x4 0x00000001 0x00000002 0x00000003 0x00000004)
+    (v128.const i32x4 0x00000005 0x00000006 0x00000007 0x00000008)
+    (i8x16.shuffle 31 30 2 3 4 5 6 7 8 9 10 11 12 13 14 15)
+  )
+  (export "_start" (func $_start))
+)
