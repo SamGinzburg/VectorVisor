@@ -6,6 +6,13 @@ use crate::opencl_writer::mem_interleave::*;
 
 use wast::core::*;
 
+pub enum VecSplatSize {
+    i8,
+    i16,
+    i32,
+    i64,
+}
+
 // Functions for loading from memory
 
 pub fn emit_memload_i32_8u(
@@ -1103,6 +1110,159 @@ pub fn emit_memstore_u128(
 
     ret_str
 }
+
+pub fn emit_memload_u128_load_n_splat(
+    writer: &opencl_writer::OpenCLCWriter,
+    stack_ctx: &mut StackCtx,
+    args: &MemArg,
+    splat_size: VecSplatSize,
+    _debug: bool,
+) -> String {
+    let mut ret_str = String::from("");
+
+    let i_load = stack_ctx.vstack_pop(StackType::i32);
+    let result_register = stack_ctx.vstack_alloc(StackType::u128);
+
+    ret_str += &format!("\t{{\n");
+    match splat_size {
+        VecSplatSize::i8 => {
+            let read = if !writer.pretty_input_wasm || args.align < 1 {
+                format!(
+                    "({})",
+                    emit_read_u8(
+                        &format!(
+                            "(ulong)((global char*)heap_u32+{}+(int)({}))",
+                            args.offset, i_load
+                        ),
+                        "(ulong)(heap_u32)",
+                        "warp_idx"
+                    )
+                )
+            } else {
+                format!(
+                    "({})",
+                    emit_read_u8(
+                        &format!(
+                            "(ulong)((global char*)heap_u32+{}+(int)({}))",
+                            args.offset, i_load
+                        ),
+                        "(ulong)(heap_u32)",
+                        "warp_idx"
+                    )
+                )
+            };
+            // Splat the first byte
+            let mask = "0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0";
+            let tempvec = format!("(uchar16)({})", read);
+            ret_str += &format!("\t{} = as_ulong2(shuffle(as_uchar16({}), (uchar16)({})));\n",
+                                result_register, tempvec, mask);
+        },
+        VecSplatSize::i16 => {
+            let read = if !writer.pretty_input_wasm || args.align < 2 {
+                format!(
+                    "({})",
+                    emit_read_u16_aligned_checked(
+                        &format!(
+                            "(ulong)((global char*)heap_u32+{}+(int)({}))",
+                            args.offset, i_load
+                        ),
+                        "(ulong)(heap_u32)",
+                        "warp_idx"
+                    )
+                )
+            } else {
+                format!(
+                    "({})",
+                    emit_read_u16_aligned(
+                        &format!(
+                            "(ulong)((global char*)heap_u32+{}+(int)({}))",
+                            args.offset, i_load
+                        ),
+                        "(ulong)(heap_u32)",
+                        "warp_idx"
+                    )
+                )
+            };
+
+            // Splat the first short
+            let mask = "0, 0, 0, 0, 0, 0, 0, 0";
+            let tempvec = format!("(ushort8)({})", read);
+            ret_str += &format!("\t{} = as_ulong2(shuffle(as_ushort8({}), (ushort8)({})));\n",
+                                result_register, tempvec, mask);
+            
+        },
+        VecSplatSize::i32 => {
+            let read = if !writer.pretty_input_wasm || args.align < 4 {
+                format!(
+                    "({})",
+                    emit_read_u32_aligned_checked(
+                        &format!(
+                            "(ulong)((global char*)heap_u32+{}+(int)({}))",
+                            args.offset, i_load
+                        ),
+                        "(ulong)(heap_u32)",
+                        "warp_idx"
+                    )
+                )
+            } else {
+                format!(
+                    "({})",
+                    emit_read_u32_aligned(
+                        &format!(
+                            "(ulong)((global char*)heap_u32+{}+(int)({}))",
+                            args.offset, i_load
+                        ),
+                        "(ulong)(heap_u32)",
+                        "warp_idx"
+                    )
+                )
+            };
+            // Splat the first int
+            let mask = "0, 0, 0, 0";
+            let tempvec = format!("(uint4)({})", read);
+            ret_str += &format!("\t{} = as_ulong2(shuffle(as_uint4({}), (uint4)({})));\n",
+                                result_register, tempvec, mask);
+            
+        },
+        VecSplatSize::i64 => {
+            let read = if !writer.pretty_input_wasm || args.align < 8 {
+                format!(
+                    "({})",
+                    emit_read_u64_aligned_checked(
+                        &format!(
+                            "(ulong)((global char*)heap_u32+{}+(int)({}))",
+                            args.offset, i_load
+                        ),
+                        "(ulong)(heap_u32)",
+                        "warp_idx"
+                    )
+                )
+            } else {
+                format!(
+                    "({})",
+                    emit_read_u64_aligned(
+                        &format!(
+                            "(ulong)((global char*)heap_u32+{}+(int)({}))",
+                            args.offset, i_load
+                        ),
+                        "(ulong)(heap_u32)",
+                        "warp_idx"
+                    )
+                )
+            };
+            // Splat the first ulong
+            let mask = "0, 0";
+            let tempvec = format!("(ulong2)({})", read);
+            ret_str += &format!("\t{} = as_ulong2(shuffle(as_ulong2({}), (ulong2)({})));\n",
+                                result_register, tempvec, mask);
+        },
+    };
+    ret_str += &format!("\t}}\n");
+
+    ret_str
+}
+
+
 
 /*
  * This function is essentially a no-op, since we pre-allocate the heaps for all procs!

@@ -351,12 +351,14 @@ impl<'a> StackCtx {
                     stack_sizes.pop();
                     stack_sizes.push(StackType::u128);
                     // no-op
+                    current_i32_count -= 1;
                     update_counter(&mut current_u128_count, &mut max_u128_count);
                 }
                 Instruction::V128Load64Zero(_memarg) => {
                     stack_sizes.pop();
                     stack_sizes.push(StackType::u128);
                     // no-op
+                    current_i32_count -= 1;
                     update_counter(&mut current_u128_count, &mut max_u128_count);
                 }
                 Instruction::I32Load(_memarg) => {
@@ -1962,6 +1964,30 @@ impl<'a> StackCtx {
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);
                     current_u128_count -= 1;
+                },
+                Instruction::V128Load8Splat(_) => {
+                    stack_sizes.pop().unwrap();
+                    stack_sizes.push(StackType::u128);
+                    update_counter(&mut current_u128_count, &mut max_u128_count);
+                    current_i32_count -= 1;
+                },
+                Instruction::V128Load16Splat(_) => {
+                    stack_sizes.pop().unwrap();
+                    stack_sizes.push(StackType::u128);
+                    update_counter(&mut current_u128_count, &mut max_u128_count);
+                    current_i32_count -= 1;
+                },
+                Instruction::V128Load32Splat(_) => {
+                    stack_sizes.pop().unwrap();
+                    stack_sizes.push(StackType::u128);
+                    update_counter(&mut current_u128_count, &mut max_u128_count);
+                    current_i32_count -= 1;
+                },
+                Instruction::V128Load64Splat(_) => {
+                    stack_sizes.pop().unwrap();
+                    stack_sizes.push(StackType::u128);
+                    update_counter(&mut current_u128_count, &mut max_u128_count);
+                    current_i32_count -= 1;
                 },
                 Instruction::I32x4ExtractLane(laneval) => {
                     stack_sizes.pop().unwrap();
