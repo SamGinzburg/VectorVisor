@@ -18,7 +18,7 @@ pub fn i8x16shuffle(_writer: &opencl_writer::OpenCLCWriter,
         mask += &format!("{},", value);
     }
 
-    result += &format!("\t{} = (ulong2)shuffle2((uchar16){}, (uchar16){}, (uchar16)({}));\n", result_register, reg1, reg2, &mask[0..mask.len()-1]);        
+    result += &format!("\t{} = as_ulong2(shuffle2(as_uchar16({}), as_uchar16({}), (uchar16)({})));\n", result_register, reg2, reg1, &mask[0..mask.len()-1]);        
 
     result
 }
