@@ -6,10 +6,6 @@ pub enum VecBinOp {
     Add,
     Sub,
     Mul,
-    Shl,
-    // Same op with different VecOpTypes
-    ShrU,
-    ShrS,
     Div,
     // Relops merged here for convenience
     NotEquals,
@@ -17,6 +13,13 @@ pub enum VecBinOp {
     MaxU,
 }
 
+pub enum VecByScalarOp {
+    ShrU,
+    ShrS,
+    Shl,
+}
+
+#[derive(Debug)]
 pub enum VecOpType {
     Float32,
     Int32,
@@ -31,6 +34,65 @@ pub enum V128BinOp {
     Xor,
     And,
     Or,
+}
+
+// Shr/Shl
+pub fn vec_x_by_scalar_binop(_writer: &opencl_writer::OpenCLCWriter,
+    stack_ctx: &mut StackCtx,
+    binop: VecByScalarOp,
+    op_type: VecOpType,
+    _debug: bool,
+) -> String {
+    let reg1 = stack_ctx.vstack_peak(StackType::u128, 0);
+    let reg2 = stack_ctx.vstack_pop(StackType::i32);
+
+    let mut result = String::from("");
+
+    result += &format!("\t{{\n");
+    match op_type {
+        VecOpType::Int32 => {
+            result += &format!("\t\tint4 *op1 = &{};\n", reg1);
+            result += &format!("\t\tint4 op2 = {};\n", reg2);
+        },
+        VecOpType::UInt32 => {
+            result += &format!("\t\tuint4 *op1 = &{};\n", reg1);
+            result += &format!("\t\tuint op2 = {};\n", reg2);
+        },
+        VecOpType::Int16 => {
+            result += &format!("\t\tshort8 *op1 = &{};\n", reg1);
+            result += &format!("\t\tint op2 = {};\n", reg2);
+        },
+        VecOpType::UInt16 => {
+            result += &format!("\t\tushort8 *op1 = &{};\n", reg1);
+            result += &format!("\t\tuint op2 = {};\n", reg2);
+        },
+        VecOpType::Int8 => {
+            result += &format!("\t\tchar8 *op1 = &{};\n", reg1);
+            result += &format!("\t\tint op2 = {};\n", reg2);
+        },
+        VecOpType::UInt8 => {
+            result += &format!("\t\tuchar8 *op1 = &{};\n", reg1);
+            result += &format!("\t\tuint op2 = {};\n", reg2);
+        },
+        _ => panic!("Type {:?}, not implemented for vec_x_by_scalar_binop", op_type),
+    }
+
+    result += &match binop {
+        VecByScalarOp::ShrU | VecByScalarOp::ShrS => {
+            format!(
+                "\t\t*op1 = *op1 >> op2;\n"
+            )
+        },
+        VecByScalarOp::Shl => {
+            format!(
+                "\t\t*op1 = *op1 << op2;\n"
+            )
+        },
+    };
+
+    result += &format!("\t}}\n");
+
+    result
 }
 
 pub fn vec_x_by_y_binop(_writer: &opencl_writer::OpenCLCWriter,
@@ -107,16 +169,6 @@ pub fn vec_x_by_y_binop(_writer: &opencl_writer::OpenCLCWriter,
         VecBinOp::Equals => {
             format!(
                 "\t\t*res = *op1 == *op2;\n"
-            )
-        },
-        VecBinOp::Shl => {
-            format!(
-                "\t\t*res = *op1 << *op2;\n"
-            )
-        },
-        VecBinOp::ShrU | VecBinOp::ShrS => {
-            format!(
-                "\t\t*res = *op1 >> *op2;\n"
             )
         },
         VecBinOp::Div => {

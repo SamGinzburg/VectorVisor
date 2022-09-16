@@ -993,14 +993,14 @@ impl<'a> OpenCLCWriter<'_> {
             Instruction::I32x4Splat => vec_splat(self, stack_ctx, SplatType::Int32, debug),
             Instruction::I64x2Splat => vec_splat(self, stack_ctx, SplatType::Int64, debug),
             Instruction::I8x16Add => vec_x_by_y_binop(self, stack_ctx, VecBinOp::Add, VecOpType::Int8, debug),
-            Instruction::I8x16Shl => vec_x_by_y_binop(self, stack_ctx, VecBinOp::Shl, VecOpType::Int8, debug),
+            Instruction::I8x16Shl => vec_x_by_scalar_binop(self, stack_ctx, VecByScalarOp::Shl, VecOpType::Int8, debug),
             Instruction::I8x16Eq => vec_x_by_y_binop(self, stack_ctx, VecBinOp::Equals, VecOpType::Int8, debug),
             Instruction::I8x16Ne => vec_x_by_y_binop(self, stack_ctx, VecBinOp::NotEquals, VecOpType::Int8, debug),
             Instruction::I16x8MaxU => vec_x_by_y_binop(self, stack_ctx, VecBinOp::MaxU, VecOpType::UInt16, debug),
             Instruction::I16x8Mul => vec_x_by_y_binop(self, stack_ctx, VecBinOp::Mul, VecOpType::Int16, debug),
             Instruction::I16x8Add => vec_x_by_y_binop(self, stack_ctx, VecBinOp::Add, VecOpType::Int16, debug),
-            Instruction::I16x8Shl => vec_x_by_y_binop(self, stack_ctx, VecBinOp::Shl, VecOpType::Int16, debug),
-            Instruction::I16x8ShrU => vec_x_by_y_binop(self, stack_ctx, VecBinOp::ShrU, VecOpType::Int16, debug),
+            Instruction::I16x8Shl => vec_x_by_scalar_binop(self, stack_ctx, VecByScalarOp::Shl, VecOpType::Int16, debug),
+            Instruction::I16x8ShrU => vec_x_by_scalar_binop(self, stack_ctx, VecByScalarOp::ShrU, VecOpType::Int16, debug),
             Instruction::I16x8Ne => vec_x_by_y_binop(self, stack_ctx, VecBinOp::NotEquals, VecOpType::Int16, debug),
             Instruction::I16x8Eq => vec_x_by_y_binop(self, stack_ctx, VecBinOp::Equals, VecOpType::Int16, debug),
             Instruction::F32x4Div => vec_x_by_y_binop(self, stack_ctx, VecBinOp::Div, VecOpType::Float32, debug),
@@ -1008,9 +1008,9 @@ impl<'a> OpenCLCWriter<'_> {
             Instruction::F32x4Add => vec_x_by_y_binop(self, stack_ctx, VecBinOp::Add, VecOpType::Float32, debug),
             Instruction::F32x4Ne => vec_x_by_y_binop(self, stack_ctx, VecBinOp::NotEquals, VecOpType::Float32, debug),
             Instruction::F32x4Eq => vec_x_by_y_binop(self, stack_ctx, VecBinOp::Equals, VecOpType::Float32, debug),
-            Instruction::I32x4Shl => vec_x_by_y_binop(self, stack_ctx, VecBinOp::Shl, VecOpType::Int32, debug),
-            Instruction::I32x4ShrU => vec_x_by_y_binop(self, stack_ctx, VecBinOp::ShrU, VecOpType::UInt32, debug),
-            Instruction::I32x4ShrS => vec_x_by_y_binop(self, stack_ctx, VecBinOp::ShrS, VecOpType::Int32, debug),
+            Instruction::I32x4Shl => vec_x_by_scalar_binop(self, stack_ctx, VecByScalarOp::Shl, VecOpType::Int32, debug),
+            Instruction::I32x4ShrU => vec_x_by_scalar_binop(self, stack_ctx, VecByScalarOp::ShrU, VecOpType::UInt32, debug),
+            Instruction::I32x4ShrS => vec_x_by_scalar_binop(self, stack_ctx, VecByScalarOp::ShrS, VecOpType::Int32, debug),
             Instruction::I32x4Mul => vec_x_by_y_binop(self, stack_ctx, VecBinOp::Mul, VecOpType::Int32, debug),
             Instruction::I32x4Add => vec_x_by_y_binop(self, stack_ctx, VecBinOp::Add, VecOpType::Int32, debug),
             Instruction::I32x4Sub => vec_x_by_y_binop(self, stack_ctx, VecBinOp::Sub, VecOpType::Int32, debug),
@@ -1392,6 +1392,7 @@ impl<'a> OpenCLCWriter<'_> {
                 // (we can't just iterate because the control stack would have a different lifetime)
 
                 for instruction in expression.instrs.iter() {
+                    println!("{:?}", instruction);
                     final_string += &self.emit_instructions(
                         instruction,
                         &mut stack_ctx,

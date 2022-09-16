@@ -1995,7 +1995,7 @@ impl<'a> StackCtx {
                     stack_sizes.pop().unwrap();
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);
-                    current_u128_count -= 1;
+                    current_i32_count -= 1;
                 },
                 Instruction::I8x16Add => {
                     stack_sizes.pop().unwrap();
@@ -2019,7 +2019,7 @@ impl<'a> StackCtx {
                     stack_sizes.pop().unwrap();
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);
-                    current_u128_count -= 1;
+                    current_i32_count -= 1;
                 },
                 Instruction::I16x8Mul => {
                     stack_sizes.pop().unwrap();
@@ -2037,7 +2037,7 @@ impl<'a> StackCtx {
                     stack_sizes.pop().unwrap();
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);
-                    current_u128_count -= 1;
+                    current_i32_count -= 1;
                 },
                 Instruction::I16x8Ne => {
                     stack_sizes.pop().unwrap();
@@ -2073,13 +2073,13 @@ impl<'a> StackCtx {
                     stack_sizes.pop().unwrap();
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);
-                    current_u128_count -= 1;
+                    current_i32_count -= 1;
                 },
                 Instruction::I32x4ShrS | Instruction::I32x4ShrU => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);
-                    current_u128_count -= 1;
+                    current_i32_count -= 1;
                 },
                 Instruction::I32x4Mul => {
                     stack_sizes.pop().unwrap();
@@ -2581,6 +2581,7 @@ impl<'a> StackCtx {
         self.i64_idx = stack_frame_unwind.i64_idx;
         self.f32_idx = stack_frame_unwind.f32_idx;
         self.f64_idx = stack_frame_unwind.f64_idx;
+        self.u128_idx = stack_frame_unwind.u128_idx;
         self.total_stack_types = stack_frame_unwind.stack_types;
 
         // restore_context tracking
@@ -3020,29 +3021,30 @@ impl<'a> StackCtx {
      */
     pub fn vstack_alloc(&mut self, t: StackType) -> String {
         self.total_stack_types.push(t.clone());
+        let panic_msg = &format!("vstack alloc err: {:?}", self);
         let ret = match t {
             StackType::i32 => {
-                let alloc_val = self.i32_stack.get(self.i32_idx).unwrap();
+                let alloc_val = self.i32_stack.get(self.i32_idx).expect(panic_msg);
                 self.i32_idx += 1;
                 format!("{}", alloc_val)
             }
             StackType::i64 => {
-                let alloc_val = self.i64_stack.get(self.i64_idx).unwrap();
+                let alloc_val = self.i64_stack.get(self.i64_idx).expect(panic_msg);
                 self.i64_idx += 1;
                 format!("{}", alloc_val)
             }
             StackType::f32 => {
-                let alloc_val = self.f32_stack.get(self.f32_idx).unwrap();
+                let alloc_val = self.f32_stack.get(self.f32_idx).expect(panic_msg);
                 self.f32_idx += 1;
                 format!("{}", alloc_val)
             }
             StackType::f64 => {
-                let alloc_val = self.f64_stack.get(self.f64_idx).unwrap();
+                let alloc_val = self.f64_stack.get(self.f64_idx).expect(panic_msg);
                 self.f64_idx += 1;
                 format!("{}", alloc_val)
             }
             StackType::u128 => {
-                let alloc_val = self.u128_stack.get(self.u128_idx).unwrap();
+                let alloc_val = self.u128_stack.get(self.u128_idx).expect(panic_msg);
                 self.u128_idx += 1;
                 format!("{}", alloc_val)
             }
