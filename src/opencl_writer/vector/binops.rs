@@ -4,8 +4,10 @@ use crate::opencl_writer::StackType;
 
 pub enum VecBinOp {
     Add,
+    Sub,
     Mul,
     NotEquals,
+    Equals,
     Shl,
     ShrU,
     Div,
@@ -15,6 +17,7 @@ pub enum VecOpType {
     Float32,
     Int32,
     Int16,
+    Int8,
 }
 
 pub enum V128BinOp {
@@ -51,12 +54,22 @@ pub fn vec_x_by_y_binop(_writer: &opencl_writer::OpenCLCWriter,
             result += &format!("\t\tshort8 *op2 = &{};\n", reg2);
             result += &format!("\t\tshort8 *res = &{};\n", result_register);        
         },
+        VecOpType::Int8 => {
+            result += &format!("\t\tchar8 *op1 = &{};\n", reg1);
+            result += &format!("\t\tchar8 *op2 = &{};\n", reg2);
+            result += &format!("\t\tchar8 *res = &{};\n", result_register);        
+        },
     }
 
     result += &match binop {
         VecBinOp::Add => {
             format!(
                 "\t\t*res = *op1 + *op2;\n"
+            )
+        },
+        VecBinOp::Sub => {
+            format!(
+                "\t\t*res = *op1 - *op2;\n"
             )
         },
         VecBinOp::Mul => {
@@ -67,6 +80,11 @@ pub fn vec_x_by_y_binop(_writer: &opencl_writer::OpenCLCWriter,
         VecBinOp::NotEquals => {
             format!(
                 "\t\t*res = *op1 != *op2;\n"
+            )
+        },
+        VecBinOp::Equals => {
+            format!(
+                "\t\t*res = *op1 == *op2;\n"
             )
         },
         VecBinOp::Shl => {

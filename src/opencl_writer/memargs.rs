@@ -1111,6 +1111,39 @@ pub fn emit_memstore_u128(
     ret_str
 }
 
+pub fn emit_memload_u128_load8_lane(
+    _writer: &opencl_writer::OpenCLCWriter,
+    stack_ctx: &mut StackCtx,
+    args: &LoadOrStoreLane,
+    _debug: bool,
+) -> String {
+    let mut ret_str = String::from("");
+
+    let i_load = stack_ctx.vstack_pop(StackType::i32);
+    let result_register = stack_ctx.vstack_alloc(StackType::u128);
+
+    // We just use two 8-byte reads for 16-byte values
+    let read = format!(
+        "({})",
+        emit_read_u8(
+            &format!(
+                "(ulong)((global char*)heap_u32+{}+(int)({}))",
+                args.memarg.offset, i_load
+            ),
+            "(ulong)(heap_u32)",
+            "warp_idx"
+        )
+    );
+
+    ret_str += &format!("\t{{\n");
+    ret_str += &format!("\t\tuchar16 *temp = &{};\n", result_register);
+    ret_str += &format!("\t\ttemp[{}] = {};\n", args.lane.lane, read);
+    ret_str += &format!("\t}}\n");
+
+    ret_str
+}
+
+
 pub fn emit_memload_u128_load_n_splat(
     writer: &opencl_writer::OpenCLCWriter,
     stack_ctx: &mut StackCtx,
