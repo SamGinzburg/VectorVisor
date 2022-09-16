@@ -2,6 +2,16 @@ use crate::opencl_writer;
 use crate::opencl_writer::StackCtx;
 use crate::opencl_writer::StackType;
 
+pub enum NarrowType {
+    Int8,
+    UInt8
+}
+
+
+pub enum NarrowLaneType {
+    Int16
+}
+
 pub fn extract_lane(
     _writer: &opencl_writer::OpenCLCWriter,
     stack_ctx: &mut StackCtx,
@@ -243,6 +253,51 @@ pub fn replace_lane(
         StackType::u128 => panic!("Invalid type (v128) for extract_line"),
     }
 
+    result += &format!("\t}}\n");
+
+    result
+}
+
+pub fn narrow(
+    _writer: &opencl_writer::OpenCLCWriter,
+    stack_ctx: &mut StackCtx,
+    narrow_type: NarrowType,
+    lane_type: NarrowLaneType,
+    _debug: bool,
+) -> String {
+    let mut result = String::from("");
+    let reg1 = stack_ctx.vstack_pop(StackType::u128);
+    let reg2 = stack_ctx.vstack_pop(StackType::u128);
+    let result_register = stack_ctx.vstack_alloc(StackType::u128);
+
+    result += &format!("\t{{\n");
+
+    match (narrow_type, lane_type)  {
+        (NarrowType::Int8, NarrowLaneType::Int16) => {
+            result += &format!("\t\tchar16 temp = (char16)(0);\n");
+            result += &format!("\t\tshort8 temp1 = as_short8({});\n", reg1);
+            result += &format!("\t\tshort8 temp2 = as_short8({});\n", reg2);
+
+            for idx in 0..8 {
+                result += &format!("\t\ttemp[{}] = (char)(temp1[{}]);\n", idx, idx);
+                result += &format!("\t\ttemp[{}+8] = (char)(temp2[{}]);\n", idx, idx);
+            }
+
+            result += &format!("\t\t{} = temp;\n", result_register);
+        },
+        (NarrowType::UInt8, NarrowLaneType::Int16) => {
+            result += &format!("\t\tuchar16 temp = (uchar16)(0);\n");
+            result += &format!("\t\tushort8 temp1 = as_ushort8({});\n", reg1);
+            result += &format!("\t\tushort8 temp2 = as_ushort8({});\n", reg2);
+
+            for idx in 0..8 {
+                result += &format!("\t\ttemp[{}] = (uchar)(temp1[{}]);\n", idx, idx);
+                result += &format!("\t\ttemp[{}+8] = (uchar)(temp2[{}]);\n", idx, idx);
+            }
+        },
+    }
+
+    result += &format!("\t\t{} = as_ulong2(temp);\n", result_register);
     result += &format!("\t}}\n");
 
     result

@@ -1904,7 +1904,19 @@ impl<'a> StackCtx {
                         // This happens because unreachable is emitted as a hypercall in this case
                         num_hypercalls += 1;
                     }
-                }
+                },
+                Instruction::I8x16NarrowI16x8S => {
+                    stack_sizes.pop().unwrap();
+                    stack_sizes.pop().unwrap();
+                    stack_sizes.push(StackType::u128);
+                    current_u128_count -= 1;
+                },
+                Instruction::I8x16NarrowI16x8U => {
+                    stack_sizes.pop().unwrap();
+                    stack_sizes.pop().unwrap();
+                    stack_sizes.push(StackType::u128);
+                    current_u128_count -= 1;
+                },
                 Instruction::I32x4Splat => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);

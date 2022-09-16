@@ -6,11 +6,13 @@ pub enum VecBinOp {
     Add,
     Sub,
     Mul,
-    NotEquals,
-    Equals,
     Shl,
     ShrU,
     Div,
+    // Relops merged here for convenience
+    NotEquals,
+    Equals,
+    MaxU,
 }
 
 pub enum VecOpType {
@@ -98,6 +100,11 @@ pub fn vec_x_by_y_binop(_writer: &opencl_writer::OpenCLCWriter,
             )
         },
         VecBinOp::Div => {
+            format!(
+                "\t\t*res = *op1 / *op2;\n"
+            )
+        },
+        VecBinOp::MaxU => {
             format!(
                 "\t\t*res = *op1 / *op2;\n"
             )

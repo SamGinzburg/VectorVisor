@@ -980,6 +980,8 @@ impl<'a> OpenCLCWriter<'_> {
                     )
                 }
             }
+            Instruction::I8x16NarrowI16x8S => narrow(self, stack_ctx, NarrowType::Int8, NarrowLaneType::Int16, debug),
+            Instruction::I8x16NarrowI16x8U => narrow(self, stack_ctx, NarrowType::UInt8, NarrowLaneType::Int16, debug),
             Instruction::F32x4Splat => vec_splat(self, stack_ctx, SplatType::Float32, debug),
             Instruction::F64x2Splat => vec_splat(self, stack_ctx, SplatType::Float64, debug),
             Instruction::I16x8Splat => vec_splat(self, stack_ctx, SplatType::Int16, debug),
