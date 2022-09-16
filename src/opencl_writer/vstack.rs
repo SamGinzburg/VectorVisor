@@ -75,6 +75,8 @@ impl StackSnapshot {
  */
 #[derive(Debug)]
 pub struct StackCtx {
+    // Useful in debugging compiler crashes during vstack pop
+    _curr_fn_name: String,
     // The last element of this Vec points at the current stack frame we are in
     // 0 -> the function level stack frame, all subsequent frames are loops
     stack_frame_idx: u32,
@@ -1905,6 +1907,42 @@ impl<'a> StackCtx {
                         num_hypercalls += 1;
                     }
                 },
+                Instruction::I8x16ExtractLaneU(_) => {
+                    stack_sizes.pop().unwrap();
+                    stack_sizes.push(StackType::i32);
+                    update_counter(&mut current_i32_count, &mut max_i32_count);
+                    current_u128_count -= 1;
+                },
+                Instruction::I8x16ExtractLaneS(_) => {
+                    stack_sizes.pop().unwrap();
+                    stack_sizes.push(StackType::i32);
+                    update_counter(&mut current_i32_count, &mut max_i32_count);
+                    current_u128_count -= 1;
+                },
+                Instruction::I16x8ExtractLaneU(_) => {
+                    stack_sizes.pop().unwrap();
+                    stack_sizes.push(StackType::i32);
+                    update_counter(&mut current_i32_count, &mut max_i32_count);
+                    current_u128_count -= 1;
+                },
+                Instruction::I16x8ExtractLaneS(_) => {
+                    stack_sizes.pop().unwrap();
+                    stack_sizes.push(StackType::i32);
+                    update_counter(&mut current_i32_count, &mut max_i32_count);
+                    current_u128_count -= 1;
+                },
+                Instruction::I16x8MaxU => {
+                    stack_sizes.pop().unwrap();
+                    stack_sizes.pop().unwrap();
+                    stack_sizes.push(StackType::u128);
+                    current_u128_count -= 1;
+                },
+                Instruction::I8x16MaxU => {
+                    stack_sizes.pop().unwrap();
+                    stack_sizes.pop().unwrap();
+                    stack_sizes.push(StackType::u128);
+                    current_u128_count -= 1;
+                },
                 Instruction::I8x16NarrowI16x8S => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.pop().unwrap();
@@ -2037,6 +2075,12 @@ impl<'a> StackCtx {
                     stack_sizes.push(StackType::u128);
                     current_u128_count -= 1;
                 },
+                Instruction::I32x4ShrS | Instruction::I32x4ShrU => {
+                    stack_sizes.pop().unwrap();
+                    stack_sizes.pop().unwrap();
+                    stack_sizes.push(StackType::u128);
+                    current_u128_count -= 1;
+                },
                 Instruction::I32x4Mul => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.pop().unwrap();
@@ -2087,8 +2131,26 @@ impl<'a> StackCtx {
                 },
                 Instruction::V128Load8Lane(_) => {
                     stack_sizes.pop().unwrap();
+                    stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);
-                    update_counter(&mut current_u128_count, &mut max_u128_count);
+                    current_i32_count -= 1;
+                },
+                Instruction::V128Load16Lane(_) => {
+                    stack_sizes.pop().unwrap();
+                    stack_sizes.pop().unwrap();
+                    stack_sizes.push(StackType::u128);
+                    current_i32_count -= 1;
+                },
+                Instruction::V128Store32Lane(_) => {
+                    stack_sizes.pop().unwrap();
+                    stack_sizes.pop().unwrap();
+                    stack_sizes.push(StackType::u128);
+                    current_i32_count -= 1;
+                },
+                Instruction::V128Store64Lane(_) => {
+                    stack_sizes.pop().unwrap();
+                    stack_sizes.pop().unwrap();
+                    stack_sizes.push(StackType::u128);
                     current_i32_count -= 1;
                 },
                 Instruction::V128Load8Splat(_) => {
@@ -2115,41 +2177,53 @@ impl<'a> StackCtx {
                     update_counter(&mut current_u128_count, &mut max_u128_count);
                     current_i32_count -= 1;
                 },
-                Instruction::I32x4ExtractLane(laneval) => {
+                Instruction::I32x4ExtractLane(_) => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::i32);
                     update_counter(&mut current_i32_count, &mut max_i32_count);
                     current_u128_count -= 1;
                 },
-                Instruction::I64x2ExtractLane(laneval) => {
+                Instruction::I64x2ExtractLane(_) => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::i64);
                     update_counter(&mut current_i64_count, &mut max_i64_count);
                     current_u128_count -= 1;
                 },
-                Instruction::F32x4ExtractLane(laneval) => {
+                Instruction::F32x4ExtractLane(_) => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::f32);
                     update_counter(&mut current_f32_count, &mut max_f32_count);
                     current_u128_count -= 1;
                 },
-                Instruction::F64x2ExtractLane(laneval) => {
+                Instruction::F64x2ExtractLane(_) => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::f64);
                     update_counter(&mut current_f64_count, &mut max_f64_count);
                     current_u128_count -= 1;
                 },
-                Instruction::I32x4ReplaceLane(laneval) => {
+                Instruction::I32x4ReplaceLane(_) => {
                     stack_sizes.pop().unwrap();
+                    stack_sizes.pop().unwrap();
+                    stack_sizes.push(StackType::u128);
+                    current_i32_count -= 1;
                 },
-                Instruction::I64x2ReplaceLane(laneval) => {
+                Instruction::I64x2ReplaceLane(_) => {
                     stack_sizes.pop().unwrap();
+                    stack_sizes.pop().unwrap();
+                    stack_sizes.push(StackType::u128);
+                    current_i64_count -= 1;
                 },
-                Instruction::F32x4ReplaceLane(laneval) => {
+                Instruction::F32x4ReplaceLane(_) => {
                     stack_sizes.pop().unwrap();
+                    stack_sizes.pop().unwrap();
+                    stack_sizes.push(StackType::u128);
+                    current_f32_count -= 1;
                 },
-                Instruction::F64x2ReplaceLane(laneval) => {
+                Instruction::F64x2ReplaceLane(_) => {
                     stack_sizes.pop().unwrap();
+                    stack_sizes.pop().unwrap();
+                    stack_sizes.push(StackType::u128);
+                    current_f64_count -= 1;
                 },
                 _ => panic!(
                     "Instruction {:?} not yet implemented (vstack-pass)",
@@ -2392,6 +2466,7 @@ impl<'a> StackCtx {
         }
 
         StackCtx {
+            _curr_fn_name: curr_fn_name,
             stack_frame_idx: 1,
             stack_frame_stack: vec![0],
             restore_context_map: restore_context_map,

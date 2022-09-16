@@ -5,6 +5,7 @@ use crate::opencl_writer::StackType;
 pub enum SplatType {
     Float32,
     Float64,
+    Int8,
     Int16,
     Int32,
     Int64
@@ -47,6 +48,15 @@ pub fn vec_splat(
             result += &format!(
                 "\t\t*temp = (ushort8)({}, {}, {}, {}, {}, {}, {}, {});\n",
                 reg, reg, reg, reg, reg, reg, reg, reg
+            );
+        },
+        SplatType::Int8 => {
+            let reg = stack_ctx.vstack_pop(StackType::i32);
+
+            result += &format!("\t\tuchar16 *temp = &{};\n", result_register);
+            result += &format!(
+                "\t\t*temp = (uchar16)({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {});\n",
+                reg, reg, reg, reg, reg, reg, reg, reg, reg, reg, reg, reg, reg, reg, reg, reg
             );
         },
         SplatType::Int32 => {
