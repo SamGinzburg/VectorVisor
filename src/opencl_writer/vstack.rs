@@ -1937,6 +1937,18 @@ impl<'a> StackCtx {
                     stack_sizes.push(StackType::u128);
                     current_u128_count -= 1;
                 },
+                Instruction::I8x16GtS | Instruction::I8x16GtU => {
+                    stack_sizes.pop().unwrap();
+                    stack_sizes.pop().unwrap();
+                    stack_sizes.push(StackType::u128);
+                    current_u128_count -= 1;
+                },
+                Instruction::I16x8GtS | Instruction::I16x8GtU => {
+                    stack_sizes.pop().unwrap();
+                    stack_sizes.pop().unwrap();
+                    stack_sizes.push(StackType::u128);
+                    current_u128_count -= 1;
+                },
                 Instruction::I8x16MaxU => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.pop().unwrap();
@@ -2123,19 +2135,19 @@ impl<'a> StackCtx {
                     stack_sizes.push(StackType::u128);
                     current_u128_count -= 1;
                 },
+                Instruction::V128Not => {
+                    // no-op
+                },
                 Instruction::I8x16Shuffle(_) => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);
                     current_u128_count -= 1;
                 },
-                Instruction::V128Load8Lane(_) => {
-                    stack_sizes.pop().unwrap();
-                    stack_sizes.pop().unwrap();
-                    stack_sizes.push(StackType::u128);
-                    current_i32_count -= 1;
-                },
-                Instruction::V128Load16Lane(_) => {
+                Instruction::V128Load8Lane(_) |
+                Instruction::V128Load16Lane(_) |
+                Instruction::V128Load32Lane(_) |
+                Instruction::V128Load64Lane(_) => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);

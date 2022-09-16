@@ -41,6 +41,7 @@ use util::*;
 use vector::shuffle::*;
 use vector::splat::*;
 use vector::binops::*;
+use vector::unops::*;
 use vector::stackops::*;
 use vector::laneops::*;
 use vstack::*;
@@ -406,6 +407,8 @@ impl<'a> OpenCLCWriter<'_> {
             Instruction::V128Load64Splat(memarg) => emit_memload_u128_load_n_splat(self, stack_ctx, memarg, VecSplatSize::I64, debug),
             Instruction::V128Load8Lane(load_or_store_lane) => emit_memload_u128_load_lane(self, stack_ctx, load_or_store_lane, VecLoadWidth::I8, debug),
             Instruction::V128Load16Lane(load_or_store_lane) => emit_memload_u128_load_lane(self, stack_ctx, load_or_store_lane, VecLoadWidth::I16, debug),
+            Instruction::V128Load32Lane(load_or_store_lane) => emit_memload_u128_load_lane(self, stack_ctx, load_or_store_lane, VecLoadWidth::I32, debug),
+            Instruction::V128Load64Lane(load_or_store_lane) => emit_memload_u128_load_lane(self, stack_ctx, load_or_store_lane, VecLoadWidth::I64, debug),
             Instruction::V128Store32Lane(load_or_store_lane) => emit_memstore_u128_lane(self, stack_ctx, load_or_store_lane, VecStoreWidth::I32, debug),
             Instruction::V128Store64Lane(load_or_store_lane) => emit_memstore_u128_lane(self, stack_ctx, load_or_store_lane, VecStoreWidth::I64, debug),
             Instruction::I32Load8u(memarg) => {
@@ -983,6 +986,8 @@ impl<'a> OpenCLCWriter<'_> {
                     )
                 }
             },
+            Instruction::I8x16GtS => vec_x_by_y_binop(self, stack_ctx, VecBinOp::GtS, VecOpType::Int8, debug),
+            Instruction::I8x16GtU => vec_x_by_y_binop(self, stack_ctx, VecBinOp::GtS, VecOpType::UInt8, debug),
             Instruction::I8x16MaxU => vec_x_by_y_binop(self, stack_ctx, VecBinOp::MaxU, VecOpType::UInt8, debug),
             Instruction::I8x16NarrowI16x8S => narrow(self, stack_ctx, NarrowType::Int8, NarrowLaneType::Int16, debug),
             Instruction::I8x16NarrowI16x8U => narrow(self, stack_ctx, NarrowType::UInt8, NarrowLaneType::Int16, debug),
@@ -996,6 +1001,8 @@ impl<'a> OpenCLCWriter<'_> {
             Instruction::I8x16Shl => vec_x_by_scalar_binop(self, stack_ctx, VecByScalarOp::Shl, VecOpType::Int8, debug),
             Instruction::I8x16Eq => vec_x_by_y_binop(self, stack_ctx, VecBinOp::Equals, VecOpType::Int8, debug),
             Instruction::I8x16Ne => vec_x_by_y_binop(self, stack_ctx, VecBinOp::NotEquals, VecOpType::Int8, debug),
+            Instruction::I16x8GtS => vec_x_by_y_binop(self, stack_ctx, VecBinOp::GtS, VecOpType::Int16, debug),
+            Instruction::I16x8GtU => vec_x_by_y_binop(self, stack_ctx, VecBinOp::GtS, VecOpType::UInt16, debug),
             Instruction::I16x8MaxU => vec_x_by_y_binop(self, stack_ctx, VecBinOp::MaxU, VecOpType::UInt16, debug),
             Instruction::I16x8Mul => vec_x_by_y_binop(self, stack_ctx, VecBinOp::Mul, VecOpType::Int16, debug),
             Instruction::I16x8Add => vec_x_by_y_binop(self, stack_ctx, VecBinOp::Add, VecOpType::Int16, debug),
@@ -1019,6 +1026,7 @@ impl<'a> OpenCLCWriter<'_> {
             Instruction::V128Xor => v128_binop(self, stack_ctx, V128BinOp::Xor, debug),
             Instruction::V128And => v128_binop(self, stack_ctx, V128BinOp::And, debug),
             Instruction::V128Or => v128_binop(self, stack_ctx, V128BinOp::Or, debug),
+            Instruction::V128Not => vec_unop(self, stack_ctx, VecUnop::Not, debug),
             Instruction::I8x16Shuffle(lanes) => i8x16shuffle(self, stack_ctx, lanes, debug),
             Instruction::I8x16ExtractLaneU(laneval) => extract_lane(self, stack_ctx, ExtractLane::UInt8, laneval.lane, debug),
             Instruction::I8x16ExtractLaneS(laneval) => extract_lane(self, stack_ctx, ExtractLane::Int8, laneval.lane, debug),
@@ -1392,7 +1400,7 @@ impl<'a> OpenCLCWriter<'_> {
                 // (we can't just iterate because the control stack would have a different lifetime)
 
                 for instruction in expression.instrs.iter() {
-                    println!("{:?}", instruction);
+                    //println!("{:?}", instruction);
                     final_string += &self.emit_instructions(
                         instruction,
                         &mut stack_ctx,

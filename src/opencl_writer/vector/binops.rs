@@ -8,6 +8,8 @@ pub enum VecBinOp {
     Mul,
     Div,
     // Relops merged here for convenience
+    GtS,
+    GtU,
     NotEquals,
     Equals,
     MaxU,
@@ -179,6 +181,11 @@ pub fn vec_x_by_y_binop(_writer: &opencl_writer::OpenCLCWriter,
         VecBinOp::MaxU => {
             format!(
                 "\t\t*res = max(*op1, *op2);\n"
+            )
+        },
+        VecBinOp::GtS | VecBinOp::GtU => {
+            format!(
+                "\t\t*res = *op1 > *op2;\n"
             )
         },
     };

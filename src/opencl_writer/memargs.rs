@@ -21,6 +21,8 @@ pub enum VecStoreWidth {
 pub enum VecLoadWidth {
     I8,
     I16,
+    I32,
+    I64,
 }
 
 // Functions for loading from memory
@@ -1260,7 +1262,71 @@ pub fn emit_memload_u128_load_lane(
             ret_str += &format!("\t\tushort8 *temp = &{};\n", vec);
             ret_str += &format!("\t\ttemp[{}] = {};\n", args.lane.lane, read);
             ret_str += &format!("\t}}\n");
-        }
+        },
+        VecLoadWidth::I32 => {
+            let read = if !writer.pretty_input_wasm || args.memarg.align < 4 {
+                format!(
+                    "({})",
+                    emit_read_u32_aligned_checked(
+                        &format!(
+                            "(ulong)((global char*)heap_u32+{}+(int)({}))",
+                            args.memarg.offset, i_load
+                        ),
+                        "(ulong)(heap_u32)",
+                        "warp_idx"
+                    )
+                )
+            } else {
+                format!(
+                    "({})",
+                    emit_read_u32_aligned(
+                        &format!(
+                            "(ulong)((global char*)heap_u32+{}+(int)({}))",
+                            args.memarg.offset, i_load
+                        ),
+                        "(ulong)(heap_u32)",
+                        "warp_idx"
+                    )
+                )
+            };
+
+            ret_str += &format!("\t{{\n");
+            ret_str += &format!("\t\tuint4 *temp = &{};\n", vec);
+            ret_str += &format!("\t\ttemp[{}] = {};\n", args.lane.lane, read);
+            ret_str += &format!("\t}}\n");
+        },
+        VecLoadWidth::I64 => {
+            let read = if !writer.pretty_input_wasm || args.memarg.align < 4 {
+                format!(
+                    "({})",
+                    emit_read_u64_aligned_checked(
+                        &format!(
+                            "(ulong)((global char*)heap_u32+{}+(int)({}))",
+                            args.memarg.offset, i_load
+                        ),
+                        "(ulong)(heap_u32)",
+                        "warp_idx"
+                    )
+                )
+            } else {
+                format!(
+                    "({})",
+                    emit_read_u64_aligned(
+                        &format!(
+                            "(ulong)((global char*)heap_u32+{}+(int)({}))",
+                            args.memarg.offset, i_load
+                        ),
+                        "(ulong)(heap_u32)",
+                        "warp_idx"
+                    )
+                )
+            };
+
+            ret_str += &format!("\t{{\n");
+            ret_str += &format!("\t\tulong2 *temp = &{};\n", vec);
+            ret_str += &format!("\t\ttemp[{}] = {};\n", args.lane.lane, read);
+            ret_str += &format!("\t}}\n");
+        },
     }
     ret_str
 }
