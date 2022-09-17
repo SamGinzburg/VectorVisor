@@ -2009,7 +2009,8 @@ impl<'a> StackCtx {
                     stack_sizes.push(StackType::u128);
                     current_i32_count -= 1;
                 },
-                Instruction::I8x16Add => {
+                Instruction::I8x16Add | 
+                Instruction::I8x16Sub => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);
@@ -2027,7 +2028,8 @@ impl<'a> StackCtx {
                     stack_sizes.push(StackType::u128);
                     current_u128_count -= 1;
                 },
-                Instruction::I16x8ShrU => {
+                Instruction::I16x8ShrU |
+                Instruction::I16x8ShrS => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);
@@ -2039,7 +2041,8 @@ impl<'a> StackCtx {
                     stack_sizes.push(StackType::u128);
                     current_u128_count -= 1;
                 },
-                Instruction::I16x8Add => {
+                Instruction::I16x8Add |
+                Instruction::I16x8Sub => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);
