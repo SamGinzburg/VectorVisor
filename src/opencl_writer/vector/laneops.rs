@@ -53,35 +53,35 @@ pub fn extract_lane(
 
     match lanetype {
         ExtractLane::UInt8 => {
-            result += &format!("\t\tuchar16 *temp = &{};\n", reg);
+            result += &format!("\t\tuchar *temp = (uchar*)&{};\n", reg);
             result += &format!(
                 "\t\t{} = temp[{}];\n",
                 result_register, laneval
             );
         },
         ExtractLane::Int8 => {
-            result += &format!("\t\tuchar16 *temp = &{};\n", reg);
+            result += &format!("\t\tuchar *temp = (uchar*)&{};\n", reg);
             result += &format!(
                 "\t\t{} = temp[{}];\n",
                 result_register, laneval
             );
         },
         ExtractLane::UInt16 => {
-            result += &format!("\t\tushort8 *temp = &{};\n", reg);
+            result += &format!("\t\tushort *temp = (ushort*)&{};\n", reg);
             result += &format!(
                 "\t\t{} = temp[{}];\n",
                 result_register, laneval
             );
         },
         ExtractLane::Int16 => {
-            result += &format!("\t\tshort8 *temp = &{};\n", reg);
+            result += &format!("\t\tshort *temp = (short*)&{};\n", reg);
             result += &format!(
                 "\t\t{} = temp[{}];\n",
                 result_register, laneval
             );
         },
         ExtractLane::Int32 => {
-            result += &format!("\t\tuint4 *temp = &{};\n", reg);
+            result += &format!("\t\tuint4 *temp = (uint4*)(&{});\n", reg);
             match laneval {
                 0 => {
                     result += &format!(
@@ -111,7 +111,7 @@ pub fn extract_lane(
             }
         },
         ExtractLane::Int64 => {
-            result += &format!("\t\tulong2 *temp = &{};\n", reg);
+            result += &format!("\t\tulong2 *temp = (ulong2*)(&{});\n", reg);
             match laneval {
                 0 => {
                     result += &format!(
@@ -129,7 +129,7 @@ pub fn extract_lane(
             }
         },
         ExtractLane::Float32 => {
-            result += &format!("\t\tfloat4 *temp = &{};\n", reg);
+            result += &format!("\t\tfloat4 *temp = (float4*)(&{});\n", reg);
             match laneval {
                 0 => {
                     result += &format!(
@@ -159,7 +159,7 @@ pub fn extract_lane(
             }
         },
         ExtractLane::Float64 => {
-            result += &format!("\t\tdouble2 *temp = &{};\n", reg);
+            result += &format!("\t\tdouble2 *temp = (double2*)(&{});\n", reg);
             match laneval {
                 0 => {
                     result += &format!(
@@ -207,7 +207,7 @@ pub fn replace_lane(
 
     match lanetype {
         StackType::i32 => {
-            result += &format!("\t\tuint4 *temp = &{};\n", reg);
+            result += &format!("\t\tuint4 *temp = (uint4*)(&{});\n", reg);
             match laneval {
                 0 => {
                     result += &format!(
@@ -237,7 +237,7 @@ pub fn replace_lane(
             }
         },
         StackType::i64 => {
-            result += &format!("\t\tulong2 *temp = &{};\n", reg);
+            result += &format!("\t\tulong2 *temp = (ulong2*)(&{});\n", reg);
             match laneval {
                 0 => {
                     result += &format!(
@@ -255,7 +255,7 @@ pub fn replace_lane(
             }
         },
         StackType::f32 => {
-            result += &format!("\t\tfloat4 *temp = &{};\n", reg);
+            result += &format!("\t\tfloat4 *temp = (float4*)(&{});\n", reg);
             match laneval {
                 0 => {
                     result += &format!(
@@ -285,7 +285,7 @@ pub fn replace_lane(
             }
         },
         StackType::f64 => {
-            result += &format!("\t\tdouble2 *temp = &{};\n", reg);
+            result += &format!("\t\tdouble2 *temp = (double2*)(&{});\n", reg);
             match laneval {
                 0 => {
                     result += &format!(
@@ -327,24 +327,26 @@ pub fn narrow(
     match (narrow_type, lane_type)  {
         (NarrowType::Int8, NarrowLaneType::Int16) => {
             result += &format!("\t\tchar16 temp = (char16)(0);\n");
-            result += &format!("\t\tshort8 temp1 = as_short8({});\n", reg1);
-            result += &format!("\t\tshort8 temp2 = as_short8({});\n", reg2);
+            result += &format!("\t\tchar *temp_ptr = (char*)(&temp);\n");
+            result += &format!("\t\tshort *temp1 = (short*)(&{});\n", reg1);
+            result += &format!("\t\tshort *temp2 = (short*)(&{});\n", reg2);
 
             for idx in 0..8 {
-                result += &format!("\t\ttemp[{}] = (char)(temp1[{}]);\n", idx, idx);
-                result += &format!("\t\ttemp[{}+8] = (char)(temp2[{}]);\n", idx, idx);
+                result += &format!("\t\ttemp_ptr[{}] = (char)(temp1[{}]);\n", idx, idx);
+                result += &format!("\t\ttemp_ptr[{}+8] = (char)(temp2[{}]);\n", idx, idx);
             }
 
             result += &format!("\t\t{} = temp;\n", result_register);
         },
         (NarrowType::UInt8, NarrowLaneType::Int16) => {
             result += &format!("\t\tuchar16 temp = (uchar16)(0);\n");
-            result += &format!("\t\tushort8 temp1 = as_ushort8({});\n", reg1);
-            result += &format!("\t\tushort8 temp2 = as_ushort8({});\n", reg2);
+            result += &format!("\t\tuchar *temp_ptr = (uchar*)(&temp);\n");
+            result += &format!("\t\tushort *temp1 = (ushort*)(&{});\n", reg1);
+            result += &format!("\t\tushort *temp2 = (ushort*)(&{});\n", reg2);
 
             for idx in 0..8 {
-                result += &format!("\t\ttemp[{}] = (uchar)(temp1[{}]);\n", idx, idx);
-                result += &format!("\t\ttemp[{}+8] = (uchar)(temp2[{}]);\n", idx, idx);
+                result += &format!("\t\ttemp_ptr[{}] = (uchar)(temp1[{}]);\n", idx, idx);
+                result += &format!("\t\ttemp_ptr[{}+8] = (uchar)(temp2[{}]);\n", idx, idx);
             }
         },
     }

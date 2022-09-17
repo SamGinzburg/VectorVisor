@@ -1146,7 +1146,7 @@ pub fn emit_memstore_u128_lane(
                             args.memarg.offset, i_load
                         ),
                         "(ulong)(heap_u32)",
-                        &format!("(uint4*)(&{})[{}]", vec, args.lane.lane),
+                        &format!("((uint*)(&{}))[{}]", vec, args.lane.lane),
                         "warp_idx"
                     )
                 );
@@ -1159,7 +1159,7 @@ pub fn emit_memstore_u128_lane(
                             args.memarg.offset, i_load
                         ),
                         "(ulong)(heap_u32)",
-                        &format!("(uint4*)(&{})[{}]", vec, args.lane.lane),
+                        &format!("((uint*)(&{}))[{}]", vec, args.lane.lane),
                         "warp_idx"
                     )
                 );
@@ -1175,7 +1175,7 @@ pub fn emit_memstore_u128_lane(
                             args.memarg.offset, i_load
                         ),
                         "(ulong)(heap_u32)",
-                        &format!("(ulong2*)(&{})[{}]", vec, args.lane.lane),
+                        &format!("((ulong*)(&{}))[{}]", vec, args.lane.lane),
                         "warp_idx"
                     )
                 );
@@ -1188,7 +1188,7 @@ pub fn emit_memstore_u128_lane(
                             args.memarg.offset, i_load
                         ),
                         "(ulong)(heap_u32)",
-                        &format!("(ulong2*)(&{})[{}]", vec, args.lane.lane),
+                        &format!("((ulong*)(&{}))[{}]", vec, args.lane.lane),
                         "warp_idx"
                     )
                 );
@@ -1227,7 +1227,7 @@ pub fn emit_memload_u128_load_lane(
             );
         
             ret_str += &format!("\t{{\n");
-            ret_str += &format!("\t\tuchar16 *temp = &{};\n", vec);
+            ret_str += &format!("\t\tuchar *temp = (uchar*)(&{});\n", vec);
             ret_str += &format!("\t\ttemp[{}] = {};\n", args.lane.lane, read);
             ret_str += &format!("\t}}\n");
         },
@@ -1259,7 +1259,7 @@ pub fn emit_memload_u128_load_lane(
             };
 
             ret_str += &format!("\t{{\n");
-            ret_str += &format!("\t\tushort8 *temp = &{};\n", vec);
+            ret_str += &format!("\t\tushort *temp = (ushort*)(&{});\n", vec);
             ret_str += &format!("\t\ttemp[{}] = {};\n", args.lane.lane, read);
             ret_str += &format!("\t}}\n");
         },
@@ -1291,7 +1291,7 @@ pub fn emit_memload_u128_load_lane(
             };
 
             ret_str += &format!("\t{{\n");
-            ret_str += &format!("\t\tuint4 *temp = &{};\n", vec);
+            ret_str += &format!("\t\tuint *temp = (uint*)(&{});\n", vec);
             ret_str += &format!("\t\ttemp[{}] = {};\n", args.lane.lane, read);
             ret_str += &format!("\t}}\n");
         },
@@ -1323,7 +1323,7 @@ pub fn emit_memload_u128_load_lane(
             };
 
             ret_str += &format!("\t{{\n");
-            ret_str += &format!("\t\tulong2 *temp = &{};\n", vec);
+            ret_str += &format!("\t\tulong *temp = (ulong*)(&{});\n", vec);
             ret_str += &format!("\t\ttemp[{}] = {};\n", args.lane.lane, read);
             ret_str += &format!("\t}}\n");
         },

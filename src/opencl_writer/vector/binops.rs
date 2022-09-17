@@ -53,28 +53,28 @@ pub fn vec_x_by_scalar_binop(_writer: &opencl_writer::OpenCLCWriter,
     result += &format!("\t{{\n");
     match op_type {
         VecOpType::Int32 => {
-            result += &format!("\t\tint4 *op1 = &{};\n", reg1);
-            result += &format!("\t\tint4 op2 = {};\n", reg2);
+            result += &format!("\t\tint4 *op1 = (int4*)(&{});\n", reg1);
+            result += &format!("\t\tint4 op2 = (int4)({});\n", reg2);
         },
         VecOpType::UInt32 => {
-            result += &format!("\t\tuint4 *op1 = &{};\n", reg1);
-            result += &format!("\t\tuint op2 = {};\n", reg2);
+            result += &format!("\t\tuint4 *op1 = (uint4*)(&{});\n", reg1);
+            result += &format!("\t\tuint4 op2 = (uint4)({});\n", reg2);
         },
         VecOpType::Int16 => {
-            result += &format!("\t\tshort8 *op1 = &{};\n", reg1);
-            result += &format!("\t\tint op2 = {};\n", reg2);
+            result += &format!("\t\tshort8 *op1 = (short8*)(&{});\n", reg1);
+            result += &format!("\t\tshort8 op2 = (short8)({});\n", reg2);
         },
         VecOpType::UInt16 => {
-            result += &format!("\t\tushort8 *op1 = &{};\n", reg1);
-            result += &format!("\t\tuint op2 = {};\n", reg2);
+            result += &format!("\t\tushort8 *op1 = (ushort8*)(&{});\n", reg1);
+            result += &format!("\t\tushort8 op2 = (ushort8)({});\n", reg2);
         },
         VecOpType::Int8 => {
-            result += &format!("\t\tchar8 *op1 = &{};\n", reg1);
-            result += &format!("\t\tint op2 = {};\n", reg2);
+            result += &format!("\t\tchar16 *op1 = (char16*)(&{});\n", reg1);
+            result += &format!("\t\tchar16 op2 = (char16)({});\n", reg2);
         },
         VecOpType::UInt8 => {
-            result += &format!("\t\tuchar8 *op1 = &{};\n", reg1);
-            result += &format!("\t\tuint op2 = {};\n", reg2);
+            result += &format!("\t\tuchar16 *op1 = (uchar16*)(&{});\n", reg1);
+            result += &format!("\t\tuchar16 op2 = (uchar16)({});\n", reg2);
         },
         _ => panic!("Type {:?}, not implemented for vec_x_by_scalar_binop", op_type),
     }
@@ -111,39 +111,39 @@ pub fn vec_x_by_y_binop(_writer: &opencl_writer::OpenCLCWriter,
     result += &format!("\t{{\n");
     match op_type {
         VecOpType::Float32 => {
-            result += &format!("\t\tfloat4 *op1 = &{};\n", reg1);
-            result += &format!("\t\tfloat4 *op2 = &{};\n", reg2);
-            result += &format!("\t\tfloat4 *res = &{};\n", result_register);        
+            result += &format!("\t\tfloat4 *op1 = (float4*)&{};\n", reg1);
+            result += &format!("\t\tfloat4 *op2 = (float4*)&{};\n", reg2);
+            result += &format!("\t\tfloat4 *res = (float4*)&{};\n", result_register);        
         },
         VecOpType::Int32 => {
-            result += &format!("\t\tint4 *op1 = &{};\n", reg1);
-            result += &format!("\t\tint4 *op2 = &{};\n", reg2);
-            result += &format!("\t\tint4 *res = &{};\n", result_register);        
+            result += &format!("\t\tint4 *op1 = (int4*)&{};\n", reg1);
+            result += &format!("\t\tint4 *op2 = (int4*)&{};\n", reg2);
+            result += &format!("\t\tint4 *res = (int4*)&{};\n", result_register);        
         },
         VecOpType::UInt32 => {
-            result += &format!("\t\tuint4 *op1 = &{};\n", reg1);
-            result += &format!("\t\tuint4 *op2 = &{};\n", reg2);
-            result += &format!("\t\tuint4 *res = &{};\n", result_register);        
+            result += &format!("\t\tuint4 *op1 = (uint4*)&{};\n", reg1);
+            result += &format!("\t\tuint4 *op2 = (uint4*)&{};\n", reg2);
+            result += &format!("\t\tuint4 *res = (uint4*)&{};\n", result_register);        
         },
         VecOpType::Int16 => {
-            result += &format!("\t\tshort8 *op1 = &{};\n", reg1);
-            result += &format!("\t\tshort8 *op2 = &{};\n", reg2);
-            result += &format!("\t\tshort8 *res = &{};\n", result_register);        
+            result += &format!("\t\tshort8 *op1 = (short8*)&{};\n", reg1);
+            result += &format!("\t\tshort8 *op2 = (short8*)&{};\n", reg2);
+            result += &format!("\t\tshort8 *res = (short8*)&{};\n", result_register);        
         },
         VecOpType::UInt16 => {
-            result += &format!("\t\tushort8 *op1 = &{};\n", reg1);
-            result += &format!("\t\tushort8 *op2 = &{};\n", reg2);
-            result += &format!("\t\tushort8 *res = &{};\n", result_register);        
+            result += &format!("\t\tushort8 *op1 = (ushort8*)&{};\n", reg1);
+            result += &format!("\t\tushort8 *op2 = (ushort8*)&{};\n", reg2);
+            result += &format!("\t\tushort8 *res = (ushort8*)&{};\n", result_register);        
         },
         VecOpType::Int8 => {
-            result += &format!("\t\tchar8 *op1 = &{};\n", reg1);
-            result += &format!("\t\tchar8 *op2 = &{};\n", reg2);
-            result += &format!("\t\tchar8 *res = &{};\n", result_register);        
+            result += &format!("\t\tchar16 *op1 = (char16*)&{};\n", reg1);
+            result += &format!("\t\tchar16 *op2 = (char16*)&{};\n", reg2);
+            result += &format!("\t\tchar16 *res = (char16*)&{};\n", result_register);        
         },
         VecOpType::UInt8 => {
-            result += &format!("\t\tuchar8 *op1 = &{};\n", reg1);
-            result += &format!("\t\tuchar8 *op2 = &{};\n", reg2);
-            result += &format!("\t\tuchar8 *res = &{};\n", result_register);        
+            result += &format!("\t\tuchar16 *op1 = (uchar16*)&{};\n", reg1);
+            result += &format!("\t\tuchar16 *op2 = (uchar16*)&{};\n", reg2);
+            result += &format!("\t\tuchar16 *res = (uchar16*)&{};\n", result_register);        
         },
     }
 
