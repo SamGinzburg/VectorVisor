@@ -1360,10 +1360,14 @@ pub fn generate_bulkmem(fill: Option<String>) -> String {
     result += &format!("\t{}\n", "uint counter = 0;");
     match fill.clone() {
         Some(value) => {
-            result += &format!("\t{}\n", "uint fillval = value << 24;");
-	    result += &format!("\t{}\n", "fillval += value << 16;");
-	    result += &format!("\t{}\n", "fillval += value << 8;");
-	    result += &format!("\t{}\n", "fillval += value;");
+            result += &format!("\t{}\n", "ulong fillval = value << 56;");
+            result += &format!("\t{}\n", "fillval += value << 48;");
+            result += &format!("\t{}\n", "fillval += value << 40;");
+            result += &format!("\t{}\n", "fillval += value << 32;");
+            result += &format!("\t{}\n", "fillval += value << 24;");
+	        result += &format!("\t{}\n", "fillval += value << 16;");
+	        result += &format!("\t{}\n", "fillval += value << 8;");
+	        result += &format!("\t{}\n", "fillval += value;");
         },
         _    => {
         }
@@ -1374,40 +1378,48 @@ pub fn generate_bulkmem(fill: Option<String>) -> String {
 	None => {
     	    result += &format!(
         	"\t{}\n",
-        	"if (buf_len_bytes > 4 && IS_ALIGNED_POW2((ulong)src, 4) && IS_ALIGNED_POW2((ulong)dst, 4)) {"
+        	"if (buf_len_bytes > 32 && IS_ALIGNED_POW2((ulong)src, 8) && IS_ALIGNED_POW2((ulong)dst, 8)) {"
     	    );
 	},
 	_ => {
     	    result += &format!(
         	"\t{}\n",
-        	"if (buf_len_bytes > 4 && IS_ALIGNED_POW2((ulong)dst, 4)) {"
+        	"if (buf_len_bytes > 32 && IS_ALIGNED_POW2((ulong)dst, 8)) {"
     	    );
 	}
     };
 
     result += &format!(
         "\t\t{}\n",
-        "for (; counter < (buf_len_bytes-GET_POW2_OFFSET(buf_len_bytes, 4)); counter+=4) {"
+        "for (; counter < (buf_len_bytes-GET_POW2_OFFSET(buf_len_bytes, 8)); counter+=8) {"
     );
+
+    result += &format!(
+        "\t\t\t{}\n",
+        "for (uint unroll = 0; unroll < 4; unroll++) {"
+    );
+
     match fill.clone() {
-        Some(value) => {
+        Some(_value) => {
             result += &format!(
-                "\t\t\t{};\n",
-                &emit_write_u32_aligned("(ulong)(dst+counter)", "(ulong)(mem_start_dst)",
+                "\t\t\t\t{};\n",
+                &emit_write_u64_aligned("(ulong)(dst+counter)", "(ulong)(mem_start_dst)",
                         &"fillval",
                         "warp_id"),
             );
+
         },
         _    => {
             result += &format!(
-                "\t\t\t{};\n",
-                &emit_write_u32_aligned("(ulong)(dst+counter)", "(ulong)(mem_start_dst)",
-                        &emit_read_u32_aligned("(ulong)(src+counter)", "(ulong)(mem_start_src)", "warp_id"),
+                "\t\t\t\t{};\n",
+                &emit_write_u64_aligned("(ulong)(dst+counter)", "(ulong)(mem_start_dst)",
+                        &emit_read_u64_aligned("(ulong)(src+counter)", "(ulong)(mem_start_src)", "warp_id"),
                         "warp_id"),
             );
         }
     };
 
+    result += &format!("\t\t\t{}\n", "}");
     result += &format!("\t\t{}\n", "}");
     result += &format!("\t{}\n", "}");
  
