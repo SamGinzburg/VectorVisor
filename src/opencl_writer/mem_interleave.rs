@@ -1396,7 +1396,7 @@ pub fn generate_bulkmem(fill: Option<String>) -> String {
 
     result += &format!(
         "\t\t\t{}\n",
-        "for (uint unroll = 0; unroll < 32; unroll++=8) {"
+        "for (uint unroll = 0; unroll < 32; unroll+=8) {"
     );
 
     match fill.clone() {
