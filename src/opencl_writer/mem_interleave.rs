@@ -1378,25 +1378,25 @@ pub fn generate_bulkmem(fill: Option<String>) -> String {
 	None => {
     	    result += &format!(
         	"\t{}\n",
-        	"if (buf_len_bytes > 32 && IS_ALIGNED_POW2((ulong)src, 8) && IS_ALIGNED_POW2((ulong)dst, 8)) {"
+        	"if (buf_len_bytes > 64 && IS_ALIGNED_POW2((ulong)src, 8) && IS_ALIGNED_POW2((ulong)dst, 8)) {"
     	    );
 	},
 	_ => {
     	    result += &format!(
         	"\t{}\n",
-        	"if (buf_len_bytes > 32 && IS_ALIGNED_POW2((ulong)dst, 8)) {"
+        	"if (buf_len_bytes > 64 && IS_ALIGNED_POW2((ulong)dst, 8)) {"
     	    );
 	}
     };
 
     result += &format!(
         "\t\t{}\n",
-        "for (; counter < (buf_len_bytes-GET_POW2_OFFSET(buf_len_bytes, 8)); counter+=32) {"
+        "for (; counter < (buf_len_bytes-GET_POW2_OFFSET(buf_len_bytes, 64)); counter+=64) {"
     );
 
     result += &format!(
         "\t\t\t{}\n",
-        "for (uint unroll = 0; unroll < 32; unroll+=8) {"
+        "for (uint unroll = 0; unroll < 64; unroll+=8) {"
     );
 
     match fill.clone() {
