@@ -1396,14 +1396,14 @@ pub fn generate_bulkmem(fill: Option<String>) -> String {
 
     result += &format!(
         "\t\t\t{}\n",
-        "for (uint unroll = 0; unroll < 4; unroll++) {"
+        "for (uint unroll = 0; unroll < 32; unroll++=8) {"
     );
 
     match fill.clone() {
         Some(_value) => {
             result += &format!(
                 "\t\t\t\t{};\n",
-                &emit_write_u64_aligned("(ulong)(dst+counter)", "(ulong)(mem_start_dst)",
+                &emit_write_u64_aligned("(ulong)(dst+counter+unroll)", "(ulong)(mem_start_dst)",
                         &"fillval",
                         "warp_id"),
             );
@@ -1412,8 +1412,8 @@ pub fn generate_bulkmem(fill: Option<String>) -> String {
         _    => {
             result += &format!(
                 "\t\t\t\t{};\n",
-                &emit_write_u64_aligned("(ulong)(dst+counter)", "(ulong)(mem_start_dst)",
-                        &emit_read_u64_aligned("(ulong)(src+counter)", "(ulong)(mem_start_src)", "warp_id"),
+                &emit_write_u64_aligned("(ulong)(dst+counter+unroll)", "(ulong)(mem_start_dst)",
+                        &emit_read_u64_aligned("(ulong)(src+counter+unroll)", "(ulong)(mem_start_src)", "warp_id"),
                         "warp_id"),
             );
         }
