@@ -1391,7 +1391,7 @@ pub fn generate_bulkmem(fill: Option<String>) -> String {
 
     result += &format!(
         "\t\t{}\n",
-        "for (; counter < (buf_len_bytes-GET_POW2_OFFSET(buf_len_bytes, 8)); counter+=8) {"
+        "for (; counter < (buf_len_bytes-GET_POW2_OFFSET(buf_len_bytes, 8)); counter+=32) {"
     );
 
     result += &format!(
