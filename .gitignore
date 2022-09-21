@@ -16,6 +16,7 @@ benchmarks/pbkdf2/target/*
 benchmarks/scrypt/target/*
 benchmarks/imageblur/target/*
 benchmarks/imageblur-bmp/target/*
+benchmarks/cuda-blur/target/*
 benchmarks/imagehash/target/*
 benchmarks/imagehash-modified/target/*
 benchmarks/*/target/*
