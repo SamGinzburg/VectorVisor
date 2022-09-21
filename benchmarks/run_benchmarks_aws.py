@@ -72,7 +72,7 @@ maxloc = 2000000
 #maxloc = 20000000
 benchmark_duration = 600
 SLEEP_TIME=120
-NUM_REPEAT=5
+NUM_REPEAT=1
 
 if run_a10g:
     maxdemospace = 0
@@ -1309,10 +1309,10 @@ def run_image_blur_bench(run_bmp = False):
         print (output)
         # save output
         if not run_bmp:
-            with open(temp_dir+"cpu_bench_imageblur.txt".format(idx=idx), "w") as text_file:
+            with open(temp_dir+"cpu_bench_imageblur_{idx}.txt".format(idx=idx), "w") as text_file:
                 text_file.write(str(output))
         else:
-            with open(temp_dir+"cpu_bench_imageblur_bmp.txt", "w") as text_file:
+            with open(temp_dir+"cpu_bench_imageblur_bmp_{idx}.txt".format(idx=idx), "w") as text_file:
                 text_file.write(str(output))
         time.sleep(SLEEP_TIME)
 
@@ -1339,6 +1339,45 @@ def run_image_blur_bench(run_bmp = False):
                 text_file.write(str(output))
         time.sleep(SLEEP_TIME)
 
+    if run_bmp:
+        exe_path = "/tmp/VectorVisor/benchmarks/cuda-blur/"
+        run_cuda_command = """#!/bin/bash
+            sudo su
+            ulimit -n 65536
+            x=$(cloud-init status)
+            until [ "$x" == "status: done" ]; do
+            sleep 10
+            x=$(cloud-init status)
+            done
+
+            cd {bin_path}
+            cd kernel
+            make
+            cd ..
+            ~/.cargo/bin/cargo run --release --target x86_64-unknown-linux-gnu &> /tmp/imageblur_cuda.log &
+            """.format(bin_path=exe_path)
+
+        run_command(run_cuda_command, "run_imageblur_cuda_gpu_command", gpu_instance[0].id)
+
+        for idx in range(NUM_REPEAT): 
+            command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
+
+            time.sleep(20)
+
+            # Block until benchmark is complete
+            output = block_on_command(command_id, invoker_instance[0].id)
+            print (output)
+
+            # save output
+            if not run_bmp:
+                with open(temp_dir+"gpu_cuda_bench_imageblur_{idx}.txt".format(idx=idx), "w") as text_file:
+                    text_file.write(str(output))
+            else:
+               with open(temp_dir+"gpu_cuda_bench_imageblur_bmp_{idx}.txt".format(idx=idx), "w") as text_file:
+                    text_file.write(str(output))
+            time.sleep(SLEEP_TIME)
+
+    cleanup()
 
 def run_nlp_count_bench():
     if run_a10g:
@@ -1724,9 +1763,11 @@ if run_only_membench and skip_membench is None:
 
 
 # run image hash bench
-run_image_hash_bench(run_modified = False)
+
+run_image_blur_bench(run_bmp = True)
 
 cleanup()
+
 
 """
 
