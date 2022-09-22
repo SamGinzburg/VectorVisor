@@ -37,7 +37,11 @@ impl WasmtimeRunner {
     ) -> Result<(), Box<dyn Error>> {
         let curr_time = Arc::new(Mutex::<i64>::new(0));
 
-        let store = Store::default();
+        let mut config = Config::new();
+        config.wasm_simd(true).wasm_bulk_memory(true);
+
+        let engine = Engine::new(&config);
+        let store = Store::new(&engine);
 
         let curr_time_invoke = curr_time.clone();
         let curr_time_response = curr_time.clone();
