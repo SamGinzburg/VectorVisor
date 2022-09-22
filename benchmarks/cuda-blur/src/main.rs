@@ -290,7 +290,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let warp_recvs = warp::any().map(move || Arc::clone(&server_recvs));
 
     let active = warp::path!("is_active").map(|| {
-        format!("{}", "true")
+        format!("{}", true)
     });
 
     let terminate = warp::path!("terminate").map(|| {
@@ -306,7 +306,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         .and(warp_recvs)
                         .and_then(response);
 
-    let server_ip = "127.0.0.1";
+    let server_ip = "0.0.0.0";
     let server_port = 8000;
     let socket: SocketAddr = format!("{}:{}", server_ip, server_port).parse().unwrap();
 

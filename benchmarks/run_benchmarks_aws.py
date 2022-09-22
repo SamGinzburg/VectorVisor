@@ -188,7 +188,7 @@ else:
      - git clone https://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:x-oauth-basic@github.com/SamGinzburg/VectorVisor.git
      - wget https://github.com/WebAssembly/binaryen/releases/download/version_109/binaryen-version_109-x86_64-linux.tar.gz
      - tar -xzvf binaryen-version_109-x86_64-linux.tar.gz
-     - cargo install wasm-snip
+     - cargo install --git https://github.com/SamGinzburg/wasm-snip.git
      - cd /tmp/VectorVisor/
      - sudo ~/.cargo/bin/cargo build --release
      - cd benchmarks/
@@ -1277,7 +1277,6 @@ def run_image_blur_bench(run_bmp = False):
                 text_file.write(str(output))
         time.sleep(SLEEP_TIME)
 
-
     run_invoker_wasmtime = """#!/bin/bash
     sudo su
     ulimit -n 65536
@@ -1298,7 +1297,7 @@ def run_image_blur_bench(run_bmp = False):
 
     /usr/local/go/bin/go run run_image_blur.go {addr} 8000 {target_rps} 1 {duration}
     """.format(addr=cpu_bench_instance[0].private_dns_name, input_size=1000, target_rps=target_rps_cpu, exe_path=exe_path, duration=benchmark_duration)
-    
+
     for idx in range(NUM_REPEAT):
         command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
 
@@ -1339,8 +1338,9 @@ def run_image_blur_bench(run_bmp = False):
                 text_file.write(str(output))
         time.sleep(SLEEP_TIME)
 
+    cleanup()
+
     if run_bmp:
-        exe_path = "/tmp/VectorVisor/benchmarks/cuda-blur/"
         run_cuda_command = """#!/bin/bash
             sudo su
             ulimit -n 65536
@@ -1355,7 +1355,28 @@ def run_image_blur_bench(run_bmp = False):
             make
             cd ..
             ~/.cargo/bin/cargo run --release --target x86_64-unknown-linux-gnu &> /tmp/imageblur_cuda.log &
-            """.format(bin_path=exe_path)
+            """.format(bin_path="/tmp/VectorVisor/benchmarks/cuda-blur/")
+            
+        run_invoker = """#!/bin/bash
+            sudo su
+            ulimit -n 65536
+            mkdir -p ~/gocache/
+            mkdir -p ~/gopath/
+            mkdir -p ~/xdg/
+            export GOCACHE=~/gocache/
+            export GOPATH=~/gopath/
+            export XDG_CACHE_HOME=~/xdg/
+
+            x=$(cloud-init status)
+            until [ "$x" == "status: done" ]; do
+            sleep 10
+            x=$(cloud-init status)
+            done
+
+            cd {exe_path}
+
+            /usr/local/go/bin/go run run_image_blur.go {addr} 8000 {target_rps} 1 {duration}
+            """.format(addr=gpu_instance[0].private_dns_name, input_size=1000, target_rps=256, exe_path=exe_path, duration=benchmark_duration)
 
         run_command(run_cuda_command, "run_imageblur_cuda_gpu_command", gpu_instance[0].id)
 
@@ -1369,12 +1390,8 @@ def run_image_blur_bench(run_bmp = False):
             print (output)
 
             # save output
-            if not run_bmp:
-                with open(temp_dir+"gpu_cuda_bench_imageblur_{idx}.txt".format(idx=idx), "w") as text_file:
-                    text_file.write(str(output))
-            else:
-               with open(temp_dir+"gpu_cuda_bench_imageblur_bmp_{idx}.txt".format(idx=idx), "w") as text_file:
-                    text_file.write(str(output))
+            with open(temp_dir+"gpu_cuda_bench_imageblur_bmp_{idx}.txt".format(idx=idx), "w") as text_file:
+                text_file.write(str(output))
             time.sleep(SLEEP_TIME)
 
     cleanup()

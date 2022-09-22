@@ -20,7 +20,7 @@ function cachebin() {
   wasm-snip ${1}.wasm --snip-rust-panicking-code -o ${1}-snip.wasm -p rust_oom __rg_oom
   wasm-opt ${1}-snip.wasm -O1 -g -c -o ${1}-opt.wasm
   cp ${1}-opt.wasm a10g_${1}-opt.wasm
-  cargo run --release -- -i $1-opt.wasm --heap=$2 --stack=$3 --hcallsize=$4 --vmcount=$5 --partition=false --maxdup=0 --jt=true --interleave=4
+  cargo run --release -- -i $1-opt.wasm --heap=$2 --stack=$3 --hcallsize=$4 --vmcount=$5 --partition=false --maxdup=0 --jt=true --interleave=8
   #cargo run --release -- -i a10g_$1-opt.wasm --heap=$2 --stack=$3 --hcallsize=$4 --vmcount=$6 --partition=false --maxdup=0 --jt=true --interleave=4
 }
 
