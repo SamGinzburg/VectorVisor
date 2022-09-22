@@ -1232,7 +1232,7 @@ def run_image_blur_bench(run_bmp = False):
     /tmp/VectorVisor/target/release/vectorvisor --input {bin_path} --ip=0.0.0.0 --heap=4194304 --stack=262144 --hcallsize=409600 --partition=true --serverless=true --vmcount={vmcount} --vmgroups=1 --maxdup=2 --disablefastcalls=false --partitions={maxfuncs} --maxloc={maxloc} --lgroup={lgroup} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} &> /tmp/imageblur.log &
     """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, bin_path=bin_path, maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount)
 
-    run_command(run_image_command, "run_imageblur_gpu_command", gpu_instance[0].id)
+    #run_command(run_image_command, "run_imageblur_gpu_command", gpu_instance[0].id)
 
     # Now set up the invoker
     if not run_latency_breakdown:
@@ -1259,6 +1259,7 @@ def run_image_blur_bench(run_bmp = False):
     /usr/local/go/bin/go run run_image_blur.go {addr} 8000 {target_rps} 1 {duration}
     """.format(addr=gpu_instance[0].private_dns_name, input_size=1000, target_rps=vmcount, exe_path=exe_path, duration=benchmark_duration)
 
+    """
     for idx in range(NUM_REPEAT):
         command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
 
@@ -1276,6 +1277,7 @@ def run_image_blur_bench(run_bmp = False):
             with open(temp_dir+"gpu_bench_imageblur_bmp_{idx}.txt".format(idx=idx), "w") as text_file:
                 text_file.write(str(output))
         time.sleep(SLEEP_TIME)
+    """
 
     run_invoker_wasmtime = """#!/bin/bash
     sudo su
@@ -1297,7 +1299,7 @@ def run_image_blur_bench(run_bmp = False):
 
     /usr/local/go/bin/go run run_image_blur.go {addr} 8000 {target_rps} 1 {duration}
     """.format(addr=cpu_bench_instance[0].private_dns_name, input_size=1000, target_rps=target_rps_cpu, exe_path=exe_path, duration=benchmark_duration)
-
+    """
     for idx in range(NUM_REPEAT):
         command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
 
@@ -1314,11 +1316,11 @@ def run_image_blur_bench(run_bmp = False):
             with open(temp_dir+"cpu_bench_imageblur_bmp_{idx}.txt".format(idx=idx), "w") as text_file:
                 text_file.write(str(output))
         time.sleep(SLEEP_TIME)
-
+    """
 
 
     cleanup()
-
+    """
     for idx in range(NUM_REPEAT):
         run_command(run_image_command_x86, "run_imageblur_command_x86", cpu_bench_instance[0].id)
 
@@ -1337,7 +1339,7 @@ def run_image_blur_bench(run_bmp = False):
             with open(temp_dir+"cpu_x86_bench_imageblur_bmp_{idx}.txt".format(idx=idx), "w") as text_file:
                 text_file.write(str(output))
         time.sleep(SLEEP_TIME)
-
+    """
     cleanup()
 
     if run_bmp:
