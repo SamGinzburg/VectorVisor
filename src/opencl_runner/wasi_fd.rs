@@ -12,6 +12,7 @@ use wasi_common::snapshots::preview_1::types::CiovecArray;
 use wasi_common::snapshots::preview_1::types::Fd;
 use wasi_common::snapshots::preview_1::types::Prestat;
 use wasi_common::snapshots::preview_1::types::UserErrorConversion;
+use wiggle::wasmtime::WasmtimeGuestMemory;
 
 //use wasi_common::wasi::types::UserErrorConversion;
 
@@ -28,9 +29,9 @@ use std::convert::TryInto;
 pub struct WasiFd {}
 
 impl WasiFd {
-    pub fn hypercall_fd_write(
-        ctx: &WasiCtx,
-        vm_ctx: &VectorizedVM,
+    #[tokio::main]
+    pub async fn hypercall_fd_write(
+        vm_ctx: &mut VectorizedVM,
         hypercall: &mut HyperCall,
         sender: &Sender<HyperCallResult>,
     ) -> () {
@@ -40,12 +41,11 @@ impl WasiFd {
             .unwrap();
 
         let memory = &vm_ctx.memory;
-        let wasm_mem = &vm_ctx.wasm_memory;
 
         let fd: u32;
         let num_iovecs: u32;
         let mut bytes_to_copy: u32 = 0;
-        let raw_mem: &mut [u8] = unsafe { memory.data_unchecked_mut() };
+        let raw_mem: &mut [u8] = memory.data_mut(&mut vm_ctx.store);
         let vm_idx = vm_ctx.vm_id;
 
         // copy the hypercall buffer over to the memory object
@@ -113,17 +113,18 @@ impl WasiFd {
         //dbg!(&raw_mem[0..64]);
 
         // we hardcode the ciovec array to start at offset 0
+        let wasm_mem = WasmtimeGuestMemory::new(raw_mem);
         let ciovec_ptr: &CiovecArray = &GuestPtr::new(&wasm_mem, (0 as u32, num_iovecs as u32));
-        let result = ctx.fd_write(Fd::from(fd), &ciovec_ptr);
+        let result = vm_ctx.ctx.fd_write(Fd::from(fd), &ciovec_ptr).await;
 
         sender
-            .send({ HyperCallResult::new(result.unwrap() as i32, vm_idx, WasiSyscalls::FdWrite) })
+            .send(HyperCallResult::new(result.unwrap() as i32, vm_idx, WasiSyscalls::FdWrite))
             .unwrap();
     }
 
-    pub fn hypercall_fd_prestat_get(
-        ctx: &WasiCtx,
-        vm_ctx: &VectorizedVM,
+    #[tokio::main]
+    pub async fn hypercall_fd_prestat_get(
+        vm_ctx: &mut VectorizedVM,
         hypercall: &mut HyperCall,
         sender: &Sender<HyperCallResult>,
     ) -> () {
@@ -132,9 +133,6 @@ impl WasiFd {
             .try_into()
             .unwrap();
         let vm_idx = vm_ctx.vm_id;
-
-        //let memory = &vm_ctx.memory;
-        //let wasm_mem = &vm_ctx.wasm_memory;
 
         let fd: u32;
 
@@ -155,9 +153,9 @@ impl WasiFd {
             fd = LittleEndian::read_u32(&hcall_buf[0..4]);
         }
 
-        let result = match ctx.fd_prestat_get(Fd::from(fd)) {
+        let result = match vm_ctx.ctx.fd_prestat_get(Fd::from(fd)).await {
             Ok(Prestat::Dir(_prestat_dir)) => 0,
-            Err(e) => UserErrorConversion::errno_from_error(ctx, e).unwrap() as u32,
+            Err(e) => vm_ctx.ctx.errno_from_error(e).unwrap() as u32,
         };
 
         if hypercall.is_interleaved_mem > 0 {
@@ -174,12 +172,13 @@ impl WasiFd {
         }
 
         sender
-            .send({ HyperCallResult::new(result as i32, vm_idx, WasiSyscalls::FdPrestatGet) })
+            .send(HyperCallResult::new(result as i32, vm_idx, WasiSyscalls::FdPrestatGet))
             .unwrap();
     }
-    pub fn hypercall_fd_prestat_dir_name(
-        ctx: &WasiCtx,
-        vm_ctx: &VectorizedVM,
+
+    #[tokio::main]
+    pub async fn hypercall_fd_prestat_dir_name(
+        vm_ctx: &mut VectorizedVM,
         hypercall: &mut HyperCall,
         sender: &Sender<HyperCallResult>,
     ) -> () {
@@ -188,14 +187,12 @@ impl WasiFd {
             .try_into()
             .unwrap();
 
-        //let memory = &vm_ctx.memory;
-        let wasm_mem = &vm_ctx.wasm_memory;
+        let raw_mem: &mut [u8] = vm_ctx.memory.data_mut(&mut vm_ctx.store);
         let vm_idx = vm_ctx.vm_id;
 
         let fd: u32;
         let str_len: u32;
 
-        //let _raw_mem: &mut [u8] = unsafe { memory.data_unchecked_mut() };
         if hypercall.is_interleaved_mem > 0 {
             fd = Interleave::read_u32(
                 hcall_buf,
@@ -220,10 +217,11 @@ impl WasiFd {
             str_len = LittleEndian::read_u32(&hcall_buf[4..8]);
         }
 
+        let wasm_mem = WasmtimeGuestMemory::new(raw_mem);
         let str_ptr = &GuestPtr::new(&wasm_mem, 8);
-        let result = match ctx.fd_prestat_dir_name(Fd::from(fd), str_ptr, str_len) {
+        let result = match vm_ctx.ctx.fd_prestat_dir_name(Fd::from(fd), str_ptr, str_len).await {
             Ok(()) => 0,
-            Err(e) => UserErrorConversion::errno_from_error(ctx, e).unwrap() as u32,
+            Err(e) => vm_ctx.ctx.errno_from_error(e).unwrap() as u32,
         };
 
         let mut index = 0;
@@ -247,7 +245,7 @@ impl WasiFd {
         }
 
         sender
-            .send({ HyperCallResult::new(result as i32, vm_idx, WasiSyscalls::FdPrestatDirName) })
+            .send(HyperCallResult::new(result as i32, vm_idx, WasiSyscalls::FdPrestatDirName))
             .unwrap();
     }
 }

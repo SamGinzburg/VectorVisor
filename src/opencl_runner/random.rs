@@ -6,7 +6,7 @@ use crate::opencl_runner::vectorized_vm::HyperCallResult;
 use crate::opencl_runner::vectorized_vm::VectorizedVM;
 use crate::opencl_runner::vectorized_vm::WasiSyscalls;
 use wasi_common::snapshots::preview_1::wasi_snapshot_preview1::WasiSnapshotPreview1;
-
+use wiggle::wasmtime::WasmtimeGuestMemory;
 use wiggle::GuestPtr;
 
 use byteorder::ByteOrder;
@@ -19,33 +19,33 @@ use std::convert::TryInto;
 pub struct Random {}
 
 impl Random {
-    pub fn hypercall_random_get(
-        ctx: &WasiCtx,
-        vm_ctx: &VectorizedVM,
+    #[tokio::main]
+    pub async fn hypercall_random_get(
+        vm_ctx: &mut VectorizedVM,
         hypercall: &mut HyperCall,
         sender: &Sender<HyperCallResult>,
     ) -> () {
         let mut hcall_buf: &mut [u8] = unsafe { *hypercall.hypercall_buffer.buf.get() };
         let hcall_buf_size: u32 = vm_ctx.hcall_buf_size;
 
-        let memory = &vm_ctx.memory;
-        let wasm_mem = &vm_ctx.wasm_memory;
         let vm_idx = vm_ctx.vm_id;
-        let raw_mem: &mut [u8] = unsafe { memory.data_unchecked_mut() };
+        let raw_mem: &mut [u8] = vm_ctx.memory.data_mut(&mut vm_ctx.store);
 
         // If the VM is masked off, don't try to run the syscall
         hcall_buf = &mut hcall_buf
             [(vm_idx * hcall_buf_size) as usize..((vm_idx + 1) * hcall_buf_size) as usize];
         let random_len = LittleEndian::read_u32(&hcall_buf[0..4]);
+
+        let wasm_mem = WasmtimeGuestMemory::new(raw_mem);
         let buf = &GuestPtr::new(&wasm_mem, 0);
-        let _result = ctx.random_get(buf, random_len).unwrap();
+        let _result = vm_ctx.ctx.random_get(buf, random_len).await.unwrap();
 
         // now copy the random data back to the hcall_buffer
         hcall_buf[0..(random_len as usize)]
             .clone_from_slice(&raw_mem[0..(random_len as usize)]);
 
         sender
-            .send({ HyperCallResult::new(0, vm_idx, WasiSyscalls::RandomGet) })
+            .send(HyperCallResult::new(0, vm_idx, WasiSyscalls::RandomGet))
             .unwrap();
     }
 }

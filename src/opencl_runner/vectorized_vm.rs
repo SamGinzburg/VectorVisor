@@ -4,7 +4,7 @@ use wasi_common::WasiCtx;
 use cap_std::fs::Dir as CapDir;
 use std::fmt;
 use wasmtime::*;
-use wasmtime_wiggle::WasmtimeGuestMemory;
+use wiggle::wasmtime::WasmtimeGuestMemory;
 
 use crate::opencl_runner::OpenCLBuffers;
 
@@ -145,11 +145,10 @@ pub type VmRecvType = (bytes::Bytes, usize, String);
 
 pub struct VectorizedVM {
     // each VM has its own WASI state tracking object
-    ctx: WasiCtx,
+    pub ctx: WasiCtx,
     _engine: Engine,
-    _store: Store,
+    pub store: Store<u8>,
     pub memory: Memory,
-    pub wasm_memory: WasmtimeGuestMemory,
     pub enviroment_size: Option<u32>,
     pub environment_str_size: Option<u32>,
     pub vm_id: u32,
@@ -178,7 +177,7 @@ impl VectorizedVM {
         // default context with no args yet - we can inherit arguments from the CLI if we want
         // or we can pass them in some other config file
 
-        let opendir = unsafe { CapDir::from_std_file(File::open(".").unwrap()) };
+        let opendir = unsafe { wasi_cap_std_sync::Dir::from_std_file(File::open(".").unwrap()) };
 
         let wasi_ctx = WasiCtxBuilder::new()
             .inherit_args()
@@ -190,11 +189,10 @@ impl VectorizedVM {
             // TODO: pass this via CLI somehow
             .preopened_dir(opendir, Path::new("."))
             .unwrap()
-            .build()
-            .unwrap();
+            .build();
 
         let engine = Engine::default();
-        let store = Store::new(&engine);
+        let mut store = Store::new(&engine, 0u8);
 
         let num_vm_pages = if hcall_buf_size >= (1024 * 64) {
             hcall_buf_size / (1024 * 64)
@@ -202,19 +200,15 @@ impl VectorizedVM {
             1
         };
 
-        let memory_ty = MemoryType::new(Limits::new(num_vm_pages, None));
-        let memory = Memory::new(&store, memory_ty);
+        let memory_ty = MemoryType::new(num_vm_pages, None);
+        let memory = Memory::new(&mut store, memory_ty).unwrap();
+        //let raw_mem: &mut [u8] = memory.data_mut(&mut store);
 
         VectorizedVM {
             ctx: wasi_ctx,
             _engine: engine,
-            _store: store,
-            /*
-             * Memories are internally reference counted so you can clone a Memory. The cloning process only performs a shallow clone, so two cloned Memory instances are equivalent in their functionality.
-             * See: https://docs.wasmtime.dev/api/wasmtime/struct.Memory.html
-             */
+            store: store,
             memory: memory.clone(),
-            wasm_memory: WasmtimeGuestMemory::new(memory),
             enviroment_size: None,
             environment_str_size: None,
             vm_id: vm_id,
@@ -260,25 +254,25 @@ impl VectorizedVM {
     ) -> () {
         match hypercall.syscall {
             WasiSyscalls::FdWrite => {
-                WasiFd::hypercall_fd_write(&self.ctx, self, hypercall, sender);
+                WasiFd::hypercall_fd_write(self, hypercall, sender);
             }
             // ProcExit is special cased, since we want to manually mask off those VMs
             WasiSyscalls::ProcExit => {
                 sender
-                    .send({ HyperCallResult::new(0, hypercall.vm_id, WasiSyscalls::ProcExit) })
+                    .send(HyperCallResult::new(0, hypercall.vm_id, WasiSyscalls::ProcExit))
                     .unwrap();
             }
             WasiSyscalls::EnvironSizeGet => {
-                Environment::hypercall_environ_sizes_get(&self.ctx, self, hypercall, sender);
+                Environment::hypercall_environ_sizes_get(self, hypercall, sender);
             }
             WasiSyscalls::EnvironGet => {
-                Environment::hypercall_environ_get(&self.ctx, self, hypercall, sender);
+                Environment::hypercall_environ_get(self, hypercall, sender);
             }
             WasiSyscalls::FdPrestatGet => {
-                WasiFd::hypercall_fd_prestat_get(&self.ctx, self, hypercall, sender);
+                WasiFd::hypercall_fd_prestat_get(self, hypercall, sender);
             }
             WasiSyscalls::FdPrestatDirName => {
-                WasiFd::hypercall_fd_prestat_dir_name(&self.ctx, self, hypercall, sender);
+                WasiFd::hypercall_fd_prestat_dir_name(self, hypercall, sender);
             }
             WasiSyscalls::ServerlessInvoke => {
                 Serverless::hypercall_serverless_invoke(self, hypercall, sender);
@@ -288,10 +282,10 @@ impl VectorizedVM {
                 self.ready_for_input.store(true, Ordering::Relaxed);
             }
             WasiSyscalls::RandomGet => {
-                Random::hypercall_random_get(&self.ctx, self, hypercall, sender);
+                Random::hypercall_random_get(self, hypercall, sender);
             }
             WasiSyscalls::ClockTimeGet => {
-                Clock::hypercall_clock_time_get(&self.ctx, self, hypercall, sender);
+                Clock::hypercall_clock_time_get(self, hypercall, sender);
             }
             /*
             _ => {
