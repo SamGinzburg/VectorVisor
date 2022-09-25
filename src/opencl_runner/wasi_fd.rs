@@ -48,69 +48,32 @@ impl WasiFd {
         let raw_mem: &mut [u8] = memory.data_mut(&mut vm_ctx.store);
         let vm_idx = vm_ctx.vm_id;
 
-        // copy the hypercall buffer over to the memory object
-        if hypercall.is_interleaved_mem > 0 {
-            fd = Interleave::read_u32(
-                hcall_buf,
-                0,
-                hypercall.num_total_vms,
-                vm_idx,
-                hypercall.is_interleaved_mem,
-            );
-            num_iovecs = Interleave::read_u32(
-                hcall_buf,
-                8,
-                hypercall.num_total_vms,
-                vm_idx,
-                hypercall.is_interleaved_mem,
-            );
-            // for each iovec, read the buf_len to determine how many bytes to actually copy over
-            for idx in 0..num_iovecs {
-                bytes_to_copy += Interleave::read_u32(
-                    hcall_buf,
-                    16 + 8 * idx + 4,
-                    hypercall.num_total_vms,
-                    vm_idx,
-                    hypercall.is_interleaved_mem,
-                );
-            }
+        // set the buffer to the scratch space for the appropriate VM
+        // we don't have to do this for the interleave
+        hcall_buf = &hcall_buf
+            [(vm_idx * hcall_buf_size) as usize..((vm_idx + 1) * hcall_buf_size) as usize];
+        fd = LittleEndian::read_u32(&hcall_buf[0..4]);
+        num_iovecs = LittleEndian::read_u32(&hcall_buf[8..12]);
 
-            // the amount of bytes to copy is the sum of all buf_lens + size of the iovec_arr
-            // we account for the 16 byte header too
-            bytes_to_copy += 8 * num_iovecs;
-            for idx in 16..(16 + bytes_to_copy) as usize {
-                raw_mem[idx - 16] = Interleave::read_u8(
-                    hcall_buf,
-                    idx as u32,
-                    hypercall.num_total_vms,
-                    vm_idx,
-                    hypercall.is_interleaved_mem,
-                );
-            }
-        } else {
-            // set the buffer to the scratch space for the appropriate VM
-            // we don't have to do this for the interleave
-            hcall_buf = &hcall_buf
-                [(vm_idx * hcall_buf_size) as usize..((vm_idx + 1) * hcall_buf_size) as usize];
-            fd = LittleEndian::read_u32(&hcall_buf[0..4]);
-            num_iovecs = LittleEndian::read_u32(&hcall_buf[8..12]);
-
-            // for each iovec, read the buf_len to determine how many bytes to actually copy over
-            for idx in 0..num_iovecs {
-                let offset: usize = (16 + 8 * idx + 4) as usize;
-                bytes_to_copy += LittleEndian::read_u32(&hcall_buf[offset..offset + 4]);
-            }
-
-            // the amount of bytes to copy is the sum of all buf_lens + size of the iovec_arr
-            // we account for the 16 byte header too
-            bytes_to_copy += 8 * num_iovecs;
-
-            for idx in 16..(16 + bytes_to_copy) as usize {
-                raw_mem[idx - 16] = hcall_buf[idx];
-            }
+        // for each iovec, read the buf_len to determine how many bytes to actually copy over
+        for idx in 0..num_iovecs {
+            let offset: usize = (16 + 8 * idx + 4) as usize;
+            bytes_to_copy += LittleEndian::read_u32(&hcall_buf[offset..offset + 4]);
         }
 
-        //dbg!(&raw_mem[0..64]);
+        // the amount of bytes to copy is the sum of all buf_lens + size of the iovec_arr
+        // we account for the 16 byte header too
+        bytes_to_copy += 8 * num_iovecs;
+
+        for idx in 16..(16 + bytes_to_copy) as usize {
+            raw_mem[idx - 16] = hcall_buf[idx];
+        }
+
+        //dbg!(&fd);
+        //dbg!(&num_iovecs);
+        //dbg!(&bytes_to_copy);
+        //dbg!(&raw_mem[0..(bytes_to_copy as usize)]);
+        //dbg!(&hcall_buf[16..(16 + bytes_to_copy as usize)]);
 
         // we hardcode the ciovec array to start at offset 0
         let wasm_mem = WasmtimeGuestMemory::new(raw_mem);

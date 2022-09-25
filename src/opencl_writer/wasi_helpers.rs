@@ -48,7 +48,7 @@ pub fn emit_hypercall_helpers(
 pub fn emit_fd_write_helpers(_writer: &opencl_writer::OpenCLCWriter, _debug: bool) -> String {
     let mut result = String::from("");
 
-    result += &String::from("\nvoid fd_write_helper(global uint *stack_u32, global uint* heap_u32, global uint *hypercall_buffer, global ulong *sp, uint warp_idx, uint thread_idx, uint read_idx, local uchar *scratch_space, uint fd_write_buf_len, uint iovec_count, uint iovec, uint fd) {\n");
+    result += &String::from("\nvoid fd_write_helper(global uint *stack_u32, global uint* heap_u32, global uint *hypercall_buffer, global ulong *sp, uint warp_idx, uint thread_idx, uint read_idx, local uchar *scratch_space, uint fd_write_buf_len, uint iovec_count, uint iovec, uint fd, uint hcall_size) {\n");
 
     // first, copy all of the iovecs over to the hypercall_buffer
     // the number of iovecs and the iovec array ptr is on the stack
@@ -58,42 +58,18 @@ pub fn emit_fd_write_helpers(_writer: &opencl_writer::OpenCLCWriter, _debug: boo
     /*
      * Copy the stack over to the first 16 bytes of the hypercall_buffer (4, 4 byte values)
      */
-    result += &format!(
-        "\t{};\n",
-        &emit_write_u32(
-            "(ulong)(hypercall_buffer)",
-            "(ulong)(hypercall_buffer)",
-            "fd",
-            "warp_idx"
-        )
-    );
-    result += &format!(
-        "\t{};\n",
-        &emit_write_u32(
-            "(ulong)(hypercall_buffer+1)",
-            "(ulong)(hypercall_buffer)",
-            "iovec",
-            "warp_idx"
-        )
-    );
-    result += &format!(
-        "\t{};\n",
-        &emit_write_u32(
-            "(ulong)(hypercall_buffer+2)",
-            "(ulong)(hypercall_buffer)",
-            "iovec_count",
-            "warp_idx"
-        )
-    );
-    result += &format!(
-        "\t{};\n",
-        &emit_write_u32(
-            "(ulong)(hypercall_buffer+3)",
-            "(ulong)(hypercall_buffer)",
-            "fd_write_buf_len",
-            "warp_idx"
-        )
-    );
+
+    result += &format!("\t*({}) = fd;\n",
+                       "(global uint*)((global char*)hypercall_buffer+(hcall_size*warp_idx))");
+
+    result += &format!("\t*({}) = iovec;\n",
+                       "(global uint*)((global char*)hypercall_buffer+(hcall_size*warp_idx)+4)");
+
+    result += &format!("\t*({}) = iovec_count;\n",
+                       "(global uint*)((global char*)hypercall_buffer+(hcall_size*warp_idx)+8)");
+
+    result += &format!("\t*({}) = fd_write_buf_len;\n",
+                       "(global uint*)((global char*)hypercall_buffer+(hcall_size*warp_idx)+12)");
 
     result += &format!("\tuint iovec_offset = {};\n", "iovec");
 
@@ -130,36 +106,20 @@ pub fn emit_fd_write_helpers(_writer: &opencl_writer::OpenCLCWriter, _debug: boo
     );
 
     // write the iovec to the hypercall_buffer
-    result += &format!(
-        "\t{};\n",
-        emit_write_u32(
-            "(ulong)((global char*)hypercall_buffer + iovec_hypercall_offset)",
-            "(ulong)(hypercall_buffer)",
-            "next_buffer_start",
-            "warp_idx"
-        )
-    );
 
-    result += &format!(
-        "\t{};\n",
-        emit_write_u32(
-            "(ulong)((global char*)hypercall_buffer + iovec_hypercall_offset+4)",
-            "(ulong)(hypercall_buffer)",
-            "buf_len",
-            "warp_idx"
-        )
-    );
+    result += &format!("\t*({}) = next_buffer_start;\n",
+                       "(global uint*)((global char*)hypercall_buffer+(hcall_size*warp_idx)+iovec_hypercall_offset)");
 
-    result += &format!(
-        "\t{};\n",
-        "___private_memcpy((ulong)((global char*)heap_u32+buf_ptr),
-                            (ulong)(heap_u32),
-                            (ulong)((global char*)hypercall_buffer+next_buffer_start+16),
-                            (ulong)(hypercall_buffer),
-                            buf_len,
-                            warp_idx,
-                            read_idx)"
-    );
+    result += &format!("\t*({}) = buf_len;\n",
+                       "(global uint*)((global char*)hypercall_buffer+(hcall_size*warp_idx)+iovec_hypercall_offset+4)");
+
+    result += &format!("\t___private_memcpy_gpu2cpu((ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), warp_idx, read_idx, thread_idx, scratch_space);\n",
+                       &format!("(global char *)heap_u32+buf_ptr"),
+                       "heap_u32", // mem_start_src
+                       "(ulong)((global char *)hypercall_buffer+(hcall_size*warp_idx)+next_buffer_start+16)", //dst, first 4 bytes are the len
+                       "hypercall_buffer", // mem_start_dst
+                       "buf_len"); // the length of the buffer
+
 
     // update next_buffer_start
     result += &format!("\tnext_buffer_start += buf_len;\n");
@@ -191,7 +151,7 @@ pub fn emit_fd_write_call_helper(
     format!(
         "\t{}\n",
         format!(
-            "fd_write_helper({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {});",
+            "fd_write_helper({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {});",
             "stack_u32",
             "heap_u32",
             "hypercall_buffer",
@@ -203,7 +163,8 @@ pub fn emit_fd_write_call_helper(
             buf_len,
             iovec_count,
             iovec_ptr,
-            fd
+            fd,
+            "hcall_size",
         )
     )
 }
