@@ -177,7 +177,7 @@ impl VectorizedVM {
         // default context with no args yet - we can inherit arguments from the CLI if we want
         // or we can pass them in some other config file
 
-        let opendir = unsafe { wasi_cap_std_sync::Dir::from_std_file(File::open(".").unwrap()) };
+        let opendir = wasi_cap_std_sync::Dir::from_std_file(File::open(".").unwrap());
 
         let wasi_ctx = WasiCtxBuilder::new()
             .inherit_args()

@@ -32,32 +32,13 @@ impl Environment {
             Ok(tuple) => {
                 // now that we have retreived the sizes
                 // now we copy the result to the hcall buf
-                if hypercall.is_interleaved_mem > 0 {
-                    Interleave::write_u32(
-                        hcall_buf,
-                        0,
-                        hypercall.num_total_vms,
-                        tuple.0,
-                        vm_idx,
-                        hypercall.is_interleaved_mem,
-                    );
-                    Interleave::write_u32(
-                        hcall_buf,
-                        4,
-                        hypercall.num_total_vms,
-                        tuple.1,
-                        vm_idx,
-                        hypercall.is_interleaved_mem,
-                    );
-                } else {
-                    let hcall_buf_size: u32 = (hcall_buf.len() / hypercall.num_total_vms as usize)
-                        .try_into()
-                        .unwrap();
-                    hcall_buf = &mut hcall_buf[(vm_idx * hcall_buf_size) as usize
-                        ..((vm_idx + 1) * hcall_buf_size) as usize];
-                    LittleEndian::write_u32(&mut hcall_buf[0..4], tuple.0);
-                    LittleEndian::write_u32(&mut hcall_buf[4..8], tuple.1);
-                }
+                let hcall_buf_size: u32 = (hcall_buf.len() / hypercall.num_total_vms as usize)
+                    .try_into()
+                    .unwrap();
+                hcall_buf = &mut hcall_buf[(vm_idx * hcall_buf_size) as usize
+                    ..((vm_idx + 1) * hcall_buf_size) as usize];
+                LittleEndian::write_u32(&mut hcall_buf[0..4], tuple.0);
+                LittleEndian::write_u32(&mut hcall_buf[4..8], tuple.1);
                 0
             }
             Err(e) => vm_ctx.ctx.errno_from_error(e).unwrap() as i32,
@@ -101,41 +82,13 @@ impl Environment {
         //println!("{:?}", &arr);
 
         // copy the results back to the hcall_buf
-        if hypercall.is_interleaved_mem > 0 {
-            Interleave::write_u32(
-                &mut hcall_buf,
-                0,
-                hypercall.num_total_vms,
-                num_env_vars,
-                vm_idx,
-                hypercall.is_interleaved_mem,
-            );
-            Interleave::write_u32(
-                &mut hcall_buf,
-                4,
-                hypercall.num_total_vms,
-                env_str_size,
-                vm_idx,
-                hypercall.is_interleaved_mem,
-            );
-            for idx in 8..(num_env_vars * 4 + env_str_size) {
-                Interleave::write_u8(
-                    &mut hcall_buf,
-                    idx,
-                    hypercall.num_total_vms,
-                    raw_mem[idx as usize],
-                    vm_idx,
-                    hypercall.is_interleaved_mem,
-                );
-            }
-        } else {
-            hcall_buf = &mut hcall_buf
-                [(vm_idx * hcall_buf_size) as usize..((vm_idx + 1) * hcall_buf_size) as usize];
-            LittleEndian::write_u32(&mut hcall_buf[0..4], num_env_vars);
-            LittleEndian::write_u32(&mut hcall_buf[4..8], env_str_size);
-            for idx in 8..(num_env_vars * 4 + env_str_size) {
-                hcall_buf[idx as usize] = raw_mem[idx as usize];
-            }
+
+        hcall_buf = &mut hcall_buf
+            [(vm_idx * hcall_buf_size) as usize..((vm_idx + 1) * hcall_buf_size) as usize];
+        LittleEndian::write_u32(&mut hcall_buf[0..4], num_env_vars);
+        LittleEndian::write_u32(&mut hcall_buf[4..8], env_str_size);
+        for idx in 8..(num_env_vars * 4 + env_str_size) {
+            hcall_buf[idx as usize] = raw_mem[idx as usize];
         }
 
         //dbg!(&mut hcall_buf[0..16]);

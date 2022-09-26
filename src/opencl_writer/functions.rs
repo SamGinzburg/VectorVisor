@@ -599,7 +599,7 @@ pub fn function_unwind(
     _debug: bool,
 ) -> String {
     let mut final_str = String::from("");
-    let results: Vec<ValType> = match func_ret_info {
+    let mut results: Vec<ValType> = match func_ret_info {
         Some(s) => (*s.results).to_vec(),
         None => {
             vec![]
@@ -622,19 +622,40 @@ pub fn function_unwind(
         Some(_) => {
             for parameter in func_type_signature.clone().inline.unwrap().params.to_vec() {
                 match parameter {
-                    (_, _, t) => {
+                    (_, _, _t) => {
                         parameter_offset += 2;
                     }
                 }
             }
-        }
+        },
         // if we cannot find the type signature, no-op
         // this seems to only come up in cases where there are no parameters
         None => {
-            //dbg!("Unable to find type signature for parameters in func_unwind: fn_name: {:?}", &fn_name);
-            ()
+            // Try to find a type index
+            let type_index = match func_type_signature.index {
+                Some(Num(n, _)) => format!("t{}", n),
+                Some(Id(i)) => i.name().to_string(),
+                _ => panic!("Unable to find type index in func_unwind: fn_name: {:?}", &fn_name),
+            };
+        
+            let func_type = match writer.types.get(&type_index).unwrap() {
+                TypeDef::Func(ft) => ft,
+                _ => panic!("Indirect call cannot have a type of something other than a func"),
+            };
+
+            for parameter in func_type.params.to_vec() {
+                match parameter {
+                    (_, _, _t) => {
+                        parameter_offset += 2;
+                    }
+                }
+            }
+
+            results = func_type.results.to_vec();
         }
     }
+
+
 
     if is_fastcall {
         // Get the return type

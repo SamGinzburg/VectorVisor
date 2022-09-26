@@ -21,7 +21,8 @@
     call $wasi_unstable.environ_sizes_get
     drop
     i32.const 0
-    i32.load)
+    i32.load
+  )
   (memory $memory 1)
   (export "memory" (memory 0))
   (export "_start" (func $_start))

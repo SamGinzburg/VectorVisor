@@ -189,7 +189,6 @@
       (get_local 0) ;; Offset of returned data
     )
     drop
-    
     ;; Convert binary data to an ASCII hex string
     (set_local 3 (call $bin-to-hex-str (get_local 0)
                                               (get_local 1)
