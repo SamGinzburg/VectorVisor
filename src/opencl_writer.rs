@@ -81,6 +81,21 @@ lazy_static! {
         m.insert("random_get", true);             // 6
         m.insert("clock_time_get", true);         // 7
         m.insert("sched_yield", true);            // 8
+        m.insert("poll_oneoff", true);            // 9
+        m.insert("fd_filestat_get", true);        // 10
+        m.insert("fd_read", true);                // 10
+        m.insert("fd_seek", true);                // 11
+        m.insert("path_filestat_get", true);      // 12
+        m.insert("path_open", true);              // 13
+        m.insert("fd_close", true);               // 13
+        m.insert("fd_fdstat_get", true);          // 14
+        m.insert("fd_fdstat_set_flags", true);    // 14
+        m.insert("fd_readdir", true);             // 15
+        m.insert("path_create_directory", true);  // 16
+        m.insert("path_remove_directory", true);  // 17
+        m.insert("path_rename", true);            // 18
+        m.insert("path_symlink", true);           // 19
+        m.insert("path_unlink_file", true);       // 20
         m.insert("serverless_invoke", true);      // 9999
         m.insert("serverless_response", true);    // 10000
         m

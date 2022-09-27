@@ -1070,6 +1070,55 @@ impl<'a> StackCtx {
                                             &"random_get"             => {
                                                 current_i32_count -= 1;
                                             },
+
+                                            &"poll_oneoff"            => {
+                                                current_i32_count -= 3;
+                                            },
+                                            &"fd_filestat_get"        => {
+                                                current_i32_count -= 1;
+                                            },
+                                            &"fd_read"                => {
+                                                current_i32_count -= 3;
+                                            },
+                                            &"fd_seek"                => {
+                                                current_i32_count -= 2;
+                                                current_i64_count -= 1;
+                                            },
+                                            &"path_filestat_get"      => {
+                                                current_i32_count -= 4;
+                                            },
+                                            &"path_open"              => {
+                                                current_i32_count -= 6;
+                                                current_i64_count -= 2;
+                                            },
+                                            &"fd_close"               => {
+                                                // No-op
+                                            },
+                                            &"fd_fdstat_get"          => {
+                                                // No-op
+                                            },
+                                            &"fd_fdstat_set_flags"    => {
+                                                // No-op
+                                            },
+                                            &"fd_readdir"             => {
+                                                current_i32_count -= 3;
+                                                current_i64_count -= 1;
+                                            },
+                                            &"path_create_directory"  => {
+                                                current_i32_count -= 2;
+                                            },
+                                            &"path_remove_directory"  => {
+                                                current_i32_count -= 2;
+                                            },
+                                            &"path_unlink_file"  => {
+                                                current_i32_count -= 2;
+                                            },
+                                            &"path_rename"  => {
+                                                current_i32_count -= 5;
+                                            },
+                                            &"path_symlink"  => {
+                                                current_i32_count -= 4;
+                                            },
                                             &"serverless_invoke"      => {
                                                 current_i32_count -= 1;
                                             },
