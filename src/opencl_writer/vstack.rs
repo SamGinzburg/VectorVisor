@@ -1525,6 +1525,18 @@ impl<'a> StackCtx {
                     current_f64_count -= 1;
                     update_counter(&mut current_i64_count, &mut max_i64_count);
                 }
+                Instruction::F64Copysign => {
+                    stack_sizes.pop();
+                    stack_sizes.pop();
+                    stack_sizes.push(StackType::f64);
+                    current_f64_count -= 1;
+                }
+                Instruction::F64Copysign => {
+                    stack_sizes.pop();
+                    stack_sizes.pop();
+                    stack_sizes.push(StackType::f32);
+                    current_f32_count -= 1
+                }
                 Instruction::F64ReinterpretI64 => {
                     stack_sizes.pop();
                     stack_sizes.push(StackType::f64);

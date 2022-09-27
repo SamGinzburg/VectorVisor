@@ -69,6 +69,30 @@ pub fn emit_f32_max(
     format!("\t{} = FMAX({}, {});\n", result_register, reg2, reg1)
 }
 
+pub fn emit_f32_copysign(
+    _writer: &opencl_writer::OpenCLCWriter,
+    stack_ctx: &mut StackCtx,
+    _debug: bool,
+) -> String {
+    let reg1 = stack_ctx.vstack_pop(StackType::f32);
+    let reg2 = stack_ctx.vstack_pop(StackType::f32);
+    let result_register = stack_ctx.vstack_alloc(StackType::f32);
+
+    format!("\t{} = copysign({}, {});\n", result_register, reg2, reg1)
+}
+
+pub fn emit_f64_copysign(
+    _writer: &opencl_writer::OpenCLCWriter,
+    stack_ctx: &mut StackCtx,
+    _debug: bool,
+) -> String {
+    let reg1 = stack_ctx.vstack_pop(StackType::f64);
+    let reg2 = stack_ctx.vstack_pop(StackType::f64);
+    let result_register = stack_ctx.vstack_alloc(StackType::f64);
+
+    format!("\t{} = copysign({}, {});\n", result_register, reg2, reg1)
+}
+
 pub fn emit_f64_min(
     _writer: &opencl_writer::OpenCLCWriter,
     stack_ctx: &mut StackCtx,

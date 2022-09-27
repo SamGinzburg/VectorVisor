@@ -800,6 +800,12 @@ impl<'a> OpenCLCWriter<'_> {
             Instruction::I32Rotl => emit_i32_rotl(self, stack_ctx, debug),
             Instruction::I64Rotl => emit_i64_rotl(self, stack_ctx, debug),
             Instruction::I64Sub => emit_i64_sub(self, stack_ctx, debug),
+            Instruction::F32Copysign => {
+                emit_f32_copysign(self, stack_ctx, debug)
+            }
+            Instruction::F64Copysign => {
+                emit_f64_copysign(self, stack_ctx, debug)
+            }
             Instruction::I64ReinterpretF64 => {
                 emit_i64_reinterpret_f64(self, stack_ctx, debug)
             }
