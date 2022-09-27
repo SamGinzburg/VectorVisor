@@ -1525,6 +1525,14 @@ impl<'a> StackCtx {
                     current_f64_count -= 1;
                     update_counter(&mut current_i64_count, &mut max_i64_count);
                 }
+                Instruction::F64Nearest => {
+                    stack_sizes.pop();
+                    stack_sizes.push(StackType::f64);
+                }
+                Instruction::F32Nearest => {
+                    stack_sizes.pop();
+                    stack_sizes.push(StackType::f32);
+                }
                 Instruction::F64Copysign => {
                     stack_sizes.pop();
                     stack_sizes.pop();
@@ -2033,6 +2041,12 @@ impl<'a> StackCtx {
                     stack_sizes.push(StackType::u128);
                     update_counter(&mut current_u128_count, &mut max_u128_count);
                     current_i32_count -= 1;
+                },
+                Instruction::I32x4Eq => {
+                    stack_sizes.pop().unwrap();
+                    stack_sizes.pop().unwrap();
+                    stack_sizes.push(StackType::u128);
+                    current_u128_count -= 1;
                 },
                 Instruction::I8x16Splat => {
                     stack_sizes.pop().unwrap();

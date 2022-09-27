@@ -800,6 +800,12 @@ impl<'a> OpenCLCWriter<'_> {
             Instruction::I32Rotl => emit_i32_rotl(self, stack_ctx, debug),
             Instruction::I64Rotl => emit_i64_rotl(self, stack_ctx, debug),
             Instruction::I64Sub => emit_i64_sub(self, stack_ctx, debug),
+            Instruction::F64Nearest => {
+                emit_f64_rint(self, stack_ctx, debug)
+            }
+            Instruction::F32Nearest => {
+                emit_f32_rint(self, stack_ctx, debug)
+            }
             Instruction::F32Copysign => {
                 emit_f32_copysign(self, stack_ctx, debug)
             }
@@ -1017,6 +1023,7 @@ impl<'a> OpenCLCWriter<'_> {
             Instruction::I8x16Splat => vec_splat(self, stack_ctx, SplatType::Int8, debug),
             Instruction::I16x8Splat => vec_splat(self, stack_ctx, SplatType::Int16, debug),
             Instruction::I32x4Splat => vec_splat(self, stack_ctx, SplatType::Int32, debug),
+            Instruction::I32x4Eq => vec_x_by_y_binop(self, stack_ctx, VecBinOp::Equals, VecOpType::Int32, debug),
             Instruction::I64x2Splat => vec_splat(self, stack_ctx, SplatType::Int64, debug),
             Instruction::I8x16Add => vec_x_by_y_binop(self, stack_ctx, VecBinOp::Add, VecOpType::Int8, debug),
             Instruction::I8x16Sub => vec_x_by_y_binop(self, stack_ctx, VecBinOp::Sub, VecOpType::Int8, debug),
