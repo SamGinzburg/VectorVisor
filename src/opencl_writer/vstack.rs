@@ -2090,7 +2090,12 @@ impl<'a> StackCtx {
                     update_counter(&mut current_u128_count, &mut max_u128_count);
                     current_i64_count -= 1;
                 },
-                Instruction::I8x16Shl => {
+                Instruction::I64x2Shl |
+                Instruction::I64x2ShrU |
+                Instruction::I64x2ShrS |
+                Instruction::I8x16Shl |
+                Instruction::I8x16ShrU |
+                Instruction::I8x16ShrS => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);
