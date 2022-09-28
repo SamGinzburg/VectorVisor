@@ -19,6 +19,8 @@ use crate::opencl_writer::mem_interleave::emit_write_u64;
 use crate::opencl_writer::StackCtx;
 use crate::opencl_writer::StackType;
 
+use wasi_common::snapshots::preview_1::types::*;
+
 pub fn emit_hypercall_helpers(
     writer: &opencl_writer::OpenCLCWriter,
     call_name: Option<&str>,
@@ -187,6 +189,23 @@ pub fn emit_fd_prestat_get_helper(
     ret_str
 }
 
+pub fn emit_fd_fdstat_get_helper(
+    _writer: &opencl_writer::OpenCLCWriter,
+    stack_ctx: &mut StackCtx,
+    _debug: bool,
+) -> String {
+    let mut ret_str = String::from("");
+    let fd = stack_ctx.vstack_peak(StackType::i32, 0);
+    let _fdstat_ptr = stack_ctx.vstack_peak(StackType::i32, 1);
+
+    // copy the fd
+    ret_str += &format!("\t*({}) = {};\n",
+                        "(global uint*)((global char*)hypercall_buffer+(hcall_size*warp_idx))",
+                        &fd);
+
+    ret_str
+}
+
 pub fn emit_fd_prestat_dir_name_helper(
     _writer: &opencl_writer::OpenCLCWriter,
     stack_ctx: &mut StackCtx,
@@ -252,6 +271,30 @@ pub fn emit_fd_prestat_dir_name_post(
 
     // now return the error code
     ret_str += &format!("\t{} = {};\n", result_regsiter, "hcall_ret_val");
+
+    ret_str
+}
+
+
+pub fn emit_fd_fdstat_get_post(
+    _writer: &opencl_writer::OpenCLCWriter,
+    stack_ctx: &mut StackCtx,
+    _debug: bool,
+) -> String {
+    let mut ret_str = String::from("");
+    let _fd = stack_ctx.vstack_pop(StackType::i32);
+    let fdstat_ptr = stack_ctx.vstack_pop(StackType::i32);
+    let result_register = stack_ctx.vstack_pop(StackType::i32);
+
+    // copy the fd_fdstat_get result back to GPU mem
+    ret_str += &format!("\t___private_memcpy_cpu2gpu((ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), warp_idx, read_idx, thread_idx, scratch_space);\n",
+    "(ulong)((global char *)hypercall_buffer+(hcall_size*warp_idx))",
+    "hypercall_buffer", // mem_start_dst
+    &format!("(global char *)heap_u32+{}", fdstat_ptr),
+    "heap_u32", // mem_start_src
+    std::mem::size_of::<Fdstat>());
+
+    ret_str += &format!("\t{} = {};\n", result_register, "hcall_ret_val");
 
     ret_str
 }

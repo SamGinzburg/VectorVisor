@@ -83,19 +83,19 @@ lazy_static! {
         m.insert("sched_yield", true);            // 8
         m.insert("poll_oneoff", true);            // 9
         m.insert("fd_filestat_get", true);        // 10
-        m.insert("fd_read", true);                // 10
-        m.insert("fd_seek", true);                // 11
-        m.insert("path_filestat_get", true);      // 12
-        m.insert("path_open", true);              // 13
-        m.insert("fd_close", true);               // 13
-        m.insert("fd_fdstat_get", true);          // 14
-        m.insert("fd_fdstat_set_flags", true);    // 14
-        m.insert("fd_readdir", true);             // 15
-        m.insert("path_create_directory", true);  // 16
-        m.insert("path_remove_directory", true);  // 17
-        m.insert("path_rename", true);            // 18
-        m.insert("path_symlink", true);           // 19
-        m.insert("path_unlink_file", true);       // 20
+        m.insert("fd_read", true);                // 11
+        m.insert("fd_seek", true);                // 12
+        m.insert("path_filestat_get", true);      // 13
+        m.insert("path_open", true);              // 14
+        m.insert("fd_close", true);               // 15
+        m.insert("fd_fdstat_get", true);          // 16
+        m.insert("fd_fdstat_set_flags", true);    // 17
+        m.insert("fd_readdir", true);             // 18
+        m.insert("path_create_directory", true);  // 19
+        m.insert("path_remove_directory", true);  // 20
+        m.insert("path_rename", true);            // 21
+        m.insert("path_symlink", true);           // 22
+        m.insert("path_unlink_file", true);       // 23
         m.insert("serverless_invoke", true);      // 9999
         m.insert("serverless_response", true);    // 10000
         m
@@ -112,7 +112,22 @@ pub enum WasmHypercallId {
     fd_prestat_dir_name = 5,
     random_get = 6,
     clock_time_get = 7,
-    sched_yield= 8,
+    sched_yield = 8,
+    poll_oneoff = 9,
+    fd_filestat_get = 10,
+    fd_read = 11,
+    fd_seek = 12,
+    path_filestat_get = 13,
+    path_open = 14,
+    fd_close = 15,
+    fd_fdstat_get = 16,
+    fd_fdstat_set_flags = 17,
+    fd_readdir = 18,
+    path_create_directory = 19,
+    path_remove_directory = 20,
+    path_rename = 21,
+    path_symlink = 22,
+    path_unlink_file = 23,
     serverless_invoke = 9999,
     serverless_response = 10000,
 }
@@ -264,19 +279,22 @@ impl<'a> OpenCLCWriter<'_> {
         match hypercall_id {
             WasmHypercallId::fd_write => {
                 ret_str += &emit_fd_write_call_helper(self, stack_ctx, debug)
-            }
+            },
+            WasmHypercallId::fd_fdstat_get => {
+                ret_str += &emit_fd_fdstat_get_helper(self, stack_ctx, debug)
+            },
             WasmHypercallId::fd_prestat_get => {
                 ret_str += &emit_fd_prestat_get_helper(self, stack_ctx, debug)
-            }
+            },
             WasmHypercallId::fd_prestat_dir_name => {
                 ret_str += &emit_fd_prestat_dir_name_helper(self, stack_ctx, debug)
-            }
+            },
             WasmHypercallId::serverless_invoke => {
                 ret_str += &emit_serverless_invoke_pre(self, debug)
-            }
+            },
             WasmHypercallId::serverless_response => {
                 ret_str += &emit_serverless_response_pre(self, stack_ctx, debug)
-            }
+            },
             WasmHypercallId::random_get => ret_str += &emit_random_get_pre(self, stack_ctx, debug),
             WasmHypercallId::clock_time_get => ret_str += &emit_clock_time_get_pre(self, stack_ctx, debug),
             _ => (),
@@ -310,25 +328,28 @@ impl<'a> OpenCLCWriter<'_> {
         match hypercall_id {
             WasmHypercallId::fd_write => {
                 ret_str += &emit_fd_write_post(&self, stack_ctx, debug);
-            }
+            },
             WasmHypercallId::environ_sizes_get => {
                 ret_str += &emit_environ_sizes_get_post(&self, stack_ctx, debug);
-            }
+            },
             WasmHypercallId::environ_get => {
                 ret_str += &emit_environ_get_post(&self, stack_ctx, debug);
-            }
+            },
+            WasmHypercallId::fd_fdstat_get => {
+                ret_str += &emit_fd_fdstat_get_post(&self, stack_ctx, debug);
+            },
             WasmHypercallId::fd_prestat_get => {
                 ret_str += &emit_fd_prestat_get_post(&self, stack_ctx, debug);
-            }
+            },
             WasmHypercallId::fd_prestat_dir_name => {
                 ret_str += &emit_fd_prestat_dir_name_post(&self, stack_ctx, debug);
-            }
+            },
             WasmHypercallId::serverless_invoke => {
                 ret_str += &emit_serverless_invoke_post(&self, stack_ctx, debug);
-            }
+            },
             WasmHypercallId::serverless_response => {
                 ret_str += &emit_serverless_response_post(&self, stack_ctx, debug);
-            }
+            },
             WasmHypercallId::random_get => {
                 ret_str += &emit_random_get_post(&self, stack_ctx, debug);
             },
@@ -705,10 +726,24 @@ impl<'a> OpenCLCWriter<'_> {
                                         },
                                         &"environ_sizes_get"      => self.emit_hypercall(WasmHypercallId::environ_sizes_get, stack_ctx, hypercall_id_count, fn_name.to_string(), false, debug),
                                         &"environ_get"            => self.emit_hypercall(WasmHypercallId::environ_get, stack_ctx, hypercall_id_count, fn_name.to_string(), false, debug),
+                                        &"fd_fdstat_set_flags"         => self.emit_hypercall(WasmHypercallId::fd_fdstat_set_flags, stack_ctx, hypercall_id_count, fn_name.to_string(), false, debug),
+                                        &"fd_fdstat_get"         => self.emit_hypercall(WasmHypercallId::fd_fdstat_get, stack_ctx, hypercall_id_count, fn_name.to_string(), false, debug),
                                         &"fd_prestat_get"         => self.emit_hypercall(WasmHypercallId::fd_prestat_get, stack_ctx, hypercall_id_count, fn_name.to_string(), false, debug),
                                         &"fd_prestat_dir_name"    => self.emit_hypercall(WasmHypercallId::fd_prestat_dir_name, stack_ctx, hypercall_id_count, fn_name.to_string(), false, debug),
+                                        &"fd_close"         => self.emit_hypercall(WasmHypercallId::fd_close, stack_ctx, hypercall_id_count, fn_name.to_string(), false, debug),
                                         &"random_get"             => self.emit_hypercall(WasmHypercallId::random_get, stack_ctx, hypercall_id_count, fn_name.to_string(), false, debug),
                                         &"clock_time_get"         => self.emit_hypercall(WasmHypercallId::clock_time_get, stack_ctx, hypercall_id_count, fn_name.to_string(), false, debug),
+                                        &"poll_oneoff"         => self.emit_hypercall(WasmHypercallId::poll_oneoff, stack_ctx, hypercall_id_count, fn_name.to_string(), false, debug),
+                                        &"fd_read"         => self.emit_hypercall(WasmHypercallId::fd_read, stack_ctx, hypercall_id_count, fn_name.to_string(), false, debug),
+                                        &"fd_seek"         => self.emit_hypercall(WasmHypercallId::fd_seek, stack_ctx, hypercall_id_count, fn_name.to_string(), false, debug),
+                                        &"path_filestat_get"         => self.emit_hypercall(WasmHypercallId::path_filestat_get, stack_ctx, hypercall_id_count, fn_name.to_string(), false, debug),
+                                        &"path_open"         => self.emit_hypercall(WasmHypercallId::path_open, stack_ctx, hypercall_id_count, fn_name.to_string(), false, debug),
+                                        &"fd_readdir"         => self.emit_hypercall(WasmHypercallId::fd_readdir, stack_ctx, hypercall_id_count, fn_name.to_string(), false, debug),
+                                        &"path_create_directory"         => self.emit_hypercall(WasmHypercallId::path_create_directory, stack_ctx, hypercall_id_count, fn_name.to_string(), false, debug),
+                                        &"path_remove_directory"         => self.emit_hypercall(WasmHypercallId::path_remove_directory, stack_ctx, hypercall_id_count, fn_name.to_string(), false, debug),
+                                        &"path_rename"         => self.emit_hypercall(WasmHypercallId::path_rename, stack_ctx, hypercall_id_count, fn_name.to_string(), false, debug),
+                                        &"path_symlink"         => self.emit_hypercall(WasmHypercallId::path_symlink, stack_ctx, hypercall_id_count, fn_name.to_string(), false, debug),
+                                        &"path_unlink_file"         => self.emit_hypercall(WasmHypercallId::path_unlink_file, stack_ctx, hypercall_id_count, fn_name.to_string(), false, debug),
                                         &"sched_yield"            => {
                                             // sched_yield is a special case, we just return an i32 value, and don't perform any context saving
                                             emit_sched_yield(self, stack_ctx, debug)
