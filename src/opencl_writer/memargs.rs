@@ -14,6 +14,7 @@ pub enum VecSplatSize {
 }
 
 pub enum VecStoreWidth {
+    I16,
     I32,
     I64,
 }
@@ -1194,6 +1195,78 @@ pub fn emit_memstore_u128_lane(
                 );
             }
         },
+        _ => panic!("Unimplemented store width for emit_memstore_u128_lane"),
+    }
+
+    ret_str
+}
+
+pub fn emit_memload_u128_load_m_x_n(
+    writer: &opencl_writer::OpenCLCWriter,
+    stack_ctx: &mut StackCtx,
+    arg: &MemArg,
+    load_width: VecLoadWidth,
+    extend_width: VecStoreWidth,
+    signed: bool,
+    _debug: bool,
+) -> String {
+    let mut ret_str = String::from("");
+    let i_load = stack_ctx.vstack_pop(StackType::i32);
+    let vec = stack_ctx.vstack_alloc(StackType::u128);
+
+    let load = match load_width {
+        VecLoadWidth::I64 => {
+            if !writer.pretty_input_wasm || arg.align < 8 {
+                format!(
+                    "({})",
+                    emit_read_u64_aligned_checked(
+                        &format!(
+                            "(ulong)((global char*)heap_u32+{}+(int)({}))",
+                            arg.offset, i_load
+                        ),
+                        "(ulong)(heap_u32)",
+                        "warp_idx"
+                    )
+                )
+            } else {
+                format!(
+                    "({})",
+                    emit_read_u64_aligned(
+                        &format!(
+                            "(ulong)((global char*)heap_u32+{}+(int)({}))",
+                            arg.offset, i_load
+                        ),
+                        "(ulong)(heap_u32)",
+                        "warp_idx"
+                    )
+                )
+            }
+        },
+        _ => panic!("Unimplemented load width for emit_memload_u128_load_m_x_n"),
+    };
+
+    // Extend width is 2 X M in size
+    // So V128Load8x8u ==> one 8 byte load, with each byte extended to 2 bytes (16-byte vec)
+    match extend_width {
+        VecStoreWidth::I16 if signed == true => {
+            ret_str += &format!("\t{{\n");
+            ret_str += &format!("\t\tshort *temp1 = (short*)(&{});\n", vec);
+            ret_str += &format!("\t\tshort4 temp2 = (short4)({});\n", load);
+            for idx in 0..8 {
+                ret_str += &format!("\t\ttemp1[{}] = (short)(temp2[idx]);\n", idx);
+            }
+            ret_str += &format!("\t}}\n");
+        },
+        VecStoreWidth::I16 => {
+            ret_str += &format!("\t{{\n");
+            ret_str += &format!("\t\tushort *temp1 = (ushort*)(&{});\n", vec);
+            ret_str += &format!("\t\tushort4 temp2 = (ushort4)({});\n", load);
+            for idx in 0..8 {
+                ret_str += &format!("\t\ttemp1[{}] = (ushort)(temp2[idx]);\n", idx);
+            }
+            ret_str += &format!("\t}}\n");
+        },
+        _ => panic!("Unimplemented store width for emit_memload_u128_load_m_x_n"),
     }
 
     ret_str
@@ -1296,7 +1369,7 @@ pub fn emit_memload_u128_load_lane(
             ret_str += &format!("\t}}\n");
         },
         VecLoadWidth::I64 => {
-            let read = if !writer.pretty_input_wasm || args.memarg.align < 4 {
+            let read = if !writer.pretty_input_wasm || args.memarg.align < 8 {
                 format!(
                     "({})",
                     emit_read_u64_aligned_checked(

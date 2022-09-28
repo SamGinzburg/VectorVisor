@@ -2222,6 +2222,13 @@ impl<'a> StackCtx {
                     stack_sizes.push(StackType::u128);
                     current_u128_count -= 1;
                 },
+                Instruction::V128Load8x8U(_) |
+                Instruction::V128Load8x8S(_) => {
+                    stack_sizes.pop().unwrap();
+                    stack_sizes.push(StackType::u128);
+                    update_counter(&mut current_u128_count, &mut max_u128_count);
+                    current_i32_count -= 1;
+                },
                 Instruction::V128Load8Lane(_) |
                 Instruction::V128Load16Lane(_) |
                 Instruction::V128Load32Lane(_) |

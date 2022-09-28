@@ -415,6 +415,8 @@ impl<'a> OpenCLCWriter<'_> {
             }
             Instruction::I32Load(memarg) => emit_memload_i32(self, stack_ctx, memarg, debug),
             Instruction::V128Load(memarg) => emit_memload_u128(self, stack_ctx, memarg, debug),
+            Instruction::V128Load8x8U(memarg) => emit_memload_u128_load_m_x_n(self, stack_ctx, memarg, VecLoadWidth::I64, VecStoreWidth::I16, false, debug),
+            Instruction::V128Load8x8S(memarg) => emit_memload_u128_load_m_x_n(self, stack_ctx, memarg, VecLoadWidth::I64, VecStoreWidth::I16, true, debug),
             Instruction::V128Load64Zero(memarg) => emit_memload_u128_zero_64(self, stack_ctx, memarg, debug),
             Instruction::V128Load8Splat(memarg) => emit_memload_u128_load_n_splat(self, stack_ctx, memarg, VecSplatSize::I8, debug),
             Instruction::V128Load16Splat(memarg) => emit_memload_u128_load_n_splat(self, stack_ctx, memarg, VecSplatSize::I16, debug),
