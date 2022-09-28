@@ -1095,10 +1095,10 @@ impl<'a> StackCtx {
                                                 // No-op
                                             },
                                             &"fd_fdstat_get"          => {
-                                                // No-op
+                                                current_i32_count -= 1;
                                             },
                                             &"fd_fdstat_set_flags"    => {
-                                                // No-op
+                                                current_i32_count -= 1;
                                             },
                                             &"fd_readdir"             => {
                                                 current_i32_count -= 3;

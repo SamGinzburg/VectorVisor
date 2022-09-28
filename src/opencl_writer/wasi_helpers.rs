@@ -535,7 +535,7 @@ pub fn emit_fd_fdstat_get_post(
     let mut ret_str = String::from("");
     let _fd = stack_ctx.vstack_pop(StackType::i32);
     let fdstat_ptr = stack_ctx.vstack_pop(StackType::i32);
-    let result_register = stack_ctx.vstack_pop(StackType::i32);
+    let result_register = stack_ctx.vstack_alloc(StackType::i32);
 
     // copy the fd_fdstat_get result back to GPU mem
     ret_str += &format!("\t___private_memcpy_cpu2gpu((ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), warp_idx, read_idx, thread_idx, scratch_space);\n",
