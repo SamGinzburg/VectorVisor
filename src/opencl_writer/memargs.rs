@@ -1266,6 +1266,24 @@ pub fn emit_memload_u128_load_m_x_n(
             }
             ret_str += &format!("\t}}\n");
         },
+        VecStoreWidth::I32 if signed == true => {
+            ret_str += &format!("\t{{\n");
+            ret_str += &format!("\t\tint *temp1 = (int*)(&{});\n", vec);
+            ret_str += &format!("\t\tint4 temp2 = (int4)({});\n", load);
+            for idx in 0..8 {
+                ret_str += &format!("\t\ttemp1[{}] = (int)(temp2[idx]);\n", idx);
+            }
+            ret_str += &format!("\t}}\n");
+        },
+        VecStoreWidth::I32 => {
+            ret_str += &format!("\t{{\n");
+            ret_str += &format!("\t\tuint *temp1 = (uint*)(&{});\n", vec);
+            ret_str += &format!("\t\tuint4 temp2 = (uint4)({});\n", load);
+            for idx in 0..8 {
+                ret_str += &format!("\t\ttemp1[{}] = (uint)(temp2[idx]);\n", idx);
+            }
+            ret_str += &format!("\t}}\n");
+        },
         _ => panic!("Unimplemented store width for emit_memload_u128_load_m_x_n"),
     }
 
