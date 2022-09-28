@@ -893,9 +893,11 @@ pub fn emit_path_open_post(
 
     let fs_rights_base = stack_ctx.vstack_pop(StackType::i64);
     let fs_rights_inherit = stack_ctx.vstack_pop(StackType::i64);
+    let result_register = stack_ctx.vstack_alloc(StackType::i32);
 
     // TODO
     ret_str += &emit_trap(TrapCode::TrapUnimplemented, true);
+    ret_str += &format!("\t{} = {};\n", result_register, "hcall_ret_val");
 
     ret_str
 }
@@ -923,9 +925,11 @@ pub fn emit_fd_close_post(
     let mut ret_str = String::from("");
 
     let fd = stack_ctx.vstack_pop(StackType::i32);
+    let result_register = stack_ctx.vstack_alloc(StackType::i32);
 
     // TODO
     ret_str += &emit_trap(TrapCode::TrapUnimplemented, true);
+    ret_str += &format!("\t{} = {};\n", result_register, "hcall_ret_val");
 
     ret_str
 }
@@ -959,9 +963,11 @@ pub fn emit_fd_read_post(
     let iovec_ptr = stack_ctx.vstack_pop(StackType::i32);
     let iovec_len = stack_ctx.vstack_pop(StackType::i32);
     let result_ptr = stack_ctx.vstack_pop(StackType::i32);
+    let result_register = stack_ctx.vstack_alloc(StackType::i32);
 
     // TODO
     ret_str += &emit_trap(TrapCode::TrapUnimplemented, true);
+    ret_str += &format!("\t{} = {};\n", result_register, "hcall_ret_val");
 
     ret_str
 }
@@ -995,10 +1001,12 @@ pub fn emit_fd_seek_post(
     let whence = stack_ctx.vstack_pop(StackType::i32);
     let result_ptr = stack_ctx.vstack_pop(StackType::i32);
     let offset = stack_ctx.vstack_pop(StackType::i64);
+    let result_register = stack_ctx.vstack_alloc(StackType::i32);
 
     // TODO
     ret_str += &emit_trap(TrapCode::TrapUnimplemented, true);
 
+    ret_str += &format!("\t{} = {};\n", result_register, "hcall_ret_val");
     ret_str
 }
 
