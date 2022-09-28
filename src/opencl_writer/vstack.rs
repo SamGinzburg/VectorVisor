@@ -2036,6 +2036,16 @@ impl<'a> StackCtx {
                     stack_sizes.push(StackType::u128);
                     current_u128_count -= 1;
                 },
+                Instruction::I64x2Mul |
+                Instruction::I64x2Add |
+                Instruction::I64x2Sub |
+                Instruction::I64x2Eq |
+                Instruction::I64x2Ne => {
+                    stack_sizes.pop().unwrap();
+                    stack_sizes.pop().unwrap();
+                    stack_sizes.push(StackType::u128);
+                    current_u128_count -= 1;
+                },    
                 Instruction::I32x4Splat => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);

@@ -23,6 +23,7 @@ pub enum VecByScalarOp {
 
 #[derive(Debug)]
 pub enum VecOpType {
+    Int64,
     Float32,
     Int32,
     UInt32,
@@ -52,6 +53,10 @@ pub fn vec_x_by_scalar_binop(_writer: &opencl_writer::OpenCLCWriter,
 
     result += &format!("\t{{\n");
     match op_type {
+        VecOpType::Int64 => {
+            result += &format!("\t\tulong2 *op1 = (ulong2*)(&{});\n", reg1);
+            result += &format!("\t\tulong2 op2 = (ulong2)({});\n", reg2);
+        },
         VecOpType::Int32 => {
             result += &format!("\t\tint4 *op1 = (int4*)(&{});\n", reg1);
             result += &format!("\t\tint4 op2 = (int4)({});\n", reg2);
@@ -110,6 +115,11 @@ pub fn vec_x_by_y_binop(_writer: &opencl_writer::OpenCLCWriter,
 
     result += &format!("\t{{\n");
     match op_type {
+        VecOpType::Int64 => {
+            result += &format!("\t\tulong2 *op1 = (ulong2*)&{};\n", reg1);
+            result += &format!("\t\tulong2 *op2 = (ulong2*)&{};\n", reg2);
+            result += &format!("\t\tulong2 *res = (ulong2*)&{};\n", result_register);
+        },
         VecOpType::Float32 => {
             result += &format!("\t\tfloat4 *op1 = (float4*)&{};\n", reg1);
             result += &format!("\t\tfloat4 *op2 = (float4*)&{};\n", reg2);
