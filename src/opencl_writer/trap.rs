@@ -3,6 +3,7 @@ pub enum TrapCode {
     TrapIntOverflow,
     TrapInvalidConversion,
     TrapCallIndirectNotFound,
+    TrapUnimplemented
 }
 
 pub fn emit_trap(code: TrapCode, emit_semicolon: bool) -> String {
@@ -16,6 +17,9 @@ pub fn emit_trap(code: TrapCode, emit_semicolon: bool) -> String {
         }
         TrapCode::TrapCallIndirectNotFound => {
             format!("\t*((volatile unsigned long *)0x3) = 0x42{}\n", semi)
+        }
+        TrapUnimplemented => {
+            format!("\t*((volatile unsigned long *)0x3) = 0x42424242{}\n", semi)
         }
     }
 }

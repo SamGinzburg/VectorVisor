@@ -13,7 +13,7 @@ mod parametric;
 mod relops;
 mod stackops;
 mod testops;
-mod trap;
+pub mod trap;
 mod unops;
 mod util;
 mod vector;
@@ -277,6 +277,36 @@ impl<'a> OpenCLCWriter<'_> {
 
         // hypercalls that are omitted from this table are implied to not require any data transfer via the hcall buffer
         match hypercall_id {
+            WasmHypercallId::path_unlink_file => {
+                ret_str += &emit_path_unlink_file_pre(self, stack_ctx, debug)
+            },
+            WasmHypercallId::path_symlink => {
+                ret_str += &emit_path_symlink_pre(self, stack_ctx, debug)
+            },
+            WasmHypercallId::path_rename => {
+                ret_str += &emit_path_rename_pre(self, stack_ctx, debug)
+            },
+            WasmHypercallId::path_remove_directory => {
+                ret_str += &emit_path_remove_directory_pre(self, stack_ctx, debug)
+            },
+            WasmHypercallId::path_create_directory => {
+                ret_str += &emit_path_create_directory_pre(self, stack_ctx, debug)
+            },
+            WasmHypercallId::fd_readdir => {
+                ret_str += &emit_fd_readdir_pre(self, stack_ctx, debug)
+            },
+            WasmHypercallId::path_open => {
+                ret_str += &emit_path_open_pre(self, stack_ctx, debug)
+            },
+            WasmHypercallId::fd_close => {
+                ret_str += &emit_fd_close_pre(self, stack_ctx, debug)
+            },
+            WasmHypercallId::fd_read => {
+                ret_str += &emit_fd_read_pre(self, stack_ctx, debug)
+            },
+            WasmHypercallId::fd_seek => {
+                ret_str += &emit_fd_seek_pre(self, stack_ctx, debug)
+            },
             WasmHypercallId::poll_oneoff => {
                 ret_str += &emit_poll_oneoff_pre(self, stack_ctx, debug)
             },
@@ -285,6 +315,9 @@ impl<'a> OpenCLCWriter<'_> {
             },
             WasmHypercallId::fd_fdstat_get => {
                 ret_str += &emit_fd_fdstat_get_helper(self, stack_ctx, debug)
+            },
+            WasmHypercallId::fd_fdstat_set_flags => {
+                ret_str += &emit_fd_fdstat_set_flags_pre(self, stack_ctx, debug)
             },
             WasmHypercallId::fd_prestat_get => {
                 ret_str += &emit_fd_prestat_get_helper(self, stack_ctx, debug)
@@ -329,6 +362,36 @@ impl<'a> OpenCLCWriter<'_> {
         // after the hypercall, we need to reset values on re-entry, and possible copy data back from the hcall buf
         // skipped hypercall entries here are no-ops
         match hypercall_id {
+            WasmHypercallId::path_unlink_file => {
+                ret_str += &emit_path_unlink_file_post(self, stack_ctx, debug)
+            },
+            WasmHypercallId::path_symlink => {
+                ret_str += &emit_path_symlink_post(self, stack_ctx, debug)
+            },
+            WasmHypercallId::path_rename => {
+                ret_str += &emit_path_rename_post(self, stack_ctx, debug)
+            },
+            WasmHypercallId::path_remove_directory => {
+                ret_str += &emit_path_remove_directory_post(self, stack_ctx, debug)
+            },
+            WasmHypercallId::path_create_directory => {
+                ret_str += &emit_path_create_directory_post(self, stack_ctx, debug)
+            },
+            WasmHypercallId::fd_readdir => {
+                ret_str += &emit_fd_readdir_post(self, stack_ctx, debug)
+            },
+            WasmHypercallId::path_open => {
+                ret_str += &emit_path_open_post(self, stack_ctx, debug)
+            },
+            WasmHypercallId::fd_close => {
+                ret_str += &emit_fd_close_post(self, stack_ctx, debug)
+            },
+            WasmHypercallId::fd_read => {
+                ret_str += &emit_fd_read_post(self, stack_ctx, debug)
+            },
+            WasmHypercallId::fd_seek => {
+                ret_str += &emit_fd_seek_post(self, stack_ctx, debug)
+            },
             WasmHypercallId::poll_oneoff => {
                 ret_str += &emit_poll_oneoff_post(self, stack_ctx, debug);
             },
@@ -340,6 +403,9 @@ impl<'a> OpenCLCWriter<'_> {
             },
             WasmHypercallId::environ_get => {
                 ret_str += &emit_environ_get_post(&self, stack_ctx, debug);
+            },
+            WasmHypercallId::fd_fdstat_set_flags => {
+                ret_str += &emit_fd_fdstat_set_flags_post(self, stack_ctx, debug)
             },
             WasmHypercallId::fd_fdstat_get => {
                 ret_str += &emit_fd_fdstat_get_post(&self, stack_ctx, debug);

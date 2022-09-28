@@ -18,6 +18,7 @@ use crate::opencl_writer::mem_interleave::{emit_write_u32, emit_write_u32_aligne
 use crate::opencl_writer::mem_interleave::emit_write_u64;
 use crate::opencl_writer::StackCtx;
 use crate::opencl_writer::StackType;
+use crate::opencl_writer::trap::*;
 
 use wasi_common::snapshots::preview_1::types::*;
 
@@ -275,6 +276,256 @@ pub fn emit_fd_prestat_dir_name_post(
     ret_str
 }
 
+pub fn emit_path_unlink_file_pre(
+    _writer: &opencl_writer::OpenCLCWriter,
+    stack_ctx: &mut StackCtx,
+    _debug: bool,
+) -> String {
+    let mut ret_str = String::from("");
+    let _fd = stack_ctx.vstack_peak(StackType::i32, 0);
+    let _path_ptr = stack_ctx.vstack_peak(StackType::i32, 1);
+    let _path_len = stack_ctx.vstack_peak(StackType::i32, 2);
+
+    // TODO
+    ret_str += &emit_trap(TrapCode::TrapUnimplemented, true);
+
+    ret_str
+}
+
+pub fn emit_path_unlink_file_post(
+    _writer: &opencl_writer::OpenCLCWriter,
+    stack_ctx: &mut StackCtx,
+    _debug: bool,
+) -> String {
+    let mut ret_str = String::from("");
+    let _fd = stack_ctx.vstack_pop(StackType::i32);
+    let _path_ptr = stack_ctx.vstack_pop(StackType::i32);
+    let _path_len = stack_ctx.vstack_pop(StackType::i32);
+    let result_register = stack_ctx.vstack_alloc(StackType::i32);
+
+    // TODO
+    ret_str += &emit_trap(TrapCode::TrapUnimplemented, true);
+    ret_str += &format!("\t{} = {};\n", result_register, "hcall_ret_val");
+
+    ret_str
+}
+
+pub fn emit_path_symlink_pre(
+    _writer: &opencl_writer::OpenCLCWriter,
+    stack_ctx: &mut StackCtx,
+    _debug: bool,
+) -> String {
+    let mut ret_str = String::from("");
+    let _old_path_ptr = stack_ctx.vstack_peak(StackType::i32, 0);
+    let _old_path_len = stack_ctx.vstack_peak(StackType::i32, 1);
+    let _fd = stack_ctx.vstack_peak(StackType::i32, 2);
+    let _new_path_ptr = stack_ctx.vstack_peak(StackType::i32, 3);
+    let _new_path_len = stack_ctx.vstack_peak(StackType::i32, 4);
+
+    // TODO
+    ret_str += &emit_trap(TrapCode::TrapUnimplemented, true);
+
+    ret_str
+}
+
+pub fn emit_path_symlink_post(
+    _writer: &opencl_writer::OpenCLCWriter,
+    stack_ctx: &mut StackCtx,
+    _debug: bool,
+) -> String {
+    let mut ret_str = String::from("");
+    let _old_path_ptr = stack_ctx.vstack_pop(StackType::i32);
+    let _old_path_len = stack_ctx.vstack_pop(StackType::i32);
+    let _fd = stack_ctx.vstack_pop(StackType::i32);
+    let _new_path_ptr = stack_ctx.vstack_pop(StackType::i32);
+    let _new_path_len = stack_ctx.vstack_pop(StackType::i32);
+    let result_register = stack_ctx.vstack_alloc(StackType::i32);
+
+    // TODO
+    ret_str += &emit_trap(TrapCode::TrapUnimplemented, true);
+    ret_str += &format!("\t{} = {};\n", result_register, "hcall_ret_val");
+
+    ret_str
+}
+
+pub fn emit_path_rename_pre(
+    _writer: &opencl_writer::OpenCLCWriter,
+    stack_ctx: &mut StackCtx,
+    _debug: bool,
+) -> String {
+    let mut ret_str = String::from("");
+    let _fd = stack_ctx.vstack_peak(StackType::i32, 0);
+    let _old_path_ptr = stack_ctx.vstack_peak(StackType::i32, 1);
+    let _old_path_len = stack_ctx.vstack_peak(StackType::i32, 2);
+    let _new_fd = stack_ctx.vstack_peak(StackType::i32, 3);
+    let _new_path_ptr = stack_ctx.vstack_peak(StackType::i32, 4);
+    let _new_path_len = stack_ctx.vstack_peak(StackType::i32, 5);
+
+    // TODO
+    ret_str += &emit_trap(TrapCode::TrapUnimplemented, true);
+
+    ret_str
+}
+
+pub fn emit_path_rename_post(
+    _writer: &opencl_writer::OpenCLCWriter,
+    stack_ctx: &mut StackCtx,
+    _debug: bool,
+) -> String {
+    let mut ret_str = String::from("");
+    let _fd = stack_ctx.vstack_pop(StackType::i32);
+    let _old_path_ptr = stack_ctx.vstack_pop(StackType::i32);
+    let _old_path_len = stack_ctx.vstack_pop(StackType::i32);
+    let _new_fd = stack_ctx.vstack_pop(StackType::i32);
+    let _new_path_ptr = stack_ctx.vstack_pop(StackType::i32);
+    let _new_path_len = stack_ctx.vstack_pop(StackType::i32);
+    let result_register = stack_ctx.vstack_alloc(StackType::i32);
+
+    // TODO
+    ret_str += &emit_trap(TrapCode::TrapUnimplemented, true);
+    ret_str += &format!("\t{} = {};\n", result_register, "hcall_ret_val");
+
+    ret_str
+}
+
+pub fn emit_path_remove_directory_pre(
+    _writer: &opencl_writer::OpenCLCWriter,
+    stack_ctx: &mut StackCtx,
+    _debug: bool,
+) -> String {
+    let mut ret_str = String::from("");
+    let _fd = stack_ctx.vstack_peak(StackType::i32, 0);
+    let _path_ptr = stack_ctx.vstack_peak(StackType::i32, 1);
+    let _path_len = stack_ctx.vstack_peak(StackType::i32, 2);
+
+    // TODO
+    ret_str += &emit_trap(TrapCode::TrapUnimplemented, true);
+
+    ret_str
+}
+
+pub fn emit_path_remove_directory_post(
+    _writer: &opencl_writer::OpenCLCWriter,
+    stack_ctx: &mut StackCtx,
+    _debug: bool,
+) -> String {
+    let mut ret_str = String::from("");
+    let _fd = stack_ctx.vstack_pop(StackType::i32);
+    let _path_ptr = stack_ctx.vstack_pop(StackType::i32);
+    let _path_len = stack_ctx.vstack_pop(StackType::i32);
+    let result_register = stack_ctx.vstack_alloc(StackType::i32);
+
+    // TODO
+    ret_str += &emit_trap(TrapCode::TrapUnimplemented, true);
+    ret_str += &format!("\t{} = {};\n", result_register, "hcall_ret_val");
+
+    ret_str
+}
+
+pub fn emit_path_create_directory_pre(
+    _writer: &opencl_writer::OpenCLCWriter,
+    stack_ctx: &mut StackCtx,
+    _debug: bool,
+) -> String {
+    let mut ret_str = String::from("");
+    let _fd = stack_ctx.vstack_peak(StackType::i32, 0);
+    let _path_ptr = stack_ctx.vstack_peak(StackType::i32, 1);
+    let _path_len = stack_ctx.vstack_peak(StackType::i32, 2);
+
+    // TODO
+    ret_str += &emit_trap(TrapCode::TrapUnimplemented, true);
+
+    ret_str
+}
+
+pub fn emit_path_create_directory_post(
+    _writer: &opencl_writer::OpenCLCWriter,
+    stack_ctx: &mut StackCtx,
+    _debug: bool,
+) -> String {
+    let mut ret_str = String::from("");
+    let _fd = stack_ctx.vstack_pop(StackType::i32);
+    let _path_ptr = stack_ctx.vstack_pop(StackType::i32);
+    let _path_len = stack_ctx.vstack_pop(StackType::i32);
+    let result_register = stack_ctx.vstack_alloc(StackType::i32);
+
+    // TODO
+    ret_str += &emit_trap(TrapCode::TrapUnimplemented, true);
+    ret_str += &format!("\t{} = {};\n", result_register, "hcall_ret_val");
+
+    ret_str
+}
+
+
+pub fn emit_fd_readdir_pre(
+    _writer: &opencl_writer::OpenCLCWriter,
+    stack_ctx: &mut StackCtx,
+    _debug: bool,
+) -> String {
+    let mut ret_str = String::from("");
+    let _fd = stack_ctx.vstack_peak(StackType::i32, 0);
+    let _buf = stack_ctx.vstack_peak(StackType::i32, 1);
+    let _buflen = stack_ctx.vstack_peak(StackType::i32, 2);
+    let _cookie = stack_ctx.vstack_peak(StackType::i64, 0);
+    let _return_ptr = stack_ctx.vstack_peak(StackType::i32, 3);
+
+    // TODO
+    ret_str += &emit_trap(TrapCode::TrapUnimplemented, true);
+
+    ret_str
+}
+
+pub fn emit_fd_readdir_post(
+    _writer: &opencl_writer::OpenCLCWriter,
+    stack_ctx: &mut StackCtx,
+    _debug: bool,
+) -> String {
+    let mut ret_str = String::from("");
+    let _fd = stack_ctx.vstack_pop(StackType::i32);
+    let _buf = stack_ctx.vstack_pop(StackType::i32);
+    let _buflen = stack_ctx.vstack_pop(StackType::i32);
+    let _cookie = stack_ctx.vstack_pop(StackType::i64);
+    let _return_ptr = stack_ctx.vstack_pop(StackType::i32);
+    let result_register = stack_ctx.vstack_alloc(StackType::i32);
+
+    // TODO
+    ret_str += &emit_trap(TrapCode::TrapUnimplemented, true);
+
+    ret_str += &format!("\t{} = {};\n", result_register, "hcall_ret_val");
+    ret_str
+}
+
+pub fn emit_fd_fdstat_set_flags_pre(
+    _writer: &opencl_writer::OpenCLCWriter,
+    stack_ctx: &mut StackCtx,
+    _debug: bool,
+) -> String {
+    let mut ret_str = String::from("");
+    let _fd = stack_ctx.vstack_peak(StackType::i32, 0);
+    let _flags = stack_ctx.vstack_peak(StackType::i32, 1);
+
+    // TODO
+    ret_str += &emit_trap(TrapCode::TrapUnimplemented, true);
+
+    ret_str
+}
+
+pub fn emit_fd_fdstat_set_flags_post(
+    _writer: &opencl_writer::OpenCLCWriter,
+    stack_ctx: &mut StackCtx,
+    _debug: bool,
+) -> String {
+    let mut ret_str = String::from("");
+    let _fd = stack_ctx.vstack_pop(StackType::i32);
+    let _flags = stack_ctx.vstack_pop(StackType::i32);
+    let result_register = stack_ctx.vstack_alloc(StackType::i32);
+
+    // TODO
+    ret_str += &emit_trap(TrapCode::TrapUnimplemented, true);
+
+    ret_str += &format!("\t{} = {};\n", result_register, "hcall_ret_val");
+    ret_str
+}
 
 pub fn emit_fd_fdstat_get_post(
     _writer: &opencl_writer::OpenCLCWriter,
@@ -597,6 +848,156 @@ pub fn emit_poll_oneoff_post(
 
     // error code
     ret_str += &format!("\t{} = {};\n", result_register, "hcall_ret_val");
+
+    ret_str
+}
+
+pub fn emit_path_open_pre(
+    _writer: &opencl_writer::OpenCLCWriter,
+    stack_ctx: &mut StackCtx,
+    _debug: bool,
+) -> String {
+    let mut ret_str = String::from("");
+
+    let fd = stack_ctx.vstack_peak(StackType::i32, 0);
+    let dirflags = stack_ctx.vstack_peak(StackType::i32, 1);
+    let path_ptr = stack_ctx.vstack_peak(StackType::i32, 2);
+    let path_len = stack_ctx.vstack_peak(StackType::i32, 3);
+    let oflags = stack_ctx.vstack_peak(StackType::i32, 4);
+    let fdflags = stack_ctx.vstack_peak(StackType::i32, 5);
+    let return_ptr = stack_ctx.vstack_peak(StackType::i32, 6);
+
+    let fs_rights_base = stack_ctx.vstack_peak(StackType::i64, 0);
+    let fs_rights_inherit = stack_ctx.vstack_peak(StackType::i64, 1);
+
+    // TODO
+    ret_str += &emit_trap(TrapCode::TrapUnimplemented, true);
+
+    ret_str
+}
+
+pub fn emit_path_open_post(
+    _writer: &opencl_writer::OpenCLCWriter,
+    stack_ctx: &mut StackCtx,
+    _debug: bool,
+) -> String {
+    let mut ret_str = String::from("");
+
+    let fd = stack_ctx.vstack_pop(StackType::i32);
+    let dirflags = stack_ctx.vstack_pop(StackType::i32);
+    let path_ptr = stack_ctx.vstack_pop(StackType::i32);
+    let path_len = stack_ctx.vstack_pop(StackType::i32);
+    let oflags = stack_ctx.vstack_pop(StackType::i32);
+    let fdflags = stack_ctx.vstack_pop(StackType::i32);
+    let return_ptr = stack_ctx.vstack_pop(StackType::i32);
+
+    let fs_rights_base = stack_ctx.vstack_pop(StackType::i64);
+    let fs_rights_inherit = stack_ctx.vstack_pop(StackType::i64);
+
+    // TODO
+    ret_str += &emit_trap(TrapCode::TrapUnimplemented, true);
+
+    ret_str
+}
+
+pub fn emit_fd_close_pre(
+    _writer: &opencl_writer::OpenCLCWriter,
+    stack_ctx: &mut StackCtx,
+    _debug: bool,
+) -> String {
+    let mut ret_str = String::from("");
+
+    let fd = stack_ctx.vstack_peak(StackType::i32, 0);
+
+    // TODO
+    ret_str += &emit_trap(TrapCode::TrapUnimplemented, true);
+
+    ret_str
+}
+
+pub fn emit_fd_close_post(
+    _writer: &opencl_writer::OpenCLCWriter,
+    stack_ctx: &mut StackCtx,
+    _debug: bool,
+) -> String {
+    let mut ret_str = String::from("");
+
+    let fd = stack_ctx.vstack_pop(StackType::i32);
+
+    // TODO
+    ret_str += &emit_trap(TrapCode::TrapUnimplemented, true);
+
+    ret_str
+}
+
+pub fn emit_fd_read_pre(
+    _writer: &opencl_writer::OpenCLCWriter,
+    stack_ctx: &mut StackCtx,
+    _debug: bool,
+) -> String {
+    let mut ret_str = String::from("");
+
+    let fd = stack_ctx.vstack_peak(StackType::i32, 0);
+    let iovec_ptr = stack_ctx.vstack_peak(StackType::i32, 0);
+    let iovec_len = stack_ctx.vstack_peak(StackType::i32, 0);
+    let result_ptr = stack_ctx.vstack_peak(StackType::i32, 0);
+
+    // TODO
+    ret_str += &emit_trap(TrapCode::TrapUnimplemented, true);
+
+    ret_str
+}
+
+pub fn emit_fd_read_post(
+    _writer: &opencl_writer::OpenCLCWriter,
+    stack_ctx: &mut StackCtx,
+    _debug: bool,
+) -> String {
+    let mut ret_str = String::from("");
+
+    let fd = stack_ctx.vstack_pop(StackType::i32);
+    let iovec_ptr = stack_ctx.vstack_pop(StackType::i32);
+    let iovec_len = stack_ctx.vstack_pop(StackType::i32);
+    let result_ptr = stack_ctx.vstack_pop(StackType::i32);
+
+    // TODO
+    ret_str += &emit_trap(TrapCode::TrapUnimplemented, true);
+
+    ret_str
+}
+
+pub fn emit_fd_seek_pre(
+    _writer: &opencl_writer::OpenCLCWriter,
+    stack_ctx: &mut StackCtx,
+    _debug: bool,
+) -> String {
+    let mut ret_str = String::from("");
+
+    let fd = stack_ctx.vstack_peak(StackType::i32, 0);
+    let whence = stack_ctx.vstack_peak(StackType::i32, 1);
+    let result_ptr = stack_ctx.vstack_peak(StackType::i32, 2);
+    let offset = stack_ctx.vstack_peak(StackType::i64, 0);
+
+    // TODO
+    ret_str += &emit_trap(TrapCode::TrapUnimplemented, true);
+
+    ret_str
+}
+
+pub fn emit_fd_seek_post(
+    _writer: &opencl_writer::OpenCLCWriter,
+    stack_ctx: &mut StackCtx,
+    _debug: bool,
+) -> String {
+    let mut ret_str = String::from("");
+
+    let fd = stack_ctx.vstack_pop(StackType::i32);
+    let whence = stack_ctx.vstack_pop(StackType::i32);
+    let result_ptr = stack_ctx.vstack_pop(StackType::i32);
+    let offset = stack_ctx.vstack_pop(StackType::i64);
+
+    // TODO
+    ret_str += &emit_trap(TrapCode::TrapUnimplemented, true);
 
     ret_str
 }
