@@ -2040,6 +2040,8 @@ impl<'a> StackCtx {
                 Instruction::I64x2Add |
                 Instruction::I64x2Sub |
                 Instruction::I64x2Eq |
+                Instruction::I64x2GeS |
+                Instruction::I64x2GtS |
                 Instruction::I64x2Ne => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.pop().unwrap();
@@ -2127,6 +2129,8 @@ impl<'a> StackCtx {
                     current_u128_count -= 1;
                 },
                 Instruction::I16x8Add |
+                Instruction::I16x8GeS |
+                Instruction::I16x8GeU |
                 Instruction::I16x8Sub => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.pop().unwrap();
@@ -2180,6 +2184,16 @@ impl<'a> StackCtx {
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);
                     current_i32_count -= 1;
+                },
+                Instruction::I32x4GeS |
+                Instruction::I32x4GeU |
+                Instruction::I32x4GtS |
+                Instruction::I32x4GtU |
+                Instruction::I32x4MaxU => {
+                    stack_sizes.pop().unwrap();
+                    stack_sizes.pop().unwrap();
+                    stack_sizes.push(StackType::u128);
+                    current_u128_count -= 1;
                 },
                 Instruction::I32x4Mul => {
                     stack_sizes.pop().unwrap();
