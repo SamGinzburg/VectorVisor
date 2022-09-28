@@ -277,6 +277,9 @@ impl<'a> OpenCLCWriter<'_> {
 
         // hypercalls that are omitted from this table are implied to not require any data transfer via the hcall buffer
         match hypercall_id {
+            WasmHypercallId::poll_oneoff => {
+                ret_str += &emit_poll_oneoff_pre(self, stack_ctx, debug)
+            },
             WasmHypercallId::fd_write => {
                 ret_str += &emit_fd_write_call_helper(self, stack_ctx, debug)
             },
@@ -326,6 +329,9 @@ impl<'a> OpenCLCWriter<'_> {
         // after the hypercall, we need to reset values on re-entry, and possible copy data back from the hcall buf
         // skipped hypercall entries here are no-ops
         match hypercall_id {
+            WasmHypercallId::poll_oneoff => {
+                ret_str += &emit_poll_oneoff_post(self, stack_ctx, debug);
+            },
             WasmHypercallId::fd_write => {
                 ret_str += &emit_fd_write_post(&self, stack_ctx, debug);
             },
@@ -726,6 +732,7 @@ impl<'a> OpenCLCWriter<'_> {
                                         },
                                         &"environ_sizes_get"      => self.emit_hypercall(WasmHypercallId::environ_sizes_get, stack_ctx, hypercall_id_count, fn_name.to_string(), false, debug),
                                         &"environ_get"            => self.emit_hypercall(WasmHypercallId::environ_get, stack_ctx, hypercall_id_count, fn_name.to_string(), false, debug),
+                                        &"fd_filestat_get"         => self.emit_hypercall(WasmHypercallId::fd_filestat_get, stack_ctx, hypercall_id_count, fn_name.to_string(), false, debug),
                                         &"fd_fdstat_set_flags"         => self.emit_hypercall(WasmHypercallId::fd_fdstat_set_flags, stack_ctx, hypercall_id_count, fn_name.to_string(), false, debug),
                                         &"fd_fdstat_get"         => self.emit_hypercall(WasmHypercallId::fd_fdstat_get, stack_ctx, hypercall_id_count, fn_name.to_string(), false, debug),
                                         &"fd_prestat_get"         => self.emit_hypercall(WasmHypercallId::fd_prestat_get, stack_ctx, hypercall_id_count, fn_name.to_string(), false, debug),

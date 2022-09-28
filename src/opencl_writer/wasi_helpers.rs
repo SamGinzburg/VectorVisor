@@ -13,8 +13,8 @@
 
 use crate::opencl_writer;
 use crate::opencl_writer::mem_interleave::emit_read_u32;
-use crate::opencl_writer::mem_interleave::emit_read_u64;
-use crate::opencl_writer::mem_interleave::emit_write_u32;
+//use crate::opencl_writer::mem_interleave::emit_read_u64;
+use crate::opencl_writer::mem_interleave::{emit_write_u32, emit_write_u32_aligned_checked};
 use crate::opencl_writer::mem_interleave::emit_write_u64;
 use crate::opencl_writer::StackCtx;
 use crate::opencl_writer::StackType;
@@ -534,6 +534,69 @@ pub fn emit_serverless_response_post(
 
     let _json_buf_len = stack_ctx.vstack_pop(StackType::i32);
     let _json_buf_ptr = stack_ctx.vstack_pop(StackType::i32);
+
+    ret_str
+}
+
+pub fn emit_poll_oneoff_pre(
+    _writer: &opencl_writer::OpenCLCWriter,
+    stack_ctx: &mut StackCtx,
+    _debug: bool,
+) -> String {
+    let mut ret_str = String::from("");
+
+    let subscription_ptr = stack_ctx.vstack_peak(StackType::i32, 0);
+    let _events_ptr = stack_ctx.vstack_peak(StackType::i32, 1);
+    let subscription_num = stack_ctx.vstack_peak(StackType::i32, 2);
+    let _result_ptr = stack_ctx.vstack_peak(StackType::i32, 3);
+
+    // copy the subscription_num
+    ret_str += &format!("\t*({}) = {};\n",
+                        "(global uint*)((global char*)hypercall_buffer+(hcall_size*warp_idx))", &subscription_num);
+    // copy the subscriptions
+    ret_str += &format!("\t___private_memcpy_gpu2cpu((ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), warp_idx, read_idx, thread_idx, scratch_space);\n",
+                        &format!("(global char *)heap_u32+{}", subscription_ptr),
+                        "heap_u32", // mem_start_src
+                        "(ulong)((global char *)hypercall_buffer+(hcall_size*warp_idx)+next_buffer_start+4)", //dst, first 4 bytes are the len
+                        "hypercall_buffer", // mem_start_dst
+                        format!("{} * {}", std::mem::size_of::<Subscription>(), subscription_num)); // the length of the buffer
+
+    ret_str
+}
+
+pub fn emit_poll_oneoff_post(
+    _writer: &opencl_writer::OpenCLCWriter,
+    stack_ctx: &mut StackCtx,
+    _debug: bool,
+) -> String {
+    let mut ret_str = String::from("");
+
+    let subscription_ptr = stack_ctx.vstack_pop(StackType::i32);
+    let _events_ptr = stack_ctx.vstack_pop(StackType::i32);
+    let subscription_num = stack_ctx.vstack_pop(StackType::i32);
+    let result_ptr = stack_ctx.vstack_pop(StackType::i32);
+    let result_register = stack_ctx.vstack_alloc(StackType::i32);
+
+    // copy the subscriptions
+    ret_str += &format!("\t___private_memcpy_gpu2cpu((ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), warp_idx, read_idx, thread_idx, scratch_space);\n",
+                        &format!("(global char *)heap_u32+{}", subscription_ptr),
+                        "heap_u32", // mem_start_src
+                        "(ulong)((global char *)hypercall_buffer+(hcall_size*warp_idx)+next_buffer_start+4)", //dst, first 4 bytes are the len
+                        "hypercall_buffer", // mem_start_dst
+                        format!("{} * {}", std::mem::size_of::<Subscription>(), subscription_num)); // the length of the buffer
+
+    // copy the nwritten result
+    let nwritten = &format!("\t*({})\n",
+                            "(global uint*)((global char*)hypercall_buffer+(hcall_size*warp_idx))");
+
+    // write back result
+    ret_str += &format!("\t{};\n", emit_write_u32_aligned_checked(&format!("(ulong)((global char*)heap_u32+(int)({}))", result_ptr),
+                                                                  "(ulong)(heap_u32)",
+                                                                  nwritten,
+                                                                  "warp_idx"));
+
+    // error code
+    ret_str += &format!("\t{} = {};\n", result_register, "hcall_ret_val");
 
     ret_str
 }
