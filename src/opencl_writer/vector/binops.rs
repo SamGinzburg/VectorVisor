@@ -220,7 +220,8 @@ pub fn vec_x_by_y_binop(_writer: &opencl_writer::OpenCLCWriter,
         },
         VecBinOp::GtS | VecBinOp::GtU => {
             format!(
-                "\t\t*res = *op1 > *op2;\n"
+                "\t\t*res = convert_{}(*op1 > *op2);\n",
+                typecast
             )
         },
         VecBinOp::GeU | VecBinOp::GeS => {
@@ -231,12 +232,14 @@ pub fn vec_x_by_y_binop(_writer: &opencl_writer::OpenCLCWriter,
         },
         VecBinOp::LtU | VecBinOp::LtS => {
             format!(
-                "\t\t*res = *op1 < *op2;\n"
+                "\t\t*res = convert_{}(*op1 < *op2);\n",
+                typecast
             )
         },
         VecBinOp::LeU | VecBinOp::LeS => {
             format!(
-                "\t\t*res = *op1 <= *op2;\n"
+                "\t\t*res = convert_{}(*op1 <= *op2);\n",
+                typecast
             )
         },
     };
