@@ -12,6 +12,10 @@ pub enum VecBinOp {
     GtU,
     GeU,
     GeS,
+    LtU,
+    LtS,
+    LeS,
+    LeU,
     NotEquals,
     Equals,
     MaxU,
@@ -26,6 +30,7 @@ pub enum VecByScalarOp {
 #[derive(Debug)]
 pub enum VecOpType {
     Int64,
+    UInt64,
     Float32,
     Int32,
     UInt32,
@@ -56,6 +61,10 @@ pub fn vec_x_by_scalar_binop(_writer: &opencl_writer::OpenCLCWriter,
     result += &format!("\t{{\n");
     match op_type {
         VecOpType::Int64 => {
+            result += &format!("\t\tlong2 *op1 = (long2*)(&{});\n", reg1);
+            result += &format!("\t\tlong2 op2 = (long2)({});\n", reg2);
+        },
+        VecOpType::UInt64 => {
             result += &format!("\t\tulong2 *op1 = (ulong2*)(&{});\n", reg1);
             result += &format!("\t\tulong2 op2 = (ulong2)({});\n", reg2);
         },
@@ -117,10 +126,15 @@ pub fn vec_x_by_y_binop(_writer: &opencl_writer::OpenCLCWriter,
 
     result += &format!("\t{{\n");
     match op_type {
-        VecOpType::Int64 => {
+        VecOpType::UInt64 => {
             result += &format!("\t\tulong2 *op1 = (ulong2*)&{};\n", reg1);
             result += &format!("\t\tulong2 *op2 = (ulong2*)&{};\n", reg2);
             result += &format!("\t\tulong2 *res = (ulong2*)&{};\n", result_register);
+        },
+        VecOpType::Int64 => {
+            result += &format!("\t\tlong2 *op1 = (long2*)&{};\n", reg1);
+            result += &format!("\t\tlong2 *op2 = (long2*)&{};\n", reg2);
+            result += &format!("\t\tlong2 *res = (long2*)&{};\n", result_register);
         },
         VecOpType::Float32 => {
             result += &format!("\t\tfloat4 *op1 = (float4*)&{};\n", reg1);
@@ -203,6 +217,16 @@ pub fn vec_x_by_y_binop(_writer: &opencl_writer::OpenCLCWriter,
         VecBinOp::GeU | VecBinOp::GeS => {
             format!(
                 "\t\t*res = *op1 >= *op2;\n"
+            )
+        },
+        VecBinOp::LtU | VecBinOp::LtS => {
+            format!(
+                "\t\t*res = *op1 < *op2;\n"
+            )
+        },
+        VecBinOp::LeU | VecBinOp::LeS => {
+            format!(
+                "\t\t*res = *op1 <= *op2;\n"
             )
         },
     };

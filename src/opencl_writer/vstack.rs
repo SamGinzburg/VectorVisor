@@ -2042,6 +2042,8 @@ impl<'a> StackCtx {
                 Instruction::I64x2Eq |
                 Instruction::I64x2GeS |
                 Instruction::I64x2GtS |
+                Instruction::I64x2LtS |
+                Instruction::I64x2LeS |
                 Instruction::I64x2Ne => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.pop().unwrap();
@@ -2090,6 +2092,10 @@ impl<'a> StackCtx {
                     update_counter(&mut current_u128_count, &mut max_u128_count);
                     current_i64_count -= 1;
                 },
+                Instruction::I8x16LeS |
+                Instruction::I8x16LeU |
+                Instruction::I8x16LtS |
+                Instruction::I8x16LtU |
                 Instruction::I64x2Shl |
                 Instruction::I64x2ShrU |
                 Instruction::I64x2ShrS |
@@ -2135,6 +2141,10 @@ impl<'a> StackCtx {
                 },
                 Instruction::I16x8Add |
                 Instruction::I16x8GeS |
+                Instruction::I16x8LtS |
+                Instruction::I16x8LtU |
+                Instruction::I16x8LeS |
+                Instruction::I16x8LeU |
                 Instruction::I16x8GeU |
                 Instruction::I16x8Sub => {
                     stack_sizes.pop().unwrap();
@@ -2193,6 +2203,10 @@ impl<'a> StackCtx {
                 Instruction::I32x4GeS |
                 Instruction::I32x4GeU |
                 Instruction::I32x4GtS |
+                Instruction::I32x4LtS |
+                Instruction::I32x4LtU |
+                Instruction::I32x4LeS |
+                Instruction::I32x4LeU |
                 Instruction::I32x4GtU |
                 Instruction::I32x4MaxU => {
                     stack_sizes.pop().unwrap();
