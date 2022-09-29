@@ -1,0 +1,13 @@
+(module
+  (func $_start (result v128)
+    (local $l2 v128)
+    ;;(f32.const 0.5)
+    ;;(f32x4.splat)
+    (v128.const i32x4 0x00000001 0x00000002 0x00000003 0x00000004)
+    (local.set $l2)
+    (local.get $l2)
+    (local.get $l2)
+    (i32x4.ge_s)
+  )
+  (export "_start" (func $_start))
+)

@@ -808,7 +808,7 @@ pub fn emit_poll_oneoff_pre(
     ret_str += &format!("\t___private_memcpy_gpu2cpu((ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), warp_idx, read_idx, thread_idx, scratch_space);\n",
                         &format!("(global char *)heap_u32+{}", subscription_ptr),
                         "heap_u32", // mem_start_src
-                        "(ulong)((global char *)hypercall_buffer+(hcall_size*warp_idx)+next_buffer_start+4)", //dst, first 4 bytes are the len
+                        "(ulong)((global char *)hypercall_buffer+(hcall_size*warp_idx)+4)", //dst, first 4 bytes are the len
                         "hypercall_buffer", // mem_start_dst
                         format!("{} * {}", std::mem::size_of::<Subscription>(), subscription_num)); // the length of the buffer
 
@@ -828,11 +828,13 @@ pub fn emit_poll_oneoff_post(
     let result_ptr = stack_ctx.vstack_pop(StackType::i32);
     let result_register = stack_ctx.vstack_alloc(StackType::i32);
 
+    /*
+    TODO
     // copy the subscriptions
     ret_str += &format!("\t___private_memcpy_gpu2cpu((ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), warp_idx, read_idx, thread_idx, scratch_space);\n",
                         &format!("(global char *)heap_u32+{}", subscription_ptr),
                         "heap_u32", // mem_start_src
-                        "(ulong)((global char *)hypercall_buffer+(hcall_size*warp_idx)+next_buffer_start+4)", //dst, first 4 bytes are the len
+                        "(ulong)((global char *)hypercall_buffer+(hcall_size*warp_idx)+4)", //dst, first 4 bytes are the len
                         "hypercall_buffer", // mem_start_dst
                         format!("{} * {}", std::mem::size_of::<Subscription>(), subscription_num)); // the length of the buffer
 
@@ -845,7 +847,7 @@ pub fn emit_poll_oneoff_post(
                                                                   "(ulong)(heap_u32)",
                                                                   nwritten,
                                                                   "warp_idx"));
-
+    */
     // error code
     ret_str += &format!("\t{} = {};\n", result_register, "hcall_ret_val");
 

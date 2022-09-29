@@ -1252,7 +1252,7 @@ pub fn emit_memload_u128_load_m_x_n(
             ret_str += &format!("\t{{\n");
             ret_str += &format!("\t\tint *temp1 = (int*)(&{});\n", vec);
             ret_str += &format!("\t\tshort4 temp2 = (short4)({});\n", load);
-            ret_str += &format!("\t\tshort *temp3 = (short*)(temp2);\n");
+            ret_str += &format!("\t\tshort *temp3 = (short*)(&temp2);\n");
 
             for idx in 0..4 {
                 ret_str += &format!("\t\ttemp1[{}] = (int)(temp3[{}]);\n", idx, idx);
@@ -1263,7 +1263,7 @@ pub fn emit_memload_u128_load_m_x_n(
             ret_str += &format!("\t{{\n");
             ret_str += &format!("\t\tuint *temp1 = (uint*)(&{});\n", vec);
             ret_str += &format!("\t\tushort4 temp2 = (ushort4)({});\n", load);
-            ret_str += &format!("\t\tshort *temp3 = (short*)(temp2);\n");
+            ret_str += &format!("\t\tshort *temp3 = (short*)(&temp2);\n");
             for idx in 0..4 {
                 ret_str += &format!("\t\ttemp1[{}] = (uint)(temp3[{}]);\n", idx, idx);
             }
@@ -1273,7 +1273,7 @@ pub fn emit_memload_u128_load_m_x_n(
             ret_str += &format!("\t{{\n");
             ret_str += &format!("\t\tlong *temp1 = (long*)(&{});\n", vec);
             ret_str += &format!("\t\tint2 temp2 = (int2)({});\n", load);
-            ret_str += &format!("\t\tint *temp3 = (int*)(temp2);\n");
+            ret_str += &format!("\t\tint *temp3 = (int*)(&temp2);\n");
 
             for idx in 0..2 {
                 ret_str += &format!("\t\ttemp1[{}] = (long)(temp3[{}]);\n", idx, idx);
@@ -1284,7 +1284,7 @@ pub fn emit_memload_u128_load_m_x_n(
             ret_str += &format!("\t{{\n");
             ret_str += &format!("\t\tulong *temp1 = (ulong*)(&{});\n", vec);
             ret_str += &format!("\t\tuint2 temp2 = (uint2)({});\n", load);
-            ret_str += &format!("\t\tuint *temp3 = (uint*)(temp2);\n");
+            ret_str += &format!("\t\tuint *temp3 = (uint*)(&temp2);\n");
             for idx in 0..2 {
                 ret_str += &format!("\t\ttemp1[{}] = (ulong)(temp3[{}]);\n", idx, idx);
             }
