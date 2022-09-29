@@ -172,13 +172,13 @@ pub fn vec_x_by_y_binop(_writer: &opencl_writer::OpenCLCWriter,
             result += &format!("\t\tchar16 *op1 = (char16*)&{};\n", reg1);
             result += &format!("\t\tchar16 *op2 = (char16*)&{};\n", reg2);
             result += &format!("\t\tchar16 *res = (char16*)&{};\n", result_register);
-            format!("int8")
+            format!("char16")
         },
         VecOpType::UInt8 => {
             result += &format!("\t\tuchar16 *op1 = (uchar16*)&{};\n", reg1);
             result += &format!("\t\tuchar16 *op2 = (uchar16*)&{};\n", reg2);
             result += &format!("\t\tuchar16 *res = (uchar16*)&{};\n", result_register);
-            format!("uint8")
+            format!("uchar16")
         },
     };
 
@@ -225,7 +225,7 @@ pub fn vec_x_by_y_binop(_writer: &opencl_writer::OpenCLCWriter,
         },
         VecBinOp::GeU | VecBinOp::GeS => {
             format!(
-                "\t\t*res = ({})(*op1 >= *op2);\n",
+                "\t\t*res = convert_{}(*op1 >= *op2);\n",
                 typecast
             )
         },

@@ -2475,7 +2475,12 @@ __attribute__((always_inline)) void {}(global uint   *stack_u32,
             }
         }
         let start_func = match start_fn_name_tmp {
-            Some(Export{span, name, kind, item}) => name.to_string(),
+            Some(Export{span, name, kind, item}) => {
+                match item {
+                    Index::Id(id) => format_fn_name(id.name()),
+                    Index::Num(n, _) => format!("func_{}", n),
+                }
+            },
             _ => panic!("Could not identify start function"),
         };
     
