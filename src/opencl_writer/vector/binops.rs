@@ -125,53 +125,62 @@ pub fn vec_x_by_y_binop(_writer: &opencl_writer::OpenCLCWriter,
     let mut result = String::from("");
 
     result += &format!("\t{{\n");
-    match op_type {
+    let typecast = match op_type {
         VecOpType::UInt64 => {
             result += &format!("\t\tulong2 *op1 = (ulong2*)&{};\n", reg1);
             result += &format!("\t\tulong2 *op2 = (ulong2*)&{};\n", reg2);
             result += &format!("\t\tulong2 *res = (ulong2*)&{};\n", result_register);
+            format!("ulong2")
         },
         VecOpType::Int64 => {
             result += &format!("\t\tlong2 *op1 = (long2*)&{};\n", reg1);
             result += &format!("\t\tlong2 *op2 = (long2*)&{};\n", reg2);
             result += &format!("\t\tlong2 *res = (long2*)&{};\n", result_register);
+            format!("long2")
         },
         VecOpType::Float32 => {
             result += &format!("\t\tfloat4 *op1 = (float4*)&{};\n", reg1);
             result += &format!("\t\tfloat4 *op2 = (float4*)&{};\n", reg2);
-            result += &format!("\t\tfloat4 *res = (float4*)&{};\n", result_register);        
+            result += &format!("\t\tfloat4 *res = (float4*)&{};\n", result_register);
+            format!("float4")
         },
         VecOpType::Int32 => {
             result += &format!("\t\tint4 *op1 = (int4*)&{};\n", reg1);
             result += &format!("\t\tint4 *op2 = (int4*)&{};\n", reg2);
-            result += &format!("\t\tint4 *res = (int4*)&{};\n", result_register);        
+            result += &format!("\t\tint4 *res = (int4*)&{};\n", result_register);
+            format!("int4")
         },
         VecOpType::UInt32 => {
             result += &format!("\t\tuint4 *op1 = (uint4*)&{};\n", reg1);
             result += &format!("\t\tuint4 *op2 = (uint4*)&{};\n", reg2);
-            result += &format!("\t\tuint4 *res = (uint4*)&{};\n", result_register);        
+            result += &format!("\t\tuint4 *res = (uint4*)&{};\n", result_register);
+            format!("uint4")
         },
         VecOpType::Int16 => {
             result += &format!("\t\tshort8 *op1 = (short8*)&{};\n", reg1);
             result += &format!("\t\tshort8 *op2 = (short8*)&{};\n", reg2);
-            result += &format!("\t\tshort8 *res = (short8*)&{};\n", result_register);        
+            result += &format!("\t\tshort8 *res = (short8*)&{};\n", result_register);
+            format!("short8")
         },
         VecOpType::UInt16 => {
             result += &format!("\t\tushort8 *op1 = (ushort8*)&{};\n", reg1);
             result += &format!("\t\tushort8 *op2 = (ushort8*)&{};\n", reg2);
-            result += &format!("\t\tushort8 *res = (ushort8*)&{};\n", result_register);        
+            result += &format!("\t\tushort8 *res = (ushort8*)&{};\n", result_register);
+            format!("ushort8")
         },
         VecOpType::Int8 => {
             result += &format!("\t\tchar16 *op1 = (char16*)&{};\n", reg1);
             result += &format!("\t\tchar16 *op2 = (char16*)&{};\n", reg2);
-            result += &format!("\t\tchar16 *res = (char16*)&{};\n", result_register);        
+            result += &format!("\t\tchar16 *res = (char16*)&{};\n", result_register);
+            format!("int8")
         },
         VecOpType::UInt8 => {
             result += &format!("\t\tuchar16 *op1 = (uchar16*)&{};\n", reg1);
             result += &format!("\t\tuchar16 *op2 = (uchar16*)&{};\n", reg2);
-            result += &format!("\t\tuchar16 *res = (uchar16*)&{};\n", result_register);        
+            result += &format!("\t\tuchar16 *res = (uchar16*)&{};\n", result_register);
+            format!("uint8")
         },
-    }
+    };
 
     result += &match binop {
         VecBinOp::Add => {
@@ -216,7 +225,8 @@ pub fn vec_x_by_y_binop(_writer: &opencl_writer::OpenCLCWriter,
         },
         VecBinOp::GeU | VecBinOp::GeS => {
             format!(
-                "\t\t*res = *op1 >= *op2;\n"
+                "\t\t*res = ({})(*op1 >= *op2);\n",
+                typecast
             )
         },
         VecBinOp::LtU | VecBinOp::LtS => {

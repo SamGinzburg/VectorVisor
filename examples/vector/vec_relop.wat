@@ -7,7 +7,7 @@
     (local.set $l2)
     (local.get $l2)
     (local.get $l2)
-    (i32x4.ge_s)
+    (i32x4.ge_u)
   )
   (export "_start" (func $_start))
 )
