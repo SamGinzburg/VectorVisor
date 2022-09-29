@@ -1253,7 +1253,7 @@ pub fn emit_memload_u128_load_m_x_n(
             ret_str += &format!("\t\tshort *temp1 = (short*)(&{});\n", vec);
             ret_str += &format!("\t\tshort4 temp2 = (short4)({});\n", load);
             for idx in 0..8 {
-                ret_str += &format!("\t\ttemp1[{}] = (short)(temp2[idx]);\n", idx);
+                ret_str += &format!("\t\ttemp1[{}] = (short)(temp2[{}]);\n", idx, idx);
             }
             ret_str += &format!("\t}}\n");
         },
@@ -1262,7 +1262,7 @@ pub fn emit_memload_u128_load_m_x_n(
             ret_str += &format!("\t\tushort *temp1 = (ushort*)(&{});\n", vec);
             ret_str += &format!("\t\tushort4 temp2 = (ushort4)({});\n", load);
             for idx in 0..8 {
-                ret_str += &format!("\t\ttemp1[{}] = (ushort)(temp2[idx]);\n", idx);
+                ret_str += &format!("\t\ttemp1[{}] = (ushort)(temp2[{}]);\n", idx, idx);
             }
             ret_str += &format!("\t}}\n");
         },
@@ -1271,7 +1271,7 @@ pub fn emit_memload_u128_load_m_x_n(
             ret_str += &format!("\t\tint *temp1 = (int*)(&{});\n", vec);
             ret_str += &format!("\t\tint4 temp2 = (int4)({});\n", load);
             for idx in 0..8 {
-                ret_str += &format!("\t\ttemp1[{}] = (int)(temp2[idx]);\n", idx);
+                ret_str += &format!("\t\ttemp1[{}] = (int)(temp2[{}]);\n", idx, idx);
             }
             ret_str += &format!("\t}}\n");
         },
@@ -1280,7 +1280,7 @@ pub fn emit_memload_u128_load_m_x_n(
             ret_str += &format!("\t\tuint *temp1 = (uint*)(&{});\n", vec);
             ret_str += &format!("\t\tuint4 temp2 = (uint4)({});\n", load);
             for idx in 0..8 {
-                ret_str += &format!("\t\ttemp1[{}] = (uint)(temp2[idx]);\n", idx);
+                ret_str += &format!("\t\ttemp1[{}] = (uint)(temp2[{}]);\n", idx, idx);
             }
             ret_str += &format!("\t}}\n");
         },
