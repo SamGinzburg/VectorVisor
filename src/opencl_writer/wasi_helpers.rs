@@ -972,6 +972,45 @@ pub fn emit_fd_read_post(
     ret_str
 }
 
+pub fn emit_path_filestat_get_pre(
+    _writer: &opencl_writer::OpenCLCWriter,
+    stack_ctx: &mut StackCtx,
+    _debug: bool,
+) -> String {
+    let mut ret_str = String::from("");
+
+    let _fd = stack_ctx.vstack_peak(StackType::i32, 0);
+    let _flags = stack_ctx.vstack_peak(StackType::i32, 1);
+    let _path_ptr = stack_ctx.vstack_peak(StackType::i32, 2);
+    let _path_len = stack_ctx.vstack_peak(StackType::i32, 3);
+    let _result_ptr = stack_ctx.vstack_peak(StackType::i32, 4);
+
+    // TODO
+    ret_str += &emit_trap(TrapCode::TrapUnimplemented, true);
+
+    ret_str
+}
+
+pub fn emit_path_filestat_get_post(
+    _writer: &opencl_writer::OpenCLCWriter,
+    stack_ctx: &mut StackCtx,
+    _debug: bool,
+) -> String {
+    let mut ret_str = String::from("");
+
+    let _fd = stack_ctx.vstack_pop(StackType::i32);
+    let _flags = stack_ctx.vstack_pop(StackType::i32);
+    let _path_ptr = stack_ctx.vstack_pop(StackType::i32);
+    let _path_len = stack_ctx.vstack_pop(StackType::i32);
+    let _result_ptr = stack_ctx.vstack_pop(StackType::i32);
+    let result_register = stack_ctx.vstack_alloc(StackType::i32);
+
+    // TODO
+    ret_str += &emit_trap(TrapCode::TrapUnimplemented, true);
+
+    ret_str += &format!("\t{} = {};\n", result_register, "hcall_ret_val");
+    ret_str
+}
 
 pub fn emit_fd_filestat_get_pre(
     _writer: &opencl_writer::OpenCLCWriter,

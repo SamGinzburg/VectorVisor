@@ -316,6 +316,9 @@ impl<'a> OpenCLCWriter<'_> {
             WasmHypercallId::fd_filestat_get => {
                 ret_str += &emit_fd_filestat_get_pre(self, stack_ctx, debug)
             },
+            WasmHypercallId::path_filestat_get => {
+                ret_str += &emit_path_filestat_get_pre(self, stack_ctx, debug)
+            },
             WasmHypercallId::fd_fdstat_get => {
                 ret_str += &emit_fd_fdstat_get_helper(self, stack_ctx, debug)
             },
@@ -365,6 +368,9 @@ impl<'a> OpenCLCWriter<'_> {
         // after the hypercall, we need to reset values on re-entry, and possible copy data back from the hcall buf
         // skipped hypercall entries here are no-ops
         match hypercall_id {
+            WasmHypercallId::path_filestat_get => {
+                ret_str += &emit_path_filestat_get_post(self, stack_ctx, debug)
+            },
             WasmHypercallId::path_unlink_file => {
                 ret_str += &emit_path_unlink_file_post(self, stack_ctx, debug)
             },
