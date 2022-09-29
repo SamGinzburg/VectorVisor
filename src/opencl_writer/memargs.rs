@@ -1250,37 +1250,43 @@ pub fn emit_memload_u128_load_m_x_n(
     match extend_width {
         VecStoreWidth::I16 if signed == true => {
             ret_str += &format!("\t{{\n");
-            ret_str += &format!("\t\tshort *temp1 = (short*)(&{});\n", vec);
+            ret_str += &format!("\t\tint *temp1 = (int*)(&{});\n", vec);
             ret_str += &format!("\t\tshort4 temp2 = (short4)({});\n", load);
-            for idx in 0..8 {
-                ret_str += &format!("\t\ttemp1[{}] = (short)(temp2[{}]);\n", idx, idx);
+            ret_str += &format!("\t\tshort *temp3 = (short*)(temp2);\n");
+
+            for idx in 0..4 {
+                ret_str += &format!("\t\ttemp1[{}] = (int)(temp3[{}]);\n", idx, idx);
             }
             ret_str += &format!("\t}}\n");
         },
         VecStoreWidth::I16 => {
             ret_str += &format!("\t{{\n");
-            ret_str += &format!("\t\tushort *temp1 = (ushort*)(&{});\n", vec);
+            ret_str += &format!("\t\tuint *temp1 = (uint*)(&{});\n", vec);
             ret_str += &format!("\t\tushort4 temp2 = (ushort4)({});\n", load);
-            for idx in 0..8 {
-                ret_str += &format!("\t\ttemp1[{}] = (ushort)(temp2[{}]);\n", idx, idx);
+            ret_str += &format!("\t\tshort *temp3 = (short*)(temp2);\n");
+            for idx in 0..4 {
+                ret_str += &format!("\t\ttemp1[{}] = (uint)(temp3[{}]);\n", idx, idx);
             }
             ret_str += &format!("\t}}\n");
         },
         VecStoreWidth::I32 if signed == true => {
             ret_str += &format!("\t{{\n");
-            ret_str += &format!("\t\tint *temp1 = (int*)(&{});\n", vec);
-            ret_str += &format!("\t\tint4 temp2 = (int4)({});\n", load);
-            for idx in 0..8 {
-                ret_str += &format!("\t\ttemp1[{}] = (int)(temp2[{}]);\n", idx, idx);
+            ret_str += &format!("\t\tlong *temp1 = (long*)(&{});\n", vec);
+            ret_str += &format!("\t\tint2 temp2 = (int2)({});\n", load);
+            ret_str += &format!("\t\tint *temp3 = (int*)(temp2);\n");
+
+            for idx in 0..2 {
+                ret_str += &format!("\t\ttemp1[{}] = (long)(temp3[{}]);\n", idx, idx);
             }
             ret_str += &format!("\t}}\n");
         },
         VecStoreWidth::I32 => {
             ret_str += &format!("\t{{\n");
-            ret_str += &format!("\t\tuint *temp1 = (uint*)(&{});\n", vec);
-            ret_str += &format!("\t\tuint4 temp2 = (uint4)({});\n", load);
-            for idx in 0..8 {
-                ret_str += &format!("\t\ttemp1[{}] = (uint)(temp2[{}]);\n", idx, idx);
+            ret_str += &format!("\t\tulong *temp1 = (ulong*)(&{});\n", vec);
+            ret_str += &format!("\t\tuint2 temp2 = (uint2)({});\n", load);
+            ret_str += &format!("\t\tuint *temp3 = (uint*)(temp2);\n");
+            for idx in 0..2 {
+                ret_str += &format!("\t\ttemp1[{}] = (ulong)(temp3[{}]);\n", idx, idx);
             }
             ret_str += &format!("\t}}\n");
         },
