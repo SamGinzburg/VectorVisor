@@ -3118,42 +3118,45 @@ impl<'a> StackCtx {
      * Get the most recent intermediate value from the stack
      */
     pub fn vstack_pop(&mut self, t: StackType) -> String {
-        self.total_stack_types.pop().unwrap();
+        let panic_msg = &format!("vstack_pop err: {:?}", self);
+        let get_panic_msg = &format!("vstack_pop get err: {:?}", self);
+
+        self.total_stack_types.pop().expect(panic_msg);
         match t {
             StackType::i32 => {
                 if self.i32_idx == 0 {
                     panic!("vstack_pop failed to pop i32 register: {:?}", self);
                 }
                 self.i32_idx -= 1;
-                format!("{}", self.i32_stack.get(self.i32_idx).unwrap())
+                format!("{}", self.i32_stack.get(self.i32_idx).expect(get_panic_msg))
             }
             StackType::i64 => {
                 if self.i64_idx == 0 {
                     panic!("vstack_pop failed to pop i64 register: {:?}", self);
                 }
                 self.i64_idx -= 1;
-                format!("{}", self.i64_stack.get(self.i64_idx).unwrap())
+                format!("{}", self.i64_stack.get(self.i64_idx).expect(get_panic_msg))
             }
             StackType::f32 => {
                 if self.f32_idx == 0 {
                     panic!("vstack_pop failed to pop f32 register: {:?}", self);
                 }
                 self.f32_idx -= 1;
-                format!("{}", self.f32_stack.get(self.f32_idx).unwrap())
+                format!("{}", self.f32_stack.get(self.f32_idx).expect(get_panic_msg))
             }
             StackType::f64 => {
                 if self.f64_idx == 0 {
                     panic!("vstack_pop failed to pop f64 register: {:?}", self);
                 }
                 self.f64_idx -= 1;
-                format!("{}", self.f64_stack.get(self.f64_idx).unwrap())
+                format!("{}", self.f64_stack.get(self.f64_idx).expect(get_panic_msg))
             }
             StackType::u128 => {
                 if self.u128_idx == 0 {
                     panic!("vstack_pop failed to pop u128 register: {:?}", self);
                 }
                 self.u128_idx -= 1;
-                format!("{}", self.u128_stack.get(self.u128_idx).unwrap())
+                format!("{}", self.u128_stack.get(self.u128_idx).expect(get_panic_msg))
             }
         }
     }

@@ -313,6 +313,9 @@ impl<'a> OpenCLCWriter<'_> {
             WasmHypercallId::fd_write => {
                 ret_str += &emit_fd_write_call_helper(self, stack_ctx, debug)
             },
+            WasmHypercallId::fd_filestat_get => {
+                ret_str += &emit_fd_filestat_get_pre(self, stack_ctx, debug)
+            },
             WasmHypercallId::fd_fdstat_get => {
                 ret_str += &emit_fd_fdstat_get_helper(self, stack_ctx, debug)
             },
@@ -382,6 +385,9 @@ impl<'a> OpenCLCWriter<'_> {
             },
             WasmHypercallId::path_open => {
                 ret_str += &emit_path_open_post(self, stack_ctx, debug)
+            },
+            WasmHypercallId::fd_filestat_get => {
+                ret_str += &emit_fd_filestat_get_post(self, stack_ctx, debug)
             },
             WasmHypercallId::fd_close => {
                 ret_str += &emit_fd_close_post(self, stack_ctx, debug)
