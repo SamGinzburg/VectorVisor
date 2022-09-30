@@ -1560,10 +1560,25 @@ impl<'a> OpenCLCWriter<'_> {
 
                 // for each local, push them onto the stack
 
+                let mut local_stack_offset = 0;
                 if !is_fastcall {
                     for local in locals {
-                        final_string += &emit_local(&self, local.clone(), debug);
+                        //final_string += &emit_local(&self, local.clone(), debug);
+                        local_stack_offset += match local.ty {
+                            ValType::I32 => 2,
+                            ValType::I64 => 2,
+                            ValType::F32 => 2,
+                            ValType::F64 => 2,
+                            ValType::V128 => 4,
+                            _ => panic!("unknown type, local zeroing code"),
+                        };
                     }
+                    // memfill the stack for local values
+                    final_string += &format!("\t{}\n", emit_intra_vm_memfill(&format!("((global char*)(stack_u32+*sp))"), "(global char*)(stack_u32)",
+                                                            &"0",
+                                                            &format!("{}", local_stack_offset*4),
+                                                            "warp_idx"));
+                    final_string += &format!("\t*sp += {};\n", local_stack_offset);
                 }
 
                 if !is_fastcall {
