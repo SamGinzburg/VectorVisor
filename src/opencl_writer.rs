@@ -2469,11 +2469,15 @@ __attribute__((always_inline)) void {}(global uint   *stack_u32,
         HashMap<u32, String>,
         HashMap<u32, (u32, u32, u32, u32, u32, u32, u32)>,
         HashMap<u32, u32>,
+        HashMap<u32, Vec<String>>,
         Vec<u8>
     ) {
         let mut output = String::new();
         let mut header = String::new();
         let mut kernel_hashmap: HashMap<u32, String> = HashMap::new();
+        // map partition idx to set of functions for debugging in case of a crash
+        let mut partition_hashmap: HashMap<u32, Vec<String>> = HashMap::new();
+
         let mut kernel_compile_stats: HashMap<u32, (u32, u32, u32, u32, u32, u32, u32)> =
             HashMap::new();
         let mut kernel_partition_mappings: HashMap<u32, u32> = HashMap::new();
@@ -3011,7 +3015,7 @@ ulong get_clock() {
                 function_idx_label_temp.insert(fname, *fname_idx);
                 kernel_partition_mappings.insert(*fname_idx, partition_idx);
             }
-
+            partition_hashmap.insert(partition_idx.clone(), Vec::from_iter(partition.clone()));
             // Check the partition size to see if we need to regenerate registers with constraints
             let max_partition_reg_usage: u32 = *partition_intermediate_size.iter().max().unwrap();
             let sum_partition_reg_usage = partition_intermediate_size.iter().sum::<u32>();
@@ -3297,6 +3301,7 @@ ulong get_clock() {
             kernel_hashmap,
             kernel_compile_stats,
             kernel_partition_mappings,
+            partition_hashmap,
             data_segment
         )
     }

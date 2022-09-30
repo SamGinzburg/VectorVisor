@@ -415,6 +415,7 @@ fn main() {
             _,
             _,
             _,
+            _,
             data_segment,
         ) = ast.write_opencl_file(
             hcall_size.try_into().unwrap(),
@@ -493,6 +494,7 @@ fn main() {
                     _kernel_hashmap,
                     _kernel_compile_stats,
                     kernel_partition_mappings,
+                    kernel_part_debug,
                     data_segment
                 ) = ast.write_opencl_file(
                     hcall_size.try_into().unwrap(),
@@ -524,6 +526,7 @@ fn main() {
 
                 (
                     InputProgram::Text(kernel_partition_mappings,
+                                       kernel_part_debug,
                                        compiled_kernel.clone(),
                                        fastcall_header.clone(),
                                        data_segment),
@@ -554,6 +557,7 @@ fn main() {
                     _kernel_hashmap,
                     _kernel_compile_stats,
                     kernel_partition_mappings,
+                    kernel_part_debug,
                     data_segment,
                 ) = ast.write_opencl_file(
                     hcall_size.try_into().unwrap(),
@@ -585,6 +589,7 @@ fn main() {
 
                 (
                     InputProgram::Text(kernel_partition_mappings,
+                                       kernel_part_debug,
                                        compiled_kernel.clone(),
                                        fastcall_header.clone(),
                                        data_segment),
@@ -618,6 +623,7 @@ fn main() {
                     kernel_hashmap,
                     kernel_compile_stats,
                     kernel_partition_mappings,
+                    kernel_part_debug,
                     data_segment,
                 ) = ast.write_opencl_file(
                     hcall_size.try_into().unwrap(),
@@ -650,6 +656,7 @@ fn main() {
                 (
                     InputProgram::Partitioned(
                         kernel_hashmap.clone(),
+                        kernel_part_debug,
                         fastcall_header.clone(),
                         kernel_compile_stats.clone(),
                         kernel_partition_mappings.clone(),
@@ -682,6 +689,7 @@ fn main() {
                     kernel_hashmap,
                     kernel_compile_stats,
                     kernel_partition_mappings,
+                    kernel_part_debug,
                     data_segment,
                 ) = ast.write_opencl_file(
                     hcall_size.try_into().unwrap(),
@@ -714,6 +722,7 @@ fn main() {
                 (
                     InputProgram::Partitioned(
                         kernel_hashmap.clone(),
+                        kernel_part_debug,
                         fastcall_header.clone(),
                         kernel_compile_stats.clone(),
                         kernel_partition_mappings.clone(),
@@ -736,6 +745,7 @@ fn main() {
                 println!("Loaded program with entry point: {}, num_compiled_funcs: {}, globals_buffer_size: {}, interleave: {}", program.entry_point, program.num_compiled_funcs, program.globals_buffer_size, program.interleave);
                 (
                     InputProgram::Binary(program.kernel_partition_mappings,
+                                         program.kernel_part_debug,
                                          program.program_data,
                                          program.data_segment),
                     program.entry_point,
@@ -758,6 +768,7 @@ fn main() {
                     InputProgram::PartitionedBinary(
                         program.program_data,
                         program.partition_mapping,
+                        program.kernel_part_debug,
                         program.data_segment
                     ),
                     program.entry_point,

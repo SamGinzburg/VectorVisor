@@ -151,6 +151,7 @@ impl OpenCLBuffers {
 pub struct SeralizedProgram {
     pub program_data: Vec<u8>,
     pub kernel_partition_mappings: HashMap<u32, u32>,
+    pub kernel_part_debug: HashMap<u32, Vec<String>>,
     pub entry_point: u32,
     pub num_compiled_funcs: u32,
     pub globals_buffer_size: u32,
@@ -162,6 +163,7 @@ pub struct SeralizedProgram {
 pub struct PartitionedSeralizedProgram {
     pub program_data: HashMap<u32, Vec<u8>>,
     pub partition_mapping: HashMap<u32, u32>,
+    pub kernel_part_debug: HashMap<u32, Vec<String>>,
     pub entry_point: u32,
     pub num_compiled_funcs: u32,
     pub globals_buffer_size: u32,
@@ -171,22 +173,23 @@ pub struct PartitionedSeralizedProgram {
 
 #[derive(Clone)]
 pub enum InputProgram {
-    Binary(HashMap<u32, u32>, Vec<u8>, Vec<u8>),
-    Text(HashMap<u32, u32>, String, String, Vec<u8>),
+    Binary(HashMap<u32, u32>, HashMap<u32, Vec<String>>, Vec<u8>, Vec<u8>),
+    Text(HashMap<u32, u32>, HashMap<u32, Vec<String>>, String, String, Vec<u8>),
     Partitioned(
         HashMap<u32, String>,
+        HashMap<u32, Vec<String>>,
         String,
         HashMap<u32, (u32, u32, u32, u32, u32, u32, u32)>,
         HashMap<u32, u32>,
         Vec<u8>
     ),
-    PartitionedBinary(HashMap<u32, Vec<u8>>, HashMap<u32, u32>, Vec<u8>),
+    PartitionedBinary(HashMap<u32, Vec<u8>>, HashMap<u32, u32>, HashMap<u32, Vec<String>>, Vec<u8>),
 }
 
 #[derive(Clone)]
 pub enum ProgramType {
-    Standard(HashMap<u32, u32>, ocl::core::Program, Vec<u8>),
-    Partitioned(HashMap<u32, ocl::core::Program>, HashMap<u32, u32>, Vec<u8>),
+    Standard(HashMap<u32, u32>, HashMap<u32, Vec<String>>, ocl::core::Program, Vec<u8>),
+    Partitioned(HashMap<u32, ocl::core::Program>, HashMap<u32, u32>, HashMap<u32, Vec<String>>, Vec<u8>),
 }
 
 #[derive(Clone)]
@@ -277,7 +280,7 @@ impl OpenCLRunner {
 
             // decide which vector runner to use based off the compiled program enum...
             let status = match program {
-                ProgramType::Standard(original_mapping, program, data_segment) => {
+                ProgramType::Standard(original_mapping, kernel_part_debug, program, data_segment) => {
                     let mut program_map: HashMap<u32, ocl::core::Program> = HashMap::new();
                     program_map.insert(0, program.clone());
                     program_map.insert(99999, program);
@@ -295,6 +298,7 @@ impl OpenCLRunner {
                         mexec,
                         program_map,
                         kernel_partition_mapping,
+                        kernel_part_debug,
                         &leaked_command_queue,
                         hypercall_buffer_read_buffer,
                         hypercall_input_buffer,
@@ -307,13 +311,14 @@ impl OpenCLRunner {
                         data_segment
                     )
                 },
-                ProgramType::Partitioned(program_map, kernel_partition_mapping, data_segment) => final_runner
+                ProgramType::Partitioned(program_map, kernel_partition_mapping, kernel_part_debug, data_segment) => final_runner
                     .run_partitioned_vector_vms(
                         stack_frames_size,
                         local_work_group,
                         mexec,
                         program_map,
                         kernel_partition_mapping,
+                        kernel_part_debug,
                         &leaked_command_queue,
                         hypercall_buffer_read_buffer,
                         hypercall_input_buffer,
@@ -633,7 +638,7 @@ impl OpenCLRunner {
 
         // compile the GPU kernel(s)
         let program_to_run = match &self.input_program {
-            InputProgram::Text(kernel_partition_mappings, program, fastcall_header, data_segment) => {
+            InputProgram::Text(kernel_partition_mappings, kernel_part_debug, program, fastcall_header, data_segment) => {
                 // create the build log
                 File::create(format!("recent.buildlog")).unwrap();
 
@@ -723,6 +728,7 @@ impl OpenCLRunner {
                 let program_to_serialize = SeralizedProgram {
                     program_data: binary,
                     kernel_partition_mappings: kernel_partition_mappings.clone(),
+                    kernel_part_debug: kernel_part_debug.clone(),
                     globals_buffer_size: globals_buffer_size,
                     entry_point: self.entry_point,
                     num_compiled_funcs: num_compiled_funcs,
@@ -738,9 +744,9 @@ impl OpenCLRunner {
                 let mut file = File::create(format!("{}.cl", input_filename)).unwrap();
                 file.write_all(&program.clone().into_bytes()).unwrap();
 
-                ProgramType::Standard(kernel_partition_mappings.clone(), final_program, data_segment.to_vec())
+                ProgramType::Standard(kernel_partition_mappings.clone(), kernel_part_debug.clone(), final_program, data_segment.to_vec())
             }
-            InputProgram::Binary(kernel_partition_mappings, b, data_segment) => {
+            InputProgram::Binary(kernel_partition_mappings, kernel_part_debug, b, data_segment) => {
                 let binary_start = std::time::Instant::now();
 
                 let program_to_run =
@@ -770,10 +776,11 @@ impl OpenCLRunner {
                     "Time to load program from binary: {:?}",
                     binary_prep_end - binary_start
                 );
-                ProgramType::Standard(kernel_partition_mappings.clone(), program_to_run, data_segment.to_vec())
+                ProgramType::Standard(kernel_partition_mappings.clone(), kernel_part_debug.clone(), program_to_run, data_segment.to_vec())
             }
             InputProgram::Partitioned(
                 map,
+                kernel_part_debug,
                 fastcall_header,
                 compile_stats_map,
                 kernel_partition_mappings,
@@ -972,6 +979,7 @@ impl OpenCLRunner {
                 let program_to_serialize = PartitionedSeralizedProgram {
                     program_data: final_binarized_hashmap,
                     partition_mapping: kernel_partition_mappings.clone(),
+                    kernel_part_debug: kernel_part_debug.clone(),
                     globals_buffer_size: globals_buffer_size,
                     entry_point: self.entry_point,
                     num_compiled_funcs: num_compiled_funcs,
@@ -983,9 +991,9 @@ impl OpenCLRunner {
                 let mut file = File::create(format!("{}.partbin", input_filename)).unwrap();
                 file.write_all(&serialized_program).unwrap();
 
-                ProgramType::Partitioned(final_hashmap, kernel_partition_mappings.clone(), data_segment.to_vec())
+                ProgramType::Partitioned(final_hashmap, kernel_partition_mappings.clone(), kernel_part_debug.clone(), data_segment.to_vec())
             }
-            InputProgram::PartitionedBinary(map, kernel_partition_mappings, data_segment) => {
+            InputProgram::PartitionedBinary(map, kernel_partition_mappings, kernel_part_debug, data_segment) => {
                 let mut final_hashmap: HashMap<u32, ocl::core::Program> = HashMap::new();
                 // create the build log
                 File::create(format!("recent.buildlog")).unwrap();
@@ -1041,7 +1049,7 @@ impl OpenCLRunner {
                     binary_prep_end - binary_start
                 ));
 
-                ProgramType::Partitioned(final_hashmap, kernel_partition_mappings.clone(), data_segment.to_vec())
+                ProgramType::Partitioned(final_hashmap, kernel_partition_mappings.clone(), kernel_part_debug.clone(), data_segment.to_vec())
             }
         };
 
@@ -1065,6 +1073,7 @@ impl OpenCLRunner {
         mexec: usize,
         program_map: HashMap<u32, ocl::core::Program>,
         kernel_partition_mappings: HashMap<u32, u32>,
+        kernel_part_debug: HashMap<u32, Vec<String>>,
         queue: &'static CommandQueue,
         hypercall_buffer_read_buffer: &'static mut [u8],
         hypercall_input_buffer: &'static mut [u8],
@@ -1640,7 +1649,7 @@ impl OpenCLRunner {
                     None::<Event>,
                     Some(&mut profiling_event),
                 )
-                .unwrap();
+                .expect(&format!("enqueue_kernel (start_kernel) error occured in partition group: {:?}", kernel_part_debug.get(&curr_func_id).unwrap()));
             }
             ocl::core::wait_for_event(&profiling_event).unwrap();
             let kernel_end = std::time::Instant::now();
