@@ -103,12 +103,12 @@ impl WasmtimeRunner {
                 // copy the output json
                 match mem {
                     Ok(memory) => {
-                        // Debug memory usage of functions
-                        //dbg!(memory.size(store));
-
                         let chan = self.vm_sender.get(self.vm_idx).unwrap();
-                        
                         let arr = memory.data(&caller);
+
+                        // Debug memory usage of functions
+                        //println!("wasmtime vm memory len: {:?}", &arr.len());
+
                         let resp_buf_len: usize = buf_len.try_into().unwrap();
                         let mut resp_buf = vec![0u8; resp_buf_len];
                         let main_mem_start = buf_ptr.try_into().unwrap();
@@ -164,6 +164,9 @@ impl WasmtimeRunner {
         let entry_point = instance.get_func(&mut store, "_start").expect("Could not find _start function in WASM binary");
 
         // start running the VM
-        Ok(entry_point.call(&mut store, &[], &mut []).unwrap())
+        let result = Ok(entry_point.call(&mut store, &[], &mut []).unwrap());
+    
+        dbg!(&memory.size(store));
+        result
     }
 }

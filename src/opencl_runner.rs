@@ -1651,7 +1651,8 @@ impl OpenCLRunner {
                 )
                 .expect(&format!("enqueue_kernel (start_kernel) error occured in partition group: {:?}", kernel_part_debug.get(&curr_func_id).unwrap()));
             }
-            ocl::core::wait_for_event(&profiling_event).unwrap();
+            ocl::core::wait_for_event(&profiling_event)
+                    .expect(&format!("wait_for_event (start_kernel, profiling) error occured in partition group: {:?}", kernel_part_debug.get(&curr_func_id).unwrap()));
             let kernel_end = std::time::Instant::now();
             kernel_exec_time += (kernel_end - kernel_start).as_nanos();
 
