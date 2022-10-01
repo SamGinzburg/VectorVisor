@@ -1017,7 +1017,7 @@ impl<'a> StackCtx {
                 }
                 Instruction::I64Extend8S |
                 Instruction::I64Extend16S |
-                Instruction::I64Extend32S |
+                Instruction::I64ExtendI32S |
                 Instruction::I64ExtendI32U => {
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i64);
