@@ -792,6 +792,7 @@ impl<'a> OpenCLCWriter<'_> {
             Instruction::I64GeS => emit_i64_ge_s(self, stack_ctx, debug),
             Instruction::I32Xor => emit_i32_xor(self, stack_ctx, debug),
             Instruction::I32WrapI64 => emit_i32_wrap_i64(self, stack_ctx, debug),
+            Instruction::I64Extend8S => emit_i64_extend_8_s(self, stack_ctx, debug),
             Instruction::I64ExtendI32S => emit_i64_extend_i32_s(self, stack_ctx, debug),
             Instruction::I64ExtendI32U => emit_i64_extend_i32_u(self, stack_ctx, debug),
             Instruction::Call(idx) => {

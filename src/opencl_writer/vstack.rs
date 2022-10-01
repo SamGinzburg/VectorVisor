@@ -1015,6 +1015,12 @@ impl<'a> StackCtx {
                     current_i64_count -= 1;
                     update_counter(&mut current_i32_count, &mut max_i32_count);
                 }
+                Instruction::I64Extend8S => {
+                    stack_sizes.pop();
+                    stack_sizes.push(StackType::i64);
+                    current_i32_count -= 1;
+                    update_counter(&mut current_i64_count, &mut max_i64_count);
+                }
                 Instruction::I64ExtendI32S => {
                     stack_sizes.pop();
                     stack_sizes.push(StackType::i64);
