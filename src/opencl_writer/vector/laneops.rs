@@ -16,11 +16,11 @@ pub enum ExtractLane {
 
 pub enum NarrowType {
     Int8,
-    UInt8
+    UInt8,
 }
 
 pub enum NarrowLaneType {
-    Int16
+    Int16,
 }
 
 fn extract_lane_result(ty: ExtractLane) -> StackType {
@@ -54,128 +54,80 @@ pub fn extract_lane(
     match lanetype {
         ExtractLane::UInt8 => {
             result += &format!("\t\tuchar *temp = (uchar*)&{};\n", reg);
-            result += &format!(
-                "\t\t{} = temp[{}];\n",
-                result_register, laneval
-            );
-        },
+            result += &format!("\t\t{} = temp[{}];\n", result_register, laneval);
+        }
         ExtractLane::Int8 => {
             result += &format!("\t\tuchar *temp = (uchar*)&{};\n", reg);
-            result += &format!(
-                "\t\t{} = temp[{}];\n",
-                result_register, laneval
-            );
-        },
+            result += &format!("\t\t{} = temp[{}];\n", result_register, laneval);
+        }
         ExtractLane::UInt16 => {
             result += &format!("\t\tushort *temp = (ushort*)&{};\n", reg);
-            result += &format!(
-                "\t\t{} = temp[{}];\n",
-                result_register, laneval
-            );
-        },
+            result += &format!("\t\t{} = temp[{}];\n", result_register, laneval);
+        }
         ExtractLane::Int16 => {
             result += &format!("\t\tshort *temp = (short*)&{};\n", reg);
-            result += &format!(
-                "\t\t{} = temp[{}];\n",
-                result_register, laneval
-            );
-        },
+            result += &format!("\t\t{} = temp[{}];\n", result_register, laneval);
+        }
         ExtractLane::Int32 => {
             result += &format!("\t\tuint4 *temp = (uint4*)(&{});\n", reg);
             match laneval {
                 0 => {
-                    result += &format!(
-                        "\t\t{} = (*temp).x;\n",
-                        result_register
-                    );
-                },
+                    result += &format!("\t\t{} = (*temp).x;\n", result_register);
+                }
                 1 => {
-                    result += &format!(
-                        "\t\t{} = (*temp).y;\n",
-                        result_register
-                    );
-                },
+                    result += &format!("\t\t{} = (*temp).y;\n", result_register);
+                }
                 2 => {
-                    result += &format!(
-                        "\t\t{} = (*temp).z;\n",
-                        result_register
-                    );
-                },
+                    result += &format!("\t\t{} = (*temp).z;\n", result_register);
+                }
                 3 => {
-                    result += &format!(
-                        "\t\t{} = (*temp).w;\n",
-                        result_register
-                    );
-                },
-                _ => panic!("invalid lane idx")
+                    result += &format!("\t\t{} = (*temp).w;\n", result_register);
+                }
+                _ => panic!("invalid lane idx"),
             }
-        },
+        }
         ExtractLane::Int64 => {
             result += &format!("\t\tulong2 *temp = (ulong2*)(&{});\n", reg);
             match laneval {
                 0 => {
-                    result += &format!(
-                        "\t\t{} = (*temp).x;\n",
-                        result_register
-                    );
-                },
+                    result += &format!("\t\t{} = (*temp).x;\n", result_register);
+                }
                 1 => {
-                    result += &format!(
-                        "\t\t{} = (*temp).y;\n",
-                        result_register
-                    );
-                },
-                _ => panic!("invalid lane idx")
+                    result += &format!("\t\t{} = (*temp).y;\n", result_register);
+                }
+                _ => panic!("invalid lane idx"),
             }
-        },
+        }
         ExtractLane::Float32 => {
             result += &format!("\t\tfloat4 *temp = (float4*)(&{});\n", reg);
             match laneval {
                 0 => {
-                    result += &format!(
-                        "\t\t{} = (*temp).x;\n",
-                        result_register
-                    );
-                },
+                    result += &format!("\t\t{} = (*temp).x;\n", result_register);
+                }
                 1 => {
-                    result += &format!(
-                        "\t\t{} = (*temp).y;\n",
-                        result_register
-                    );
-                },
+                    result += &format!("\t\t{} = (*temp).y;\n", result_register);
+                }
                 2 => {
-                    result += &format!(
-                        "\t\t{} = (*temp).z;\n",
-                        result_register
-                    );
-                },
+                    result += &format!("\t\t{} = (*temp).z;\n", result_register);
+                }
                 3 => {
-                    result += &format!(
-                        "\t\t{} = (*temp).w;\n",
-                        result_register
-                    );
-                },
-                _ => panic!("invalid lane idx")
+                    result += &format!("\t\t{} = (*temp).w;\n", result_register);
+                }
+                _ => panic!("invalid lane idx"),
             }
-        },
+        }
         ExtractLane::Float64 => {
             result += &format!("\t\tdouble2 *temp = (double2*)(&{});\n", reg);
             match laneval {
                 0 => {
-                    result += &format!(
-                        "\t\t{} = (*temp).x;\n",
-                        result_register
-                    );
-                },
+                    result += &format!("\t\t{} = (*temp).x;\n", result_register);
+                }
                 1 => {
-                    result += &format!(
-                        "\t\t{} = (*temp).y;\n",
-                        result_register
-                    );
-                },
-                _ => panic!("invalid lane idx")
+                    result += &format!("\t\t{} = (*temp).y;\n", result_register);
+                }
+                _ => panic!("invalid lane idx"),
             }
-        },
+        }
         _ => panic!("Invalid type for extract_lane"),
     }
 
@@ -183,7 +135,6 @@ pub fn extract_lane(
 
     result
 }
-
 
 pub fn replace_lane(
     _writer: &opencl_writer::OpenCLCWriter,
@@ -210,98 +161,62 @@ pub fn replace_lane(
             result += &format!("\t\tuint4 *temp = (uint4*)(&{});\n", reg);
             match laneval {
                 0 => {
-                    result += &format!(
-                        "\t\t(*temp).x = {};\n",
-                        newval
-                    );
-                },
+                    result += &format!("\t\t(*temp).x = {};\n", newval);
+                }
                 1 => {
-                    result += &format!(
-                        "\t\t(*temp).y = {};\n",
-                        newval
-                    );
-                },
+                    result += &format!("\t\t(*temp).y = {};\n", newval);
+                }
                 2 => {
-                    result += &format!(
-                        "\t\t(*temp).z = {};\n",
-                        newval
-                    );
-                },
+                    result += &format!("\t\t(*temp).z = {};\n", newval);
+                }
                 3 => {
-                    result += &format!(
-                        "\t\t(*temp).w = {};\n",
-                        newval
-                    );
-                },
-                _ => panic!("invalid lane idx")
+                    result += &format!("\t\t(*temp).w = {};\n", newval);
+                }
+                _ => panic!("invalid lane idx"),
             }
-        },
+        }
         StackType::i64 => {
             result += &format!("\t\tulong2 *temp = (ulong2*)(&{});\n", reg);
             match laneval {
                 0 => {
-                    result += &format!(
-                        "\t\t(*temp).x = {};\n",
-                        newval
-                    );
-                },
+                    result += &format!("\t\t(*temp).x = {};\n", newval);
+                }
                 1 => {
-                    result += &format!(
-                        "\t\t(*temp).y = {};\n",
-                        newval
-                    );
-                },
-                _ => panic!("invalid lane idx")
+                    result += &format!("\t\t(*temp).y = {};\n", newval);
+                }
+                _ => panic!("invalid lane idx"),
             }
-        },
+        }
         StackType::f32 => {
             result += &format!("\t\tfloat4 *temp = (float4*)(&{});\n", reg);
             match laneval {
                 0 => {
-                    result += &format!(
-                        "\t\t(*temp).x = {};\n",
-                        newval
-                    );
-                },
+                    result += &format!("\t\t(*temp).x = {};\n", newval);
+                }
                 1 => {
-                    result += &format!(
-                        "\t\t(*temp).y = {};\n",
-                        newval
-                    );
-                },
+                    result += &format!("\t\t(*temp).y = {};\n", newval);
+                }
                 2 => {
-                    result += &format!(
-                        "\t\t(*temp).z = {};\n",
-                        newval
-                    );
-                },
+                    result += &format!("\t\t(*temp).z = {};\n", newval);
+                }
                 3 => {
-                    result += &format!(
-                        "\t\t(*temp).w = {};\n",
-                        newval
-                    );
-                },
-                _ => panic!("invalid lane idx")
+                    result += &format!("\t\t(*temp).w = {};\n", newval);
+                }
+                _ => panic!("invalid lane idx"),
             }
-        },
+        }
         StackType::f64 => {
             result += &format!("\t\tdouble2 *temp = (double2*)(&{});\n", reg);
             match laneval {
                 0 => {
-                    result += &format!(
-                        "\t\t(*temp).x = {};\n",
-                        newval
-                    );
-                },
+                    result += &format!("\t\t(*temp).x = {};\n", newval);
+                }
                 1 => {
-                    result += &format!(
-                        "\t\t(*temp).y = {};\n",
-                        newval
-                    );
-                },
-                _ => panic!("invalid lane idx")
+                    result += &format!("\t\t(*temp).y = {};\n", newval);
+                }
+                _ => panic!("invalid lane idx"),
             }
-        },
+        }
         StackType::u128 => panic!("Invalid type (v128) for extract_line"),
     }
 
@@ -324,7 +239,7 @@ pub fn narrow(
 
     result += &format!("\t{{\n");
 
-    match (narrow_type, lane_type)  {
+    match (narrow_type, lane_type) {
         (NarrowType::Int8, NarrowLaneType::Int16) => {
             result += &format!("\t\tchar16 temp = (char16)(0);\n");
             result += &format!("\t\tchar *temp_ptr = (char*)(&temp);\n");
@@ -337,7 +252,7 @@ pub fn narrow(
             }
 
             result += &format!("\t\t{} = temp;\n", result_register);
-        },
+        }
         (NarrowType::UInt8, NarrowLaneType::Int16) => {
             result += &format!("\t\tuchar16 temp = (uchar16)(0);\n");
             result += &format!("\t\tuchar *temp_ptr = (uchar*)(&temp);\n");
@@ -348,7 +263,7 @@ pub fn narrow(
                 result += &format!("\t\ttemp_ptr[{}] = (uchar)(temp1[{}]);\n", idx, idx);
                 result += &format!("\t\ttemp_ptr[{}+8] = (uchar)(temp2[{}]);\n", idx, idx);
             }
-        },
+        }
     }
 
     result += &format!("\t\t{} = as_ulong2(temp);\n", result_register);

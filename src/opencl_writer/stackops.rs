@@ -8,7 +8,6 @@ use crate::opencl_writer::ValType;
 use std::collections::HashMap;
 use wast::core::*;
 
-
 pub fn emit_local_get(
     _writer: &opencl_writer::OpenCLCWriter,
     stack_ctx: &mut StackCtx,
@@ -79,23 +78,23 @@ pub fn emit_local_set(
         ValType::I32 => {
             let register = stack_ctx.vstack_pop(StackType::i32);
             format!("\t{} = {};\n{}", local_id, register, cache)
-        },
+        }
         ValType::I64 => {
             let register = stack_ctx.vstack_pop(StackType::i64);
             format!("\t{} = {};\n{}", local_id, register, cache)
-        },
+        }
         ValType::F32 => {
             let register = stack_ctx.vstack_pop(StackType::f32);
             format!("\t{} = {};\n{}", local_id, register, cache)
-        },
+        }
         ValType::F64 => {
             let register = stack_ctx.vstack_pop(StackType::f64);
             format!("\t{} = {};\n{}", local_id, register, cache)
-        },
+        }
         ValType::V128 => {
             let register = stack_ctx.vstack_pop(StackType::u128);
             format!("\t{} = {};\n{}", local_id, register, cache)
-        },
+        }
         _ => panic!("emit_local_set type not handled"),
     }
 }
@@ -134,11 +133,7 @@ pub fn emit_local_tee(
     }
 }
 
-pub fn emit_local(
-    _writer: &opencl_writer::OpenCLCWriter,
-    local: &Local,
-    _debug: bool,
-) -> String {
+pub fn emit_local(_writer: &opencl_writer::OpenCLCWriter, local: &Local, _debug: bool) -> String {
     /*
      * When emitting locals we know we have access to the global stack.
      * We zero-init all values.

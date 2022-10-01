@@ -9,12 +9,12 @@ use crate::opencl_writer::StackCtx;
 use crate::opencl_writer::StackType;
 use std::collections::{HashMap, HashSet};
 
-use wast::core::*;
-use wast::token::Index::*;
-use wast::token::Index;
+use wast::core::ExportKind;
 use wast::core::ModuleKind::{Binary, Text};
 use wast::core::*;
-use wast::core::ExportKind;
+use wast::core::*;
+use wast::token::Index;
+use wast::token::Index::*;
 
 /*
  * Notes on Irreducible Control Flow (ICF):
@@ -33,10 +33,7 @@ use wast::core::ExportKind;
  *
  */
 
-pub fn get_return_size(
-    writer: &opencl_writer::OpenCLCWriter,
-    ty: &TypeUse<FunctionType>,
-) -> u32 {
+pub fn get_return_size(writer: &opencl_writer::OpenCLCWriter, ty: &TypeUse<FunctionType>) -> u32 {
     match ty.clone().inline {
         Some(r) => {
             if r.results.len() > 0 {
@@ -627,7 +624,7 @@ pub fn function_unwind(
                     }
                 }
             }
-        },
+        }
         // if we cannot find the type signature, no-op
         // this seems to only come up in cases where there are no parameters
         None => {
@@ -635,9 +632,12 @@ pub fn function_unwind(
             let type_index = match func_type_signature.index {
                 Some(Num(n, _)) => format!("t{}", n),
                 Some(Id(i)) => i.name().to_string(),
-                _ => panic!("Unable to find type index in func_unwind: fn_name: {:?}", &fn_name),
+                _ => panic!(
+                    "Unable to find type index in func_unwind: fn_name: {:?}",
+                    &fn_name
+                ),
             };
-        
+
             let func_type = match writer.types.get(&type_index).unwrap() {
                 TypeDef::Func(ft) => ft,
                 _ => panic!("Indirect call cannot have a type of something other than a func"),
@@ -654,8 +654,6 @@ pub fn function_unwind(
             results = func_type.results.to_vec();
         }
     }
-
-
 
     if is_fastcall {
         // Get the return type

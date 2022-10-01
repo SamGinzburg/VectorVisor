@@ -41,8 +41,7 @@ impl Random {
         let _result = vm_ctx.ctx.random_get(buf, random_len).await.unwrap();
 
         // now copy the random data back to the hcall_buffer
-        hcall_buf[0..(random_len as usize)]
-            .clone_from_slice(&raw_mem[0..(random_len as usize)]);
+        hcall_buf[0..(random_len as usize)].clone_from_slice(&raw_mem[0..(random_len as usize)]);
 
         sender
             .send(HyperCallResult::new(0, vm_idx, WasiSyscalls::RandomGet))

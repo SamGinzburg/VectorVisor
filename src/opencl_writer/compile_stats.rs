@@ -14,9 +14,9 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::convert::TryInto;
 
+use wast::core::ExportKind;
 use wast::core::ModuleKind::{Binary, Text};
 use wast::core::*;
-use wast::core::ExportKind;
 use wast::token::Index;
 
 pub fn function_stats(
@@ -27,7 +27,15 @@ pub fn function_stats(
     func_map: &HashMap<String, Func>,
     indirect_call_mapping: &HashMap<u32, &Index>,
 ) -> (u32, u32, u32, u32, u32, u32, u32) {
-    return function_stats_helper(writer_ctx, curr_fn_name, func, fastcalls, func_map, indirect_call_mapping, &mut HashSet::new())
+    return function_stats_helper(
+        writer_ctx,
+        curr_fn_name,
+        func,
+        fastcalls,
+        func_map,
+        indirect_call_mapping,
+        &mut HashSet::new(),
+    );
 }
 
 pub fn function_stats_helper(
@@ -95,7 +103,7 @@ pub fn function_stats_helper(
                                 fastcalls,
                                 func_map,
                                 indirect_call_mapping,
-                                visited
+                                visited,
                             );
                             total_instr_count += nested_total_instr_count;
                             total_func_count += nested_total_func_count;

@@ -17,8 +17,11 @@ pub fn emit_v128_const(
     match const_type {
         V128Const::I32x4(bytes) => {
             result += &format!("\t\tint4 *temp = &{};\n", result_register);
-            result += &format!("\t\t*temp = (int4)({}, {}, {}, {});\n", bytes[0], bytes[1], bytes[2], bytes[3]);
-        },
+            result += &format!(
+                "\t\t*temp = (int4)({}, {}, {}, {});\n",
+                bytes[0], bytes[1], bytes[2], bytes[3]
+            );
+        }
         _ => {
             panic!("Unimplemented const types for emit_v128_const(...)");
         }

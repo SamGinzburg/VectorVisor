@@ -4,8 +4,8 @@ use crate::opencl_writer::WASI_SNAPSHOT_PREVIEW1;
 use std::collections::{HashMap, HashSet};
 
 use wast::core::*;
-use wast::token::Index::*;
 use wast::token::Index;
+use wast::token::Index::*;
 
 /*
  * Our CPS-style transform is too expensive for most function calls, so we perform some basic static analysis

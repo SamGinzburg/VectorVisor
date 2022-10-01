@@ -14,7 +14,7 @@ use serde::Serialize;
 use hyper::Body;
 use uuid::Uuid;
 use warp::http::{Response, StatusCode};
-use warp::{Filter};
+use warp::Filter;
 
 use crate::opencl_runner::vectorized_vm::{VmRecvType, VmSenderType};
 
@@ -67,7 +67,7 @@ impl BatchSubmitServer {
         queue_time: u128,
         device_time: u128,
         overhead_time: u64,
-	compile_time: u128,
+        compile_time: u128,
     ) -> warp::http::Response<Body> {
         let mut final_resp = Response::builder().status(StatusCode::OK);
         {
@@ -100,7 +100,7 @@ impl BatchSubmitServer {
                 "overhead_time_ns",
                 warp::http::HeaderValue::from_str(&overhead_time.to_string()).unwrap(),
             );
-	    headers.insert(
+            headers.insert(
                 "compile_time_ns",
                 warp::http::HeaderValue::from_str(&compile_time.to_string()).unwrap(),
             );
@@ -117,7 +117,7 @@ impl BatchSubmitServer {
         sender: Arc<Vec<Mutex<Sender<(bytes::Bytes, usize, String)>>>>,
         receiver: Arc<Vec<Mutex<Receiver<VmSenderType>>>>,
         hashmaps: Arc<Vec<Mutex<HashMap<String, VmSenderType>>>>,
-	    compile_time: u128,
+        compile_time: u128,
     ) -> Result<impl warp::Reply, warp::Rejection> {
         //dbg!(&vm_idx);
         // Get an available VM first
@@ -147,7 +147,6 @@ impl BatchSubmitServer {
             .await
             .unwrap();
 
-
         while let Some((
             resp,
             len,
@@ -171,7 +170,7 @@ impl BatchSubmitServer {
                     (req_start - req_queue).as_nanos(),
                     (req_end - req_queue).as_nanos(),
                     overhead_time_ns,
-		            compile_time,
+                    compile_time,
                 ));
             } else {
                 /*
@@ -198,7 +197,7 @@ impl BatchSubmitServer {
                     overhead_time_ns,
                     uuid,
                    )) => {
-                    let req_end = std::time::Instant::now();    
+                    let req_end = std::time::Instant::now();
                     return Ok(BatchSubmitServer::create_response(
                         resp,
                         on_dev_time,
@@ -232,9 +231,8 @@ impl BatchSubmitServer {
         num_vms: u32,
         server_ip: String,
         server_port: String,
-	compile_time: u128,
+        compile_time: u128,
     ) -> () {
-
         let mut hashmaps = vec![];
         for i in 0..num_vms {
             hashmaps.push(Mutex::new(HashMap::new()));
@@ -280,7 +278,7 @@ impl BatchSubmitServer {
                         .and(warp_senders)
                         .and(warp_receivers)
                         .and(hashmaps)
-			            .and(compile_time)
+                        .and(compile_time)
                         .and_then(BatchSubmitServer::response);
 
                     let is_active_param = warp::any().map(move || Arc::clone(&is_active));

@@ -287,17 +287,17 @@ fn emit_write_u32_body(
             } else if emit_aligned {
                 result += &format!("\t{}\n",
                             "global uchar *write_addr = ((global uchar*)(((addr-mem_start)/4)*(NUM_THREADS*4) + (warp_id*4) + mem_start));");
-		if emit_volatile {
-		    result += &format!(
-		        "\t{}\n",
-		        "*((global volatile uint*)((global uchar*)write_addr)) = value;"
-		    );
-		} else {
-		    result += &format!(
-		        "\t{}\n",
-		        "*((global uint*)((global uchar*)write_addr)) = value;"
-		    );
-		}
+                if emit_volatile {
+                    result += &format!(
+                        "\t{}\n",
+                        "*((global volatile uint*)((global uchar*)write_addr)) = value;"
+                    );
+                } else {
+                    result += &format!(
+                        "\t{}\n",
+                        "*((global uint*)((global uchar*)write_addr)) = value;"
+                    );
+                }
             } else {
                 result += &format!(
                     "\t{}\n",
@@ -380,17 +380,17 @@ fn emit_write_u32_body(
                     "\t{}\n",
                     "write_addr += GET_POW2_OFFSET((addr-mem_start), 8);"
                 );
-		if emit_volatile {
+                if emit_volatile {
                     result += &format!(
                         "\t{}\n",
                         "*((global volatile uint*)((global uchar*)write_addr)) = value;"
                     );
-		} else {
- 		    result += &format!(
+                } else {
+                    result += &format!(
                         "\t{}\n",
                         "*((global uint*)((global uchar*)write_addr)) = value;"
                     );
-		}
+                }
             } else {
                 result += &format!("\t{}\n",
                                 "global uchar *write_addr = ((global uchar*)(((addr-mem_start)/8)*(NUM_THREADS*8) + (warp_id*8) + mem_start));");
@@ -539,21 +539,21 @@ fn emit_write_u64_body(
             } else if emit_aligned {
                 result += &format!("\t{}\n",
                             "global uchar *write_addr = ((global uchar*)(((addr-mem_start)/4)*(NUM_THREADS*4) + (warp_id*4) + mem_start));");
-		if emit_volatile {
- 		    result += &format!(
+                if emit_volatile {
+                    result += &format!(
                         "\t{}\n",
                         "*((global volatile uint*)((global volatile uint*)write_addr)) = value & 0xFFFFFFFF;"
                     );
                     result += &format!("\t{}\n",
                                 "*((global volatile uint*)((global volatile uint*)write_addr+NUM_THREADS)) = (value >> 32) & 0xFFFFFFFF;");
-		} else {
- 		    result += &format!(
+                } else {
+                    result += &format!(
                         "\t{}\n",
                         "*((global uint*)((global uint*)write_addr)) = value & 0xFFFFFFFF;"
                     );
- 		    result += &format!("\t{}\n",
+                    result += &format!("\t{}\n",
                                 "*((global uint*)((global uint*)write_addr+NUM_THREADS)) = (value >> 32) & 0xFFFFFFFF;");
-		}
+                }
             } else {
                 result += &format!("\t{}\n",
                                 "global uchar *write_addr = ((global uchar*)(((addr-mem_start)/4)*(NUM_THREADS*4) + (warp_id*4) + mem_start));");
@@ -598,11 +598,11 @@ fn emit_write_u64_body(
                 result += &format!("\t\t{}\n",
                             "global uchar *write_addr = ((global uchar*)(((addr-mem_start)/8)*(NUM_THREADS*8) + (warp_id*8) + mem_start));");
                 /*
-		result += &format!(
-                    "\t\t{}\n",
-                    "write_addr += GET_POW2_OFFSET((addr-mem_start), 8);"
-                );
-		*/
+                result += &format!(
+                            "\t\t{}\n",
+                            "write_addr += GET_POW2_OFFSET((addr-mem_start), 8);"
+                        );
+                */
                 result += &format!(
                     "\t\t{}\n",
                     "*((global ulong*)((global uchar*)write_addr)) = value;"
@@ -615,22 +615,22 @@ fn emit_write_u64_body(
                 result += &format!("\t{}\n",
                             "global uchar *write_addr = ((global uchar*)(((addr-mem_start)/8)*(NUM_THREADS*8) + (warp_id*8) + mem_start));");
                 /*
-		result += &format!(
-                    "\t{}\n",
-                    "write_addr += GET_POW2_OFFSET((addr-mem_start), 8);"
-                );
-		*/
-		if emit_volatile {
+                result += &format!(
+                            "\t{}\n",
+                            "write_addr += GET_POW2_OFFSET((addr-mem_start), 8);"
+                        );
+                */
+                if emit_volatile {
                     result += &format!(
                         "\t{}\n",
                         "*((global volatile ulong*)((global uchar*)write_addr)) = value;"
                     );
-		} else {
-		    result += &format!(
+                } else {
+                    result += &format!(
                         "\t{}\n",
                         "*((global ulong*)((global uchar*)write_addr)) = value;"
                     );
-		}
+                }
             } else {
                 result += &format!("\t{}\n",
                                 "global uchar *write_addr = ((global uchar*)(((addr-mem_start)/8)*(NUM_THREADS*8) + (warp_id*8) + mem_start));");
@@ -922,18 +922,17 @@ fn emit_read_u32_body(
             } else if emit_aligned {
                 result += &format!("\t{}\n",
                                 "global uchar *read_addr = ((global uchar*)(((addr-mem_start)/4)*(NUM_THREADS*4) + (warp_id*4) + mem_start));");
-		if emit_volatile {
+                if emit_volatile {
                     result += &format!(
                         "\t{}\n",
                         "return *((global volatile uint*)((global uint*)read_addr));"
                     );
-		} else {
-		    result += &format!(
+                } else {
+                    result += &format!(
                         "\t{}\n",
                         "return *((global uint*)((global uint*)read_addr));"
                     );
-		}
-		
+                }
             } else {
                 result += &format!("\t{}\n",
                                 "global uchar *cell1 = ((global uchar*)(((addr-mem_start)/4)*(NUM_THREADS*4) + (warp_id*4) + mem_start));");
@@ -989,17 +988,17 @@ fn emit_read_u32_body(
                     "\t{}\n",
                     "read_addr += GET_POW2_OFFSET((addr-mem_start), 8);"
                 );
-		if emit_volatile {
+                if emit_volatile {
                     result += &format!(
                         "\t{}\n",
                         "return *((global volatile uint*)((global uchar*)read_addr));"
                     );
-		} else {
+                } else {
                     result += &format!(
                         "\t{}\n",
                         "return *((global uint*)((global uchar*)read_addr));"
                     );
-		}
+                }
             } else {
                 result += &format!("\t{}\n",
                                 "global uchar *cell1 = ((global uchar*)(((addr-mem_start)/8)*(NUM_THREADS*8) + (warp_id*8) + mem_start));");
@@ -1195,7 +1194,7 @@ fn emit_read_u64_body(
                 result += &format!("\t{}\n",
                                 "global uchar *read_addr = ((global uchar*)(((addr-mem_start)/4)*(NUM_THREADS*4) + (warp_id*4) + mem_start));");
                 result += &format!("\t{}\n", "ulong temp = 0;");
-		if emit_volatile {
+                if emit_volatile {
                     result += &format!(
                         "\t{}\n",
                         "temp += *((global volatile uint*)((global uint*)read_addr+NUM_THREADS));"
@@ -1205,7 +1204,7 @@ fn emit_read_u64_body(
                         "\t{}\n",
                         "temp += *((global volatile uint*)((global uint*)read_addr));"
                     );
-		} else {
+                } else {
                     result += &format!(
                         "\t{}\n",
                         "temp += *((global uint*)((global uint*)read_addr+NUM_THREADS));"
@@ -1215,7 +1214,7 @@ fn emit_read_u64_body(
                         "\t{}\n",
                         "temp += *((global uint*)((global uint*)read_addr));"
                     );
-		}
+                }
                 result += &format!("\t{}\n", "return temp;");
             } else {
                 result += &format!("\t{}\n",
@@ -1277,11 +1276,11 @@ fn emit_read_u64_body(
                 result += &format!("\t\t{}\n",
                                 "global uchar *read_addr = ((global uchar*)(((addr-mem_start)/8)*(NUM_THREADS*8) + (warp_id*8) + mem_start));");
                 /*
-		result += &format!(
-                    "\t\t{}\n",
-                    "read_addr += GET_POW2_OFFSET((addr-mem_start), 8);"
-                );
-		*/
+                result += &format!(
+                            "\t\t{}\n",
+                            "read_addr += GET_POW2_OFFSET((addr-mem_start), 8);"
+                        );
+                */
                 result += &format!(
                     "\t\t{}\n",
                     "return *((global ulong*)((global uchar*)read_addr));"
@@ -1293,22 +1292,22 @@ fn emit_read_u64_body(
                 result += &format!("\t{}\n",
                                 "global uchar *read_addr = ((global uchar*)(((addr-mem_start)/8)*(NUM_THREADS*8) + (warp_id*8) + mem_start));");
                 /*
-		result += &format!(
-                    "\t{}\n",
-                    "read_addr += GET_POW2_OFFSET((addr-mem_start), 8);"
-                );
-		*/
-		if emit_volatile {
+                result += &format!(
+                            "\t{}\n",
+                            "read_addr += GET_POW2_OFFSET((addr-mem_start), 8);"
+                        );
+                */
+                if emit_volatile {
                     result += &format!(
                         "\t{}\n",
                         "return *((global volatile ulong*)((global uchar*)read_addr));"
                     );
-		} else {
+                } else {
                     result += &format!(
                         "\t{}\n",
                         "return *((global ulong*)((global uchar*)read_addr));"
                     );
-		}
+                }
             } else {
                 result += &format!("\t{}\n",
                                 "global uchar *cell1 = ((global uchar*)(((addr-mem_start)/8)*(NUM_THREADS*8) + (warp_id*8) + mem_start));");
@@ -1349,8 +1348,8 @@ pub fn generate_bulkmem(fill: Option<String>) -> String {
             result += &format!("\n{}\n",
             "void ___private_bulk_memcpy(ulong src, ulong mem_start_src, ulong dst, ulong mem_start_dst, ulong buf_len_bytes, uint warp_id, uint read_idx, uint thread_idx, local ulong2 *scratch_space) {",
             );
-        },
-        _    => {
+        }
+        _ => {
             result += &format!("\n{}\n",
             "void ___private_bulk_memfill(ulong dst, ulong mem_start_dst, uchar value, ulong buf_len_bytes, uint warp_id, uint read_idx, uint thread_idx, local ulong2 *scratch_space) {",
             );
@@ -1365,28 +1364,27 @@ pub fn generate_bulkmem(fill: Option<String>) -> String {
             result += &format!("\t{}\n", "fillval += value << 40;");
             result += &format!("\t{}\n", "fillval += value << 32;");
             result += &format!("\t{}\n", "fillval += value << 24;");
-	        result += &format!("\t{}\n", "fillval += value << 16;");
-	        result += &format!("\t{}\n", "fillval += value << 8;");
-	        result += &format!("\t{}\n", "fillval += value;");
-        },
-        _    => {
+            result += &format!("\t{}\n", "fillval += value << 16;");
+            result += &format!("\t{}\n", "fillval += value << 8;");
+            result += &format!("\t{}\n", "fillval += value;");
         }
+        _ => {}
     };
 
     // fastpath for u32 ops
     match fill {
-	None => {
-    	    result += &format!(
+        None => {
+            result += &format!(
         	"\t{}\n",
         	"if (buf_len_bytes > 64 && IS_ALIGNED_POW2((ulong)src, 8) && IS_ALIGNED_POW2((ulong)dst, 8)) {"
     	    );
-	},
-	_ => {
-    	    result += &format!(
-        	"\t{}\n",
-        	"if (buf_len_bytes > 64 && IS_ALIGNED_POW2((ulong)dst, 8)) {"
-    	    );
-	}
+        }
+        _ => {
+            result += &format!(
+                "\t{}\n",
+                "if (buf_len_bytes > 64 && IS_ALIGNED_POW2((ulong)dst, 8)) {"
+            );
+        }
     };
 
     result += &format!(
@@ -1403,18 +1401,27 @@ pub fn generate_bulkmem(fill: Option<String>) -> String {
         Some(_value) => {
             result += &format!(
                 "\t\t\t\t{};\n",
-                &emit_write_u64_aligned("(ulong)(dst+counter+unroll)", "(ulong)(mem_start_dst)",
-                        &"fillval",
-                        "warp_id"),
+                &emit_write_u64_aligned(
+                    "(ulong)(dst+counter+unroll)",
+                    "(ulong)(mem_start_dst)",
+                    &"fillval",
+                    "warp_id"
+                ),
             );
-
-        },
-        _    => {
+        }
+        _ => {
             result += &format!(
                 "\t\t\t\t{};\n",
-                &emit_write_u64_aligned("(ulong)(dst+counter+unroll)", "(ulong)(mem_start_dst)",
-                        &emit_read_u64_aligned("(ulong)(src+counter+unroll)", "(ulong)(mem_start_src)", "warp_id"),
-                        "warp_id"),
+                &emit_write_u64_aligned(
+                    "(ulong)(dst+counter+unroll)",
+                    "(ulong)(mem_start_dst)",
+                    &emit_read_u64_aligned(
+                        "(ulong)(src+counter+unroll)",
+                        "(ulong)(mem_start_src)",
+                        "warp_id"
+                    ),
+                    "warp_id"
+                ),
             );
         }
     };
@@ -1422,7 +1429,7 @@ pub fn generate_bulkmem(fill: Option<String>) -> String {
     result += &format!("\t\t\t{}\n", "}");
     result += &format!("\t\t{}\n", "}");
     result += &format!("\t{}\n", "}");
- 
+
     // slow path for remaining ops
     result += &format!("\t{}\n", "for (; counter < buf_len_bytes; counter++) {");
 
@@ -1430,17 +1437,23 @@ pub fn generate_bulkmem(fill: Option<String>) -> String {
         Some(value) => {
             result += &format!(
                 "\t\t{};\n",
-                &emit_write_u8("(ulong)(dst+counter)", "(ulong)(mem_start_dst)",
-                                &"value",
-                                "warp_id")
+                &emit_write_u8(
+                    "(ulong)(dst+counter)",
+                    "(ulong)(mem_start_dst)",
+                    &"value",
+                    "warp_id"
+                )
             );
-        },
-        _    => {
+        }
+        _ => {
             result += &format!(
                 "\t\t{};\n",
-                &emit_write_u8("(ulong)(dst+counter)", "(ulong)(mem_start_dst)",
-                                &emit_read_u8("(ulong)(src+counter)", "(ulong)(mem_start_src)", "warp_id"),
-                                "warp_id")
+                &emit_write_u8(
+                    "(ulong)(dst+counter)",
+                    "(ulong)(mem_start_dst)",
+                    &emit_read_u8("(ulong)(src+counter)", "(ulong)(mem_start_src)", "warp_id"),
+                    "warp_id"
+                )
             );
         }
     };
@@ -1469,11 +1482,11 @@ pub fn generate_read_write_calls(
 
     match interleave {
         0 | 1 | 4 | 8 => {
-  	    if volatile {
+            if volatile {
                 result += &format!("\t{}", "*((global volatile uchar*)addr) = value;");
-	    } else {
+            } else {
                 result += &format!("\t{}", "*((global uchar*)addr) = value;");
-	    }
+            }
         }
         _ => panic!("Unsupported read/write interleave"),
     }
@@ -1589,11 +1602,11 @@ pub fn generate_read_write_calls(
     );
     match interleave {
         0 | 1 | 4 | 8 => {
-	    if volatile {
+            if volatile {
                 result += &format!("\t{}", "return *((global volatile uchar*)addr);");
-	    } else {
+            } else {
                 result += &format!("\t{}", "return *((global uchar*)addr);");
-	    }
+            }
         }
         _ => panic!("Unsupported read/write interleave"),
     }
@@ -1723,7 +1736,6 @@ pub fn generate_read_write_calls(
     // emit bulk memory operations
     result += &generate_bulkmem(Some("memfill".to_string()));
     result += &generate_bulkmem(None);
-
 
     // write from the GPU (interleaved) back to the CPU (non-interleaved)
     // The destination is always >> 16 byte aligned.

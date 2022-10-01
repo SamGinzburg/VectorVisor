@@ -12,6 +12,7 @@ use wasi_common::snapshots::preview_1::types::CiovecArray;
 use wasi_common::snapshots::preview_1::types::Fd;
 use wasi_common::snapshots::preview_1::types::Prestat;
 use wasi_common::snapshots::preview_1::types::UserErrorConversion;
+use wasi_common::snapshots::preview_1::types::*;
 use wiggle::wasmtime::WasmtimeGuestMemory;
 
 //use wasi_common::wasi::types::UserErrorConversion;
@@ -81,7 +82,11 @@ impl WasiFd {
         let result = vm_ctx.ctx.fd_write(Fd::from(fd), &ciovec_ptr).await;
 
         sender
-            .send(HyperCallResult::new(result.unwrap() as i32, vm_idx, WasiSyscalls::FdWrite))
+            .send(HyperCallResult::new(
+                result.unwrap() as i32,
+                vm_idx,
+                WasiSyscalls::FdWrite,
+            ))
             .unwrap();
     }
 
@@ -115,7 +120,11 @@ impl WasiFd {
         LittleEndian::write_u32(&mut hcall_buf[0..4], result);
 
         sender
-            .send(HyperCallResult::new(result as i32, vm_idx, WasiSyscalls::FdPrestatGet))
+            .send(HyperCallResult::new(
+                result as i32,
+                vm_idx,
+                WasiSyscalls::FdPrestatGet,
+            ))
             .unwrap();
     }
 
@@ -145,7 +154,11 @@ impl WasiFd {
 
         let wasm_mem = WasmtimeGuestMemory::new(raw_mem);
         let str_ptr = &GuestPtr::new(&wasm_mem, 8);
-        let result = match vm_ctx.ctx.fd_prestat_dir_name(Fd::from(fd), str_ptr, str_len).await {
+        let result = match vm_ctx
+            .ctx
+            .fd_prestat_dir_name(Fd::from(fd), str_ptr, str_len)
+            .await
+        {
             Ok(()) => 0,
             Err(e) => vm_ctx.ctx.errno_from_error(e).unwrap() as u32,
         };
@@ -153,14 +166,68 @@ impl WasiFd {
         let mut index = 0;
         for idx in str_ptr.as_array(str_len).iter() {
             let value = idx.unwrap().read().unwrap();
-            let mut hcall_buf_temp =
-                &mut hcall_buf[(index + 8) as usize..(index + 8 + 1) as usize];
+            let mut hcall_buf_temp = &mut hcall_buf[(index + 8) as usize..(index + 8 + 1) as usize];
             hcall_buf_temp.write_u8(value).unwrap();
             index += 1;
         }
 
         sender
-            .send(HyperCallResult::new(result as i32, vm_idx, WasiSyscalls::FdPrestatDirName))
+            .send(HyperCallResult::new(
+                result as i32,
+                vm_idx,
+                WasiSyscalls::FdPrestatDirName,
+            ))
+            .unwrap();
+    }
+
+    #[tokio::main]
+    pub async fn hypercall_fd_fdstat_get(
+        vm_ctx: &mut VectorizedVM,
+        hypercall: &mut HyperCall,
+        sender: &Sender<HyperCallResult>,
+    ) -> () {
+        let mut hcall_buf: &mut [u8] = unsafe { *hypercall.hypercall_buffer.buf.get() };
+        let hcall_buf_size: u32 = (hcall_buf.len() / hypercall.num_total_vms as usize)
+            .try_into()
+            .unwrap();
+
+        //let raw_mem: &mut [u8] = vm_ctx.memory.data_mut(&mut vm_ctx.store);
+        let vm_idx = vm_ctx.vm_id;
+
+        let fd: u32;
+
+        // set the buffer to the scratch space for the appropriate VM
+        // we don't have to do this for the interleave
+        hcall_buf = &mut hcall_buf
+            [(vm_idx * hcall_buf_size) as usize..((vm_idx + 1) * hcall_buf_size) as usize];
+        fd = LittleEndian::read_u32(&hcall_buf[0..4]);
+
+        //let wasm_mem = WasmtimeGuestMemory::new(raw_mem);
+        let mut fdstat = None;
+        let result = match vm_ctx.ctx.fd_fdstat_get(Fd::from(fd)).await {
+            Ok(fds) => {
+                fdstat = Some(fds);
+                0
+            }
+            Err(e) => vm_ctx.ctx.errno_from_error(e).unwrap() as u32,
+        };
+
+        match fdstat {
+            Some(fdstat) => {
+                let fdstat_as_slice = unsafe {
+                    std::mem::transmute::<Fdstat, [u8; std::mem::size_of::<Fdstat>()]>(fdstat)
+                };
+                hcall_buf.copy_from_slice(&fdstat_as_slice);
+            }
+            _ => (),
+        }
+
+        sender
+            .send(HyperCallResult::new(
+                result as i32,
+                vm_idx,
+                WasiSyscalls::FdFdstatGet,
+            ))
             .unwrap();
     }
 }

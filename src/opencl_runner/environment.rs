@@ -4,8 +4,8 @@ use crate::opencl_runner::vectorized_vm::HyperCall;
 use crate::opencl_runner::vectorized_vm::HyperCallResult;
 use crate::opencl_runner::vectorized_vm::VectorizedVM;
 use crate::opencl_runner::vectorized_vm::WasiSyscalls;
-use wasi_common::snapshots::preview_1::wasi_snapshot_preview1::WasiSnapshotPreview1;
 use wasi_common::snapshots::preview_1::types::UserErrorConversion;
+use wasi_common::snapshots::preview_1::wasi_snapshot_preview1::WasiSnapshotPreview1;
 use wiggle::wasmtime::WasmtimeGuestMemory;
 
 use wiggle::GuestPtr;
@@ -35,8 +35,8 @@ impl Environment {
                 let hcall_buf_size: u32 = (hcall_buf.len() / hypercall.num_total_vms as usize)
                     .try_into()
                     .unwrap();
-                hcall_buf = &mut hcall_buf[(vm_idx * hcall_buf_size) as usize
-                    ..((vm_idx + 1) * hcall_buf_size) as usize];
+                hcall_buf = &mut hcall_buf
+                    [(vm_idx * hcall_buf_size) as usize..((vm_idx + 1) * hcall_buf_size) as usize];
                 LittleEndian::write_u32(&mut hcall_buf[0..4], tuple.0);
                 LittleEndian::write_u32(&mut hcall_buf[4..8], tuple.1);
                 0
@@ -45,7 +45,11 @@ impl Environment {
         };
 
         sender
-            .send(HyperCallResult::new(result, vm_idx, WasiSyscalls::EnvironSizeGet))
+            .send(HyperCallResult::new(
+                result,
+                vm_idx,
+                WasiSyscalls::EnvironSizeGet,
+            ))
             .unwrap();
     }
 
@@ -75,7 +79,11 @@ impl Environment {
         let wasm_mem = WasmtimeGuestMemory::new(raw_mem);
         let ciovec_ptr = &GuestPtr::new(&wasm_mem, 8);
         let env_str_ptr = &GuestPtr::new(&wasm_mem, 8 + num_env_vars * 4);
-        vm_ctx.ctx.environ_get(ciovec_ptr, env_str_ptr).await.unwrap();
+        vm_ctx
+            .ctx
+            .environ_get(ciovec_ptr, env_str_ptr)
+            .await
+            .unwrap();
 
         //let arr = &raw_mem[(8 + num_env_vars * 4) as usize..(8 + num_env_vars * 4 + env_str_size) as usize];
         //println!("{}", String::from_utf8(arr.to_vec()).unwrap());

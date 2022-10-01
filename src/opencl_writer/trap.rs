@@ -3,7 +3,7 @@ pub enum TrapCode {
     TrapIntOverflow,
     TrapInvalidConversion,
     TrapCallIndirectNotFound,
-    TrapUnimplemented
+    TrapUnimplemented,
 }
 
 pub fn emit_trap(code: TrapCode, emit_semicolon: bool) -> String {

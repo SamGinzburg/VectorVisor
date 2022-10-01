@@ -21,16 +21,16 @@ use ocl::core::CommandQueue;
 use crossbeam::channel::Sender as SyncSender;
 use tokio::sync::mpsc::{Receiver, Sender};
 
+use num_enum::TryFromPrimitive;
 use std::collections::HashSet;
 use std::collections::VecDeque;
+use std::convert::TryFrom;
 use std::convert::TryInto;
 use std::fs::File;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::convert::TryFrom;
-use num_enum::TryFromPrimitive;
 
 #[derive(Clone, Copy, PartialEq, Eq, TryFromPrimitive)]
 #[repr(i32)]
@@ -43,6 +43,22 @@ pub enum WasiSyscalls {
     FdPrestatDirName = 5,
     RandomGet = 6,
     ClockTimeGet = 7,
+    SchedYield = 8,
+    PollOneoff = 9,
+    FdFilestatGet = 10,
+    FdRead = 11,
+    FdSeek = 12,
+    PathFilestatGet = 13,
+    PathOpen = 14,
+    FdClose = 15,
+    FdFdstatGet = 16,
+    FdFdstatSetFlags = 17,
+    FdReaddir = 18,
+    PathCreateDirectory = 19,
+    PathRemoveDirectory = 20,
+    PathRename = 21,
+    PathSymlink = 22,
+    PathUnlinkFile = 23,
     ServerlessInvoke = 9999,
     ServerlessResponse = 10000,
     InvalidHyperCallNum = -1,
@@ -109,7 +125,10 @@ impl fmt::Debug for HyperCall<'_> {
         f.debug_struct("HyperCall")
             .field("vm_id", &self.vm_id)
             .field("syscall_id", &(self.syscall as u8))
-            .field("non_serverless_invoke_call_found", &self.non_serverless_invoke_call_found)
+            .field(
+                "non_serverless_invoke_call_found",
+                &self.non_serverless_invoke_call_found,
+            )
             .finish()
     }
 }
@@ -259,7 +278,11 @@ impl VectorizedVM {
             // ProcExit is special cased, since we want to manually mask off those VMs
             WasiSyscalls::ProcExit => {
                 sender
-                    .send(HyperCallResult::new(0, hypercall.vm_id, WasiSyscalls::ProcExit))
+                    .send(HyperCallResult::new(
+                        0,
+                        hypercall.vm_id,
+                        WasiSyscalls::ProcExit,
+                    ))
                     .unwrap();
             }
             WasiSyscalls::EnvironSizeGet => {
@@ -270,6 +293,9 @@ impl VectorizedVM {
             }
             WasiSyscalls::FdPrestatGet => {
                 WasiFd::hypercall_fd_prestat_get(self, hypercall, sender);
+            }
+            WasiSyscalls::FdFdstatGet => {
+                WasiFd::hypercall_fd_fdstat_get(self, hypercall, sender);
             }
             WasiSyscalls::FdPrestatDirName => {
                 WasiFd::hypercall_fd_prestat_dir_name(self, hypercall, sender);

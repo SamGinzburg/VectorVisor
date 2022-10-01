@@ -14,11 +14,11 @@
 use crate::opencl_writer;
 use crate::opencl_writer::mem_interleave::emit_read_u32;
 //use crate::opencl_writer::mem_interleave::emit_read_u64;
-use crate::opencl_writer::mem_interleave::{emit_write_u32, emit_write_u32_aligned_checked};
 use crate::opencl_writer::mem_interleave::emit_write_u64;
+use crate::opencl_writer::mem_interleave::{emit_write_u32, emit_write_u32_aligned_checked};
+use crate::opencl_writer::trap::*;
 use crate::opencl_writer::StackCtx;
 use crate::opencl_writer::StackType;
-use crate::opencl_writer::trap::*;
 
 use wasi_common::snapshots::preview_1::types::*;
 
@@ -62,17 +62,25 @@ pub fn emit_fd_write_helpers(_writer: &opencl_writer::OpenCLCWriter, _debug: boo
      * Copy the stack over to the first 16 bytes of the hypercall_buffer (4, 4 byte values)
      */
 
-    result += &format!("\t*({}) = fd;\n",
-                       "(global uint*)((global char*)hypercall_buffer+(hcall_size*warp_idx))");
+    result += &format!(
+        "\t*({}) = fd;\n",
+        "(global uint*)((global char*)hypercall_buffer+(hcall_size*warp_idx))"
+    );
 
-    result += &format!("\t*({}) = iovec;\n",
-                       "(global uint*)((global char*)hypercall_buffer+(hcall_size*warp_idx)+4)");
+    result += &format!(
+        "\t*({}) = iovec;\n",
+        "(global uint*)((global char*)hypercall_buffer+(hcall_size*warp_idx)+4)"
+    );
 
-    result += &format!("\t*({}) = iovec_count;\n",
-                       "(global uint*)((global char*)hypercall_buffer+(hcall_size*warp_idx)+8)");
+    result += &format!(
+        "\t*({}) = iovec_count;\n",
+        "(global uint*)((global char*)hypercall_buffer+(hcall_size*warp_idx)+8)"
+    );
 
-    result += &format!("\t*({}) = fd_write_buf_len;\n",
-                       "(global uint*)((global char*)hypercall_buffer+(hcall_size*warp_idx)+12)");
+    result += &format!(
+        "\t*({}) = fd_write_buf_len;\n",
+        "(global uint*)((global char*)hypercall_buffer+(hcall_size*warp_idx)+12)"
+    );
 
     result += &format!("\tuint iovec_offset = {};\n", "iovec");
 
@@ -122,7 +130,6 @@ pub fn emit_fd_write_helpers(_writer: &opencl_writer::OpenCLCWriter, _debug: boo
                        "(ulong)((global char *)hypercall_buffer+(hcall_size*warp_idx)+next_buffer_start+16)", //dst, first 4 bytes are the len
                        "hypercall_buffer", // mem_start_dst
                        "buf_len"); // the length of the buffer
-
 
     // update next_buffer_start
     result += &format!("\tnext_buffer_start += buf_len;\n");
@@ -183,9 +190,10 @@ pub fn emit_fd_prestat_get_helper(
      * We only need to copy over the fd
      */
 
-    ret_str += &format!("\t*({}) = {};\n",
-                        "(global uint*)((global char*)hypercall_buffer+(hcall_size*warp_idx))",
-                        &fd);
+    ret_str += &format!(
+        "\t*({}) = {};\n",
+        "(global uint*)((global char*)hypercall_buffer+(hcall_size*warp_idx))", &fd
+    );
 
     ret_str
 }
@@ -200,9 +208,10 @@ pub fn emit_fd_fdstat_get_helper(
     let _fdstat_ptr = stack_ctx.vstack_peak(StackType::i32, 1);
 
     // copy the fd
-    ret_str += &format!("\t*({}) = {};\n",
-                        "(global uint*)((global char*)hypercall_buffer+(hcall_size*warp_idx))",
-                        &fd);
+    ret_str += &format!(
+        "\t*({}) = {};\n",
+        "(global uint*)((global char*)hypercall_buffer+(hcall_size*warp_idx))", &fd
+    );
 
     ret_str
 }
@@ -221,14 +230,16 @@ pub fn emit_fd_prestat_dir_name_helper(
     let fd = stack_ctx.vstack_peak(StackType::i32, 2);
 
     // fd
-    ret_str += &format!("\t*({}) = {};\n",
-                        "(global uint*)((global char*)hypercall_buffer+(hcall_size*warp_idx))",
-                        &fd);
+    ret_str += &format!(
+        "\t*({}) = {};\n",
+        "(global uint*)((global char*)hypercall_buffer+(hcall_size*warp_idx))", &fd
+    );
 
     // str len
-    ret_str += &format!("\t*({}) = {};\n",
-                        "(global uint*)((global char*)hypercall_buffer+(hcall_size*warp_idx)+4)",
-                        &str_len);
+    ret_str += &format!(
+        "\t*({}) = {};\n",
+        "(global uint*)((global char*)hypercall_buffer+(hcall_size*warp_idx)+4)", &str_len
+    );
 
     ret_str
 }
@@ -268,7 +279,6 @@ pub fn emit_fd_prestat_dir_name_post(
                         &format!("(global char *)heap_u32+{}", str_ptr),
                         "heap_u32", // mem_start_src
                         &str_len); // the length of the buffer
-
 
     // now return the error code
     ret_str += &format!("\t{} = {};\n", result_regsiter, "hcall_ret_val");
@@ -456,7 +466,6 @@ pub fn emit_path_create_directory_post(
     ret_str
 }
 
-
 pub fn emit_fd_readdir_pre(
     _writer: &opencl_writer::OpenCLCWriter,
     stack_ctx: &mut StackCtx,
@@ -559,8 +568,10 @@ pub fn emit_fd_prestat_get_post(
     /*
      * We need to copy back the (i32) size of the string describing the fd name
      */
-    let str_len = &format!("\t*({})\n",
-                           "(global uint*)((global char*)hypercall_buffer+(hcall_size*warp_idx))");
+    let str_len = &format!(
+        "\t*({})\n",
+        "(global uint*)((global char*)hypercall_buffer+(hcall_size*warp_idx))"
+    );
 
     let offset = stack_ctx.vstack_pop(StackType::i32);
     stack_ctx.vstack_pop(StackType::i32); // fd
@@ -637,7 +648,8 @@ pub fn emit_environ_get_post(
     // arg2: pointer to a buffer to store the string data
     // when we return, the hcall_buffer will include the two buf_lens as the first two 4 bytes values
 
-    let env_count = format!("*((global uint*)((global char*)hypercall_buffer+(hcall_size*warp_idx)))");
+    let env_count =
+        format!("*((global uint*)((global char*)hypercall_buffer+(hcall_size*warp_idx)))");
 
     let size_string_buf = stack_ctx.vstack_pop(StackType::i32);
     let size_ptr_buf = stack_ctx.vstack_pop(StackType::i32);
@@ -802,8 +814,10 @@ pub fn emit_poll_oneoff_pre(
     let _result_ptr = stack_ctx.vstack_peak(StackType::i32, 3);
 
     // copy the subscription_num
-    ret_str += &format!("\t*({}) = {};\n",
-                        "(global uint*)((global char*)hypercall_buffer+(hcall_size*warp_idx))", &subscription_num);
+    ret_str += &format!(
+        "\t*({}) = {};\n",
+        "(global uint*)((global char*)hypercall_buffer+(hcall_size*warp_idx))", &subscription_num
+    );
     // copy the subscriptions
     ret_str += &format!("\t___private_memcpy_gpu2cpu((ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), warp_idx, read_idx, thread_idx, scratch_space);\n",
                         &format!("(global char *)heap_u32+{}", subscription_ptr),
@@ -1096,8 +1110,10 @@ pub fn emit_random_get_pre(
     let random_buf_len = stack_ctx.vstack_peak(StackType::i32, 0);
 
     // copy the buf len over so we know how many random bytes to generate
-    ret_str += &format!("\t*({}) = {};\n",
-                        "(global uint*)((global char*)hypercall_buffer+(hcall_size*warp_idx))", &random_buf_len);
+    ret_str += &format!(
+        "\t*({}) = {};\n",
+        "(global uint*)((global char*)hypercall_buffer+(hcall_size*warp_idx))", &random_buf_len
+    );
 
     ret_str
 }
@@ -1137,11 +1153,15 @@ pub fn emit_clock_time_get_pre(
     let _offset = stack_ctx.vstack_peak(StackType::i32, 0);
     let clock_id = stack_ctx.vstack_peak(StackType::i32, 1);
     let precision = stack_ctx.vstack_pop(StackType::i64);
-    ret_str += &format!("\t*({}) = {};\n",
-                        "(global uint*)((global char*)hypercall_buffer+(hcall_size*warp_idx))", &clock_id);
+    ret_str += &format!(
+        "\t*({}) = {};\n",
+        "(global uint*)((global char*)hypercall_buffer+(hcall_size*warp_idx))", &clock_id
+    );
 
-    ret_str += &format!("\t*({}) = {};\n",
-                        "(global uint*)((global char*)hypercall_buffer+(hcall_size*warp_idx)+4)", &precision);
+    ret_str += &format!(
+        "\t*({}) = {};\n",
+        "(global uint*)((global char*)hypercall_buffer+(hcall_size*warp_idx)+4)", &precision
+    );
 
     ret_str
 }
@@ -1156,9 +1176,11 @@ pub fn emit_clock_time_get_post(
     let offset = stack_ctx.vstack_pop(StackType::i32);
     let _clock_id = stack_ctx.vstack_pop(StackType::i32);
     let result_register = stack_ctx.vstack_alloc(StackType::i32);
-    
-    let timestamp = &format!("\t*({})\n",
-                             "(global ulong*)((global char*)hypercall_buffer+(hcall_size*warp_idx))");
+
+    let timestamp = &format!(
+        "\t*({})\n",
+        "(global ulong*)((global char*)hypercall_buffer+(hcall_size*warp_idx))"
+    );
 
     ret_str += &format!(
         "\t{};\n",

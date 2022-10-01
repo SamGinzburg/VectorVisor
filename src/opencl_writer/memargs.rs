@@ -529,7 +529,6 @@ pub fn emit_memload_i64_16s(
     ret_str
 }
 
-
 pub fn emit_memload_i64_16u(
     writer: &opencl_writer::OpenCLCWriter,
     stack_ctx: &mut StackCtx,
@@ -982,7 +981,8 @@ pub fn emit_memload_u128(
             emit_read_u64_aligned_checked(
                 &format!(
                     "(ulong)((global char*)heap_u32+{}+(int)({}))",
-                    args.offset+8, i_load
+                    args.offset + 8,
+                    i_load
                 ),
                 "(ulong)(heap_u32)",
                 "warp_idx"
@@ -994,7 +994,8 @@ pub fn emit_memload_u128(
             emit_read_u64_aligned(
                 &format!(
                     "(ulong)((global char*)heap_u32+{}+(int)({}))",
-                    args.offset+8, i_load
+                    args.offset + 8,
+                    i_load
                 ),
                 "(ulong)(heap_u32)",
                 "warp_idx"
@@ -1087,7 +1088,8 @@ pub fn emit_memstore_u128(
             &emit_write_u64_aligned_checked(
                 &format!(
                     "(ulong)((global char*)heap_u32+{}+(int)({}))",
-                    args.offset+8, i_load
+                    args.offset + 8,
+                    i_load
                 ),
                 "(ulong)(heap_u32)",
                 &format!("(*(ulong2*)(&{})).y", stored_val),
@@ -1112,7 +1114,8 @@ pub fn emit_memstore_u128(
             &emit_write_u64_aligned(
                 &format!(
                     "(ulong)((global char*)heap_u32+{}+(int)({}))",
-                    args.offset+8, i_load
+                    args.offset + 8,
+                    i_load
                 ),
                 "(ulong)(heap_u32)",
                 &format!("(*(ulong2*)(&{})).y", stored_val),
@@ -1165,7 +1168,7 @@ pub fn emit_memstore_u128_lane(
                     )
                 );
             }
-        },
+        }
         VecStoreWidth::I64 => {
             if !writer.pretty_input_wasm || args.memarg.align < 8 {
                 ret_str += &format!(
@@ -1194,7 +1197,7 @@ pub fn emit_memstore_u128_lane(
                     )
                 );
             }
-        },
+        }
         _ => panic!("Unimplemented store width for emit_memstore_u128_lane"),
     }
 
@@ -1241,7 +1244,7 @@ pub fn emit_memload_u128_load_m_x_n(
                     )
                 )
             }
-        },
+        }
         _ => panic!("Unimplemented load width for emit_memload_u128_load_m_x_n"),
     };
 
@@ -1258,7 +1261,7 @@ pub fn emit_memload_u128_load_m_x_n(
                 ret_str += &format!("\t\ttemp1[{}] = (int)(temp3[{}]);\n", idx, idx);
             }
             ret_str += &format!("\t}}\n");
-        },
+        }
         VecStoreWidth::I16 => {
             ret_str += &format!("\t{{\n");
             ret_str += &format!("\t\tuint *temp1 = (uint*)(&{});\n", vec);
@@ -1268,7 +1271,7 @@ pub fn emit_memload_u128_load_m_x_n(
                 ret_str += &format!("\t\ttemp1[{}] = (uint)(temp3[{}]);\n", idx, idx);
             }
             ret_str += &format!("\t}}\n");
-        },
+        }
         VecStoreWidth::I32 if signed == true => {
             ret_str += &format!("\t{{\n");
             ret_str += &format!("\t\tlong *temp1 = (long*)(&{});\n", vec);
@@ -1279,7 +1282,7 @@ pub fn emit_memload_u128_load_m_x_n(
                 ret_str += &format!("\t\ttemp1[{}] = (long)(temp3[{}]);\n", idx, idx);
             }
             ret_str += &format!("\t}}\n");
-        },
+        }
         VecStoreWidth::I32 => {
             ret_str += &format!("\t{{\n");
             ret_str += &format!("\t\tulong *temp1 = (ulong*)(&{});\n", vec);
@@ -1289,7 +1292,7 @@ pub fn emit_memload_u128_load_m_x_n(
                 ret_str += &format!("\t\ttemp1[{}] = (ulong)(temp3[{}]);\n", idx, idx);
             }
             ret_str += &format!("\t}}\n");
-        },
+        }
         _ => panic!("Unimplemented store width for emit_memload_u128_load_m_x_n"),
     }
 
@@ -1322,12 +1325,12 @@ pub fn emit_memload_u128_load_lane(
                     "warp_idx"
                 )
             );
-        
+
             ret_str += &format!("\t{{\n");
             ret_str += &format!("\t\tuchar *temp = (uchar*)(&{});\n", vec);
             ret_str += &format!("\t\ttemp[{}] = {};\n", args.lane.lane, read);
             ret_str += &format!("\t}}\n");
-        },
+        }
         VecLoadWidth::I16 => {
             let read = if !writer.pretty_input_wasm || args.memarg.align < 2 {
                 format!(
@@ -1359,7 +1362,7 @@ pub fn emit_memload_u128_load_lane(
             ret_str += &format!("\t\tushort *temp = (ushort*)(&{});\n", vec);
             ret_str += &format!("\t\ttemp[{}] = {};\n", args.lane.lane, read);
             ret_str += &format!("\t}}\n");
-        },
+        }
         VecLoadWidth::I32 => {
             let read = if !writer.pretty_input_wasm || args.memarg.align < 4 {
                 format!(
@@ -1391,7 +1394,7 @@ pub fn emit_memload_u128_load_lane(
             ret_str += &format!("\t\tuint *temp = (uint*)(&{});\n", vec);
             ret_str += &format!("\t\ttemp[{}] = {};\n", args.lane.lane, read);
             ret_str += &format!("\t}}\n");
-        },
+        }
         VecLoadWidth::I64 => {
             let read = if !writer.pretty_input_wasm || args.memarg.align < 8 {
                 format!(
@@ -1423,11 +1426,10 @@ pub fn emit_memload_u128_load_lane(
             ret_str += &format!("\t\tulong *temp = (ulong*)(&{});\n", vec);
             ret_str += &format!("\t\ttemp[{}] = {};\n", args.lane.lane, read);
             ret_str += &format!("\t}}\n");
-        },
+        }
     }
     ret_str
 }
-
 
 pub fn emit_memload_u128_load_n_splat(
     writer: &opencl_writer::OpenCLCWriter,
@@ -1472,9 +1474,11 @@ pub fn emit_memload_u128_load_n_splat(
             // Splat the first byte
             let mask = "0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0";
             let tempvec = format!("(uchar16)({})", read);
-            ret_str += &format!("\t{} = as_ulong2(shuffle(as_uchar16({}), (uchar16)({})));\n",
-                                result_register, tempvec, mask);
-        },
+            ret_str += &format!(
+                "\t{} = as_ulong2(shuffle(as_uchar16({}), (uchar16)({})));\n",
+                result_register, tempvec, mask
+            );
+        }
         VecSplatSize::I16 => {
             let read = if !writer.pretty_input_wasm || args.align < 2 {
                 format!(
@@ -1505,9 +1509,11 @@ pub fn emit_memload_u128_load_n_splat(
             // Splat the first short
             let mask = "0, 0, 0, 0, 0, 0, 0, 0";
             let tempvec = format!("(ushort8)({})", read);
-            ret_str += &format!("\t{} = as_ulong2(shuffle(as_ushort8({}), (ushort8)({})));\n",
-                                result_register, tempvec, mask);
-        },
+            ret_str += &format!(
+                "\t{} = as_ulong2(shuffle(as_ushort8({}), (ushort8)({})));\n",
+                result_register, tempvec, mask
+            );
+        }
         VecSplatSize::I32 => {
             let read = if !writer.pretty_input_wasm || args.align < 4 {
                 format!(
@@ -1537,10 +1543,11 @@ pub fn emit_memload_u128_load_n_splat(
             // Splat the first int
             let mask = "0, 0, 0, 0";
             let tempvec = format!("(uint4)({})", read);
-            ret_str += &format!("\t{} = as_ulong2(shuffle(as_uint4({}), (uint4)({})));\n",
-                                result_register, tempvec, mask);
-            
-        },
+            ret_str += &format!(
+                "\t{} = as_ulong2(shuffle(as_uint4({}), (uint4)({})));\n",
+                result_register, tempvec, mask
+            );
+        }
         VecSplatSize::I64 => {
             let read = if !writer.pretty_input_wasm || args.align < 8 {
                 format!(
@@ -1570,16 +1577,16 @@ pub fn emit_memload_u128_load_n_splat(
             // Splat the first ulong
             let mask = "0, 0";
             let tempvec = format!("(ulong2)({})", read);
-            ret_str += &format!("\t{} = as_ulong2(shuffle(as_ulong2({}), (ulong2)({})));\n",
-                                result_register, tempvec, mask);
-        },
+            ret_str += &format!(
+                "\t{} = as_ulong2(shuffle(as_ulong2({}), (ulong2)({})));\n",
+                result_register, tempvec, mask
+            );
+        }
     };
     ret_str += &format!("\t}}\n");
 
     ret_str
 }
-
-
 
 /*
  * This function is essentially a no-op, since we pre-allocate the heaps for all procs!
@@ -1641,10 +1648,14 @@ pub fn emit_memcpy(
     let n_bytes = stack_ctx.vstack_pop(StackType::i32);
     let src = stack_ctx.vstack_pop(StackType::i32);
     let dst = stack_ctx.vstack_pop(StackType::i32);
-    emit_intra_vm_memcpy(&format!("((global char*)(heap_u32)+{})", src), "(global char*)(heap_u32)",
-			 &format!("((global char*)(heap_u32)+{})", dst), "(global char*)(heap_u32)",
-			 &n_bytes,
-			 "warp_idx")
+    emit_intra_vm_memcpy(
+        &format!("((global char*)(heap_u32)+{})", src),
+        "(global char*)(heap_u32)",
+        &format!("((global char*)(heap_u32)+{})", dst),
+        "(global char*)(heap_u32)",
+        &n_bytes,
+        "warp_idx",
+    )
 }
 
 pub fn emit_memfill(
@@ -1656,8 +1667,11 @@ pub fn emit_memfill(
     let n_bytes = stack_ctx.vstack_pop(StackType::i32);
     let val = stack_ctx.vstack_pop(StackType::i32);
     let dst = stack_ctx.vstack_pop(StackType::i32);
-    emit_intra_vm_memfill(&format!("((global char*)(heap_u32)+{})", dst), "(global char*)(heap_u32)",
-			  &val,
-			  &n_bytes,
-			  "warp_idx")
+    emit_intra_vm_memfill(
+        &format!("((global char*)(heap_u32)+{})", dst),
+        "(global char*)(heap_u32)",
+        &val,
+        &n_bytes,
+        "warp_idx",
+    )
 }

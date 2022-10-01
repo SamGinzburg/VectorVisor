@@ -11,8 +11,8 @@ use std::collections::HashMap;
 use std::convert::TryInto;
 
 use wast::core::*;
-use wast::token::Index;
 use wast::token::Id;
+use wast::token::Index;
 
 /*
  * Every time we encounter a Loop, Block, or If statement, we store the entry on the control stack

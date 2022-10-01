@@ -31,7 +31,7 @@ impl Serverless {
         if hypercall.non_serverless_invoke_call_found {
             return;
         }
-        
+
         // store this in the vmctx for when we return
         *Arc::make_mut(&mut vm_ctx.timestamp_counter) = hypercall.timestamp_counter;
         *Arc::make_mut(&mut vm_ctx.queue_submit_counter) = hypercall.queue_submit_delta;

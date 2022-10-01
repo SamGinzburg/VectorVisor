@@ -6,7 +6,8 @@ pub enum VecUnop {
     Not,
 }
 
-pub fn vec_unop(_writer: &opencl_writer::OpenCLCWriter,
+pub fn vec_unop(
+    _writer: &opencl_writer::OpenCLCWriter,
     stack_ctx: &mut StackCtx,
     unop: VecUnop,
     _debug: bool,
@@ -16,11 +17,8 @@ pub fn vec_unop(_writer: &opencl_writer::OpenCLCWriter,
 
     result += &match unop {
         VecUnop::Not => {
-            format!(
-                "\t{} = ~{};\n",
-                reg1, reg1
-            )
-        },
+            format!("\t{} = ~{};\n", reg1, reg1)
+        }
     };
 
     result

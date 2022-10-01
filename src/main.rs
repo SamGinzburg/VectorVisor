@@ -438,7 +438,7 @@ fn main() {
             is_gpu,
             false,
             is_nvidia_gpu,
-	    volatile,
+            volatile,
         );
 
         println!("The following info is needed to later run compiled pre-compiled/externally compiled binaries");
@@ -495,7 +495,7 @@ fn main() {
                     _kernel_compile_stats,
                     kernel_partition_mappings,
                     kernel_part_debug,
-                    data_segment
+                    data_segment,
                 ) = ast.write_opencl_file(
                     hcall_size.try_into().unwrap(),
                     interleave,
@@ -517,7 +517,7 @@ fn main() {
                     is_gpu,
                     false,
                     is_nvidia_gpu,
-		    volatile,
+                    volatile,
                 );
                 println!("Compiled: {} functions", num_compiled_funcs);
                 println!("Entry point: {}", entry_point);
@@ -525,11 +525,13 @@ fn main() {
                 println!("interleave: {}", interleave);
 
                 (
-                    InputProgram::Text(kernel_partition_mappings,
-                                       kernel_part_debug,
-                                       compiled_kernel.clone(),
-                                       fastcall_header.clone(),
-                                       data_segment),
+                    InputProgram::Text(
+                        kernel_partition_mappings,
+                        kernel_part_debug,
+                        compiled_kernel.clone(),
+                        fastcall_header.clone(),
+                        data_segment,
+                    ),
                     entry_point,
                     num_compiled_funcs,
                     globals_buffer_size,
@@ -580,7 +582,7 @@ fn main() {
                     is_gpu,
                     false,
                     is_nvidia_gpu,
-		    volatile,
+                    volatile,
                 );
                 println!("Compiled: {} functions", num_compiled_funcs);
                 println!("Entry point: {}", entry_point);
@@ -588,11 +590,13 @@ fn main() {
                 println!("interleave: {}", interleave);
 
                 (
-                    InputProgram::Text(kernel_partition_mappings,
-                                       kernel_part_debug,
-                                       compiled_kernel.clone(),
-                                       fastcall_header.clone(),
-                                       data_segment),
+                    InputProgram::Text(
+                        kernel_partition_mappings,
+                        kernel_part_debug,
+                        compiled_kernel.clone(),
+                        fastcall_header.clone(),
+                        data_segment,
+                    ),
                     entry_point,
                     num_compiled_funcs,
                     globals_buffer_size,
@@ -646,7 +650,7 @@ fn main() {
                     is_gpu,
                     false,
                     is_nvidia_gpu,
-		    volatile,
+                    volatile,
                 );
                 println!("Compiled: {} functions", num_compiled_funcs);
                 println!("Entry point: {}", entry_point);
@@ -660,7 +664,7 @@ fn main() {
                         fastcall_header.clone(),
                         kernel_compile_stats.clone(),
                         kernel_partition_mappings.clone(),
-                        data_segment
+                        data_segment,
                     ),
                     entry_point,
                     num_compiled_funcs,
@@ -712,7 +716,7 @@ fn main() {
                     is_gpu,
                     false,
                     is_nvidia_gpu,
-		    volatile,
+                    volatile,
                 );
                 println!("Compiled: {} functions", num_compiled_funcs);
                 println!("Entry point: {}", entry_point);
@@ -726,7 +730,7 @@ fn main() {
                         fastcall_header.clone(),
                         kernel_compile_stats.clone(),
                         kernel_partition_mappings.clone(),
-                        data_segment
+                        data_segment,
                     ),
                     entry_point,
                     num_compiled_funcs,
@@ -744,10 +748,12 @@ fn main() {
                 let program: SeralizedProgram = bincode::deserialize(&filedata).unwrap();
                 println!("Loaded program with entry point: {}, num_compiled_funcs: {}, globals_buffer_size: {}, interleave: {}", program.entry_point, program.num_compiled_funcs, program.globals_buffer_size, program.interleave);
                 (
-                    InputProgram::Binary(program.kernel_partition_mappings,
-                                         program.kernel_part_debug,
-                                         program.program_data,
-                                         program.data_segment),
+                    InputProgram::Binary(
+                        program.kernel_partition_mappings,
+                        program.kernel_part_debug,
+                        program.program_data,
+                        program.data_segment,
+                    ),
                     program.entry_point,
                     program.num_compiled_funcs,
                     program.globals_buffer_size,
@@ -769,7 +775,7 @@ fn main() {
                         program.program_data,
                         program.partition_mapping,
                         program.kernel_part_debug,
-                        program.data_segment
+                        program.data_segment,
                     ),
                     program.entry_point,
                     program.num_compiled_funcs,
@@ -891,7 +897,7 @@ fn main() {
                             num_vms,
                             batch_submit_ip_clone.clone(),
                             port.clone(),
-			    compile_time.clone(),
+                            compile_time.clone(),
                         );
                     });
                 }
@@ -978,7 +984,7 @@ fn main() {
                     num_threads.try_into().unwrap(),
                     batch_submit_ip,
                     batch_submit_port.to_string(),
- 		    0 as u128,
+                    0 as u128,
                 );
             });
         }

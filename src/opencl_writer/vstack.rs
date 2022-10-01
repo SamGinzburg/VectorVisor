@@ -16,9 +16,9 @@ use crate::opencl_writer::get_func_result;
 use crate::opencl_writer::OpenCLCWriter;
 use crate::opencl_writer::WASI_SNAPSHOT_PREVIEW1;
 
-use wast::token::Index::*;
-use wast::token::Index;
 use wast::core::*;
+use wast::token::Index;
+use wast::token::Index::*;
 
 use crate::opencl_writer::format_fn_name;
 use core::ops::Range;
@@ -461,25 +461,25 @@ impl<'a> StackCtx {
                     stack_sizes.pop();
                     current_i32_count -= 1;
                     current_f32_count -= 1;
-                },
+                }
                 Instruction::V128Store(_memarg) => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     current_i32_count -= 1;
                     current_u128_count -= 1;
-                },
+                }
                 Instruction::MemoryFill(_memarg) => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.pop();
                     current_i32_count -= 3;
-                },
+                }
                 Instruction::MemoryCopy(_memarg) => {
                     stack_sizes.pop();
                     stack_sizes.pop();
                     stack_sizes.pop();
                     current_i32_count -= 3;
-                },
+                }
                 /*
                  * As of right now we only support i32 globals anyways...
                  * TODO: for future support of globals, check for other types here
@@ -487,31 +487,31 @@ impl<'a> StackCtx {
                 Instruction::GlobalGet(_idx) => {
                     update_counter(&mut current_i32_count, &mut max_i32_count);
                     stack_sizes.push(StackType::i32);
-                },
+                }
                 Instruction::GlobalSet(_idx) => {
                     current_i32_count -= 1;
                     stack_sizes.pop().unwrap();
-                },
+                }
                 Instruction::I32Const(_val) => {
                     stack_sizes.push(StackType::i32);
                     update_counter(&mut current_i32_count, &mut max_i32_count);
-                },
+                }
                 Instruction::I64Const(_val) => {
                     stack_sizes.push(StackType::i64);
                     update_counter(&mut current_i64_count, &mut max_i64_count);
-                },
+                }
                 Instruction::F32Const(_val) => {
                     stack_sizes.push(StackType::f32);
                     update_counter(&mut current_f32_count, &mut max_f32_count);
-                },
+                }
                 Instruction::F64Const(_val) => {
                     stack_sizes.push(StackType::f64);
                     update_counter(&mut current_f64_count, &mut max_f64_count);
-                },
+                }
                 Instruction::V128Const(_) => {
                     stack_sizes.push(StackType::u128);
                     update_counter(&mut current_u128_count, &mut max_u128_count);
-                },
+                }
                 Instruction::LocalGet(idx) => match idx {
                     Index::Id(id) => {
                         stack_sizes.push(StackCtx::convert_wast_types(
@@ -1975,398 +1975,396 @@ impl<'a> StackCtx {
                         // This happens because unreachable is emitted as a hypercall in this case
                         num_hypercalls += 1;
                     }
-                },
+                }
                 Instruction::I8x16ExtractLaneU(_) => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::i32);
                     update_counter(&mut current_i32_count, &mut max_i32_count);
                     current_u128_count -= 1;
-                },
+                }
                 Instruction::I8x16ExtractLaneS(_) => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::i32);
                     update_counter(&mut current_i32_count, &mut max_i32_count);
                     current_u128_count -= 1;
-                },
+                }
                 Instruction::I16x8ExtractLaneU(_) => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::i32);
                     update_counter(&mut current_i32_count, &mut max_i32_count);
                     current_u128_count -= 1;
-                },
+                }
                 Instruction::I16x8ExtractLaneS(_) => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::i32);
                     update_counter(&mut current_i32_count, &mut max_i32_count);
                     current_u128_count -= 1;
-                },
+                }
                 Instruction::I16x8MaxU => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);
                     current_u128_count -= 1;
-                },
+                }
                 Instruction::I8x16GtS | Instruction::I8x16GtU => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);
                     current_u128_count -= 1;
-                },
+                }
                 Instruction::I16x8GtS | Instruction::I16x8GtU => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);
                     current_u128_count -= 1;
-                },
+                }
                 Instruction::I8x16MaxU => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);
                     current_u128_count -= 1;
-                },
+                }
                 Instruction::I8x16NarrowI16x8S => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);
                     current_u128_count -= 1;
-                },
+                }
                 Instruction::I8x16NarrowI16x8U => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);
                     current_u128_count -= 1;
-                },
-                Instruction::I64x2Mul |
-                Instruction::I64x2Add |
-                Instruction::I64x2Sub |
-                Instruction::I64x2Eq |
-                Instruction::I64x2GeS |
-                Instruction::I64x2GtS |
-                Instruction::I64x2LtS |
-                Instruction::I64x2LeS |
-                Instruction::I64x2Ne => {
+                }
+                Instruction::I64x2Mul
+                | Instruction::I64x2Add
+                | Instruction::I64x2Sub
+                | Instruction::I64x2Eq
+                | Instruction::I64x2GeS
+                | Instruction::I64x2GtS
+                | Instruction::I64x2LtS
+                | Instruction::I64x2LeS
+                | Instruction::I64x2Ne => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);
                     current_u128_count -= 1;
-                },    
+                }
                 Instruction::I32x4Splat => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);
                     update_counter(&mut current_u128_count, &mut max_u128_count);
                     current_i32_count -= 1;
-                },
+                }
                 Instruction::I32x4Eq => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);
                     current_u128_count -= 1;
-                },
+                }
                 Instruction::I8x16Splat => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);
                     update_counter(&mut current_u128_count, &mut max_u128_count);
                     current_i32_count -= 1;
-                },
+                }
                 Instruction::I16x8Splat => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);
                     update_counter(&mut current_u128_count, &mut max_u128_count);
                     current_i32_count -= 1;
-                },
+                }
                 Instruction::F32x4Splat => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);
                     update_counter(&mut current_u128_count, &mut max_u128_count);
                     current_f32_count -= 1;
-                },
+                }
                 Instruction::F64x2Splat => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);
                     update_counter(&mut current_u128_count, &mut max_u128_count);
                     current_f64_count -= 1;
-                },
+                }
                 Instruction::I64x2Splat => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);
                     update_counter(&mut current_u128_count, &mut max_u128_count);
                     current_i64_count -= 1;
-                },
-                Instruction::I8x16LeS |
-                Instruction::I8x16LeU |
-                Instruction::I8x16LtS |
-                Instruction::I8x16LtU |
-                Instruction::I64x2Shl |
-                Instruction::I64x2ShrU |
-                Instruction::I64x2ShrS |
-                Instruction::I8x16Shl |
-                Instruction::I8x16ShrU |
-                Instruction::I8x16ShrS => {
+                }
+                Instruction::I8x16LeS
+                | Instruction::I8x16LeU
+                | Instruction::I8x16LtS
+                | Instruction::I8x16LtU
+                | Instruction::I64x2Shl
+                | Instruction::I64x2ShrU
+                | Instruction::I64x2ShrS
+                | Instruction::I8x16Shl
+                | Instruction::I8x16ShrU
+                | Instruction::I8x16ShrS => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);
                     current_i32_count -= 1;
-                },
-                Instruction::I8x16Add | 
-                Instruction::I8x16Sub => {
+                }
+                Instruction::I8x16Add | Instruction::I8x16Sub => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);
                     current_u128_count -= 1;
-                },
+                }
                 Instruction::I8x16Eq => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);
                     current_u128_count -= 1;
-                },
+                }
                 Instruction::I8x16Ne => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);
                     current_u128_count -= 1;
-                },
-                Instruction::I16x8ShrU |
-                Instruction::I16x8ShrS => {
+                }
+                Instruction::I16x8ShrU | Instruction::I16x8ShrS => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);
                     current_i32_count -= 1;
-                },
+                }
                 Instruction::I16x8Mul => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);
                     current_u128_count -= 1;
-                },
-                Instruction::I16x8Add |
-                Instruction::I16x8GeS |
-                Instruction::I16x8LtS |
-                Instruction::I16x8LtU |
-                Instruction::I16x8LeS |
-                Instruction::I16x8LeU |
-                Instruction::I16x8GeU |
-                Instruction::I16x8Sub => {
+                }
+                Instruction::I16x8Add
+                | Instruction::I16x8GeS
+                | Instruction::I16x8LtS
+                | Instruction::I16x8LtU
+                | Instruction::I16x8LeS
+                | Instruction::I16x8LeU
+                | Instruction::I16x8GeU
+                | Instruction::I16x8Sub => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);
                     current_u128_count -= 1;
-                },
+                }
                 Instruction::I16x8Shl => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);
                     current_i32_count -= 1;
-                },
+                }
                 Instruction::I16x8Ne => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);
                     current_u128_count -= 1;
-                },
+                }
                 Instruction::I16x8Eq => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);
                     current_u128_count -= 1;
-                },
+                }
                 Instruction::F32x4Mul => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);
                     current_u128_count -= 1;
-                },
+                }
                 Instruction::F32x4Add => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);
                     current_u128_count -= 1;
-                },
+                }
                 Instruction::F32x4Ne => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);
                     current_u128_count -= 1;
-                },
+                }
                 Instruction::I32x4Shl => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);
                     current_i32_count -= 1;
-                },
+                }
                 Instruction::I32x4ShrS | Instruction::I32x4ShrU => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);
                     current_i32_count -= 1;
-                },
-                Instruction::I32x4GeS |
-                Instruction::I32x4GeU |
-                Instruction::I32x4GtS |
-                Instruction::I32x4LtS |
-                Instruction::I32x4LtU |
-                Instruction::I32x4LeS |
-                Instruction::I32x4LeU |
-                Instruction::I32x4GtU |
-                Instruction::I32x4MaxU => {
+                }
+                Instruction::I32x4GeS
+                | Instruction::I32x4GeU
+                | Instruction::I32x4GtS
+                | Instruction::I32x4LtS
+                | Instruction::I32x4LtU
+                | Instruction::I32x4LeS
+                | Instruction::I32x4LeU
+                | Instruction::I32x4GtU
+                | Instruction::I32x4MaxU => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);
                     current_u128_count -= 1;
-                },
+                }
                 Instruction::I32x4Mul => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);
                     current_u128_count -= 1;
-                },
+                }
                 Instruction::I32x4Add => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);
                     current_u128_count -= 1;
-                },
+                }
                 Instruction::I32x4Sub => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);
                     current_u128_count -= 1;
-                },
+                }
                 Instruction::I32x4Ne => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);
                     current_u128_count -= 1;
-                },
+                }
                 Instruction::V128Xor => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);
                     current_u128_count -= 1;
-                },
+                }
                 Instruction::V128And => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);
                     current_u128_count -= 1;
-                },
+                }
                 Instruction::V128Or => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);
                     current_u128_count -= 1;
-                },
+                }
                 Instruction::V128Not => {
                     // no-op
-                },
+                }
                 Instruction::I8x16Shuffle(_) => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);
                     current_u128_count -= 1;
-                },
-                Instruction::V128Load8x8U(_) |
-                Instruction::V128Load8x8S(_) |
-                Instruction::V128Load16x4U(_) |
-                Instruction::V128Load16x4S(_) => {
+                }
+                Instruction::V128Load8x8U(_)
+                | Instruction::V128Load8x8S(_)
+                | Instruction::V128Load16x4U(_)
+                | Instruction::V128Load16x4S(_) => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);
                     update_counter(&mut current_u128_count, &mut max_u128_count);
                     current_i32_count -= 1;
-                },
-                Instruction::V128Load8Lane(_) |
-                Instruction::V128Load16Lane(_) |
-                Instruction::V128Load32Lane(_) |
-                Instruction::V128Load64Lane(_) => {
+                }
+                Instruction::V128Load8Lane(_)
+                | Instruction::V128Load16Lane(_)
+                | Instruction::V128Load32Lane(_)
+                | Instruction::V128Load64Lane(_) => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);
                     current_i32_count -= 1;
-                },
+                }
                 Instruction::V128Store32Lane(_) => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);
                     current_i32_count -= 1;
-                },
+                }
                 Instruction::V128Store64Lane(_) => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);
                     current_i32_count -= 1;
-                },
+                }
                 Instruction::V128Load8Splat(_) => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);
                     update_counter(&mut current_u128_count, &mut max_u128_count);
                     current_i32_count -= 1;
-                },
+                }
                 Instruction::V128Load16Splat(_) => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);
                     update_counter(&mut current_u128_count, &mut max_u128_count);
                     current_i32_count -= 1;
-                },
+                }
                 Instruction::V128Load32Splat(_) => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);
                     update_counter(&mut current_u128_count, &mut max_u128_count);
                     current_i32_count -= 1;
-                },
+                }
                 Instruction::V128Load64Splat(_) => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);
                     update_counter(&mut current_u128_count, &mut max_u128_count);
                     current_i32_count -= 1;
-                },
+                }
                 Instruction::I32x4ExtractLane(_) => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::i32);
                     update_counter(&mut current_i32_count, &mut max_i32_count);
                     current_u128_count -= 1;
-                },
+                }
                 Instruction::I64x2ExtractLane(_) => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::i64);
                     update_counter(&mut current_i64_count, &mut max_i64_count);
                     current_u128_count -= 1;
-                },
+                }
                 Instruction::F32x4ExtractLane(_) => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::f32);
                     update_counter(&mut current_f32_count, &mut max_f32_count);
                     current_u128_count -= 1;
-                },
+                }
                 Instruction::F64x2ExtractLane(_) => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::f64);
                     update_counter(&mut current_f64_count, &mut max_f64_count);
                     current_u128_count -= 1;
-                },
+                }
                 Instruction::I32x4ReplaceLane(_) => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);
                     current_i32_count -= 1;
-                },
+                }
                 Instruction::I64x2ReplaceLane(_) => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);
                     current_i64_count -= 1;
-                },
+                }
                 Instruction::F32x4ReplaceLane(_) => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);
                     current_f32_count -= 1;
-                },
+                }
                 Instruction::F64x2ReplaceLane(_) => {
                     stack_sizes.pop().unwrap();
                     stack_sizes.pop().unwrap();
                     stack_sizes.push(StackType::u128);
                     current_f64_count -= 1;
-                },
+                }
                 _ => panic!(
                     "Instruction {:?} not yet implemented (vstack-pass)",
                     instruction
@@ -3156,7 +3154,10 @@ impl<'a> StackCtx {
                     panic!("vstack_pop failed to pop u128 register: {:?}", self);
                 }
                 self.u128_idx -= 1;
-                format!("{}", self.u128_stack.get(self.u128_idx).expect(get_panic_msg))
+                format!(
+                    "{}",
+                    self.u128_stack.get(self.u128_idx).expect(get_panic_msg)
+                )
             }
         }
     }

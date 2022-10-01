@@ -38,20 +38,20 @@ use testops::*;
 use trap::*;
 use unops::*;
 use util::*;
+use vector::binops::*;
+use vector::laneops::*;
 use vector::shuffle::*;
 use vector::splat::*;
-use vector::binops::*;
-use vector::unops::*;
 use vector::stackops::*;
-use vector::laneops::*;
+use vector::unops::*;
 use vstack::*;
 use wasi_helpers::*;
 
 use regex::Regex;
-use wast::parser::{self, ParseBuffer};
+use wast::core::ExportKind;
 use wast::core::ModuleKind::{Binary, Text};
 use wast::core::*;
-use wast::core::ExportKind;
+use wast::parser::{self, ParseBuffer};
 use wast::token::Index;
 use wast::Wat;
 
@@ -279,66 +279,58 @@ impl<'a> OpenCLCWriter<'_> {
         match hypercall_id {
             WasmHypercallId::path_unlink_file => {
                 ret_str += &emit_path_unlink_file_pre(self, stack_ctx, debug)
-            },
+            }
             WasmHypercallId::path_symlink => {
                 ret_str += &emit_path_symlink_pre(self, stack_ctx, debug)
-            },
+            }
             WasmHypercallId::path_rename => {
                 ret_str += &emit_path_rename_pre(self, stack_ctx, debug)
-            },
+            }
             WasmHypercallId::path_remove_directory => {
                 ret_str += &emit_path_remove_directory_pre(self, stack_ctx, debug)
-            },
+            }
             WasmHypercallId::path_create_directory => {
                 ret_str += &emit_path_create_directory_pre(self, stack_ctx, debug)
-            },
-            WasmHypercallId::fd_readdir => {
-                ret_str += &emit_fd_readdir_pre(self, stack_ctx, debug)
-            },
-            WasmHypercallId::path_open => {
-                ret_str += &emit_path_open_pre(self, stack_ctx, debug)
-            },
-            WasmHypercallId::fd_close => {
-                ret_str += &emit_fd_close_pre(self, stack_ctx, debug)
-            },
-            WasmHypercallId::fd_read => {
-                ret_str += &emit_fd_read_pre(self, stack_ctx, debug)
-            },
-            WasmHypercallId::fd_seek => {
-                ret_str += &emit_fd_seek_pre(self, stack_ctx, debug)
-            },
+            }
+            WasmHypercallId::fd_readdir => ret_str += &emit_fd_readdir_pre(self, stack_ctx, debug),
+            WasmHypercallId::path_open => ret_str += &emit_path_open_pre(self, stack_ctx, debug),
+            WasmHypercallId::fd_close => ret_str += &emit_fd_close_pre(self, stack_ctx, debug),
+            WasmHypercallId::fd_read => ret_str += &emit_fd_read_pre(self, stack_ctx, debug),
+            WasmHypercallId::fd_seek => ret_str += &emit_fd_seek_pre(self, stack_ctx, debug),
             WasmHypercallId::poll_oneoff => {
                 ret_str += &emit_poll_oneoff_pre(self, stack_ctx, debug)
-            },
+            }
             WasmHypercallId::fd_write => {
                 ret_str += &emit_fd_write_call_helper(self, stack_ctx, debug)
-            },
+            }
             WasmHypercallId::fd_filestat_get => {
                 ret_str += &emit_fd_filestat_get_pre(self, stack_ctx, debug)
-            },
+            }
             WasmHypercallId::path_filestat_get => {
                 ret_str += &emit_path_filestat_get_pre(self, stack_ctx, debug)
-            },
+            }
             WasmHypercallId::fd_fdstat_get => {
                 ret_str += &emit_fd_fdstat_get_helper(self, stack_ctx, debug)
-            },
+            }
             WasmHypercallId::fd_fdstat_set_flags => {
                 ret_str += &emit_fd_fdstat_set_flags_pre(self, stack_ctx, debug)
-            },
+            }
             WasmHypercallId::fd_prestat_get => {
                 ret_str += &emit_fd_prestat_get_helper(self, stack_ctx, debug)
-            },
+            }
             WasmHypercallId::fd_prestat_dir_name => {
                 ret_str += &emit_fd_prestat_dir_name_helper(self, stack_ctx, debug)
-            },
+            }
             WasmHypercallId::serverless_invoke => {
                 ret_str += &emit_serverless_invoke_pre(self, debug)
-            },
+            }
             WasmHypercallId::serverless_response => {
                 ret_str += &emit_serverless_response_pre(self, stack_ctx, debug)
-            },
+            }
             WasmHypercallId::random_get => ret_str += &emit_random_get_pre(self, stack_ctx, debug),
-            WasmHypercallId::clock_time_get => ret_str += &emit_clock_time_get_pre(self, stack_ctx, debug),
+            WasmHypercallId::clock_time_get => {
+                ret_str += &emit_clock_time_get_pre(self, stack_ctx, debug)
+            }
             _ => (),
         }
         // insert return (we exit back to the VMM)
@@ -370,74 +362,66 @@ impl<'a> OpenCLCWriter<'_> {
         match hypercall_id {
             WasmHypercallId::path_filestat_get => {
                 ret_str += &emit_path_filestat_get_post(self, stack_ctx, debug)
-            },
+            }
             WasmHypercallId::path_unlink_file => {
                 ret_str += &emit_path_unlink_file_post(self, stack_ctx, debug)
-            },
+            }
             WasmHypercallId::path_symlink => {
                 ret_str += &emit_path_symlink_post(self, stack_ctx, debug)
-            },
+            }
             WasmHypercallId::path_rename => {
                 ret_str += &emit_path_rename_post(self, stack_ctx, debug)
-            },
+            }
             WasmHypercallId::path_remove_directory => {
                 ret_str += &emit_path_remove_directory_post(self, stack_ctx, debug)
-            },
+            }
             WasmHypercallId::path_create_directory => {
                 ret_str += &emit_path_create_directory_post(self, stack_ctx, debug)
-            },
-            WasmHypercallId::fd_readdir => {
-                ret_str += &emit_fd_readdir_post(self, stack_ctx, debug)
-            },
-            WasmHypercallId::path_open => {
-                ret_str += &emit_path_open_post(self, stack_ctx, debug)
-            },
+            }
+            WasmHypercallId::fd_readdir => ret_str += &emit_fd_readdir_post(self, stack_ctx, debug),
+            WasmHypercallId::path_open => ret_str += &emit_path_open_post(self, stack_ctx, debug),
             WasmHypercallId::fd_filestat_get => {
                 ret_str += &emit_fd_filestat_get_post(self, stack_ctx, debug)
-            },
-            WasmHypercallId::fd_close => {
-                ret_str += &emit_fd_close_post(self, stack_ctx, debug)
-            },
-            WasmHypercallId::fd_read => {
-                ret_str += &emit_fd_read_post(self, stack_ctx, debug)
-            },
-            WasmHypercallId::fd_seek => {
-                ret_str += &emit_fd_seek_post(self, stack_ctx, debug)
-            },
+            }
+            WasmHypercallId::fd_close => ret_str += &emit_fd_close_post(self, stack_ctx, debug),
+            WasmHypercallId::fd_read => ret_str += &emit_fd_read_post(self, stack_ctx, debug),
+            WasmHypercallId::fd_seek => ret_str += &emit_fd_seek_post(self, stack_ctx, debug),
             WasmHypercallId::poll_oneoff => {
                 ret_str += &emit_poll_oneoff_post(self, stack_ctx, debug);
-            },
+            }
             WasmHypercallId::fd_write => {
                 ret_str += &emit_fd_write_post(&self, stack_ctx, debug);
-            },
+            }
             WasmHypercallId::environ_sizes_get => {
                 ret_str += &emit_environ_sizes_get_post(&self, stack_ctx, debug);
-            },
+            }
             WasmHypercallId::environ_get => {
                 ret_str += &emit_environ_get_post(&self, stack_ctx, debug);
-            },
+            }
             WasmHypercallId::fd_fdstat_set_flags => {
                 ret_str += &emit_fd_fdstat_set_flags_post(self, stack_ctx, debug)
-            },
+            }
             WasmHypercallId::fd_fdstat_get => {
                 ret_str += &emit_fd_fdstat_get_post(&self, stack_ctx, debug);
-            },
+            }
             WasmHypercallId::fd_prestat_get => {
                 ret_str += &emit_fd_prestat_get_post(&self, stack_ctx, debug);
-            },
+            }
             WasmHypercallId::fd_prestat_dir_name => {
                 ret_str += &emit_fd_prestat_dir_name_post(&self, stack_ctx, debug);
-            },
+            }
             WasmHypercallId::serverless_invoke => {
                 ret_str += &emit_serverless_invoke_post(&self, stack_ctx, debug);
-            },
+            }
             WasmHypercallId::serverless_response => {
                 ret_str += &emit_serverless_response_post(&self, stack_ctx, debug);
-            },
+            }
             WasmHypercallId::random_get => {
                 ret_str += &emit_random_get_post(&self, stack_ctx, debug);
-            },
-            WasmHypercallId::clock_time_get => ret_str += &emit_clock_time_get_post(self, stack_ctx, debug),
+            }
+            WasmHypercallId::clock_time_get => {
+                ret_str += &emit_clock_time_get_post(self, stack_ctx, debug)
+            }
             _ => (),
         }
 
@@ -500,92 +484,126 @@ impl<'a> OpenCLCWriter<'_> {
                 stack_ctx.vstack_pop(dropped_type);
                 String::from("")
             }
-            Instruction::I32Store(memarg) => {
-                emit_memstore_i32(self, stack_ctx, memarg, debug)
-            }
-            Instruction::I32Store8(memarg) => {
-                emit_memstore8_i32(self, stack_ctx, memarg, debug)
-            }
-            Instruction::I64Store8(memarg) => {
-                emit_memstore8_i64(self, stack_ctx, memarg, debug)
-            }
-            Instruction::I64Store16(memarg) => {
-                emit_memstore16_i64(self, stack_ctx, memarg, debug)
-            }
-            Instruction::I32Store16(memarg) => {
-                emit_memstore16_i32(self, stack_ctx, memarg, debug)
-            }
-            Instruction::I64Store32(memarg) => {
-                emit_memstore32_i64(self, stack_ctx, memarg, debug)
-            }
+            Instruction::I32Store(memarg) => emit_memstore_i32(self, stack_ctx, memarg, debug),
+            Instruction::I32Store8(memarg) => emit_memstore8_i32(self, stack_ctx, memarg, debug),
+            Instruction::I64Store8(memarg) => emit_memstore8_i64(self, stack_ctx, memarg, debug),
+            Instruction::I64Store16(memarg) => emit_memstore16_i64(self, stack_ctx, memarg, debug),
+            Instruction::I32Store16(memarg) => emit_memstore16_i32(self, stack_ctx, memarg, debug),
+            Instruction::I64Store32(memarg) => emit_memstore32_i64(self, stack_ctx, memarg, debug),
             Instruction::I32Load(memarg) => emit_memload_i32(self, stack_ctx, memarg, debug),
             Instruction::V128Load(memarg) => emit_memload_u128(self, stack_ctx, memarg, debug),
-            Instruction::V128Load8x8U(memarg) => emit_memload_u128_load_m_x_n(self, stack_ctx, memarg, VecLoadWidth::I64, VecStoreWidth::I16, false, debug),
-            Instruction::V128Load8x8S(memarg) => emit_memload_u128_load_m_x_n(self, stack_ctx, memarg, VecLoadWidth::I64, VecStoreWidth::I16, true, debug),
-            Instruction::V128Load16x4U(memarg) => emit_memload_u128_load_m_x_n(self, stack_ctx, memarg, VecLoadWidth::I64, VecStoreWidth::I32, false, debug),
-            Instruction::V128Load16x4S(memarg) => emit_memload_u128_load_m_x_n(self, stack_ctx, memarg, VecLoadWidth::I64, VecStoreWidth::I32, true, debug),
-            Instruction::V128Load64Zero(memarg) => emit_memload_u128_zero_64(self, stack_ctx, memarg, debug),
-            Instruction::V128Load8Splat(memarg) => emit_memload_u128_load_n_splat(self, stack_ctx, memarg, VecSplatSize::I8, debug),
-            Instruction::V128Load16Splat(memarg) => emit_memload_u128_load_n_splat(self, stack_ctx, memarg, VecSplatSize::I16, debug),
-            Instruction::V128Load32Splat(memarg) => emit_memload_u128_load_n_splat(self, stack_ctx, memarg, VecSplatSize::I32, debug),
-            Instruction::V128Load64Splat(memarg) => emit_memload_u128_load_n_splat(self, stack_ctx, memarg, VecSplatSize::I64, debug),
-            Instruction::V128Load8Lane(load_or_store_lane) => emit_memload_u128_load_lane(self, stack_ctx, load_or_store_lane, VecLoadWidth::I8, debug),
-            Instruction::V128Load16Lane(load_or_store_lane) => emit_memload_u128_load_lane(self, stack_ctx, load_or_store_lane, VecLoadWidth::I16, debug),
-            Instruction::V128Load32Lane(load_or_store_lane) => emit_memload_u128_load_lane(self, stack_ctx, load_or_store_lane, VecLoadWidth::I32, debug),
-            Instruction::V128Load64Lane(load_or_store_lane) => emit_memload_u128_load_lane(self, stack_ctx, load_or_store_lane, VecLoadWidth::I64, debug),
-            Instruction::V128Store32Lane(load_or_store_lane) => emit_memstore_u128_lane(self, stack_ctx, load_or_store_lane, VecStoreWidth::I32, debug),
-            Instruction::V128Store64Lane(load_or_store_lane) => emit_memstore_u128_lane(self, stack_ctx, load_or_store_lane, VecStoreWidth::I64, debug),
-            Instruction::I32Load8u(memarg) => {
-                emit_memload_i32_8u(self, stack_ctx, memarg, debug)
+            Instruction::V128Load8x8U(memarg) => emit_memload_u128_load_m_x_n(
+                self,
+                stack_ctx,
+                memarg,
+                VecLoadWidth::I64,
+                VecStoreWidth::I16,
+                false,
+                debug,
+            ),
+            Instruction::V128Load8x8S(memarg) => emit_memload_u128_load_m_x_n(
+                self,
+                stack_ctx,
+                memarg,
+                VecLoadWidth::I64,
+                VecStoreWidth::I16,
+                true,
+                debug,
+            ),
+            Instruction::V128Load16x4U(memarg) => emit_memload_u128_load_m_x_n(
+                self,
+                stack_ctx,
+                memarg,
+                VecLoadWidth::I64,
+                VecStoreWidth::I32,
+                false,
+                debug,
+            ),
+            Instruction::V128Load16x4S(memarg) => emit_memload_u128_load_m_x_n(
+                self,
+                stack_ctx,
+                memarg,
+                VecLoadWidth::I64,
+                VecStoreWidth::I32,
+                true,
+                debug,
+            ),
+            Instruction::V128Load64Zero(memarg) => {
+                emit_memload_u128_zero_64(self, stack_ctx, memarg, debug)
             }
-            Instruction::I64Load16u(memarg) => {
-                emit_memload_i64_16u(self, stack_ctx, memarg, debug)
+            Instruction::V128Load8Splat(memarg) => {
+                emit_memload_u128_load_n_splat(self, stack_ctx, memarg, VecSplatSize::I8, debug)
             }
-            Instruction::I64Load16s(memarg) => {
-                emit_memload_i64_16s(self, stack_ctx, memarg, debug)
+            Instruction::V128Load16Splat(memarg) => {
+                emit_memload_u128_load_n_splat(self, stack_ctx, memarg, VecSplatSize::I16, debug)
             }
-            Instruction::I32Load16u(memarg) => {
-                emit_memload_i32_16u(self, stack_ctx, memarg, debug)
+            Instruction::V128Load32Splat(memarg) => {
+                emit_memload_u128_load_n_splat(self, stack_ctx, memarg, VecSplatSize::I32, debug)
             }
-            Instruction::I32Load16s(memarg) => {
-                emit_memload_i32_16s(self, stack_ctx, memarg, debug)
+            Instruction::V128Load64Splat(memarg) => {
+                emit_memload_u128_load_n_splat(self, stack_ctx, memarg, VecSplatSize::I64, debug)
             }
-            Instruction::I32Load8s(memarg) => {
-                emit_memload_i32_8s(self, stack_ctx, memarg, debug)
-            }
-            Instruction::I64Load8u(memarg) => {
-                emit_memload_i64_8u(self, stack_ctx, memarg, debug)
-            }
-            Instruction::I64Load8s(memarg) => {
-                emit_memload_i64_8s(self, stack_ctx, memarg, debug)
-            }
-            Instruction::I64Load32u(memarg) => {
-                emit_memload_i64_32u(self, stack_ctx, memarg, debug)
-            }
-            Instruction::I64Load32s(memarg) => {
-                emit_memload_i64_32s(self, stack_ctx, memarg, debug)
-            }
+            Instruction::V128Load8Lane(load_or_store_lane) => emit_memload_u128_load_lane(
+                self,
+                stack_ctx,
+                load_or_store_lane,
+                VecLoadWidth::I8,
+                debug,
+            ),
+            Instruction::V128Load16Lane(load_or_store_lane) => emit_memload_u128_load_lane(
+                self,
+                stack_ctx,
+                load_or_store_lane,
+                VecLoadWidth::I16,
+                debug,
+            ),
+            Instruction::V128Load32Lane(load_or_store_lane) => emit_memload_u128_load_lane(
+                self,
+                stack_ctx,
+                load_or_store_lane,
+                VecLoadWidth::I32,
+                debug,
+            ),
+            Instruction::V128Load64Lane(load_or_store_lane) => emit_memload_u128_load_lane(
+                self,
+                stack_ctx,
+                load_or_store_lane,
+                VecLoadWidth::I64,
+                debug,
+            ),
+            Instruction::V128Store32Lane(load_or_store_lane) => emit_memstore_u128_lane(
+                self,
+                stack_ctx,
+                load_or_store_lane,
+                VecStoreWidth::I32,
+                debug,
+            ),
+            Instruction::V128Store64Lane(load_or_store_lane) => emit_memstore_u128_lane(
+                self,
+                stack_ctx,
+                load_or_store_lane,
+                VecStoreWidth::I64,
+                debug,
+            ),
+            Instruction::I32Load8u(memarg) => emit_memload_i32_8u(self, stack_ctx, memarg, debug),
+            Instruction::I64Load16u(memarg) => emit_memload_i64_16u(self, stack_ctx, memarg, debug),
+            Instruction::I64Load16s(memarg) => emit_memload_i64_16s(self, stack_ctx, memarg, debug),
+            Instruction::I32Load16u(memarg) => emit_memload_i32_16u(self, stack_ctx, memarg, debug),
+            Instruction::I32Load16s(memarg) => emit_memload_i32_16s(self, stack_ctx, memarg, debug),
+            Instruction::I32Load8s(memarg) => emit_memload_i32_8s(self, stack_ctx, memarg, debug),
+            Instruction::I64Load8u(memarg) => emit_memload_i64_8u(self, stack_ctx, memarg, debug),
+            Instruction::I64Load8s(memarg) => emit_memload_i64_8s(self, stack_ctx, memarg, debug),
+            Instruction::I64Load32u(memarg) => emit_memload_i64_32u(self, stack_ctx, memarg, debug),
+            Instruction::I64Load32s(memarg) => emit_memload_i64_32s(self, stack_ctx, memarg, debug),
             Instruction::I64Load(memarg) => emit_memload_i64(self, stack_ctx, memarg, debug),
             Instruction::F64Load(memarg) => emit_memload_f64(self, stack_ctx, memarg, debug),
             Instruction::F32Load(memarg) => emit_memload_f32(self, stack_ctx, memarg, debug),
-            Instruction::I64Store(memarg) => {
-                emit_memstore_i64(self, stack_ctx, memarg, debug)
-            }
-            Instruction::F64Store(memarg) => {
-                emit_memstore_f64(self, stack_ctx, memarg, debug)
-            }
-            Instruction::F32Store(memarg) => {
-                emit_memstore_f32(self, stack_ctx, memarg, debug)
-            }
-            Instruction::V128Store(memarg) => {
-                emit_memstore_u128(self, stack_ctx, memarg, debug)
-            }
-            Instruction::MemoryCopy(memarg) => {
-                emit_memcpy(self, stack_ctx, memarg, debug)
-            }
-            Instruction::MemoryFill(memarg) => {
-                emit_memfill(self, stack_ctx, memarg, debug)
-            }
+            Instruction::I64Store(memarg) => emit_memstore_i64(self, stack_ctx, memarg, debug),
+            Instruction::F64Store(memarg) => emit_memstore_f64(self, stack_ctx, memarg, debug),
+            Instruction::F32Store(memarg) => emit_memstore_f32(self, stack_ctx, memarg, debug),
+            Instruction::V128Store(memarg) => emit_memstore_u128(self, stack_ctx, memarg, debug),
+            Instruction::MemoryCopy(memarg) => emit_memcpy(self, stack_ctx, memarg, debug),
+            Instruction::MemoryFill(memarg) => emit_memfill(self, stack_ctx, memarg, debug),
             Instruction::GlobalGet(idx) => match idx {
                 Index::Id(id) => {
                     emit_global_get(self, stack_ctx, id.name(), global_mappings, debug)
@@ -924,30 +942,14 @@ impl<'a> OpenCLCWriter<'_> {
             Instruction::I32Rotl => emit_i32_rotl(self, stack_ctx, debug),
             Instruction::I64Rotl => emit_i64_rotl(self, stack_ctx, debug),
             Instruction::I64Sub => emit_i64_sub(self, stack_ctx, debug),
-            Instruction::F64Nearest => {
-                emit_f64_rint(self, stack_ctx, debug)
-            }
-            Instruction::F32Nearest => {
-                emit_f32_rint(self, stack_ctx, debug)
-            }
-            Instruction::F32Copysign => {
-                emit_f32_copysign(self, stack_ctx, debug)
-            }
-            Instruction::F64Copysign => {
-                emit_f64_copysign(self, stack_ctx, debug)
-            }
-            Instruction::I64ReinterpretF64 => {
-                emit_i64_reinterpret_f64(self, stack_ctx, debug)
-            }
-            Instruction::F64ReinterpretI64 => {
-                emit_f64_reinterpret_i64(self, stack_ctx, debug)
-            }
-            Instruction::F32ReinterpretI32 => {
-                emit_f32_reinterpret_i32(self, stack_ctx, debug)
-            }
-            Instruction::I32ReinterpretF32 => {
-                emit_i32_reinterpret_f32(self, stack_ctx, debug)
-            }
+            Instruction::F64Nearest => emit_f64_rint(self, stack_ctx, debug),
+            Instruction::F32Nearest => emit_f32_rint(self, stack_ctx, debug),
+            Instruction::F32Copysign => emit_f32_copysign(self, stack_ctx, debug),
+            Instruction::F64Copysign => emit_f64_copysign(self, stack_ctx, debug),
+            Instruction::I64ReinterpretF64 => emit_i64_reinterpret_f64(self, stack_ctx, debug),
+            Instruction::F64ReinterpretI64 => emit_f64_reinterpret_i64(self, stack_ctx, debug),
+            Instruction::F32ReinterpretI32 => emit_f32_reinterpret_i32(self, stack_ctx, debug),
+            Instruction::I32ReinterpretF32 => emit_i32_reinterpret_f32(self, stack_ctx, debug),
             Instruction::F64Ceil => emit_f64_ceil(self, stack_ctx, debug),
             Instruction::F32Ceil => emit_f32_ceil(self, stack_ctx, debug),
             Instruction::F64Floor => emit_f64_floor(self, stack_ctx, debug),
@@ -989,9 +991,7 @@ impl<'a> OpenCLCWriter<'_> {
                     stack_ctx,
                 )
             }
-            Instruction::Else(_) => {
-                emit_else(&self, fn_name.to_string(), control_stack, stack_ctx)
-            }
+            Instruction::Else(_) => emit_else(&self, fn_name.to_string(), control_stack, stack_ctx),
             Instruction::Block(b) => {
                 // if a block doesn't have a label, we have to make one up
                 let label: String = match b.label {
@@ -1136,99 +1136,317 @@ impl<'a> OpenCLCWriter<'_> {
                         debug,
                     )
                 }
-            },
-            Instruction::I8x16LeS => vec_x_by_y_binop(self, stack_ctx, VecBinOp::LeS, VecOpType::Int8, debug),
-            Instruction::I8x16LeU => vec_x_by_y_binop(self, stack_ctx, VecBinOp::LeU, VecOpType::UInt8, debug),
-            Instruction::I8x16LtS => vec_x_by_y_binop(self, stack_ctx, VecBinOp::LtS, VecOpType::Int8, debug),
-            Instruction::I8x16LtU => vec_x_by_y_binop(self, stack_ctx, VecBinOp::LtU, VecOpType::UInt8, debug),
-            Instruction::I8x16GeS => vec_x_by_y_binop(self, stack_ctx, VecBinOp::GtS, VecOpType::Int8, debug),
-            Instruction::I8x16GeU => vec_x_by_y_binop(self, stack_ctx, VecBinOp::GtS, VecOpType::UInt8, debug),
-            Instruction::I8x16GtS => vec_x_by_y_binop(self, stack_ctx, VecBinOp::GtS, VecOpType::Int8, debug),
-            Instruction::I8x16GtU => vec_x_by_y_binop(self, stack_ctx, VecBinOp::GtS, VecOpType::UInt8, debug),
-            Instruction::I8x16MaxU => vec_x_by_y_binop(self, stack_ctx, VecBinOp::MaxU, VecOpType::UInt8, debug),
-            Instruction::I8x16NarrowI16x8S => narrow(self, stack_ctx, NarrowType::Int8, NarrowLaneType::Int16, debug),
-            Instruction::I8x16NarrowI16x8U => narrow(self, stack_ctx, NarrowType::UInt8, NarrowLaneType::Int16, debug),
+            }
+            Instruction::I8x16LeS => {
+                vec_x_by_y_binop(self, stack_ctx, VecBinOp::LeS, VecOpType::Int8, debug)
+            }
+            Instruction::I8x16LeU => {
+                vec_x_by_y_binop(self, stack_ctx, VecBinOp::LeU, VecOpType::UInt8, debug)
+            }
+            Instruction::I8x16LtS => {
+                vec_x_by_y_binop(self, stack_ctx, VecBinOp::LtS, VecOpType::Int8, debug)
+            }
+            Instruction::I8x16LtU => {
+                vec_x_by_y_binop(self, stack_ctx, VecBinOp::LtU, VecOpType::UInt8, debug)
+            }
+            Instruction::I8x16GeS => {
+                vec_x_by_y_binop(self, stack_ctx, VecBinOp::GtS, VecOpType::Int8, debug)
+            }
+            Instruction::I8x16GeU => {
+                vec_x_by_y_binop(self, stack_ctx, VecBinOp::GtS, VecOpType::UInt8, debug)
+            }
+            Instruction::I8x16GtS => {
+                vec_x_by_y_binop(self, stack_ctx, VecBinOp::GtS, VecOpType::Int8, debug)
+            }
+            Instruction::I8x16GtU => {
+                vec_x_by_y_binop(self, stack_ctx, VecBinOp::GtS, VecOpType::UInt8, debug)
+            }
+            Instruction::I8x16MaxU => {
+                vec_x_by_y_binop(self, stack_ctx, VecBinOp::MaxU, VecOpType::UInt8, debug)
+            }
+            Instruction::I8x16NarrowI16x8S => narrow(
+                self,
+                stack_ctx,
+                NarrowType::Int8,
+                NarrowLaneType::Int16,
+                debug,
+            ),
+            Instruction::I8x16NarrowI16x8U => narrow(
+                self,
+                stack_ctx,
+                NarrowType::UInt8,
+                NarrowLaneType::Int16,
+                debug,
+            ),
             Instruction::F32x4Splat => vec_splat(self, stack_ctx, SplatType::Float32, debug),
             Instruction::F64x2Splat => vec_splat(self, stack_ctx, SplatType::Float64, debug),
             Instruction::I8x16Splat => vec_splat(self, stack_ctx, SplatType::Int8, debug),
             Instruction::I16x8Splat => vec_splat(self, stack_ctx, SplatType::Int16, debug),
             Instruction::I64x2Splat => vec_splat(self, stack_ctx, SplatType::Int64, debug),
-            Instruction::I64x2LtS => vec_x_by_y_binop(self, stack_ctx, VecBinOp::LtS, VecOpType::Int64, debug),
-            Instruction::I64x2LeS => vec_x_by_y_binop(self, stack_ctx, VecBinOp::LeS, VecOpType::Int64, debug),
-            Instruction::I64x2Mul => vec_x_by_y_binop(self, stack_ctx, VecBinOp::Mul, VecOpType::Int64, debug),
-            Instruction::I64x2Add => vec_x_by_y_binop(self, stack_ctx, VecBinOp::Add, VecOpType::Int64, debug),
-            Instruction::I64x2Sub => vec_x_by_y_binop(self, stack_ctx, VecBinOp::Sub, VecOpType::Int64, debug),
-            Instruction::I64x2Eq => vec_x_by_y_binop(self, stack_ctx, VecBinOp::Equals, VecOpType::Int64, debug),
-            Instruction::I64x2Ne => vec_x_by_y_binop(self, stack_ctx, VecBinOp::NotEquals, VecOpType::Int64, debug),
-            Instruction::I64x2GeS => vec_x_by_y_binop(self, stack_ctx, VecBinOp::GeS, VecOpType::Int64, debug),
-            Instruction::I64x2GtS => vec_x_by_y_binop(self, stack_ctx, VecBinOp::GtS, VecOpType::Int64, debug),
-            Instruction::I64x2Shl => vec_x_by_scalar_binop(self, stack_ctx, VecByScalarOp::Shl, VecOpType::Int64, debug),
-            Instruction::I64x2ShrU => vec_x_by_scalar_binop(self, stack_ctx, VecByScalarOp::ShrU, VecOpType::Int64, debug),
-            Instruction::I64x2ShrS => vec_x_by_scalar_binop(self, stack_ctx, VecByScalarOp::ShrS, VecOpType::Int64, debug),
-            Instruction::I8x16Add => vec_x_by_y_binop(self, stack_ctx, VecBinOp::Add, VecOpType::Int8, debug),
-            Instruction::I8x16Sub => vec_x_by_y_binop(self, stack_ctx, VecBinOp::Sub, VecOpType::Int8, debug),
-            Instruction::I8x16Shl => vec_x_by_scalar_binop(self, stack_ctx, VecByScalarOp::Shl, VecOpType::Int8, debug),
-            Instruction::I8x16ShrU => vec_x_by_scalar_binop(self, stack_ctx, VecByScalarOp::ShrU, VecOpType::Int64, debug),
-            Instruction::I8x16ShrS => vec_x_by_scalar_binop(self, stack_ctx, VecByScalarOp::ShrS, VecOpType::Int64, debug),
-            Instruction::I8x16Eq => vec_x_by_y_binop(self, stack_ctx, VecBinOp::Equals, VecOpType::Int8, debug),
-            Instruction::I8x16Ne => vec_x_by_y_binop(self, stack_ctx, VecBinOp::NotEquals, VecOpType::Int8, debug),
-            Instruction::I16x8LtS => vec_x_by_y_binop(self, stack_ctx, VecBinOp::LtS, VecOpType::Int16, debug),
-            Instruction::I16x8LtU => vec_x_by_y_binop(self, stack_ctx, VecBinOp::LtU, VecOpType::UInt16, debug),
-            Instruction::I16x8LeS => vec_x_by_y_binop(self, stack_ctx, VecBinOp::LeS, VecOpType::Int16, debug),
-            Instruction::I16x8LeU => vec_x_by_y_binop(self, stack_ctx, VecBinOp::LeU, VecOpType::UInt16, debug),
-            Instruction::I16x8GtS => vec_x_by_y_binop(self, stack_ctx, VecBinOp::GtS, VecOpType::Int16, debug),
-            Instruction::I16x8GtU => vec_x_by_y_binop(self, stack_ctx, VecBinOp::GtS, VecOpType::UInt16, debug),
-            Instruction::I16x8GeS => vec_x_by_y_binop(self, stack_ctx, VecBinOp::GeS, VecOpType::Int16, debug),
-            Instruction::I16x8GeU => vec_x_by_y_binop(self, stack_ctx, VecBinOp::GeS, VecOpType::UInt16, debug),
-            Instruction::I16x8MaxU => vec_x_by_y_binop(self, stack_ctx, VecBinOp::MaxU, VecOpType::UInt16, debug),
-            Instruction::I16x8Mul => vec_x_by_y_binop(self, stack_ctx, VecBinOp::Mul, VecOpType::Int16, debug),
-            Instruction::I16x8Add => vec_x_by_y_binop(self, stack_ctx, VecBinOp::Add, VecOpType::Int16, debug),
-            Instruction::I16x8Sub => vec_x_by_y_binop(self, stack_ctx, VecBinOp::Sub, VecOpType::Int16, debug),
-            Instruction::I16x8Shl => vec_x_by_scalar_binop(self, stack_ctx, VecByScalarOp::Shl, VecOpType::Int16, debug),
-            Instruction::I16x8ShrU => vec_x_by_scalar_binop(self, stack_ctx, VecByScalarOp::ShrU, VecOpType::Int16, debug),
-            Instruction::I16x8ShrS => vec_x_by_scalar_binop(self, stack_ctx, VecByScalarOp::ShrS, VecOpType::Int16, debug),
-            Instruction::I16x8Ne => vec_x_by_y_binop(self, stack_ctx, VecBinOp::NotEquals, VecOpType::Int16, debug),
-            Instruction::I16x8Eq => vec_x_by_y_binop(self, stack_ctx, VecBinOp::Equals, VecOpType::Int16, debug),
-            Instruction::F32x4Div => vec_x_by_y_binop(self, stack_ctx, VecBinOp::Div, VecOpType::Float32, debug),
-            Instruction::F32x4Mul => vec_x_by_y_binop(self, stack_ctx, VecBinOp::Mul, VecOpType::Float32, debug),
-            Instruction::F32x4Add => vec_x_by_y_binop(self, stack_ctx, VecBinOp::Add, VecOpType::Float32, debug),
-            Instruction::F32x4Ne => vec_x_by_y_binop(self, stack_ctx, VecBinOp::NotEquals, VecOpType::Float32, debug),
-            Instruction::F32x4Eq => vec_x_by_y_binop(self, stack_ctx, VecBinOp::Equals, VecOpType::Float32, debug),
-            Instruction::I32x4LeS => vec_x_by_y_binop(self, stack_ctx, VecBinOp::LeS, VecOpType::Int32, debug),
-            Instruction::I32x4LeU => vec_x_by_y_binop(self, stack_ctx, VecBinOp::LeU, VecOpType::UInt32, debug),
-            Instruction::I32x4LtS => vec_x_by_y_binop(self, stack_ctx, VecBinOp::LtS, VecOpType::Int32, debug),
-            Instruction::I32x4LtU => vec_x_by_y_binop(self, stack_ctx, VecBinOp::LtU, VecOpType::UInt32, debug),
-            Instruction::I32x4Shl => vec_x_by_scalar_binop(self, stack_ctx, VecByScalarOp::Shl, VecOpType::Int32, debug),
-            Instruction::I32x4ShrU => vec_x_by_scalar_binop(self, stack_ctx, VecByScalarOp::ShrU, VecOpType::UInt32, debug),
-            Instruction::I32x4ShrS => vec_x_by_scalar_binop(self, stack_ctx, VecByScalarOp::ShrS, VecOpType::Int32, debug),
-            Instruction::I32x4Mul => vec_x_by_y_binop(self, stack_ctx, VecBinOp::Mul, VecOpType::Int32, debug),
-            Instruction::I32x4Add => vec_x_by_y_binop(self, stack_ctx, VecBinOp::Add, VecOpType::Int32, debug),
-            Instruction::I32x4Sub => vec_x_by_y_binop(self, stack_ctx, VecBinOp::Sub, VecOpType::Int32, debug),
-            Instruction::I32x4Ne => vec_x_by_y_binop(self, stack_ctx, VecBinOp::NotEquals, VecOpType::Int32, debug),
-            Instruction::I32x4Eq => vec_x_by_y_binop(self, stack_ctx, VecBinOp::Equals, VecOpType::Int32, debug),
-            Instruction::I32x4GeS => vec_x_by_y_binop(self, stack_ctx, VecBinOp::GeS, VecOpType::Int32, debug),
-            Instruction::I32x4GeU => vec_x_by_y_binop(self, stack_ctx, VecBinOp::GeS, VecOpType::UInt32, debug),
-            Instruction::I32x4GtS => vec_x_by_y_binop(self, stack_ctx, VecBinOp::GtS, VecOpType::Int32, debug),
-            Instruction::I32x4GtU => vec_x_by_y_binop(self, stack_ctx, VecBinOp::GtS, VecOpType::UInt32, debug),
-            Instruction::I32x4MaxU => vec_x_by_y_binop(self, stack_ctx, VecBinOp::MaxU, VecOpType::UInt32, debug),
+            Instruction::I64x2LtS => {
+                vec_x_by_y_binop(self, stack_ctx, VecBinOp::LtS, VecOpType::Int64, debug)
+            }
+            Instruction::I64x2LeS => {
+                vec_x_by_y_binop(self, stack_ctx, VecBinOp::LeS, VecOpType::Int64, debug)
+            }
+            Instruction::I64x2Mul => {
+                vec_x_by_y_binop(self, stack_ctx, VecBinOp::Mul, VecOpType::Int64, debug)
+            }
+            Instruction::I64x2Add => {
+                vec_x_by_y_binop(self, stack_ctx, VecBinOp::Add, VecOpType::Int64, debug)
+            }
+            Instruction::I64x2Sub => {
+                vec_x_by_y_binop(self, stack_ctx, VecBinOp::Sub, VecOpType::Int64, debug)
+            }
+            Instruction::I64x2Eq => {
+                vec_x_by_y_binop(self, stack_ctx, VecBinOp::Equals, VecOpType::Int64, debug)
+            }
+            Instruction::I64x2Ne => vec_x_by_y_binop(
+                self,
+                stack_ctx,
+                VecBinOp::NotEquals,
+                VecOpType::Int64,
+                debug,
+            ),
+            Instruction::I64x2GeS => {
+                vec_x_by_y_binop(self, stack_ctx, VecBinOp::GeS, VecOpType::Int64, debug)
+            }
+            Instruction::I64x2GtS => {
+                vec_x_by_y_binop(self, stack_ctx, VecBinOp::GtS, VecOpType::Int64, debug)
+            }
+            Instruction::I64x2Shl => {
+                vec_x_by_scalar_binop(self, stack_ctx, VecByScalarOp::Shl, VecOpType::Int64, debug)
+            }
+            Instruction::I64x2ShrU => vec_x_by_scalar_binop(
+                self,
+                stack_ctx,
+                VecByScalarOp::ShrU,
+                VecOpType::Int64,
+                debug,
+            ),
+            Instruction::I64x2ShrS => vec_x_by_scalar_binop(
+                self,
+                stack_ctx,
+                VecByScalarOp::ShrS,
+                VecOpType::Int64,
+                debug,
+            ),
+            Instruction::I8x16Add => {
+                vec_x_by_y_binop(self, stack_ctx, VecBinOp::Add, VecOpType::Int8, debug)
+            }
+            Instruction::I8x16Sub => {
+                vec_x_by_y_binop(self, stack_ctx, VecBinOp::Sub, VecOpType::Int8, debug)
+            }
+            Instruction::I8x16Shl => {
+                vec_x_by_scalar_binop(self, stack_ctx, VecByScalarOp::Shl, VecOpType::Int8, debug)
+            }
+            Instruction::I8x16ShrU => vec_x_by_scalar_binop(
+                self,
+                stack_ctx,
+                VecByScalarOp::ShrU,
+                VecOpType::Int64,
+                debug,
+            ),
+            Instruction::I8x16ShrS => vec_x_by_scalar_binop(
+                self,
+                stack_ctx,
+                VecByScalarOp::ShrS,
+                VecOpType::Int64,
+                debug,
+            ),
+            Instruction::I8x16Eq => {
+                vec_x_by_y_binop(self, stack_ctx, VecBinOp::Equals, VecOpType::Int8, debug)
+            }
+            Instruction::I8x16Ne => {
+                vec_x_by_y_binop(self, stack_ctx, VecBinOp::NotEquals, VecOpType::Int8, debug)
+            }
+            Instruction::I16x8LtS => {
+                vec_x_by_y_binop(self, stack_ctx, VecBinOp::LtS, VecOpType::Int16, debug)
+            }
+            Instruction::I16x8LtU => {
+                vec_x_by_y_binop(self, stack_ctx, VecBinOp::LtU, VecOpType::UInt16, debug)
+            }
+            Instruction::I16x8LeS => {
+                vec_x_by_y_binop(self, stack_ctx, VecBinOp::LeS, VecOpType::Int16, debug)
+            }
+            Instruction::I16x8LeU => {
+                vec_x_by_y_binop(self, stack_ctx, VecBinOp::LeU, VecOpType::UInt16, debug)
+            }
+            Instruction::I16x8GtS => {
+                vec_x_by_y_binop(self, stack_ctx, VecBinOp::GtS, VecOpType::Int16, debug)
+            }
+            Instruction::I16x8GtU => {
+                vec_x_by_y_binop(self, stack_ctx, VecBinOp::GtS, VecOpType::UInt16, debug)
+            }
+            Instruction::I16x8GeS => {
+                vec_x_by_y_binop(self, stack_ctx, VecBinOp::GeS, VecOpType::Int16, debug)
+            }
+            Instruction::I16x8GeU => {
+                vec_x_by_y_binop(self, stack_ctx, VecBinOp::GeS, VecOpType::UInt16, debug)
+            }
+            Instruction::I16x8MaxU => {
+                vec_x_by_y_binop(self, stack_ctx, VecBinOp::MaxU, VecOpType::UInt16, debug)
+            }
+            Instruction::I16x8Mul => {
+                vec_x_by_y_binop(self, stack_ctx, VecBinOp::Mul, VecOpType::Int16, debug)
+            }
+            Instruction::I16x8Add => {
+                vec_x_by_y_binop(self, stack_ctx, VecBinOp::Add, VecOpType::Int16, debug)
+            }
+            Instruction::I16x8Sub => {
+                vec_x_by_y_binop(self, stack_ctx, VecBinOp::Sub, VecOpType::Int16, debug)
+            }
+            Instruction::I16x8Shl => {
+                vec_x_by_scalar_binop(self, stack_ctx, VecByScalarOp::Shl, VecOpType::Int16, debug)
+            }
+            Instruction::I16x8ShrU => vec_x_by_scalar_binop(
+                self,
+                stack_ctx,
+                VecByScalarOp::ShrU,
+                VecOpType::Int16,
+                debug,
+            ),
+            Instruction::I16x8ShrS => vec_x_by_scalar_binop(
+                self,
+                stack_ctx,
+                VecByScalarOp::ShrS,
+                VecOpType::Int16,
+                debug,
+            ),
+            Instruction::I16x8Ne => vec_x_by_y_binop(
+                self,
+                stack_ctx,
+                VecBinOp::NotEquals,
+                VecOpType::Int16,
+                debug,
+            ),
+            Instruction::I16x8Eq => {
+                vec_x_by_y_binop(self, stack_ctx, VecBinOp::Equals, VecOpType::Int16, debug)
+            }
+            Instruction::F32x4Div => {
+                vec_x_by_y_binop(self, stack_ctx, VecBinOp::Div, VecOpType::Float32, debug)
+            }
+            Instruction::F32x4Mul => {
+                vec_x_by_y_binop(self, stack_ctx, VecBinOp::Mul, VecOpType::Float32, debug)
+            }
+            Instruction::F32x4Add => {
+                vec_x_by_y_binop(self, stack_ctx, VecBinOp::Add, VecOpType::Float32, debug)
+            }
+            Instruction::F32x4Ne => vec_x_by_y_binop(
+                self,
+                stack_ctx,
+                VecBinOp::NotEquals,
+                VecOpType::Float32,
+                debug,
+            ),
+            Instruction::F32x4Eq => {
+                vec_x_by_y_binop(self, stack_ctx, VecBinOp::Equals, VecOpType::Float32, debug)
+            }
+            Instruction::I32x4LeS => {
+                vec_x_by_y_binop(self, stack_ctx, VecBinOp::LeS, VecOpType::Int32, debug)
+            }
+            Instruction::I32x4LeU => {
+                vec_x_by_y_binop(self, stack_ctx, VecBinOp::LeU, VecOpType::UInt32, debug)
+            }
+            Instruction::I32x4LtS => {
+                vec_x_by_y_binop(self, stack_ctx, VecBinOp::LtS, VecOpType::Int32, debug)
+            }
+            Instruction::I32x4LtU => {
+                vec_x_by_y_binop(self, stack_ctx, VecBinOp::LtU, VecOpType::UInt32, debug)
+            }
+            Instruction::I32x4Shl => {
+                vec_x_by_scalar_binop(self, stack_ctx, VecByScalarOp::Shl, VecOpType::Int32, debug)
+            }
+            Instruction::I32x4ShrU => vec_x_by_scalar_binop(
+                self,
+                stack_ctx,
+                VecByScalarOp::ShrU,
+                VecOpType::UInt32,
+                debug,
+            ),
+            Instruction::I32x4ShrS => vec_x_by_scalar_binop(
+                self,
+                stack_ctx,
+                VecByScalarOp::ShrS,
+                VecOpType::Int32,
+                debug,
+            ),
+            Instruction::I32x4Mul => {
+                vec_x_by_y_binop(self, stack_ctx, VecBinOp::Mul, VecOpType::Int32, debug)
+            }
+            Instruction::I32x4Add => {
+                vec_x_by_y_binop(self, stack_ctx, VecBinOp::Add, VecOpType::Int32, debug)
+            }
+            Instruction::I32x4Sub => {
+                vec_x_by_y_binop(self, stack_ctx, VecBinOp::Sub, VecOpType::Int32, debug)
+            }
+            Instruction::I32x4Ne => vec_x_by_y_binop(
+                self,
+                stack_ctx,
+                VecBinOp::NotEquals,
+                VecOpType::Int32,
+                debug,
+            ),
+            Instruction::I32x4Eq => {
+                vec_x_by_y_binop(self, stack_ctx, VecBinOp::Equals, VecOpType::Int32, debug)
+            }
+            Instruction::I32x4GeS => {
+                vec_x_by_y_binop(self, stack_ctx, VecBinOp::GeS, VecOpType::Int32, debug)
+            }
+            Instruction::I32x4GeU => {
+                vec_x_by_y_binop(self, stack_ctx, VecBinOp::GeS, VecOpType::UInt32, debug)
+            }
+            Instruction::I32x4GtS => {
+                vec_x_by_y_binop(self, stack_ctx, VecBinOp::GtS, VecOpType::Int32, debug)
+            }
+            Instruction::I32x4GtU => {
+                vec_x_by_y_binop(self, stack_ctx, VecBinOp::GtS, VecOpType::UInt32, debug)
+            }
+            Instruction::I32x4MaxU => {
+                vec_x_by_y_binop(self, stack_ctx, VecBinOp::MaxU, VecOpType::UInt32, debug)
+            }
             Instruction::I32x4Splat => vec_splat(self, stack_ctx, SplatType::Int32, debug),
             Instruction::V128Xor => v128_binop(self, stack_ctx, V128BinOp::Xor, debug),
             Instruction::V128And => v128_binop(self, stack_ctx, V128BinOp::And, debug),
             Instruction::V128Or => v128_binop(self, stack_ctx, V128BinOp::Or, debug),
             Instruction::V128Not => vec_unop(self, stack_ctx, VecUnop::Not, debug),
             Instruction::I8x16Shuffle(lanes) => i8x16shuffle(self, stack_ctx, lanes, debug),
-            Instruction::I8x16ExtractLaneU(laneval) => extract_lane(self, stack_ctx, ExtractLane::UInt8, laneval.lane, debug),
-            Instruction::I8x16ExtractLaneS(laneval) => extract_lane(self, stack_ctx, ExtractLane::Int8, laneval.lane, debug),
-            Instruction::I16x8ExtractLaneU(laneval) => extract_lane(self, stack_ctx, ExtractLane::UInt16, laneval.lane, debug),
-            Instruction::I16x8ExtractLaneS(laneval) => extract_lane(self, stack_ctx, ExtractLane::Int16, laneval.lane, debug),
-            Instruction::I32x4ExtractLane(laneval) => extract_lane(self, stack_ctx, ExtractLane::Int32, laneval.lane, debug),
-            Instruction::I64x2ExtractLane(laneval) => extract_lane(self, stack_ctx, ExtractLane::Int64, laneval.lane, debug),
-            Instruction::F32x4ExtractLane(laneval) => extract_lane(self, stack_ctx, ExtractLane::Float32, laneval.lane, debug),
-            Instruction::F64x2ExtractLane(laneval) => extract_lane(self, stack_ctx, ExtractLane::Float64, laneval.lane, debug),
-            Instruction::I32x4ReplaceLane(laneval) => replace_lane(self, stack_ctx, StackType::i32, laneval.lane, debug),
-            Instruction::I64x2ReplaceLane(laneval) => replace_lane(self, stack_ctx, StackType::i64, laneval.lane, debug),
-            Instruction::F32x4ReplaceLane(laneval) => replace_lane(self, stack_ctx, StackType::f32, laneval.lane, debug),
-            Instruction::F64x2ReplaceLane(laneval) => replace_lane(self, stack_ctx, StackType::f64, laneval.lane, debug),
+            Instruction::I8x16ExtractLaneU(laneval) => {
+                extract_lane(self, stack_ctx, ExtractLane::UInt8, laneval.lane, debug)
+            }
+            Instruction::I8x16ExtractLaneS(laneval) => {
+                extract_lane(self, stack_ctx, ExtractLane::Int8, laneval.lane, debug)
+            }
+            Instruction::I16x8ExtractLaneU(laneval) => {
+                extract_lane(self, stack_ctx, ExtractLane::UInt16, laneval.lane, debug)
+            }
+            Instruction::I16x8ExtractLaneS(laneval) => {
+                extract_lane(self, stack_ctx, ExtractLane::Int16, laneval.lane, debug)
+            }
+            Instruction::I32x4ExtractLane(laneval) => {
+                extract_lane(self, stack_ctx, ExtractLane::Int32, laneval.lane, debug)
+            }
+            Instruction::I64x2ExtractLane(laneval) => {
+                extract_lane(self, stack_ctx, ExtractLane::Int64, laneval.lane, debug)
+            }
+            Instruction::F32x4ExtractLane(laneval) => {
+                extract_lane(self, stack_ctx, ExtractLane::Float32, laneval.lane, debug)
+            }
+            Instruction::F64x2ExtractLane(laneval) => {
+                extract_lane(self, stack_ctx, ExtractLane::Float64, laneval.lane, debug)
+            }
+            Instruction::I32x4ReplaceLane(laneval) => {
+                replace_lane(self, stack_ctx, StackType::i32, laneval.lane, debug)
+            }
+            Instruction::I64x2ReplaceLane(laneval) => {
+                replace_lane(self, stack_ctx, StackType::i64, laneval.lane, debug)
+            }
+            Instruction::F32x4ReplaceLane(laneval) => {
+                replace_lane(self, stack_ctx, StackType::f32, laneval.lane, debug)
+            }
+            Instruction::F64x2ReplaceLane(laneval) => {
+                replace_lane(self, stack_ctx, StackType::f64, laneval.lane, debug)
+            }
             _ => panic!(
                 "Instruction {:?} not yet implemented, in func: {:?}",
                 instr, func.id
@@ -1574,10 +1792,16 @@ impl<'a> OpenCLCWriter<'_> {
                         };
                     }
                     // memfill the stack for local values
-                    final_string += &format!("\t{}\n", emit_intra_vm_memfill(&format!("((global char*)(stack_u32+*sp))"), "(global char*)(stack_u32)",
-                                                            &"0",
-                                                            &format!("{}", local_stack_offset*4),
-                                                            "warp_idx"));
+                    final_string += &format!(
+                        "\t{}\n",
+                        emit_intra_vm_memfill(
+                            &format!("((global char*)(stack_u32+*sp))"),
+                            "(global char*)(stack_u32)",
+                            &"0",
+                            &format!("{}", local_stack_offset * 4),
+                            "warp_idx"
+                        )
+                    );
                     final_string += &format!("\t*sp += {};\n", local_stack_offset);
                 }
 
@@ -1735,7 +1959,7 @@ impl<'a> OpenCLCWriter<'_> {
                     id,
                     kind,
                     data,
-                    name
+                    name,
                 } => match kind {
                     DataKind::Active { memory, offset } => match offset.instrs[0] {
                         Instruction::I32Const(val) => {
@@ -2134,7 +2358,7 @@ __attribute__((always_inline)) void {}(global uint   *stack_u32,
                     exports,
                     ty,
                     kind,
-                    name
+                    name,
                 } => {
                     let id = match id {
                         Some(id) => String::from(id.name()),
@@ -2243,9 +2467,7 @@ __attribute__((always_inline)) void {}(global uint   *stack_u32,
 
                 result += &format!(
                     "\t{}\n",
-                    format!(
-                        "global uint *globals_buffer = (global uint*)(globals_buffer_global);"
-                    )
+                    format!("global uint *globals_buffer = (global uint*)(globals_buffer_global);")
                 );
 
                 result += &format!(
@@ -2459,7 +2681,7 @@ __attribute__((always_inline)) void {}(global uint   *stack_u32,
         is_gpu: bool,
         debug: bool,
         is_nvidia_gpu: bool,
-	emit_volatile_reads_writes: bool,
+        emit_volatile_reads_writes: bool,
     ) -> (
         String,
         String,
@@ -2470,7 +2692,7 @@ __attribute__((always_inline)) void {}(global uint   *stack_u32,
         HashMap<u32, (u32, u32, u32, u32, u32, u32, u32)>,
         HashMap<u32, u32>,
         HashMap<u32, Vec<String>>,
-        Vec<u8>
+        Vec<u8>,
     ) {
         let mut output = String::new();
         let mut header = String::new();
@@ -2494,15 +2716,18 @@ __attribute__((always_inline)) void {}(global uint   *stack_u32,
             }
         }
         let start_func = match start_fn_name_tmp {
-            Some(Export{span, name, kind, item}) => {
-                match item {
-                    Index::Id(id) => format_fn_name(id.name()),
-                    Index::Num(n, _) => format!("func_{}", n),
-                }
+            Some(Export {
+                span,
+                name,
+                kind,
+                item,
+            }) => match item {
+                Index::Id(id) => format_fn_name(id.name()),
+                Index::Num(n, _) => format!("func_{}", n),
             },
             _ => panic!("Could not identify start function"),
         };
-    
+
         /*
         let mut start_fn_name_tmp = None;
         for export in &self.exports {
@@ -2525,7 +2750,7 @@ __attribute__((always_inline)) void {}(global uint   *stack_u32,
         write!(
             output,
             "{}",
-r#"
+            r#"
 #ifdef cl_khr_fp64
 #pragma OPENCL EXTENSION cl_khr_fp64 : enable
 #elif defined(cl_amd_fp64)
@@ -2561,7 +2786,7 @@ r#"
             write!(
                 output,
                 "{}",
-r#"
+                r#"
 ulong get_clock() {
     ulong timestamp;
     asm volatile("mov.u64 %0, %%globaltimer;" : "=l"(timestamp));
@@ -2574,7 +2799,7 @@ ulong get_clock() {
             write!(
                 output,
                 "{}",
-r#"
+                r#"
 ulong get_clock() {
     return 0;
 }
@@ -2583,20 +2808,33 @@ ulong get_clock() {
             .unwrap();
         }
 
-
         // generate the read/write functions
         // we support only either a 1 byte interleave, or no interleave
         // 0 = no interleave
         write!(
             output,
             "{}",
-            generate_read_write_calls(&self, interleave, local_work_group, mexec, emit_volatile_reads_writes, debug)
+            generate_read_write_calls(
+                &self,
+                interleave,
+                local_work_group,
+                mexec,
+                emit_volatile_reads_writes,
+                debug
+            )
         )
         .unwrap();
         write!(
             header,
             "{}",
-            generate_read_write_calls(&self, interleave, local_work_group, mexec, emit_volatile_reads_writes, debug)
+            generate_read_write_calls(
+                &self,
+                interleave,
+                local_work_group,
+                mexec,
+                emit_volatile_reads_writes,
+                debug
+            )
         )
         .unwrap();
 
@@ -2802,7 +3040,7 @@ ulong get_clock() {
         let mut fast_func_size: HashMap<String, u32> = HashMap::new();
         let mut fast_func_called: HashMap<String, HashSet<String>> = HashMap::new();
         let mut fastcall_called_func_sizes: HashMap<String, Vec<u32>> = HashMap::new();
-        
+
         for fastfunc in fast_function_set.iter() {
             let (func, func_size, func_called) = self.emit_function(
                 self.func_map.get(&fastfunc.to_string()).unwrap(),
@@ -2852,9 +3090,8 @@ ulong get_clock() {
                                             .get(&called_func as &str).unwrap()
                                             .iter().filter(|func| !seen_funcs.contains(*func)).collect();
                         */
-                        let funcs_called = fast_func_called
-                                            .get(&called_func as &str).unwrap(); 
-                        
+                        let funcs_called = fast_func_called.get(&called_func as &str).unwrap();
+
                         // If len==0, then the size is known, else if len>0, then we need to keep it in the set
                         if funcs_called.len() != 0 {
                             new_called_set.insert(called_func.to_string());
@@ -2890,7 +3127,7 @@ ulong get_clock() {
                 .unwrap();
             *fast_func_size.entry(fastfunc.to_string()).or_insert(0) += max;
         }
-        
+
         // Finish fastcall register demotion pass
         for fastfunc in fast_function_set.iter() {
             let (func, func_size, func_called) = self.emit_function(
@@ -3302,7 +3539,7 @@ ulong get_clock() {
             kernel_compile_stats,
             kernel_partition_mappings,
             partition_hashmap,
-            data_segment
+            data_segment,
         )
     }
 }

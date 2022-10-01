@@ -78,7 +78,7 @@ impl WasmtimeRunner {
                         let start = buf_ptr as usize;
                         let end = (buf_ptr as usize) + msg.len();
                         arr[start..end].copy_from_slice(&msg);
-                    },
+                    }
                     Err(e) => {
                         panic!("Unable to find memory for WASM VM: {}", e);
                     }
@@ -114,9 +114,8 @@ impl WasmtimeRunner {
                         let main_mem_start = buf_ptr.try_into().unwrap();
 
                         let resp_buf_as_slice: &mut [u8] = resp_buf.as_mut_slice();
-                        resp_buf_as_slice[0..resp_buf_len].copy_from_slice(
-                            &arr[main_mem_start..main_mem_start + resp_buf_len],
-                        );
+                        resp_buf_as_slice[0..resp_buf_len]
+                            .copy_from_slice(&arr[main_mem_start..main_mem_start + resp_buf_len]);
 
                         let tsc = curr_time_response.clone();
                         let device_execution_time =
@@ -136,7 +135,6 @@ impl WasmtimeRunner {
                                 resp_uuid,
                             ))
                             .unwrap();
-                        
                     }
                     Err(e) => {
                         panic!("Unable to find memory for WASM VM: {}", e);
@@ -161,11 +159,13 @@ impl WasmtimeRunner {
         }
         //dbg!(&memory.size());
 
-        let entry_point = instance.get_func(&mut store, "_start").expect("Could not find _start function in WASM binary");
+        let entry_point = instance
+            .get_func(&mut store, "_start")
+            .expect("Could not find _start function in WASM binary");
 
         // start running the VM
         let result = Ok(entry_point.call(&mut store, &[], &mut []).unwrap());
-    
+
         dbg!(&memory.size(store));
         result
     }

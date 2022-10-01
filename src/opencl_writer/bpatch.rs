@@ -13,9 +13,9 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::Hasher;
 use std::iter::FromIterator;
 use std::sync::Arc;
-use wast::parser::{self, ParseBuffer};
 use wast::core::ModuleKind::{Binary, Text};
 use wast::core::*;
+use wast::parser::{self, ParseBuffer};
 use wast::Wat;
 
 pub const PATCH_FILE: &'static str = include_str!("patch/do_reserve_and_handle.wat");
@@ -60,8 +60,10 @@ impl<'a> OpenCLCWriter<'_> {
 
             let module_kind = match module {
                 wast::Wat::Module(m) => m,
-                _ => panic!("VectorVisor currently only operates on modules and not WASM componenets"),
-            };    
+                _ => panic!(
+                    "VectorVisor currently only operates on modules and not WASM componenets"
+                ),
+            };
 
             match module_kind.kind {
                 Text(t) => {
