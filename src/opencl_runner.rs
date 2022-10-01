@@ -1597,6 +1597,8 @@ impl OpenCLRunner {
             .get(&kernel_partition_mappings.get(&self.entry_point).unwrap())
             .unwrap();
 
+        println!("Set entry point: {:?}", kernel_part_debug.get(&kernel_partition_mappings.get(&self.entry_point).unwrap()).unwrap());
+
         let mut max_queue_time: u64 = 0;
         let mut min_queue_time: u64 = std::u64::MAX;
         let mut num_queue_submits: u64 = 0;
@@ -1636,6 +1638,9 @@ impl OpenCLRunner {
 
             let kernel_start = std::time::Instant::now();
             profiling_event = ocl::Event::empty();
+
+            // For debugging
+            println!("Running partition: {:?}", kernel_part_debug.get(&curr_func_id).unwrap());
             unsafe {
                 num_queue_submits += 1;
                 ocl::core::finish(&queue).unwrap();

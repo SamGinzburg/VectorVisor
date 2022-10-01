@@ -111,7 +111,7 @@ pub fn emit_memload_i32_16s(
 
     let read = if !writer.pretty_input_wasm || args.align < 2 {
         format!(
-            "(int)({})",
+            "(short)({})",
             emit_read_u16_aligned_checked(
                 &format!(
                     "(ulong)((global char*)heap_u32+{}+(int)({}))",
@@ -123,7 +123,7 @@ pub fn emit_memload_i32_16s(
         )
     } else {
         format!(
-            "(int)({})",
+            "(short)({})",
             emit_read_u16_aligned(
                 &format!(
                     "(ulong)((global char*)heap_u32+{}+(int)({}))",
@@ -135,7 +135,7 @@ pub fn emit_memload_i32_16s(
         )
     };
 
-    ret_str += &format!("\t{} = (uint)({});\n", result_register, read);
+    ret_str += &format!("\t{} = {};\n", result_register, read);
 
     ret_str
 }
@@ -387,7 +387,7 @@ pub fn emit_memload_i64_8s(
     let result_register = stack_ctx.vstack_alloc(StackType::i64);
 
     let read = format!(
-        "(long)({})",
+        "(char)({})",
         &emit_read_u8(
             &format!(
                 "(ulong)((global char*)heap_u32+{}+(int)({}))",
@@ -416,7 +416,7 @@ pub fn emit_memload_i64_32u(
 
     let read = if !writer.pretty_input_wasm || args.align < 4 {
         format!(
-            "({})",
+            "(ulong)({})",
             emit_read_u32_aligned_checked(
                 &format!(
                     "(ulong)((global char*)heap_u32+{}+(int)({}))",
@@ -428,7 +428,7 @@ pub fn emit_memload_i64_32u(
         )
     } else {
         format!(
-            "({})",
+            "(ulong)({})",
             emit_read_u32_aligned(
                 &format!(
                     "(ulong)((global char*)heap_u32+{}+(int)({}))",
@@ -458,7 +458,7 @@ pub fn emit_memload_i64_32s(
 
     let read = if !writer.pretty_input_wasm || args.align < 4 {
         format!(
-            "(long)({})",
+            "(int)({})",
             &emit_read_u32_aligned_checked(
                 &format!(
                     "(ulong)((global char*)heap_u32+{}+(int)({}))",
@@ -470,7 +470,7 @@ pub fn emit_memload_i64_32s(
         )
     } else {
         format!(
-            "(long)({})",
+            "(int)({})",
             &emit_read_u32_aligned(
                 &format!(
                     "(ulong)((global char*)heap_u32+{}+(int)({}))",
@@ -500,7 +500,7 @@ pub fn emit_memload_i64_16s(
 
     let read = if !writer.pretty_input_wasm || args.align < 2 {
         format!(
-            "(long)({})",
+            "(short)({})",
             &emit_read_u16_aligned_checked(
                 &format!(
                     "(ulong)((global char*)heap_u32+{}+(int)({}))",
@@ -512,7 +512,7 @@ pub fn emit_memload_i64_16s(
         )
     } else {
         format!(
-            "(long)({})",
+            "(short)({})",
             &emit_read_u16_aligned(
                 &format!(
                     "(ulong)((global char*)heap_u32+{}+(int)({}))",

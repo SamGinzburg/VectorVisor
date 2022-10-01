@@ -1,0 +1,12 @@
+(module
+  (memory (export "memory") 1)
+  (data $d0 (i32.const 5) "\10\20\30\40")
+  (func $_start (result i64)
+    (i32.const 0)
+    (i64.const 0xFFFFFFFFFFFFFFFF)
+    (i64.store)
+    (i32.const 0)
+    (i64.load8_u)
+  )
+  (export "_start" (func $_start))
+)
