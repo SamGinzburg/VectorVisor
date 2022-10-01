@@ -1783,7 +1783,7 @@ impl<'a> OpenCLCWriter<'_> {
                 let mut local_stack_offset = 0;
                 if !is_fastcall {
                     for local in locals {
-                        //final_string += &emit_local(&self, local.clone(), debug);
+                        final_string += &emit_local(&self, local.clone(), debug);
                         local_stack_offset += match local.ty {
                             ValType::I32 => 2,
                             ValType::I64 => 2,
@@ -1794,6 +1794,7 @@ impl<'a> OpenCLCWriter<'_> {
                         };
                     }
                     // memfill the stack for local values
+                    /*
                     final_string += &format!(
                         "\t{}\n",
                         emit_intra_vm_memfill(
@@ -1805,6 +1806,7 @@ impl<'a> OpenCLCWriter<'_> {
                         )
                     );
                     final_string += &format!("\t*sp += {};\n", local_stack_offset);
+                    */
                 }
 
                 if !is_fastcall {
