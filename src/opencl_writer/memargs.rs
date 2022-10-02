@@ -1648,14 +1648,14 @@ pub fn emit_memcpy(
     let n_bytes = stack_ctx.vstack_pop(StackType::i32);
     let src = stack_ctx.vstack_pop(StackType::i32);
     let dst = stack_ctx.vstack_pop(StackType::i32);
-    emit_intra_vm_memcpy(
+    format!("\t{}\n", emit_intra_vm_memcpy(
         &format!("((global char*)(heap_u32)+{})", src),
         "(global char*)(heap_u32)",
         &format!("((global char*)(heap_u32)+{})", dst),
         "(global char*)(heap_u32)",
         &n_bytes,
         "warp_idx",
-    )
+    ))
 }
 
 pub fn emit_memfill(
@@ -1667,11 +1667,12 @@ pub fn emit_memfill(
     let n_bytes = stack_ctx.vstack_pop(StackType::i32);
     let val = stack_ctx.vstack_pop(StackType::i32);
     let dst = stack_ctx.vstack_pop(StackType::i32);
-    emit_intra_vm_memfill(
+
+    format!("\t{}\n", emit_intra_vm_memfill(
         &format!("((global char*)(heap_u32)+{})", dst),
         "(global char*)(heap_u32)",
         &val,
         &n_bytes,
         "warp_idx",
-    )
+    ))
 }

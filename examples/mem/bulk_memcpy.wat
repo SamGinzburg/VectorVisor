@@ -1,0 +1,13 @@
+(module
+  (memory (export "memory") 1)
+  (data $d0 (i32.const 0) "\10\20\30\40")
+  (func $_start (result i32)
+    (i32.const 10)
+    (i32.const 0)
+    (i32.const 5)
+    (memory.copy)
+    (i32.const 10)
+    (i32.load)
+  )
+  (export "_start" (func $_start))
+)
