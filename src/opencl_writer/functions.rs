@@ -179,10 +179,18 @@ pub fn emit_fn_call(
                             stack_params.insert(0, param);
                             stack_params_types.insert(0, param_type);
                         }
-                        parameter_offset += 2;
+                        match t {
+                            ValType::I32 => parameter_offset += 2,
+                            ValType::F32 => parameter_offset += 2,
+                            ValType::I64 => parameter_offset += 2,
+                            ValType::F64 => parameter_offset += 2,
+                            ValType::V128 => parameter_offset += 4,
+                            _ => panic!("Unsupported valtype for function call param"),
+                        }
                     }
                 }
             }
+
             if func_type_signature.inline.as_ref().unwrap().results.len() > 0 {
                 return_type = Some(func_type_signature.clone().inline.unwrap().results[0]);
             } else {
@@ -208,7 +216,14 @@ pub fn emit_fn_call(
                                     stack_params.insert(0, param);
                                     stack_params_types.insert(0, param_type);
                                 }
-                                parameter_offset += 2;
+                                match t {
+                                    ValType::I32 => parameter_offset += 2,
+                                    ValType::F32 => parameter_offset += 2,
+                                    ValType::I64 => parameter_offset += 2,
+                                    ValType::F64 => parameter_offset += 2,
+                                    ValType::V128 => parameter_offset += 4,
+                                    _ => panic!("Unsupported valtype for function call param"),
+                                }
                             }
                         }
                     }
@@ -324,11 +339,7 @@ pub fn emit_fn_call(
     call_ret_map.insert(ret_label, *call_ret_idx);
 
     // get the return type of the function
-    let return_size = if get_return_size(writer, &func_type_signature.clone()) > 0 {
-        2
-    } else {
-        0
-    };
+    let return_size = get_return_size(writer, &func_type_signature.clone());
 
     let result = if return_size > 0 && !is_fastcall {
         format!(

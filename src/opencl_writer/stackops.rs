@@ -257,12 +257,3 @@ pub fn emit_f64_const(
 
     ret_val
 }
-
-pub fn emit_u128_const(
-    _writer: &opencl_writer::OpenCLCWriter,
-    stack_ctx: &mut StackCtx,
-    val: &i64,
-    _debug: bool,
-) -> String {
-    format!("\t{} = {};\n", stack_ctx.vstack_alloc(StackType::i64), val)
-}

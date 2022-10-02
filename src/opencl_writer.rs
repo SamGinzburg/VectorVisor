@@ -244,12 +244,14 @@ impl<'a> OpenCLCWriter<'_> {
         Ok(true)
     }
 
+    // These are not the sizes of the valtypes, but rather the sizes they occupy within our ABI (8-byte aligned)
     fn get_size_valtype(&self, t: &ValType) -> u32 {
         match t {
-            ValType::I32 => 1,
-            ValType::F32 => 1,
+            ValType::I32 => 2,
+            ValType::F32 => 2,
             ValType::I64 => 2,
             ValType::F64 => 2,
+            ValType::V128 => 4,
             _ => panic!("Unknown local size found"),
         }
     }
@@ -1040,7 +1042,7 @@ impl<'a> OpenCLCWriter<'_> {
                 // for the control stack, we don't use the third parameter for blocks
                 control_stack.push((
                     label.to_string(),
-                    0,
+                    WasmBlockType::BasicBlock,
                     -1,
                     *block_name_count,
                     block_type,
@@ -2072,7 +2074,7 @@ impl<'a> OpenCLCWriter<'_> {
             match &element.payload {
                 ElemPayload::Indices(index_vec) => {
                     let offset: u32 = match &element.kind {
-                        ElemKind::Active{table, offset} => {
+                        ElemKind::Active{offset, ..} => {
                             match &offset.instrs[0] {
                                 Instruction::I32Const(val) => *val as u32,
                                 _ => panic!("Unable to extract offset from WASM module element - unknown offset"),
@@ -2107,7 +2109,7 @@ impl<'a> OpenCLCWriter<'_> {
         globals_buffer_size: u32,
         stack_frame_ptr_size_bytes: u32,
         local_work_group: usize,
-        mexec: usize,
+        _mexec: usize,
         is_control_fn: bool,
         debug: bool,
     ) -> String {
@@ -2380,12 +2382,9 @@ __attribute__((always_inline)) void {}(global uint   *stack_u32,
         for global in &self.globals {
             match global {
                 Global {
-                    span,
                     id,
-                    exports,
                     ty,
-                    kind,
-                    name,
+                    ..
                 } => {
                     let id = match id {
                         Some(id) => String::from(id.name()),
@@ -3427,28 +3426,6 @@ ulong get_clock() {
             match function.id {
                 Some(name) => {
                     if name.name() == start_func {
-                        // move stack_u32 by the total size of all parameters
-                        /*
-                        let mut offset = 0;
-                        match function.ty.clone().inline {
-                            Some(params) => {
-                                for parameter in params.params.to_vec() {
-                                    match parameter {
-                                        (Some(id), _, t) => {
-                                            offset += self.get_size_valtype(&t);
-                                        },
-                                        // if there is no id, we have to name the parameter ourselves!
-                                        (None, _, t) => {
-                                            offset += self.get_size_valtype(&t);
-                                        },
-                                        _ => panic!("Unhandled parameter type")
-                                    }
-                                }
-
-                            },
-                            None => (),
-                        }
-                        */
                         write!(output, "\tstack_u32 += {};\n", 128).unwrap();
                         break;
                     }

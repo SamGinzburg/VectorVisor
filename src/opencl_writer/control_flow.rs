@@ -18,7 +18,15 @@ use wast::token::Index;
  * Every time we encounter a Loop, Block, or If statement, we store the entry on the control stack
  * We store the label,
  */
-pub type ControlStackEntryType = (String, u32, i32, u32, Option<StackType>, Option<String>);
+
+ #[derive(Clone, Copy, PartialEq)]
+pub enum WasmBlockType {
+    BasicBlock,
+    LoopBlock,
+    IfBlock,
+}
+
+pub type ControlStackEntryType = (String, WasmBlockType, i32, u32, Option<StackType>, Option<String>);
 
 // TODO: double check the semantics of this?
 pub fn emit_return(
@@ -116,13 +124,13 @@ pub fn emit_br(
             .unwrap(),
     };
 
-    if *block_type == 1 && *loop_header_reentry < 0 {
+    if *block_type == WasmBlockType::LoopBlock && *loop_header_reentry < 0 {
         panic!("Invalid loop re-entry point");
     }
 
     // First, determine if the branch is a forward branch or a backwards branch (targeting a loop header)
     // block = 0, loop = 1
-    if *block_type == 0 {
+    if *block_type == WasmBlockType::BasicBlock {
         // Check for return values, if this branch targets a block with a return value, we need to set that return value
         // We pop the most recent value on the stack and set the result register to be equal to that
         match (block_result_type, result_register) {
@@ -254,7 +262,7 @@ pub fn emit_end<'a>(
     stack_ctx: &mut StackCtx,
     _id: &Option<Id<'a>>,
     label: &str,
-    block_type: u32,
+    block_type: WasmBlockType,
     fn_name: &str,
     result_type: Option<StackType>,
     result_register: Option<String>,
@@ -287,9 +295,9 @@ pub fn emit_end<'a>(
     };
 
     // before unwinding the stack frame, save the current locals for blocks & loops
-    if !is_fastcall && block_type == 0 {
+    if !is_fastcall && block_type == WasmBlockType::BasicBlock {
         result += &stack_ctx.save_context(true, false);
-    } else if !is_fastcall && block_type == 1 {
+    } else if !is_fastcall && block_type == WasmBlockType::LoopBlock {
         // For loops that are tainted, we emit a normal save ctx, for optimized loops we want to
         // save everything that would have been saved while nested
         let is_tainted = stack_ctx.is_loop_tainted((loop_idx).try_into().unwrap());
@@ -303,7 +311,7 @@ pub fn emit_end<'a>(
     }
 
     // unwind the stack frame
-    stack_ctx.vstack_pop_stack_frame(block_type == 2);
+    stack_ctx.vstack_pop_stack_frame(block_type == WasmBlockType::IfBlock);
     stack_ctx.vstack_pop_stack_info();
 
     /*
@@ -317,7 +325,7 @@ pub fn emit_end<'a>(
      */
     result += &match (ret_val, result_register) {
         (Some(return_value), Some(result_register)) => {
-            if block_type == 1 && !has_hanging_value {
+            if block_type == WasmBlockType::LoopBlock && !has_hanging_value {
                 String::from("")
             } else {
                 format!("\t{} = {};\n", result_register, return_value)
@@ -331,7 +339,7 @@ pub fn emit_end<'a>(
     // 0 -> block (label goes here, at the end statement)
     // 1 -> loop (label was already inserted at the top, this is a no-op here)
     // 2 -> if statement (insert closing bracket)
-    if block_type == 0 {
+    if block_type == WasmBlockType::BasicBlock {
         if !is_fastcall {
             result += &format!(
                 "\n{}_{}:\n",
@@ -345,24 +353,24 @@ pub fn emit_end<'a>(
                 label
             );
         }
-    } else if block_type == 1 {
+    } else if block_type == WasmBlockType::LoopBlock {
         result += &format!(
             "\t/* END (loop: {}_{}) */\n",
             format!("{}{}", "__", format_fn_name(&fn_name)),
             label
         );
-    } else if block_type == 2 {
+    } else if block_type == WasmBlockType::IfBlock {
         result += &format!("\t{}_{}_end:\n", format_fn_name(&fn_name), label);
     }
 
-    if !is_fastcall && block_type == 1 {
+    if !is_fastcall && block_type == WasmBlockType::LoopBlock {
         let is_tainted = stack_ctx.is_loop_tainted((loop_idx).try_into().unwrap());
         // we only want to load values if we saved them previously for optimized loops!
         // this is because we only emit the save for tainted loops
         if is_tainted {
             result += &stack_ctx.restore_context_with_result_val(false, false, result_type);
         }
-    } else if !is_fastcall && block_type == 0 {
+    } else if !is_fastcall && block_type == WasmBlockType::BasicBlock {
         // for blocks only restore locals
         result += &stack_ctx.restore_context_with_result_val(false, false, result_type);
     }
@@ -403,7 +411,7 @@ pub fn emit_loop(
     // the third parameter in the control stack stores loop header entry points
     control_stack.push((
         label.to_string(),
-        1,
+        WasmBlockType::LoopBlock,
         (*call_ret_idx).try_into().unwrap(),
         *loop_branch_idx,
         block_type,
@@ -472,9 +480,9 @@ pub fn emit_loop(
 }
 
 pub fn emit_block(
-    writer: &opencl_writer::OpenCLCWriter,
+    _writer: &opencl_writer::OpenCLCWriter,
     stack_ctx: &mut StackCtx,
-    block: &BlockType,
+    _block: &BlockType,
     _label: String,
     _branch_idx_u32: u32,
     _fn_name: &str,
@@ -542,7 +550,7 @@ pub fn emit_if(
     stack_ctx.vstack_push_stack_info(stack_ctx.stack_frame_size().try_into().unwrap());
 
     // for the control stack, we don't use the third parameter for blocks
-    control_stack.push((label, 2, -1, *if_name_count, block_type, result_register));
+    control_stack.push((label, WasmBlockType::IfBlock, -1, *if_name_count, block_type, result_register));
     *if_name_count += 1;
 
     result
@@ -562,7 +570,7 @@ pub fn emit_else(
     control_stack_copy.reverse();
     for (if_label, block_type, _, _, block_result_type, result_register) in control_stack_copy {
         // We found the matching if entry
-        if block_type == 2 {
+        if block_type == WasmBlockType::IfBlock {
             match (block_result_type, result_register) {
                 (Some(t), Some(result_register)) => {
                     else_label = Some(if_label);

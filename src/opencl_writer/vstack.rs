@@ -2422,8 +2422,8 @@ impl<'a> StackCtx {
         let (mut max_offset, mut max_offset_type_size): (u32, u32) =
             match cloned_local_offsets.pop() {
                 Some((name, offset)) => {
-                    //(offset, writer_ctx.get_size_valtype(&local_param_types.get(&name).unwrap()))
-                    (offset, 2)
+                    (offset, writer_ctx.get_size_valtype(&local_param_types.get(&name).unwrap()))
+                    //(offset, 2)
                 }
                 None => (0, 0),
             };
@@ -2438,7 +2438,7 @@ impl<'a> StackCtx {
             if !param_found {
                 if *offsets > max_offset {
                     max_offset = *offsets;
-                    max_offset_type_size = 2; //writer_ctx.get_size_valtype(&local_param_types.get(name).unwrap());
+                    max_offset_type_size = writer_ctx.get_size_valtype(&local_param_types.get(name).unwrap());
                 }
             }
         }
@@ -3270,7 +3270,7 @@ impl<'a> StackCtx {
 
     // get the size of the current stack frame
     pub fn stack_frame_size(&self) -> usize {
-        self.i32_idx + (self.i64_idx * 2) + self.f32_idx + (self.f64_idx * 2)
+        self.i32_idx + (self.i64_idx * 2) + self.f32_idx + (self.f64_idx * 2) + (self.u128_idx * 4)
     }
 
     // Used to track which fastcalls we call (for use in register spill analysis)
@@ -3284,6 +3284,7 @@ impl<'a> StackCtx {
             + (self.i64_stack.len() * 2)
             + (self.f32_stack.len() * 2)
             + (self.f64_stack.len() * 2)
+            + (self.u128_stack.len() * 4)
     }
 
     pub fn get_max_emitted_context(&self) -> u32 {
