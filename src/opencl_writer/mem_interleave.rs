@@ -1266,7 +1266,11 @@ fn emit_read_u64_body(
                 result += &format!("\t{}\n", "result[5] = combined[cell_offset+5];");
                 result += &format!("\t{}\n", "result[6] = combined[cell_offset+6];");
                 result += &format!("\t{}\n", "result[7] = combined[cell_offset+7];");
-                result += &format!("\t{}\n", "return *(ulong*)result;");
+                result += &format!("\tulong final_result = 0;\n");
+                result += &format!(
+                    "\t___private_memcpy_nonmmu((void*)&final_result, (void*)&result, sizeof(ulong));\n",
+                );
+                result += &format!("\t{}\n", "return final_result;");
             }
         }
         8 => {
@@ -1473,6 +1477,16 @@ pub fn generate_read_write_calls(
     _debug: bool,
 ) -> String {
     let mut result = String::from("");
+
+    result += &format!(
+        "\n{}\n",
+        "inline void * ___private_memcpy_nonmmu(void *dest, void *src, size_t len) {"
+    );
+    result += &format!(
+        "\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n",
+        "char *d = dest;", "char *s = src;", "while (len--)", "  *d++ = *s++;", "return dest;"
+    );
+    result += &format!("}}\n");
 
     // fast_write_u8 is used for writes greater than 1 byte to reduce computation
     result += &format!(
@@ -1815,7 +1829,7 @@ pub fn generate_read_write_calls(
         "void ___private_memcpy_cpu2gpu(ulong src, ulong mem_start_src, ulong dst, ulong mem_start_dst, ulong buf_len_bytes, uint warp_id, uint read_idx, uint thread_idx, local ulong2 *scratch_space) {");
     result += &format!("\t{}\n", "ulong *src_tmp = (ulong*)(src);");
     result += &format!("\t{}\n", "uint counter = 0;");
-    result += &format!("\t{}\n", "if (buf_len_bytes > 8) {");
+    result += &format!("\t{}\n", "if (buf_len_bytes > 8 && IS_ALIGNED_POW2((ulong)dst, 8) && IS_ALIGNED_POW2((ulong)src, 8)) {");
     result += &format!(
         "\t\t{}\n",
         "for (; counter < (buf_len_bytes-GET_POW2_OFFSET(buf_len_bytes, 8)); counter+=8) {"
@@ -1850,16 +1864,6 @@ pub fn generate_read_write_calls(
     result += &format!("\t{}\n", "}");
 
     result += &format!("\n{}\n", "}");
-
-    result += &format!(
-        "\n{}\n",
-        "inline void * ___private_memcpy_nonmmu(void *dest, void *src, size_t len) {"
-    );
-    result += &format!(
-        "\t{}\n\t{}\n\t{}\n\t{}\n\t{}\n",
-        "char *d = dest;", "char *s = src;", "while (len--)", "  *d++ = *s++;", "return dest;"
-    );
-    result += &format!("}}\n");
 
     // Emit helper functions for saving/restoring local_cache
     /*
