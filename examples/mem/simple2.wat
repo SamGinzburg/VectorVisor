@@ -6,7 +6,7 @@
     (i32.const 0xFFFFFFFF)
     (i32.store)
     (i32.const 0)
-    (i32.load16_s align=1)
+    (i32.load8_s align=1)
   )
   (export "_start" (func $_start))
 )
