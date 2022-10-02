@@ -1717,10 +1717,13 @@ impl OpenCLRunner {
             profiling_event = ocl::Event::empty();
 
             // For debugging
+            /*
             println!(
                 "Running partition: {:?}",
                 kernel_part_debug.get(&curr_func_id).unwrap()
             );
+            */
+
             unsafe {
                 num_queue_submits += 1;
                 ocl::core::finish(&queue).unwrap();
