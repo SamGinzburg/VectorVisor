@@ -27,6 +27,8 @@ pub fn format_fn_name(fn_name: &str) -> String {
         .replace("::", "_colon2_")
         .replace(":", "_colon_")
         .replace("*", "_star_")
+        .replace("/", "_fslash_")
+        .replace("\\", "_bslash_")
         .replace(" ", "_")
         .replace("{", "")
         .replace("}", "")
