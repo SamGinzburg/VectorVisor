@@ -1788,7 +1788,7 @@ pub fn generate_read_write_calls(
             );
 
             result += &format!(
-                "\t\t\t{} = {};printf(\"0x%x\\n\", *(dst_tmp_uint-1));\n",
+                "\t\t\t{} = {};\n",
                 "*dst_tmp_uint++",
                 &emit_read_u32_aligned("(ulong)(src+counter)", "(ulong)(mem_start_src)", "warp_id"),
             );
