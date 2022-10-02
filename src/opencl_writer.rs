@@ -476,8 +476,8 @@ impl<'a> OpenCLCWriter<'_> {
         hypercall_id_count: &mut u32,
         // map of indexes in the indirect call table ($T0) to function indicies
         indirect_call_mapping: &HashMap<u32, &Index>,
-        // map of global identifiers to (offset, size of global)
-        global_mappings: &HashMap<String, (u32, u32)>,
+        // map of global identifiers to (offset, size of global, type of global)
+        global_mappings: &HashMap<String, (u32, u32, StackType)>,
         // the current function
         func: &Func,
         // if we are parsing WASM code with blocks without names, we have to make up names
@@ -1492,7 +1492,7 @@ impl<'a> OpenCLCWriter<'_> {
         local_work_group: usize,
         mexec: usize,
         indirect_call_mapping: &HashMap<u32, &Index>,
-        global_mappings: &HashMap<String, (u32, u32)>,
+        global_mappings: &HashMap<String, (u32, u32, StackType)>,
         fastcall_set: HashSet<String>,
         force_inline: bool,
         debug_call_print: bool,
@@ -2026,7 +2026,7 @@ impl<'a> OpenCLCWriter<'_> {
 
     fn emit_global_init(
         &self,
-        global_mappings: &HashMap<String, (u32, u32)>,
+        global_mappings: &HashMap<String, (u32, u32, StackType)>,
         _debug: bool,
     ) -> String {
         let mut ret_str = String::from("");
@@ -2035,7 +2035,7 @@ impl<'a> OpenCLCWriter<'_> {
         let mut global_count: u32 = 0;
 
         for global in &self.globals {
-            let (offset, _) = match global.id {
+            let (offset, _, _) = match global.id {
                 Some(id) => global_mappings.get(id.name()).unwrap(),
                 None => global_mappings.get(&format!("g{}", global_count)).unwrap(),
             };
@@ -2371,10 +2371,10 @@ __attribute__((always_inline)) void {}(global uint   *stack_u32,
         mexec: u32,
         local_work_group: u32,
         debug: bool,
-    ) -> (String, HashMap<String, (u32, u32)>, Vec<u8>) {
+    ) -> (String, HashMap<String, (u32, u32, StackType)>, Vec<u8>) {
         let mut result = String::from("");
         let mut temp_str = String::from("");
-        let mut mapping: HashMap<String, (u32, u32)> = HashMap::new();
+        let mut mapping: HashMap<String, (u32, u32, StackType)> = HashMap::new();
         let mut data_segment = vec![];
         let mut offset: u32 = 0;
         // needed if globals are referred to using numerical indexes
@@ -2392,7 +2392,8 @@ __attribute__((always_inline)) void {}(global uint   *stack_u32,
                     };
 
                     let type_size = self.get_size_valtype(&ty.ty);
-                    mapping.insert(id, (offset, type_size.clone()));
+                    let stack_type = StackCtx::convert_wast_types(&ty.ty);
+                    mapping.insert(id, (offset, type_size.clone(), stack_type));
                     offset += type_size;
                 }
                 _ => panic!("Uknown global kind found"),
@@ -2885,7 +2886,7 @@ ulong get_clock() {
         );
         let mut globals_buffer_size = 0;
 
-        for (_key, (_offset, size)) in &global_mappings {
+        for (_key, (_offset, size, _)) in &global_mappings {
             globals_buffer_size += size;
         }
 
