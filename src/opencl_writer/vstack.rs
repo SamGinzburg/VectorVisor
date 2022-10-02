@@ -1057,6 +1057,12 @@ impl<'a> StackCtx {
                                             &"proc_exit"              => {
                                                 current_i32_count -= 1;
                                             },
+                                            &"args_sizes_get"         => {
+                                                current_i32_count -= 1;
+                                            },
+                                            &"args_get"               => {
+                                                current_i32_count -= 1;
+                                            },
                                             &"environ_sizes_get"      => {
                                                 current_i32_count -= 1;
                                             },
@@ -1072,7 +1078,6 @@ impl<'a> StackCtx {
                                             &"random_get"             => {
                                                 current_i32_count -= 1;
                                             },
-
                                             &"poll_oneoff"            => {
                                                 current_i32_count -= 3;
                                             },
