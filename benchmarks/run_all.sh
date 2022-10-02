@@ -8,15 +8,15 @@ echo "Starting interleave=4 benchmarks..."
 TOTAL_START_TIME=$(date +%s)
 STARTTIME=$(date +%s)
 python3 run_benchmarks_aws.py --gpu=t4 --cpu=amd --interleave=4 --dir=$t4_dir_4 --skip-membench True & 
-python3 run_benchmarks_aws.py --gpu=a10g --cpu=intel --interleave=4 --dir=$a10g_dir_4 --skip-membench True &
+#python3 run_benchmarks_aws.py --gpu=a10g --cpu=intel --interleave=4 --dir=$a10g_dir_4 --skip-membench True &
 for job in `jobs -p`; do wait ${job}; done
 ENDTIME=$(date +%s)
 echo "$(($ENDTIME - $STARTTIME)) seconds ellapsed while running interleave=4 benchmarks"
 sleep 60
 echo "Starting interleave=8 benchmarks..."
 STARTTIME=$(date +%s)
-python3 run_benchmarks_aws.py --gpu=t4 --cpu=amd --interleave=8 --dir=$t4_dir_8 --skip-membench True & 
-python3 run_benchmarks_aws.py --gpu=a10g --cpu=intel --interleave=8 --dir=$a10g_dir_8 --skip-membench True &
+#python3 run_benchmarks_aws.py --gpu=t4 --cpu=amd --interleave=8 --dir=$t4_dir_8 --skip-membench True & 
+#python3 run_benchmarks_aws.py --gpu=a10g --cpu=intel --interleave=8 --dir=$a10g_dir_8 --skip-membench True &
 for job in `jobs -p`; do wait ${job}; done
 ENDTIME=$(date +%s)
 echo "$(($ENDTIME - $STARTTIME)) seconds ellapsed while running interleave=8 benchmarks"

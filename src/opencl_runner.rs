@@ -1695,7 +1695,7 @@ impl OpenCLRunner {
         let mut is_first: HashMap<u32, bool> = HashMap::new();
         let mut first_invokes: Vec<u64> = vec![];
         let mut repeat_invokes: Vec<u64> = vec![];
-        let mut curr_func_id = self.entry_point;
+        let mut curr_func_id = *kernel_partition_mappings.get(&self.entry_point).unwrap();
         is_first.insert(curr_func_id, true);
         called_funcs.insert(curr_func_id);
         let mut num_batches = 0 as u128;

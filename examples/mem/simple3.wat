@@ -6,7 +6,7 @@
     (i64.const 0xFFFFFFFFFFFFFFFF)
     (i64.store)
     (i32.const 0)
-    (i64.load32_s align=1)
+    (i64.load32_s align=4)
   )
   (export "_start" (func $_start))
 )
