@@ -59,6 +59,8 @@ pub enum WasiSyscalls {
     PathRename = 21,
     PathSymlink = 22,
     PathUnlinkFile = 23,
+    ArgsSizesGet = 24,
+    ArgsGet = 25,
     ServerlessInvoke = 9999,
     ServerlessResponse = 10000,
     InvalidHyperCallNum = -1,
@@ -170,6 +172,8 @@ pub struct VectorizedVM {
     pub memory: Memory,
     pub enviroment_size: Option<u32>,
     pub environment_str_size: Option<u32>,
+    pub args_size: Option<u32>,
+    pub args_str_size: Option<u32>,
     pub vm_id: u32,
     pub hcall_buf_size: u32,
     pub timestamp_counter: Arc<u64>,
@@ -230,6 +234,8 @@ impl VectorizedVM {
             memory: memory.clone(),
             enviroment_size: None,
             environment_str_size: None,
+            args_size: None,
+            args_str_size: None,
             vm_id: vm_id,
             hcall_buf_size: hcall_buf_size,
             timestamp_counter: Arc::new(0),
@@ -284,6 +290,12 @@ impl VectorizedVM {
                         WasiSyscalls::ProcExit,
                     ))
                     .unwrap();
+            }
+            WasiSyscalls::ArgsSizesGet => {
+                Environment::hypercall_args_sizes_get(self, hypercall, sender);
+            }
+            WasiSyscalls::ArgsGet => {
+                Environment::hypercall_args_get(self, hypercall, sender);
             }
             WasiSyscalls::EnvironSizeGet => {
                 Environment::hypercall_environ_sizes_get(self, hypercall, sender);

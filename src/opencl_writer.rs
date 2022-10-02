@@ -96,6 +96,8 @@ lazy_static! {
         m.insert("path_rename", true);            // 21
         m.insert("path_symlink", true);           // 22
         m.insert("path_unlink_file", true);       // 23
+        m.insert("args_sizes_get", true);         // 24
+        m.insert("args_get", true);               // 25
         m.insert("serverless_invoke", true);      // 9999
         m.insert("serverless_response", true);    // 10000
         m
@@ -128,6 +130,8 @@ pub enum WasmHypercallId {
     path_rename = 21,
     path_symlink = 22,
     path_unlink_file = 23,
+    args_sizes_get = 24,
+    args_get = 25,
     serverless_invoke = 9999,
     serverless_response = 10000,
 }
@@ -277,6 +281,15 @@ impl<'a> OpenCLCWriter<'_> {
 
         // hypercalls that are omitted from this table are implied to not require any data transfer via the hcall buffer
         match hypercall_id {
+            WasmHypercallId::args_sizes_get => {
+                ret_str += &emit_args_sizes_get_pre(self, stack_ctx, debug)
+            }
+            WasmHypercallId::environ_get => {
+                // No-op
+            }
+            WasmHypercallId::args_get => {
+                // No-op
+            }
             WasmHypercallId::path_unlink_file => {
                 ret_str += &emit_path_unlink_file_pre(self, stack_ctx, debug)
             }
@@ -360,6 +373,12 @@ impl<'a> OpenCLCWriter<'_> {
         // after the hypercall, we need to reset values on re-entry, and possible copy data back from the hcall buf
         // skipped hypercall entries here are no-ops
         match hypercall_id {
+            WasmHypercallId::args_sizes_get => {
+                ret_str += &emit_args_sizes_get_post(self, stack_ctx, debug)
+            }
+            WasmHypercallId::args_get => {
+                ret_str += &emit_args_get_post(self, stack_ctx, debug)
+            }
             WasmHypercallId::path_filestat_get => {
                 ret_str += &emit_path_filestat_get_post(self, stack_ctx, debug)
             }

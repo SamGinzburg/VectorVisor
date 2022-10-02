@@ -1780,7 +1780,7 @@ pub fn generate_read_write_calls(
             result += &format!("\t{}\n", "uint counter = 0;");
             result += &format!(
                 "\t{}\n",
-                "if (buf_len_bytes > 4 && IS_ALIGNED_POW2((ulong)src, 4)) {"
+                "if (buf_len_bytes > 4 && IS_ALIGNED_POW2((ulong)src, 4) && IS_ALIGNED_POW2((ulong)dst, 4)) {"
             );
             result += &format!(
                 "\t\t{}\n",

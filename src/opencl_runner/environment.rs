@@ -54,6 +54,39 @@ impl Environment {
     }
 
     #[tokio::main]
+    pub async fn hypercall_args_sizes_get(
+        vm_ctx: &mut VectorizedVM,
+        hypercall: &mut HyperCall,
+        sender: &Sender<HyperCallResult>,
+    ) -> () {
+        let mut hcall_buf: &mut [u8] = unsafe { *hypercall.hypercall_buffer.buf.get() };
+        let vm_idx = vm_ctx.vm_id;
+        let result = match vm_ctx.ctx.args_sizes_get().await {
+            Ok(tuple) => {
+                // now that we have retreived the sizes
+                // now we copy the result to the hcall buf
+                let hcall_buf_size: u32 = (hcall_buf.len() / hypercall.num_total_vms as usize)
+                    .try_into()
+                    .unwrap();
+                hcall_buf = &mut hcall_buf
+                    [(vm_idx * hcall_buf_size) as usize..((vm_idx + 1) * hcall_buf_size) as usize];
+                LittleEndian::write_u32(&mut hcall_buf[0..4], tuple.0);
+                LittleEndian::write_u32(&mut hcall_buf[4..8], tuple.1);
+                0
+            }
+            Err(e) => vm_ctx.ctx.errno_from_error(e).unwrap() as i32,
+        };
+
+        sender
+            .send(HyperCallResult::new(
+                result,
+                vm_idx,
+                WasiSyscalls::ArgsSizesGet,
+            ))
+            .unwrap();
+    }
+
+    #[tokio::main]
     pub async fn hypercall_environ_get(
         vm_ctx: &mut VectorizedVM,
         hypercall: &mut HyperCall,
@@ -103,6 +136,51 @@ impl Environment {
 
         sender
             .send(HyperCallResult::new(0, vm_idx, WasiSyscalls::EnvironGet))
+            .unwrap();
+    }
+
+    #[tokio::main]
+    pub async fn hypercall_args_get(
+        vm_ctx: &mut VectorizedVM,
+        hypercall: &mut HyperCall,
+        sender: &Sender<HyperCallResult>,
+    ) -> () {
+        let mut hcall_buf: &mut [u8] = unsafe { *hypercall.hypercall_buffer.buf.get() };
+        let hcall_buf_size: u32 = vm_ctx.hcall_buf_size;
+        let vm_idx = vm_ctx.vm_id;
+
+        let memory = &vm_ctx.memory;
+        let raw_mem: &mut [u8] = memory.data_mut(&mut vm_ctx.store);
+
+        // environ_get is likely to always be called *after* environ_sizes_get, so we can cache the results from that call in the VM object
+        let (num_arg_vars, arg_str_size) =
+            match (vm_ctx.args_size, vm_ctx.args_str_size) {
+                (Some(args_size), Some(args_str_size)) => (args_size, args_str_size),
+                (_, _) => {
+                    // if we haven't cached the values yet, we have to get them
+                    vm_ctx.ctx.args_sizes_get().await.unwrap()
+                }
+            };
+
+        let wasm_mem = WasmtimeGuestMemory::new(raw_mem);
+        let ciovec_ptr = &GuestPtr::new(&wasm_mem, 8);
+        let args_str_ptr = &GuestPtr::new(&wasm_mem, 8 + num_arg_vars * 4);
+        vm_ctx
+            .ctx
+            .environ_get(ciovec_ptr, args_str_ptr)
+            .await
+            .unwrap();
+
+        hcall_buf = &mut hcall_buf
+            [(vm_idx * hcall_buf_size) as usize..((vm_idx + 1) * hcall_buf_size) as usize];
+        LittleEndian::write_u32(&mut hcall_buf[0..4], num_arg_vars);
+        LittleEndian::write_u32(&mut hcall_buf[4..8], arg_str_size);
+        for idx in 8..(num_arg_vars * 4 + arg_str_size) {
+            hcall_buf[idx as usize] = raw_mem[idx as usize];
+        }
+
+        sender
+            .send(HyperCallResult::new(0, vm_idx, WasiSyscalls::ArgsGet))
             .unwrap();
     }
 }

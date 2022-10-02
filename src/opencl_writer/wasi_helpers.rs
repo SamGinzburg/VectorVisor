@@ -286,6 +286,58 @@ pub fn emit_fd_prestat_dir_name_post(
     ret_str
 }
 
+pub fn emit_args_sizes_get_pre(
+    _writer: &opencl_writer::OpenCLCWriter,
+    stack_ctx: &mut StackCtx,
+    _debug: bool,
+) -> String {
+    let mut ret_str = String::from("");
+    let _rp0 = stack_ctx.vstack_peak(StackType::i32, 0);
+    let _rp1 = stack_ctx.vstack_peak(StackType::i32, 1);
+
+    // No-op
+
+    ret_str
+}
+
+pub fn emit_args_sizes_get_post(
+    _writer: &opencl_writer::OpenCLCWriter,
+    stack_ctx: &mut StackCtx,
+    _debug: bool,
+) -> String {
+    let mut ret_str = String::from("");
+    let num_args_ptr = stack_ctx.vstack_pop(StackType::i32);
+    let arg_sizes_ptr = stack_ctx.vstack_pop(StackType::i32);
+    let result_register = stack_ctx.vstack_alloc(StackType::i32);
+
+    ret_str += &format!(
+        "\t{};\n",
+        emit_write_u32(
+            &format!("(ulong)((global char*)heap_u32+(int)({}))", num_args_ptr),
+            "(ulong)(heap_u32)",
+            "*(uint*)((global char *)hypercall_buffer+(hcall_size*warp_idx))",
+            "warp_idx"
+        )
+    );
+
+    ret_str += &format!(
+        "\t{};\n",
+        emit_write_u32(
+            &format!("(ulong)((global char*)heap_u32+(int)({}))", arg_sizes_ptr),
+            "(ulong)(heap_u32)",
+            "*(uint*)((global char *)hypercall_buffer+(hcall_size*warp_idx)+4)",
+            "warp_idx"
+        )
+    );
+        
+    // now return the error code
+    ret_str += &format!("\t{} = {};\n", result_register, "hcall_ret_val");
+
+    ret_str
+}
+
+
+
 pub fn emit_path_unlink_file_pre(
     _writer: &opencl_writer::OpenCLCWriter,
     stack_ctx: &mut StackCtx,
@@ -651,7 +703,7 @@ pub fn emit_environ_get_post(
     let env_count =
         format!("*((global uint*)((global char*)hypercall_buffer+(hcall_size*warp_idx)))");
 
-    let size_string_buf = stack_ctx.vstack_pop(StackType::i32);
+    let _size_string_buf = stack_ctx.vstack_pop(StackType::i32);
     let size_ptr_buf = stack_ctx.vstack_pop(StackType::i32);
     let result_register = stack_ctx.vstack_alloc(StackType::i32);
 
@@ -689,6 +741,48 @@ pub fn emit_environ_get_post(
                         "heap_u32", // mem_start_dst
                         &emit_read_u32("(ulong)(hypercall_buffer+1)", "(ulong)(hypercall_buffer)", "warp_idx")); // buf_len_bytes;
     */
+
+    // now return the error code
+    ret_str += &format!("\t{} = {};\n", result_register, "hcall_ret_val");
+
+    ret_str
+}
+
+pub fn emit_args_get_post(
+    _writer: &opencl_writer::OpenCLCWriter,
+    stack_ctx: &mut StackCtx,
+    _debug: bool,
+) -> String {
+    let mut ret_str = String::from("");
+    // This function takes two u32 arguments, so we need to pop those off
+    // arg1: pointer to a buffer of pointers
+    // arg2: pointer to a buffer to store the string data
+    // when we return, the hcall_buffer will include the two buf_lens as the first two 4 bytes values
+
+    let arg_count =
+        format!("*((global uint*)((global char*)hypercall_buffer+(hcall_size*warp_idx)))");
+
+    let _size_string_buf = stack_ctx.vstack_pop(StackType::i32);
+    let size_ptr_buf = stack_ctx.vstack_pop(StackType::i32);
+    let result_register = stack_ctx.vstack_alloc(StackType::i32);
+
+    // copy over the buffer of pointers
+
+    ret_str += &format!("\t___private_memcpy_cpu2gpu((ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), warp_idx, read_idx, thread_idx, scratch_space);\n",
+                        "(ulong)((global char *)hypercall_buffer+(hcall_size*warp_idx)+8)",
+                        "hypercall_buffer", // mem_start_dst
+                        &format!("(global char *)heap_u32+{}", size_ptr_buf),
+                        "heap_u32", // mem_start_src
+                        &"*((global uint*)((global char*)hypercall_buffer+(hcall_size*warp_idx)))");
+
+
+    // copy the string data
+    ret_str += &format!("\t___private_memcpy_cpu2gpu((ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), warp_idx, read_idx, thread_idx, scratch_space);\n",
+                        &format!("(ulong)((global char *)hypercall_buffer+(hcall_size*warp_idx)+8+({}*4))", arg_count),
+                        "hypercall_buffer", // mem_start_dst
+                        &format!("(global char *)heap_u32+{}", size_ptr_buf),
+                        "heap_u32", // mem_start_src
+                        &"*((global uint*)((global char*)hypercall_buffer+(hcall_size*warp_idx)+4))");
 
     // now return the error code
     ret_str += &format!("\t{} = {};\n", result_register, "hcall_ret_val");
