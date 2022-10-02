@@ -26,6 +26,7 @@ pub fn format_fn_name(fn_name: &str) -> String {
         .replace(",", "_")
         .replace("::", "_colon2_")
         .replace(":", "_colon_")
+        .replace("*", "_star_")
         .replace(" ", "_")
         .replace("{", "")
         .replace("}", "")
