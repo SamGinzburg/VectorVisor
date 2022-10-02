@@ -849,6 +849,8 @@ impl<'a> OpenCLCWriter<'_> {
                                                 emit_trap(TrapCode::TrapUnreachable, true)
                                             }
                                         },
+                                        &"args_sizes_get"      => self.emit_hypercall(WasmHypercallId::args_sizes_get, stack_ctx, hypercall_id_count, fn_name.to_string(), false, debug),
+                                        &"args_get"            => self.emit_hypercall(WasmHypercallId::args_get, stack_ctx, hypercall_id_count, fn_name.to_string(), false, debug),
                                         &"environ_sizes_get"      => self.emit_hypercall(WasmHypercallId::environ_sizes_get, stack_ctx, hypercall_id_count, fn_name.to_string(), false, debug),
                                         &"environ_get"            => self.emit_hypercall(WasmHypercallId::environ_get, stack_ctx, hypercall_id_count, fn_name.to_string(), false, debug),
                                         &"fd_filestat_get"         => self.emit_hypercall(WasmHypercallId::fd_filestat_get, stack_ctx, hypercall_id_count, fn_name.to_string(), false, debug),
