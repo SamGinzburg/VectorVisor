@@ -1970,10 +1970,16 @@ impl<'a> StackCtx {
                     }
                 }
                 Instruction::BrIf(idx) => {
+                    if empty_loop {
+                        taint_open_loops(&mut tainted_loops, open_loop_stack.clone());
+                    }
                     stack_sizes.pop().unwrap();
                     current_i32_count -= 1;
                 }
                 Instruction::BrTable(table_idxs) => {
+                    if empty_loop {
+                        taint_open_loops(&mut tainted_loops, open_loop_stack.clone());
+                    }
                     stack_sizes.pop().unwrap();
                     current_i32_count -= 1;
                 }
@@ -2380,6 +2386,7 @@ impl<'a> StackCtx {
             if empty_loop {
                 empty_loop = false;
             }
+            taint_open_loops(&mut tainted_loops, open_loop_stack.clone());
         }
 
         let mut i32_stack = vec![];

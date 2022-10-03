@@ -9,16 +9,25 @@
   )
 
   (func $_start (result i32)
-    (local $l1 i32)
+    (local i32 i32)
     block (result i32)
-      i32.const 42
-      local.set $l1
-      i32.const 1
-      i32.const 1
-      call $add
-      drop
-      ;; now check to see if we still have the old result
-      local.get $l1
+    loop (result i32)
+    i32.const 1
+    i32.const 1
+    i32.eq
+    if (result i32)
+        i32.const 2
+        i32.const 2
+        i32.add
+        i32.const 1
+        br_if 0
+        drop
+        i32.const 1
+    else
+        i32.const 42
+    end
+    br 1
+    end
     end
   )
   (export "_start" (func $_start))
