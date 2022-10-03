@@ -2386,7 +2386,6 @@ impl<'a> StackCtx {
             if empty_loop {
                 empty_loop = false;
             }
-            taint_open_loops(&mut tainted_loops, open_loop_stack.clone());
         }
 
         let mut i32_stack = vec![];

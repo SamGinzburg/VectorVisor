@@ -130,94 +130,101 @@ pub fn emit_br(
 
     // First, determine if the branch is a forward branch or a backwards branch (targeting a loop header)
     // block = 0, loop = 1
-    if *block_type == WasmBlockType::BasicBlock {
-        // Check for return values, if this branch targets a block with a return value, we need to set that return value
-        // We pop the most recent value on the stack and set the result register to be equal to that
-        match (block_result_type, result_register) {
-            (Some(stack_size), Some(result)) => {
-                // We peak the previous value, we don't pop it!
-                let val = stack_ctx.vstack_peak(stack_size.clone(), 0);
-                ret_str += &format!("\t{} = {};\n", result, val);
-            }
-            _ => (),
-        }
 
-        if !is_fastcall {
-            // we have to save locals on exiting the stack frame, unless we do it in br_table
-            if !from_br_table {
-                ret_str += &stack_ctx.save_context(true, false);
-            }
-            ret_str += &format!(
-                "\t{}\n",
-                format!(
-                    "goto {}_{};",
-                    format!("{}{}", "__", format_fn_name(&fn_name)),
-                    block_name
-                )
-            );
-        } else {
-            ret_str += &format!(
-                "\t{}\n",
-                format!(
-                    "goto {}_{}_fastcall;",
-                    format!("{}{}", "__", format_fn_name(&fn_name)),
-                    block_name
-                )
-            );
-        }
-    } else {
-        // For loops, we need to check if we are targeting a tainted loop
-        let is_loop_tainted = stack_ctx.is_loop_tainted((*block_or_loop_idx).try_into().unwrap());
-        if !is_fastcall && is_loop_tainted {
-            // If we are targeting a loop, we have to emit a return instead, to convert the iterative loop into a recursive function call
-            // save the context, since we are about to call a function (ourself)
-            // in br_table we unconditionally save the current locals
-            if !from_br_table {
-                ret_str += &stack_ctx.save_context(true, false);
+    match *block_type {
+        WasmBlockType::BasicBlock => {
+            // Check for return values, if this branch targets a block with a return value, we need to set that return value
+            // We pop the most recent value on the stack and set the result register to be equal to that
+            match (block_result_type, result_register) {
+                (Some(stack_size), Some(result)) => {
+                    // We peak the previous value, we don't pop it!
+                    let val = stack_ctx.vstack_peak(stack_size.clone(), 0);
+                    ret_str += &format!("\t{} = {};\n", result, val);
+                }
+                _ => (),
             }
 
-            ret_str += &format!("\t{}\n", "*sfp += 1;");
-            // increment the stack frame pointer & save the label of the loop header so we return to it
-            ret_str += &format!(
-                "\t{}\n",
-                &format!(
-                    "{};",
-                    emit_write_u64_aligned(
-                        "(ulong)(call_stack+*sfp)",
-                        "(ulong)(call_stack)",
-                        &format!("{}", *loop_header_reentry),
-                        "warp_idx"
+            if !is_fastcall {
+                // we have to save locals on exiting the stack frame, unless we do it in br_table
+                if !from_br_table {
+                    ret_str += &stack_ctx.save_context(true, false);
+                }
+                ret_str += &format!(
+                    "\t{}\n",
+                    format!(
+                        "goto {}_{};",
+                        format!("{}{}", "__", format_fn_name(&fn_name)),
+                        block_name
                     )
-                )
-            );
+                );
+            } else {
+                ret_str += &format!(
+                    "\t{}\n",
+                    format!(
+                        "goto {}_{}_fastcall;",
+                        format!("{}{}", "__", format_fn_name(&fn_name)),
+                        block_name
+                    )
+                );
+            }
+        }
+        WasmBlockType::LoopBlock => {
+            // For loops, we need to check if we are targeting a tainted loop
+            let is_loop_tainted = stack_ctx.is_loop_tainted((*block_or_loop_idx).try_into().unwrap());
+            if !is_fastcall && is_loop_tainted {
+                // If we are targeting a loop, we have to emit a return instead, to convert the iterative loop into a recursive function call
+                // save the context, since we are about to call a function (ourself)
+                // in br_table we unconditionally save the current locals
+                if !from_br_table {
+                    ret_str += &stack_ctx.save_context(true, false);
+                }
 
-            // set our re-entry target to ourself
-            ret_str += &format!(
-                "\t{}\n",
-                format!("*entry_point = {};", function_id_map.get(fn_name).unwrap())
-            );
-            // set is_calling to false to perform the recursive call to ourself
-            // upon re-entry, we will pop off the top call_stack value which will be pointing at our loop header
-            ret_str += &format!("\t{}\n", "*is_calling = 0;");
-            ret_str += &format!("\t{}\n", "return;");
-        } else if !is_loop_tainted && !is_fastcall {
-            ret_str += &format!(
-                "\t{}\n",
-                format!(
-                    "goto {}_{}_loop;",
-                    format!("{}{}", "__", format_fn_name(&fn_name)),
-                    block_name
-                )
-            );
-        } else {
-            ret_str += &format!(
-                "\t{}\n",
-                format!(
-                    "goto {}_{}_fastcall;",
-                    format!("{}{}", "__", format_fn_name(&fn_name)),
-                    block_name
-                )
-            );
+                ret_str += &format!("\t{}\n", "*sfp += 1;");
+                // increment the stack frame pointer & save the label of the loop header so we return to it
+                ret_str += &format!(
+                    "\t{}\n",
+                    &format!(
+                        "{};",
+                        emit_write_u64_aligned(
+                            "(ulong)(call_stack+*sfp)",
+                            "(ulong)(call_stack)",
+                            &format!("{}", *loop_header_reentry),
+                            "warp_idx"
+                        )
+                    )
+                );
+
+                // set our re-entry target to ourself
+                ret_str += &format!(
+                    "\t{}\n",
+                    format!("*entry_point = {};", function_id_map.get(fn_name).unwrap())
+                );
+                // set is_calling to false to perform the recursive call to ourself
+                // upon re-entry, we will pop off the top call_stack value which will be pointing at our loop header
+                ret_str += &format!("\t{}\n", "*is_calling = 0;");
+                ret_str += &format!("\t{}\n", "return;");
+            } else if !is_loop_tainted && !is_fastcall {
+                ret_str += &format!(
+                    "\t{}\n",
+                    format!(
+                        "goto {}_{}_loop;",
+                        format!("{}{}", "__", format_fn_name(&fn_name)),
+                        block_name
+                    )
+                );
+            } else {
+                ret_str += &format!(
+                    "\t{}\n",
+                    format!(
+                        "goto {}_{}_fastcall;",
+                        format!("{}{}", "__", format_fn_name(&fn_name)),
+                        block_name
+                    )
+                );
+            }
+        }
+        WasmBlockType::IfBlock => {
+            panic!("IfBlock not handled for br statements yet: {:?}", stack_ctx);
         }
     }
 
@@ -255,8 +262,6 @@ pub fn emit_br_if(
     ret_str
 }
 
-// semantically, the end statement pops from the control stack,
-// in our compiler, this is a no-op
 pub fn emit_end<'a>(
     _writer: &opencl_writer::OpenCLCWriter<'a>,
     stack_ctx: &mut StackCtx,
