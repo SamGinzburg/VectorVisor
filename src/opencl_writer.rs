@@ -1736,6 +1736,10 @@ impl<'a> OpenCLCWriter<'_> {
                             .unwrap();
                             write!(final_string, "\t\t\t\tbreak;\n").unwrap();
                         }
+                        write!(final_string, "\t\t\tdefault:\n").unwrap();
+                        write!(final_string, "\t\t\t\tprintf(\"invalid hypercall return stub in %s\\n\", __func__);\n").unwrap();
+                        write!(final_string, "\t\t\t\t{}\n", emit_trap(TrapCode::TrapUnreachable, true)).unwrap();
+
                         write!(final_string, "\t\t}}\n").unwrap();
                     }
 
@@ -1780,6 +1784,10 @@ impl<'a> OpenCLCWriter<'_> {
                             .unwrap();
                             //write!(final_string, "\t\t\t\tbreak;\n");
                         }
+                        write!(final_string, "\t\t\tdefault:\n").unwrap();
+                        write!(final_string, "\t\t\t\tprintf(\"invalid call return stub in %s\\n\", __func__);\n").unwrap();
+                        write!(final_string, "\t\t\t\t{}\n", emit_trap(TrapCode::TrapUnreachable, true)).unwrap();
+
                         write!(final_string, "\t\t}}\n").unwrap();
                     }
 
