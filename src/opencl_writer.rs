@@ -1843,6 +1843,18 @@ impl<'a> OpenCLCWriter<'_> {
                 }
 
                 if !is_fastcall {
+                    /*
+                    final_string += &format!(
+                        "\t{}\n",
+                        emit_intra_vm_memfill(
+                            &format!("((global char*)(stack_u32+*sp))"),
+                            "(global char*)(stack_u32)",
+                            &"0",
+                            &format!("{}", (local_cache_size + stack_ctx.max_stack_frame_size() as u32) * 4),
+                            "warp_idx"
+                        )
+                    );
+                    */
                     // Allocate space on the stack for saving the intermediate context
                     final_string += &format!("\t*sp += {};\n", stack_ctx.max_stack_frame_size());
                     // Allocate space on the stack for storing the local_cache
@@ -2807,6 +2819,16 @@ __attribute__((always_inline)) void {}(global uint   *stack_u32,
   : ((y) != (y)) ? NAN                            \
   : ((x) == 0 && (y) == 0) ? (signbit(x) ? y : x) \
   : (x > y) ? x : y)
+
+#define ROTL(x, y, mask) \
+  (((x) << ((y) & (mask))) | ((x) >> (((mask) - (y) + 1) & (mask))))
+#define ROTR(x, y, mask) \
+  (((x) >> ((y) & (mask))) | ((x) << (((mask) - (y) + 1) & (mask))))
+
+#define I32_ROTL(x, y) ROTL(x, y, 31)
+#define I64_ROTL(x, y) ROTL(x, y, 63)
+#define I32_ROTR(x, y) ROTR(x, y, 31)
+#define I64_ROTR(x, y) ROTR(x, y, 63)
 
 #define IS_ALIGNED_POW2(addr, align) \
     !(addr & (align-1))

@@ -1363,14 +1363,17 @@ pub fn generate_bulkmem(fill: Option<String>) -> String {
     result += &format!("\t{}\n", "uint counter = 0;");
     match fill.clone() {
         Some(value) => {
-            result += &format!("\t{}\n", "ulong fillval = value << 56;");
-            result += &format!("\t{}\n", "fillval += value << 48;");
-            result += &format!("\t{}\n", "fillval += value << 40;");
-            result += &format!("\t{}\n", "fillval += value << 32;");
-            result += &format!("\t{}\n", "fillval += value << 24;");
-            result += &format!("\t{}\n", "fillval += value << 16;");
-            result += &format!("\t{}\n", "fillval += value << 8;");
-            result += &format!("\t{}\n", "fillval += value;");
+            result += &format!("\t{}\n", "ulong fillval = 0;");
+            result += &format!("\t{}\n", "fillval += (ulong)value;");
+            result += &format!("\t{}\n", "fillval += (ulong)value << 8;");
+            result += &format!("\t{}\n", "fillval += (ulong)value << 16;");
+            result += &format!("\t{}\n", "fillval += (ulong)value << 16;");
+            result += &format!("\t{}\n", "fillval += (ulong)value << 24;");
+            result += &format!("\t{}\n", "fillval += (ulong)value << 32;");
+            result += &format!("\t{}\n", "fillval += (ulong)value << 32;");
+            result += &format!("\t{}\n", "fillval += (ulong)value << 40;");
+            result += &format!("\t{}\n", "fillval += (ulong)value << 48;");
+            result += &format!("\t{}\n", "fillval += (ulong)value << 56;");
         }
         _ => {}
     };

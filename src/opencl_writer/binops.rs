@@ -313,7 +313,7 @@ pub fn emit_i32_shr_u(
     let result_register = stack_ctx.vstack_alloc(StackType::i32);
 
     format!(
-        "\t{} = (uint)({}) >> (uint)({});\n",
+        "\t{} = (uint)({}) >> (uint)({} & 31);\n",
         result_register, reg2, reg1
     )
 }
@@ -328,7 +328,7 @@ pub fn emit_i64_shr_u(
     let result_register = stack_ctx.vstack_alloc(StackType::i64);
 
     format!(
-        "\t{} = (ulong)({}) >> (ulong)({});\n",
+        "\t{} = (ulong)({}) >> (ulong)({} & 63);\n",
         result_register, reg2, reg1
     )
 }
@@ -343,7 +343,7 @@ pub fn emit_i32_shr_s(
     let result_register = stack_ctx.vstack_alloc(StackType::i32);
 
     format!(
-        "\t{} = (int)({}) >> (int)({});\n",
+        "\t{} = (int)({}) >> (int)({} & 31);\n",
         result_register, reg2, reg1
     )
 }
@@ -358,7 +358,7 @@ pub fn emit_i32_shl(
     let result_register = stack_ctx.vstack_alloc(StackType::i32);
 
     format!(
-        "\t{} = (uint)({}) << (uint)({});\n",
+        "\t{} = (uint)({}) << (uint)({} & 31);\n",
         result_register, reg2, reg1
     )
 }
@@ -372,7 +372,7 @@ pub fn emit_i64_shl(
     let reg2 = stack_ctx.vstack_pop(StackType::i64);
     let result_register = stack_ctx.vstack_alloc(StackType::i64);
 
-    format!("\t{} = (ulong)({}) << {};\n", result_register, reg2, reg1)
+    format!("\t{} = (ulong)({}) << ({} & 63);\n", result_register, reg2, reg1)
 }
 
 pub fn emit_i32_xor(
@@ -636,7 +636,7 @@ pub fn emit_i64_shr_s(
     let reg2 = stack_ctx.vstack_pop(StackType::i64);
     let result_register = stack_ctx.vstack_alloc(StackType::i64);
 
-    format!("\t{} = (long){} >> {};\n", result_register, reg2, reg1)
+    format!("\t{} = (long){} >> ({} & 63);\n", result_register, reg2, reg1)
 }
 
 /*
@@ -652,7 +652,7 @@ pub fn emit_i32_rotl(
         let reg2 = stack_ctx.vstack_pop(StackType::i32);
         let result_register = stack_ctx.vstack_alloc(StackType::i32);
 
-        format!("\t{} = rotate({}, {});\n", result_register, reg2, reg1)
+        format!("\t{} = I32_ROTL({}, {});\n", result_register, reg2, reg1)
     } else {
         let reg1 = stack_ctx.vstack_pop(StackType::i32);
         let reg2 = stack_ctx.vstack_pop(StackType::i32);
@@ -677,7 +677,7 @@ pub fn emit_i64_rotl(
         let reg2 = stack_ctx.vstack_pop(StackType::i64);
         let result_register = stack_ctx.vstack_alloc(StackType::i64);
 
-        format!("\t{} = rotate({}, {});\n", result_register, reg2, reg1)
+        format!("\t{} = I64_ROTL({}, {});\n", result_register, reg2, reg1)
     } else {
         let reg1 = stack_ctx.vstack_pop(StackType::i64);
         let reg2 = stack_ctx.vstack_pop(StackType::i64);

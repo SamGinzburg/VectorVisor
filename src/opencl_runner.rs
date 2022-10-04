@@ -1717,12 +1717,10 @@ impl OpenCLRunner {
             profiling_event = ocl::Event::empty();
 
             // For debugging
-            /*
             println!(
                 "Running partition: {:?}",
                 kernel_part_debug.get(&curr_func_id).unwrap()
             );
-            */
 
             unsafe {
                 num_queue_submits += 1;
@@ -1865,7 +1863,7 @@ impl OpenCLRunner {
                     divergence_stack.insert(
                         *kernel_partition_mappings
                             .get(&entry_point_temp[idx])
-                            .unwrap(),
+                            .expect(&format!("Error getting entry point for the divergence stack: {:?}, idx: {:?}", entry_point_temp, idx)),
                     );
                     stored_entry_points[idx] = entry_point_temp[idx];
                 } else if hypercall_num_temp[idx] != -2
@@ -1874,7 +1872,7 @@ impl OpenCLRunner {
                     hcall_divergence_stack.insert(
                         *kernel_partition_mappings
                             .get(&entry_point_temp[idx])
-                            .unwrap(),
+                            .expect(&format!("Error getting entry point for the hcall divergence stack: {:?}, idx: {:?}", entry_point_temp, idx)),
                     );
                     stored_entry_points[idx] = entry_point_temp[idx];
                     entry_point_temp[idx] = ((-1) as i32) as u32;
@@ -1896,7 +1894,7 @@ impl OpenCLRunner {
 
                 /*
                 for idx in 0..(self.num_vms as usize) {
-                    entry_point_temp[idx] = next_func;
+                    entry_point_temp[idx] = stored_entry_points[idx];
                 }
                 */
 
