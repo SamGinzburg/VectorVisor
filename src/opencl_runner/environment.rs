@@ -110,29 +110,32 @@ impl Environment {
             };
 
         let wasm_mem = WasmtimeGuestMemory::new(raw_mem);
-        let ciovec_ptr = &GuestPtr::new(&wasm_mem, 8);
-        let env_str_ptr = &GuestPtr::new(&wasm_mem, 8 + num_env_vars * 4);
+        let ciovec_ptr = &GuestPtr::new(&wasm_mem, 0); // returns an array of pointers, 4 bytes * num_env_vars
+        let env_str_ptr = &GuestPtr::new(&wasm_mem, num_env_vars * 4);
         vm_ctx
             .ctx
             .environ_get(ciovec_ptr, env_str_ptr)
             .await
             .unwrap();
-
-        //let arr = &raw_mem[(8 + num_env_vars * 4) as usize..(8 + num_env_vars * 4 + env_str_size) as usize];
-        //println!("{}", String::from_utf8(arr.to_vec()).unwrap());
-        //println!("{:?}", &arr);
-
         // copy the results back to the hcall_buf
+
+        //dbg!(&num_env_vars);
+        //dbg!(&env_str_size);
 
         hcall_buf = &mut hcall_buf
             [(vm_idx * hcall_buf_size) as usize..((vm_idx + 1) * hcall_buf_size) as usize];
         LittleEndian::write_u32(&mut hcall_buf[0..4], num_env_vars);
         LittleEndian::write_u32(&mut hcall_buf[4..8], env_str_size);
-        for idx in 8..(num_env_vars * 4 + env_str_size) {
-            hcall_buf[idx as usize] = raw_mem[idx as usize];
+        let ptr_array_offset = num_env_vars * 4;
+        for idx in 0..(ptr_array_offset + env_str_size) {
+            hcall_buf[(8 + idx) as usize] = raw_mem[idx as usize];
         }
 
-        //dbg!(&mut hcall_buf[0..16]);
+        let env = std::str::from_utf8(&hcall_buf[(8 + ptr_array_offset) as usize..(8 + ptr_array_offset + env_str_size) as usize]).unwrap();
+        dbg!(&env);
+
+        //let ptrs = &hcall_buf[(8) as usize..(8 + ptr_array_offset) as usize];
+        //dbg!(&ptrs);
 
         sender
             .send(HyperCallResult::new(0, vm_idx, WasiSyscalls::EnvironGet))

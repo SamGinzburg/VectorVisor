@@ -203,8 +203,8 @@ impl VectorizedVM {
         let opendir = wasi_cap_std_sync::Dir::from_std_file(File::open(".").unwrap());
 
         let wasi_ctx = WasiCtxBuilder::new()
-            .inherit_args()
-            .unwrap()
+            //.inherit_args()
+            //.unwrap()
             .inherit_stdio()
             .inherit_env()
             .unwrap()

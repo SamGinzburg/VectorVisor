@@ -700,47 +700,46 @@ pub fn emit_environ_get_post(
     // arg2: pointer to a buffer to store the string data
     // when we return, the hcall_buffer will include the two buf_lens as the first two 4 bytes values
 
-    let env_count =
-        format!("*((global uint*)((global char*)hypercall_buffer+(hcall_size*warp_idx)))");
-
-    let _size_string_buf = stack_ctx.vstack_pop(StackType::i32);
-    let size_ptr_buf = stack_ctx.vstack_pop(StackType::i32);
+    let string_buf = stack_ctx.vstack_pop(StackType::i32);
+    let environ_ptr_buf = stack_ctx.vstack_pop(StackType::i32);
     let result_register = stack_ctx.vstack_alloc(StackType::i32);
 
-    // copy over the buffer of pointers
+    // read the env count back from the hcall buf
+    let env_count =
+        format!("*((global uint*)((global char*)hypercall_buffer+(hcall_size*warp_idx)))");
+    let str_buf_len =
+        format!("*((global uint*)((global char*)hypercall_buffer+(hcall_size*warp_idx)+4))");
 
+    // Fix the environ ptrs, as they are offset to 0 (from the host-VM)
+    // We just need to add the environ ptr buf to each ptr
+    let ptr_list_head =
+        format!("*((global uint*)((global char*)hypercall_buffer+(hcall_size*warp_idx)+(count*4)+8))");
+
+    //ret_str += &format!("\t\tprintf(\"environ ptr %d\\n\", {});\n", environ_ptr_buf);
+    //ret_str += &format!("\t\tprintf(\"string buf %d\\n\", {});\n", string_buf);
+
+    // Remap the ptrs from the host VM to the GPU VM
+    ret_str += &format!("\tfor (uint count = 0; count < {}; count++) {{\n", env_count);
+    ret_str += &format!("\t\tprintf(\"before: %d\\n\", {});\n", ptr_list_head);
+    ret_str += &format!("\t\t{} -= ({}*4) - {};\n", ptr_list_head, env_count, string_buf);
+    ret_str += &format!("\t\tprintf(\"after: %d\\n\", {});\n", ptr_list_head);
+    ret_str += &format!("\t}}\n");
+
+    // copy over the buffer of pointers
     ret_str += &format!("\t___private_memcpy_cpu2gpu((ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), warp_idx, read_idx, thread_idx, scratch_space);\n",
                         "(ulong)((global char *)hypercall_buffer+(hcall_size*warp_idx)+8)",
                         "hypercall_buffer", // mem_start_dst
-                        &format!("(global char *)heap_u32+{}", size_ptr_buf),
+                        &format!("(global char *)heap_u32+{}", environ_ptr_buf),
                         "heap_u32", // mem_start_src
-                        &"*((global uint*)((global char*)hypercall_buffer+(hcall_size*warp_idx)))");
-
-    /*
-    ret_str += &format!("\t___private_memcpy((ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), warp_idx, read_idx);\n",
-                        "(ulong)((global char *)hypercall_buffer+8)",
-                        "hypercall_buffer", // mem_start_src
-                        &format!("(global char *)heap_u32+{}", size_ptr_buf), //dst
-                        "heap_u32", // mem_start_dst`
-                        &emit_read_u32("(ulong)(hypercall_buffer)", "(ulong)(hypercall_buffer)", "warp_idx")); // buf_len_bytes;
-    */
+                        &format!("({})*4", env_count));
 
     // copy the string data
     ret_str += &format!("\t___private_memcpy_cpu2gpu((ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), warp_idx, read_idx, thread_idx, scratch_space);\n",
                         &format!("(ulong)((global char *)hypercall_buffer+(hcall_size*warp_idx)+8+({}*4))", env_count),
                         "hypercall_buffer", // mem_start_dst
-                        &format!("(global char *)heap_u32+{}", size_ptr_buf),
+                        &format!("(global char *)heap_u32+{}", string_buf),
                         "heap_u32", // mem_start_src
-                        &"*((global uint*)((global char*)hypercall_buffer+(hcall_size*warp_idx)+4))");
-
-    /*
-    ret_str += &format!("\t___private_memcpy((ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), warp_idx, read_idx);\n",
-                        &format!("(ulong)((global char *)hypercall_buffer+8+({}*4))", env_count), //src
-                        "hypercall_buffer", // mem_start_src
-                        &format!("((global char *)heap_u32+{})", size_string_buf), //dst
-                        "heap_u32", // mem_start_dst
-                        &emit_read_u32("(ulong)(hypercall_buffer+1)", "(ulong)(hypercall_buffer)", "warp_idx")); // buf_len_bytes;
-    */
+                        &str_buf_len);
 
     // now return the error code
     ret_str += &format!("\t{} = {};\n", result_register, "hcall_ret_val");

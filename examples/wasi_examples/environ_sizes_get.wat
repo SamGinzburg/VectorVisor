@@ -20,7 +20,7 @@
     i32.const 4
     call $wasi_unstable.environ_sizes_get
     drop
-    i32.const 0
+    i32.const 4
     i32.load
   )
   (memory $memory 1)

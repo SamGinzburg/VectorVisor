@@ -1858,14 +1858,14 @@ impl OpenCLRunner {
                 // 1) We are not blocked on a hypercall
                 // 2) The VM is not currently masked off
                 if entry_point_temp[idx] != ((-1) as i32) as u32
-                    && (hypercall_num_temp[idx] == -2 || hypercall_num_temp[idx] == -1)
+                    && (hypercall_num_temp[idx] == -2)
                 {
                     divergence_stack.insert(
                         *kernel_partition_mappings
                             .get(&entry_point_temp[idx])
                             .expect(&format!("Error getting entry point for the divergence stack: {:?}, idx: {:?}", entry_point_temp, idx)),
                     );
-                    stored_entry_points[idx] = entry_point_temp[idx];
+                    //stored_entry_points[idx] = entry_point_temp[idx];
                 } else if hypercall_num_temp[idx] != -2
                     && entry_point_temp[idx] != ((-1) as i32) as u32
                 {
@@ -1876,11 +1876,13 @@ impl OpenCLRunner {
                     );
                     stored_entry_points[idx] = entry_point_temp[idx];
                     entry_point_temp[idx] = ((-1) as i32) as u32;
+                } else {
+                    panic!("missing case: entry: {:?}, hcall: {:?}", entry_point_temp[idx], hypercall_num_temp[idx]);
                 }
             }
 
-            //println!("divergence stack: {:?}", &divergence_stack);
-            //println!("hcall divergence stack: {:?}", &hcall_divergence_stack);
+            println!("divergence stack: {:?}", &divergence_stack);
+            println!("hcall divergence stack: {:?}", &hcall_divergence_stack);
 
             // if we found a VM that needs to run another function, we do that first
             if divergence_stack.len() > 0 {
