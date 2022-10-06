@@ -12,7 +12,7 @@ pub fn emit_i32_eqz(
     _debug: bool,
 ) -> String {
     let reg = stack_ctx.vstack_peak(StackType::i32, 0);
-    format!("\t{} = ((int)({}) == (int)0) ? 1 : 0;\n", reg, reg)
+    format!("\t{} = !({});\n", reg, reg)
 }
 
 pub fn emit_i64_eqz(
@@ -24,7 +24,7 @@ pub fn emit_i64_eqz(
     let result_register = stack_ctx.vstack_alloc(StackType::i32);
 
     format!(
-        "\t{} = ((long)({}) == (long)0) ? 1 : 0;\n",
+        "\t{} = !({});\n",
         result_register, reg
     )
 }
