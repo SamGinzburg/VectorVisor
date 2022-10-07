@@ -3391,7 +3391,7 @@ impl<'a> StackCtx {
                     *self.local_offsets.get(local).unwrap() as i32 + self.param_offset;
 
                 if !locals_set.contains(local) {
-                    continue;
+                    //continue;
                 }
 
                 is_empty = false;
