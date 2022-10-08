@@ -1857,8 +1857,8 @@ impl<'a> OpenCLCWriter<'_> {
                     */
                     // Allocate space on the stack for saving the intermediate context
                     final_string += &format!("\t*sp += {};\n", stack_ctx.max_stack_frame_size());
-                    // Allocate space on the stack for storing the local_cache
-                    final_string += &format!("\t*sp += {};\n", local_cache_size + 16);
+                    // Allocate space on the stack for handling return values 
+                    final_string += &format!("\t*sp += {};\n", 16);
                 }
 
                 // keep a stack of control-flow labels
