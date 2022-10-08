@@ -1,0 +1,10 @@
+[package]
+name = "jstest"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+wasmedge_quickjs = { git = "https://github.com/SamGinzburg/wasmedge-quickjs.git", branch = "main" }
+#wasmedge_quickjs = "0.2.0"
