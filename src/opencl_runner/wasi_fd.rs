@@ -81,6 +81,8 @@ impl WasiFd {
         let ciovec_ptr: &CiovecArray = &GuestPtr::new(&wasm_mem, (0 as u32, num_iovecs as u32));
         let result = vm_ctx.ctx.fd_write(Fd::from(fd), &ciovec_ptr).await;
 
+        //dbg!(&result.as_ref().unwrap());
+
         sender
             .send(HyperCallResult::new(
                 result.unwrap() as i32,
