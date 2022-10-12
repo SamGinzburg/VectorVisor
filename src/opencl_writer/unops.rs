@@ -30,7 +30,7 @@ pub fn emit_i32_ctz(
 ) -> String {
     let reg = stack_ctx.vstack_peak(StackType::i32, 0);
 
-    format!("\t{} = 31-clz({}&-{});\n", reg, reg, reg)
+    format!("\t{} = ctz({});\n", reg, reg)
 }
 
 pub fn emit_i64_ctz(
@@ -40,7 +40,7 @@ pub fn emit_i64_ctz(
 ) -> String {
     let reg = stack_ctx.vstack_peak(StackType::i64, 0);
 
-    format!("\t{} = 63-clz({}&-{});\n", reg, reg, reg)
+    format!("\t{} = ctz({});\n", reg, reg)
 }
 
 pub fn emit_i32_popcnt(

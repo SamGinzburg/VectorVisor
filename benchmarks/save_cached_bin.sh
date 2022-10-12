@@ -24,7 +24,7 @@ function cachebin() {
   #cargo run --release -- -i a10g_$1-opt.wasm --heap=$2 --stack=$3 --hcallsize=$4 --vmcount=$6 --partition=false --maxdup=0 --jt=true --interleave=4
 }
 
-cachebin "imagehash-modified" "4194304" "131072" "262144" "2048" "2048"
+cachebin "genpdf" "3145728" "131072" "262144" "2048" "2048"
 exit
 cachebin "pbkdf2" "3145728" "262144" "131072" "4096" "6144"
 cachebin "imagehash" "4194304" "131072" "262144" "3072" "4608"

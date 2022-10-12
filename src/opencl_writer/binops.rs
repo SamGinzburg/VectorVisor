@@ -639,9 +639,6 @@ pub fn emit_i64_shr_s(
     format!("\t{} = (long){} >> ({} & 63);\n", result_register, reg2, reg1)
 }
 
-/*
- * Implementing rotl safely in software: https://blog.regehr.org/archives/1063
- */
 pub fn emit_i32_rotl(
     _writer: &opencl_writer::OpenCLCWriter,
     stack_ctx: &mut StackCtx,
@@ -652,7 +649,7 @@ pub fn emit_i32_rotl(
         let reg2 = stack_ctx.vstack_pop(StackType::i32);
         let result_register = stack_ctx.vstack_alloc(StackType::i32);
 
-        format!("\t{} = I32_ROTL({}, {});\n", result_register, reg2, reg1)
+        format!("\t{} = rotate({}, {} & 31);\n", result_register, reg2, reg1)
     } else {
         let reg1 = stack_ctx.vstack_pop(StackType::i32);
         let reg2 = stack_ctx.vstack_pop(StackType::i32);
@@ -677,7 +674,8 @@ pub fn emit_i64_rotl(
         let reg2 = stack_ctx.vstack_pop(StackType::i64);
         let result_register = stack_ctx.vstack_alloc(StackType::i64);
 
-        format!("\t{} = I64_ROTL({}, {});\n", result_register, reg2, reg1)
+        format!("\t{} = rotate({}, {} & 63);\n", result_register, reg2, reg1)
+        //format!("\t{} = I64_ROTL({}, {});\n", result_register, reg2, reg1)
     } else {
         let reg1 = stack_ctx.vstack_pop(StackType::i64);
         let reg2 = stack_ctx.vstack_pop(StackType::i64);

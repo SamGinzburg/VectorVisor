@@ -131,8 +131,8 @@ impl Environment {
             hcall_buf[(8 + idx) as usize] = raw_mem[idx as usize];
         }
 
-        let env = std::str::from_utf8(&hcall_buf[(8 + ptr_array_offset) as usize..(8 + ptr_array_offset + env_str_size) as usize]).unwrap();
-        dbg!(&env);
+        //let env = std::str::from_utf8(&hcall_buf[(8 + ptr_array_offset) as usize..(8 + ptr_array_offset + env_str_size) as usize]).unwrap();
+        //dbg!(&env);
 
         //let ptrs = &hcall_buf[(8) as usize..(8 + ptr_array_offset) as usize];
         //dbg!(&ptrs);

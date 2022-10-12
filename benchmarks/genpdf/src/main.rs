@@ -86,7 +86,7 @@ fn genpdf(event: FuncInput) -> FuncResponse {
         purchase_ops.push(Operation::new("BT", vec![]));
         purchase_ops.push(Operation::new("Tf", vec!["F1".into(), 12.into()]));
         purchase_ops.push(Operation::new("Td", vec![50.into(), idx.into()]));
-        purchase_ops.push(Operation::new("Tj", vec![Object::string_literal(format!("{}                                                        ${:.2}", purchase, price))]));
+        //purchase_ops.push(Operation::new("Tj", vec![Object::string_literal(format!("{}                                                        ${:.2}", purchase, price))]));
         purchase_ops.push(Operation::new("ET", vec![]),);
         idx -= 12;
     }

@@ -720,9 +720,9 @@ pub fn emit_environ_get_post(
 
     // Remap the ptrs from the host VM to the GPU VM
     ret_str += &format!("\tfor (uint count = 0; count < {}; count++) {{\n", env_count);
-    ret_str += &format!("\t\tprintf(\"before: %d\\n\", {});\n", ptr_list_head);
+    //ret_str += &format!("\t\tprintf(\"before: %d\\n\", {});\n", ptr_list_head);
     ret_str += &format!("\t\t{} -= ({}*4) - {};\n", ptr_list_head, env_count, string_buf);
-    ret_str += &format!("\t\tprintf(\"after: %d\\n\", {});\n", ptr_list_head);
+    //ret_str += &format!("\t\tprintf(\"after: %d\\n\", {});\n", ptr_list_head);
     ret_str += &format!("\t}}\n");
 
     // copy over the buffer of pointers

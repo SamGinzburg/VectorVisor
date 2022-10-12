@@ -1547,13 +1547,15 @@ pub fn generate_read_write_calls(
     );
     result += &format!("\n{}\n", "}");
 
-    result += &format!("\n{}\n",
-                        "inline void write_u16_aligned(ulong addr, ulong mem_start, ushort value, uint warp_id, uint read_idx, uint thread_idx, local ulong2 *scratch_space) {");
-    result += &format!(
-        "{}",
-        emit_write_u16_body(interleave, local_work_group, mexec, true, false)
-    );
-    result += &format!("\n{}\n", "}");
+    if interleave != 4 {
+            result += &format!("\n{}\n",
+                                "inline void write_u16_aligned(ulong addr, ulong mem_start, ushort value, uint warp_id, uint read_idx, uint thread_idx, local ulong2 *scratch_space) {");
+            result += &format!(
+                "{}",
+                emit_write_u16_body(interleave, local_work_group, mexec, true, false)
+            );
+            result += &format!("\n{}\n", "}");
+    }
 
     result += &format!("\n{}\n",
                         "inline void write_u16_aligned_checked(ulong addr, ulong mem_start, ushort value, uint warp_id, uint read_idx, uint thread_idx, local ulong2 *scratch_space) {");
@@ -1571,13 +1573,15 @@ pub fn generate_read_write_calls(
     );
     result += &format!("\n{}\n", "}");
 
-    result += &format!("\n{}\n",
-                        "inline void write_u32_aligned(ulong addr, ulong mem_start, uint value, uint warp_id, uint read_idx, uint thread_idx, local ulong2 *scratch_space) {");
-    result += &format!(
-        "{}",
-        emit_write_u32_body(interleave, local_work_group, mexec, true, false, volatile)
-    );
-    result += &format!("\n{}\n", "}");
+    if interleave != 4 && interleave != 8 {
+            result += &format!("\n{}\n",
+                                "inline void write_u32_aligned(ulong addr, ulong mem_start, uint value, uint warp_id, uint read_idx, uint thread_idx, local ulong2 *scratch_space) {");
+            result += &format!(
+                "{}",
+                emit_write_u32_body(interleave, local_work_group, mexec, true, false, volatile)
+            );
+            result += &format!("\n{}\n", "}");
+    }
 
     result += &format!("\n{}\n",
                         "inline void write_u32_aligned_checked(ulong addr, ulong mem_start, uint value, uint warp_id, uint read_idx, uint thread_idx, local ulong2 *scratch_space) {");
@@ -1595,13 +1599,15 @@ pub fn generate_read_write_calls(
     );
     result += &format!("\n{}\n", "}");
 
-    result += &format!("\n{}\n",
-                        "inline void write_u64_aligned(ulong addr, ulong mem_start, ulong value, uint warp_id, uint read_idx, uint thread_idx, local ulong2 *scratch_space) {");
-    result += &format!(
-        "{}",
-        emit_write_u64_body(interleave, local_work_group, mexec, true, false, volatile)
-    );
-    result += &format!("\n{}\n", "}");
+    if interleave != 8 {
+            result += &format!("\n{}\n",
+                                "inline void write_u64_aligned(ulong addr, ulong mem_start, ulong value, uint warp_id, uint read_idx, uint thread_idx, local ulong2 *scratch_space) {");
+            result += &format!(
+                "{}",
+                emit_write_u64_body(interleave, local_work_group, mexec, true, false, volatile)
+            );
+            result += &format!("\n{}\n", "}");
+    }
 
     result += &format!("\n{}\n",
                         "inline void write_u64_aligned_checked(ulong addr, ulong mem_start, ulong value, uint warp_id, uint read_idx, uint thread_idx, local ulong2 *scratch_space) {");
@@ -1667,13 +1673,15 @@ pub fn generate_read_write_calls(
     );
     result += &format!("\n{}", "}");
 
-    result += &format!("\n{}\n",
-                        "inline ushort read_u16_aligned(ulong addr, ulong mem_start, uint warp_id, uint read_idx, uint thread_idx, local ulong2 *scratch_space) {");
-    result += &format!(
-        "{}",
-        emit_read_u16_body(interleave, local_work_group, mexec, true, false)
-    );
-    result += &format!("\n{}", "}");
+    if interleave != 4 {
+            result += &format!("\n{}\n",
+                                "inline ushort read_u16_aligned(ulong addr, ulong mem_start, uint warp_id, uint read_idx, uint thread_idx, local ulong2 *scratch_space) {");
+            result += &format!(
+                "{}",
+                emit_read_u16_body(interleave, local_work_group, mexec, true, false)
+            );
+            result += &format!("\n{}", "}");
+    }
 
     result += &format!("\n{}\n",
                         "inline ushort read_u16_aligned_checked(ulong addr, ulong mem_start, uint warp_id, uint read_idx, uint thread_idx, local ulong2 *scratch_space) {");
@@ -1691,13 +1699,17 @@ pub fn generate_read_write_calls(
     );
     result += &format!("\n{}", "}");
 
-    result += &format!("\n{}\n",
-                        "inline uint read_u32_aligned(ulong addr, ulong mem_start, uint warp_id, uint read_idx, uint thread_idx, local ulong2 *scratch_space) {");
-    result += &format!(
-        "{}",
-        emit_read_u32_body(interleave, local_work_group, mexec, true, false, volatile)
-    );
-    result += &format!("\n{}", "}");
+
+    if interleave != 4 && interleave != 8 {
+            result += &format!("\n{}\n",
+                                "inline uint read_u32_aligned(ulong addr, ulong mem_start, uint warp_id, uint read_idx, uint thread_idx, local ulong2 *scratch_space) {");
+            result += &format!(
+                "{}",
+                emit_read_u32_body(interleave, local_work_group, mexec, true, false, volatile)
+            );
+            result += &format!("\n{}", "}");
+    }
+
 
     result += &format!("\n{}\n",
                         "inline uint read_u32_aligned_checked(ulong addr, ulong mem_start, uint warp_id, uint read_idx, uint thread_idx, local ulong2 *scratch_space) {");
@@ -1715,13 +1727,15 @@ pub fn generate_read_write_calls(
     );
     result += &format!("\n{}\n", "}");
 
-    result += &format!("\n{}\n",
-                        "inline ulong read_u64_aligned(ulong addr, ulong mem_start, uint warp_id, uint read_idx, uint thread_idx, local ulong2 *scratch_space) {");
-    result += &format!(
-        "{}",
-        emit_read_u64_body(interleave, local_work_group, mexec, true, false, volatile)
-    );
-    result += &format!("\n{}\n", "}");
+    if interleave != 8 {
+            result += &format!("\n{}\n",
+                                "inline ulong read_u64_aligned(ulong addr, ulong mem_start, uint warp_id, uint read_idx, uint thread_idx, local ulong2 *scratch_space) {");
+            result += &format!(
+                "{}",
+                emit_read_u64_body(interleave, local_work_group, mexec, true, false, volatile)
+            );
+            result += &format!("\n{}\n", "}");
+    }
 
     result += &format!("\n{}\n",
                         "inline ulong read_u64_aligned_checked(ulong addr, ulong mem_start, uint warp_id, uint read_idx, uint thread_idx, local ulong2 *scratch_space) {");

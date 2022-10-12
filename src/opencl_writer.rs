@@ -1497,6 +1497,7 @@ impl<'a> OpenCLCWriter<'_> {
         force_inline: bool,
         debug_call_print: bool,
         start_function: String,
+        interleave: u32,
         is_gpu: bool,
         reduction_size: &mut u32,
         is_fastcall: bool,
@@ -1693,6 +1694,14 @@ impl<'a> OpenCLCWriter<'_> {
                     write!(final_string, "\t\tprintf(\"read_u64(call_stack+*sfp) = %d\\n\", read_u64((ulong)(call_stack+*sfp), (ulong)(call_stack), warp_idx, read_idx, thread_idx, scratch_space));\n").unwrap();
                 }
 
+                write!(
+                    final_string,
+                    "\t{} + warp_idx*{};\n",
+                    "uint *heap_base_u32 = (char*)heap_u32",
+                    interleave
+                )
+                .unwrap();
+
                 /*
                  * First, before emitting the function call & hypercall return tables,
                  * we need to do an analysis pass on the instructions to:
@@ -1737,7 +1746,9 @@ impl<'a> OpenCLCWriter<'_> {
                             write!(final_string, "\t\t\t\tbreak;\n").unwrap();
                         }
                         write!(final_string, "\t\t\tdefault:\n").unwrap();
-                        write!(final_string, "\t\t\t\tprintf(\"invalid hypercall return stub in %s\\n\", __func__);\n").unwrap();
+                        if debug_call_print {
+                            write!(final_string, "\t\t\t\tprintf(\"invalid hypercall return stub in %s\\n\", __func__);\n").unwrap();
+                        }
                         write!(final_string, "\t\t\t\t{}\n", emit_trap(TrapCode::TrapUnreachable, true)).unwrap();
 
                         write!(final_string, "\t\t}}\n").unwrap();
@@ -1785,7 +1796,9 @@ impl<'a> OpenCLCWriter<'_> {
                             //write!(final_string, "\t\t\t\tbreak;\n");
                         }
                         write!(final_string, "\t\t\tdefault:\n").unwrap();
-                        write!(final_string, "\t\t\t\tprintf(\"invalid call return stub in %s\\n\", __func__);\n").unwrap();
+                        if debug_call_print {
+                            write!(final_string, "\t\t\t\tprintf(\"invalid call return stub in %s\\n\", __func__);\n").unwrap();
+                        }
                         write!(final_string, "\t\t\t\t{}\n", emit_trap(TrapCode::TrapUnreachable, true)).unwrap();
 
                         write!(final_string, "\t\t}}\n").unwrap();
@@ -2522,7 +2535,11 @@ __attribute__((always_inline)) void {}(global uint   *stack_u32,
                     format!("global uchar *data_segment = (global uchar*)(data_segment_global);")
                 );
             }
-
+            result += &format!(
+                        "\t{} + warp_idx*{};\n",
+                        "uint *heap_base_u32 = (char*)heap_u32",
+                        interleave
+                        );
             result += &self.zero_init_memory();
             (temp_str, data_segment) = self.emit_memcpy_arr(debug);
             result += &temp_str;
@@ -2842,6 +2859,40 @@ __attribute__((always_inline)) void {}(global uint   *stack_u32,
         )
         .unwrap();
 
+if interleave == 4 {
+        write!(output,
+r#"
+#define read_u32_aligned(addr, mem_start, warp_id, read_idx, thread_idx, scratch_space) \
+    *(global uint*)(((global uchar*)(((addr-mem_start)/4)*(NUM_THREADS*4) + (warp_id*4) + mem_start)))
+
+#define read_u16_aligned(addr, mem_start, warp_id, read_idx, thread_idx, scratch_space) \
+    *(global ushort*)(((global uchar*)(((addr-mem_start)/4)*(NUM_THREADS*4) + (warp_id*4) + mem_start)) + GET_POW2_OFFSET((addr-mem_start), 4))
+
+#define write_u32_aligned(addr, mem_start, value, warp_id, read_idx, thread_idx, scratch_space) \
+    *(global uint*)(((global uchar*)(((addr-mem_start)/4)*(NUM_THREADS*4) + (warp_id*4) + mem_start))) = (uint)value
+
+#define write_u16_aligned(addr, mem_start, value, warp_id, read_idx, thread_idx, scratch_space) \
+    *(global ushort*)(((global uchar*)(((addr-mem_start)/4)*(NUM_THREADS*4) + (warp_id*4) + mem_start)) + GET_POW2_OFFSET((addr-mem_start), 4)) = (short)value
+"#,
+                );
+} else if interleave == 8 {
+        write!(output,
+r#"
+#define read_u64_aligned(addr, mem_start, warp_id, read_idx, thread_idx, scratch_space) \
+    *(global ulong*)(((global uchar*)(((addr-mem_start)/8)*(NUM_THREADS*8) + (warp_id*8) + mem_start)))
+
+#define read_u32_aligned(addr, mem_start, warp_id, read_idx, thread_idx, scratch_space) \
+    *(global uint*)(((global uchar*)(((addr-mem_start)/8)*(NUM_THREADS*8) + (warp_id*8) + mem_start)) + GET_POW2_OFFSET((addr-mem_start), 8))
+
+#define write_u64_aligned(addr, mem_start, value, warp_id, read_idx, thread_idx, scratch_space) \
+    *(global ulong*)(((global uchar*)(((addr-mem_start)/8)*(NUM_THREADS*8) + (warp_id*8) + mem_start))) = (ulong)value
+
+#define write_u32_aligned(addr, mem_start, value, warp_id, read_idx, thread_idx, scratch_space) \
+    *(global ushort*)(((global uchar*)(((addr-mem_start)/8)*(NUM_THREADS*8) + (warp_id*8) + mem_start)) + GET_POW2_OFFSET((addr-mem_start), 8)) = (uint)value
+"#,
+                );
+}
+
         if is_nvidia_gpu {
             write!(
                 output,
@@ -2978,7 +3029,8 @@ ulong get_clock() {
                 indirect_call_mapping,
             )
         } else {
-            //let allowed_fastcalls: Vec<String> = vec![];
+            let allowed_fastcalls: Vec<String> = vec![];
+            /*
             let allowed_fastcalls = vec![
                 "__lctrans",
                 "dlfree",
@@ -3020,6 +3072,7 @@ ulong get_clock() {
                 "strcpy",
                 "__wasm_call_dtors",
             ];
+            */
             let mut final_hset = HashSet::new();
             let mut hset = HashSet::new();
             for f in allowed_fastcalls {
@@ -3118,6 +3171,7 @@ ulong get_clock() {
                 force_inline,
                 debug_print_function_calls,
                 start_func.clone(),
+                interleave,
                 is_gpu,
                 &mut 0,
                 true,
@@ -3206,6 +3260,7 @@ ulong get_clock() {
                 force_inline,
                 debug_print_function_calls,
                 start_func.clone(),
+                interleave,
                 is_gpu,
                 &mut 0,
                 true,
@@ -3236,6 +3291,7 @@ ulong get_clock() {
                     force_inline,
                     debug_print_function_calls,
                     start_func.clone(),
+                    interleave,
                     is_gpu,
                     &mut 16,
                     true,
@@ -3294,6 +3350,7 @@ ulong get_clock() {
                     force_inline,
                     debug_print_function_calls,
                     start_func.clone(),
+                    interleave,
                     is_gpu,
                     &mut 0,
                     false,
@@ -3370,6 +3427,7 @@ ulong get_clock() {
                         force_inline,
                         debug_print_function_calls,
                         start_func.clone(),
+                        interleave,
                         is_gpu,
                         reduction_size,
                         false,

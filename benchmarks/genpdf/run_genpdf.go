@@ -47,7 +47,7 @@ func CreatePayload() Payload {
 	prices := make([]float64, 0, 10)
 	max := 15.00
 	min := 7.00
-	for i := 0; i < 20; i++ {
+	for i := 0; i < 15; i++ {
 		purchases = append(purchases, RandString(15));
 		prices = append(prices, min + rand.Float64() * (max - min));
 	}
@@ -201,7 +201,7 @@ func main() {
 
 	reqs := make([][]byte, NUM_PARAMS)
 	for i := 0; i < NUM_PARAMS; i++ {
-		p := CreateBatchPayload(64)
+		p := CreateBatchPayload(1)
 		request_body, _ := msgpack.Marshal(p)
 		reqs[i] = request_body
 	}
