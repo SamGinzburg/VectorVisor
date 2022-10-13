@@ -1879,6 +1879,9 @@ impl OpenCLRunner {
                     hcall_divergence_stack.insert(curr_func_id);
                     stored_entry_points[idx] = entry_point_temp[idx];
                     entry_point_temp[idx] = ((-1) as i32) as u32;
+                } else if entry_point_temp[idx] == ((-1) as i32) as u32 && hypercall_num_temp[idx] != -2 {
+                    // this is the case where a VM is blocked off on some call
+                    // we can safely ignore this
                 } else {
                     panic!("missing case: entry: {:?}, hcall: {:?}", entry_point_temp[idx], hypercall_num_temp[idx]);
                 }

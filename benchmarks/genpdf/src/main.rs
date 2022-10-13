@@ -86,12 +86,11 @@ fn genpdf(event: FuncInput) -> FuncResponse {
         purchase_ops.push(Operation::new("BT", vec![]));
         purchase_ops.push(Operation::new("Tf", vec!["F1".into(), 12.into()]));
         purchase_ops.push(Operation::new("Td", vec![50.into(), idx.into()]));
-        //purchase_ops.push(Operation::new("Tj", vec![Object::string_literal(format!("{}                                                        ${:.2}", purchase, price))]));
+        purchase_ops.push(Operation::new("Tj", vec![Object::string_literal(format!("{}                                                        ${:.2}", purchase, price))]));
         purchase_ops.push(Operation::new("ET", vec![]),);
         idx -= 12;
     }
     pdf_ops.extend(purchase_ops);
-    /*
     let mut image_ops: Vec<Operation> = vec![];
 
     // Add an image
@@ -130,7 +129,7 @@ fn genpdf(event: FuncInput) -> FuncResponse {
     image_ops.push(Operation::new("Q", vec![]));
 
     pdf_ops.extend(image_ops);
-    */
+    
     let content = Content {
         operations: pdf_ops,
     };
@@ -142,7 +141,7 @@ fn genpdf(event: FuncInput) -> FuncResponse {
         "Contents" => content_id,
     });
 
-    //doc.add_xobject(page_id, img_name.as_bytes(), img_id).unwrap();
+    doc.add_xobject(page_id, img_name.as_bytes(), img_id).unwrap();
 
     let pages = dictionary! {
         "Type" => "Pages",

@@ -1694,14 +1694,6 @@ impl<'a> OpenCLCWriter<'_> {
                     write!(final_string, "\t\tprintf(\"read_u64(call_stack+*sfp) = %d\\n\", read_u64((ulong)(call_stack+*sfp), (ulong)(call_stack), warp_idx, read_idx, thread_idx, scratch_space));\n").unwrap();
                 }
 
-                write!(
-                    final_string,
-                    "\t{} + warp_idx*{};\n",
-                    "uint *heap_base_u32 = (char*)heap_u32",
-                    interleave
-                )
-                .unwrap();
-
                 /*
                  * First, before emitting the function call & hypercall return tables,
                  * we need to do an analysis pass on the instructions to:
@@ -2535,11 +2527,7 @@ __attribute__((always_inline)) void {}(global uint   *stack_u32,
                     format!("global uchar *data_segment = (global uchar*)(data_segment_global);")
                 );
             }
-            result += &format!(
-                        "\t{} + warp_idx*{};\n",
-                        "uint *heap_base_u32 = (char*)heap_u32",
-                        interleave
-                        );
+
             result += &self.zero_init_memory();
             (temp_str, data_segment) = self.emit_memcpy_arr(debug);
             result += &temp_str;
@@ -3029,8 +3017,7 @@ ulong get_clock() {
                 indirect_call_mapping,
             )
         } else {
-            let allowed_fastcalls: Vec<String> = vec![];
-            /*
+            //let allowed_fastcalls: Vec<String> = vec![];
             let allowed_fastcalls = vec![
                 "__lctrans",
                 "dlfree",
@@ -3072,7 +3059,7 @@ ulong get_clock() {
                 "strcpy",
                 "__wasm_call_dtors",
             ];
-            */
+
             let mut final_hset = HashSet::new();
             let mut hset = HashSet::new();
             for f in allowed_fastcalls {
