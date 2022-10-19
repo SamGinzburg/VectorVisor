@@ -1848,22 +1848,11 @@ impl<'a> OpenCLCWriter<'_> {
                 }
 
                 if !is_fastcall {
-                    /*
-                    final_string += &format!(
-                        "\t{}\n",
-                        emit_intra_vm_memfill(
-                            &format!("((global char*)(stack_u32+*sp))"),
-                            "(global char*)(stack_u32)",
-                            &"0",
-                            &format!("{}", (local_cache_size + stack_ctx.max_stack_frame_size() as u32) * 4),
-                            "warp_idx"
-                        )
-                    );
-                    */
+                    
                     // Allocate space on the stack for saving the intermediate context
-                    final_string += &format!("\t*sp += {};\n", stack_ctx.max_stack_frame_size());
+                    final_string += &format!("\t*sp += {};\n", stack_ctx.max_stack_frame_size() + 16);
                     // Allocate space on the stack for handling return values 
-                    final_string += &format!("\t*sp += {};\n", 16);
+                    //final_string += &format!("\t*sp += {};\n", 16);
                 }
 
                 // keep a stack of control-flow labels

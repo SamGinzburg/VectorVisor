@@ -9,3 +9,6 @@ edition = "2021"
 #wasmedge_quickjs = { git = "https://github.com/SamGinzburg/wasmedge-quickjs.git", branch = "main" }
 wasmedge_quickjs = { path = "../../../wasmedge-quickjs" }
 #wasmedge_quickjs = "0.2.0"
+wasm-serverless-invoke = { path = "../../wasm-serverless-invoke" }
+serde_json = "1.0.62"
+serde = { version = "1.0.62", features = ["derive"] }

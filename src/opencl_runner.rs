@@ -1691,6 +1691,7 @@ impl OpenCLRunner {
             vec![0u32; (self.num_vms as usize * mexec).try_into().unwrap()];
         // Flag to write entry point at end of critical path
         let mut set_entry_point = false;
+        let mut write_entry_partition_reentry = false;
 
         let mut is_first: HashMap<u32, bool> = HashMap::new();
         let mut first_invokes: Vec<u64> = vec![];
@@ -1717,11 +1718,14 @@ impl OpenCLRunner {
             profiling_event = ocl::Event::empty();
 
             // For debugging
+            /*
             println!(
                 "Running partition: {:?}",
                 kernel_part_debug.get(&curr_func_id).unwrap()
             );
+            */
 
+            write_entry_partition_reentry = false;
             unsafe {
                 num_queue_submits += 1;
                 ocl::core::finish(&queue).unwrap();
@@ -1879,6 +1883,7 @@ impl OpenCLRunner {
                     hcall_divergence_stack.insert(curr_func_id);
                     stored_entry_points[idx] = entry_point_temp[idx];
                     entry_point_temp[idx] = ((-1) as i32) as u32;
+                    write_entry_partition_reentry = true;
                 } else if entry_point_temp[idx] == ((-1) as i32) as u32 && hypercall_num_temp[idx] != -2 {
                     // this is the case where a VM is blocked off on some call
                     // we can safely ignore this
@@ -1906,17 +1911,19 @@ impl OpenCLRunner {
                 }
                 */
 
-                unsafe {
-                    ocl::core::enqueue_write_buffer(
-                        &queue,
-                        &buffers.entry,
-                        true,
-                        0,
-                        &mut entry_point_temp,
-                        None::<Event>,
-                        None::<&mut Event>,
-                    )
-                    .unwrap();
+                if write_entry_partition_reentry {
+                    unsafe {
+                        ocl::core::enqueue_write_buffer(
+                            &queue,
+                            &buffers.entry,
+                            false,
+                            0,
+                            &mut entry_point_temp,
+                            None::<Event>,
+                            None::<&mut Event>,
+                        )
+                        .unwrap();
+                    }
                 }
 
                 let vmm_pre_overhead_end = std::time::Instant::now();
