@@ -128,15 +128,43 @@ pub fn get_called_funcs(
                                     };
 
                                     // We add the speculated call target if the type signature
-                                    // matches. We also don't recurse, as that seems to add a lot
-                                    // of noise.
-                                    // We explicitly allow non-fastcalls to be targeted here
+                                    // matches.
                                     if func_type_index == type_index {
                                         if !imports_map.contains_key(&f_name as &str) {
                                             if nested_loop_count > 0 {
                                                 fn_call_in_loop.push(f_name.to_string());
+                                                if !visited_funcs.contains(&f_name as &str) {
+                                                    visited_funcs.insert(f_name.to_string());
+                                                    let (nested_fn_call_in_loop, nested_fn_calls) =
+                                                        get_called_funcs(
+                                                            writer_ctx,
+                                                            indirect_call_mapping,
+                                                            func_map.get(&f_name as &str).unwrap(),
+                                                            fastcalls,
+                                                            func_map,
+                                                            imports_map,
+                                                            visited_funcs,
+                                                        );
+                                                    fn_call_in_loop.extend(nested_fn_call_in_loop);
+                                                    fn_call.extend(nested_fn_calls);
+                                                }
                                             } else {
                                                 fn_call.push(f_name.to_string());
+                                                if !visited_funcs.contains(&f_name as &str) {
+                                                    visited_funcs.insert(f_name.to_string());
+                                                    let (nested_fn_call_in_loop, nested_fn_calls) =
+                                                        get_called_funcs(
+                                                            writer_ctx,
+                                                            indirect_call_mapping,
+                                                            func_map.get(&f_name as &str).unwrap(),
+                                                            fastcalls,
+                                                            func_map,
+                                                            imports_map,
+                                                            visited_funcs,
+                                                        );
+                                                    fn_call_in_loop.extend(nested_fn_call_in_loop);
+                                                    fn_call.extend(nested_fn_calls);
+                                                }
                                             }
                                         }
                                     }
