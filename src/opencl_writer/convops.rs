@@ -7,6 +7,11 @@ use crate::opencl_writer::StackType;
  * This file contains conversion operators
  */
 
+pub enum TruncType {
+    I32,
+    I64,
+}
+
 pub fn emit_i32_wrap_i64(
     _writer: &opencl_writer::OpenCLCWriter,
     stack_ctx: &mut StackCtx,
@@ -145,6 +150,34 @@ pub fn emit_f64_convert_i64s(
     let reg = stack_ctx.vstack_pop(StackType::i64);
     let result_register = stack_ctx.vstack_alloc(StackType::f64);
     format!("\t{} = (double)((long){});\n", result_register, reg)
+}
+
+pub fn emit_truncsat_f64(
+    _writer: &opencl_writer::OpenCLCWriter,
+    stack_ctx: &mut StackCtx,
+    trunc: TruncType,
+    signed: bool,
+    _debug: bool,
+) -> String {
+    let reg = stack_ctx.vstack_pop(StackType::f64);
+    match (signed, trunc) {
+        (true, TruncType::I32) => {
+            let result_register = stack_ctx.vstack_alloc(StackType::i32);
+            format!("\t{} = I32_TRUNC_SAT_S_F64({});\n", result_register, reg)
+        },
+        (true, TruncType::I64) => {
+            let result_register = stack_ctx.vstack_alloc(StackType::i64);
+            format!("\t{} = I64_TRUNC_SAT_S_F64({});\n", result_register, reg)
+        },
+        (false, TruncType::I32) => {
+            let result_register = stack_ctx.vstack_alloc(StackType::i32);
+            format!("\t{} = I32_TRUNC_SAT_U_F64({});\n", result_register, reg)
+        },
+        (false, TruncType::I64) => {
+            let result_register = stack_ctx.vstack_alloc(StackType::i64);
+            format!("\t{} = I64_TRUNC_SAT_U_F64({});\n", result_register, reg)
+        },
+    }
 }
 
 pub fn emit_i32_trunc_f64_u(

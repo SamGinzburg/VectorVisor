@@ -732,6 +732,20 @@ impl<'a> StackCtx {
                     stack_sizes.push(StackType::f64);
                     current_f64_count -= 1;
                 }
+                Instruction::I32TruncSatF64S |
+                Instruction::I32TruncSatF64U => {
+                    stack_sizes.pop();
+                    stack_sizes.push(StackType::i32);
+                    update_counter(&mut current_i32_count, &mut max_i32_count);
+                    current_f64_count -= 1;
+                },
+                Instruction::I64TruncSatF64S |
+                Instruction::I64TruncSatF64U => {
+                    stack_sizes.pop();
+                    stack_sizes.push(StackType::i64);
+                    update_counter(&mut current_i64_count, &mut max_i64_count);
+                    current_f64_count -= 1;
+                }
                 Instruction::F32Trunc => {}
                 Instruction::F64Trunc => {}
                 Instruction::F64Neg => {}

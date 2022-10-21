@@ -753,6 +753,10 @@ impl<'a> OpenCLCWriter<'_> {
             Instruction::I64Mul => emit_i64_mul(self, stack_ctx, debug),
             Instruction::I32Sub => emit_i32_sub(self, stack_ctx, debug),
             Instruction::I64Add => emit_i64_add(self, stack_ctx, debug),
+            Instruction::I32TruncSatF64S => emit_truncsat_f64(self, stack_ctx, TruncType::I32, true, debug),
+            Instruction::I32TruncSatF64U => emit_truncsat_f64(self, stack_ctx, TruncType::I32, false, debug),
+            Instruction::I64TruncSatF64S => emit_truncsat_f64(self, stack_ctx, TruncType::I64, true, debug),
+            Instruction::I64TruncSatF64U => emit_truncsat_f64(self, stack_ctx, TruncType::I64, false, debug),
             Instruction::F32Trunc => emit_f32_trunc(self, stack_ctx, debug),
             Instruction::F64Trunc => emit_f64_trunc(self, stack_ctx, debug),
             Instruction::F64Add => emit_f64_add(self, stack_ctx, debug),
@@ -2804,6 +2808,37 @@ __attribute__((always_inline)) void {}(global uint   *stack_u32,
 #pragma OPENCL EXTENSION cl_khr_byte_addressable_store : enable
 
 // Emit some utility macros
+
+#define UINT32_MIN UINT_MIN
+#define UINT64_MIN ULONG_MIN
+#define INT32_MIN INT_MIN
+#define INT64_MIN LONG_MIN
+#define UINT32_MAX UINT_MAX
+#define UINT64_MAX ULONG_MAX
+#define INT32_MAX INT_MAX
+#define INT64_MAX LONG_MAX
+
+#define TRUNC_SAT_U(ut, ft, max, smax, x) \
+  ((((x) != (x)))        ? 0      \
+   : ((!((x) > (ft)-1))) ? 0      \
+   : ((!((x) < (max))))  ? smax   \
+                                 : (ut)(x))
+
+#define TRUNC_SAT_S(ut, st, ft, min, smin, minop, max, smax, x) \
+  ((((x) != (x)))         ? 0                           \
+   : ((!((x)minop(min)))) ? smin                        \
+   : ((!((x) < (max))))   ? smax                        \
+                                  : (ut)(st)(x))
+
+#define I32_TRUNC_SAT_U_F32(x) TRUNC_SAT_U(uint, float, 4294967296.f, UINT32_MAX, x)
+#define I64_TRUNC_SAT_U_F32(x) TRUNC_SAT_U(ulong, float, (float)UINT64_MAX, UINT64_MAX, x)
+#define I32_TRUNC_SAT_U_F64(x) TRUNC_SAT_U(uint, double, 4294967296., UINT32_MAX,  x)
+#define I64_TRUNC_SAT_U_F64(x) TRUNC_SAT_U(ulong, double, (double)UINT64_MAX, UINT64_MAX, x)
+
+#define I32_TRUNC_SAT_S_F32(x) TRUNC_SAT_S(uint, int, float, (float)INT32_MIN, INT32_MIN, >=, 2147483648.f, INT32_MAX, x)
+#define I64_TRUNC_SAT_S_F32(x) TRUNC_SAT_S(ulong, long, float, (float)INT64_MIN, INT64_MIN, >=, (float)INT64_MAX, INT64_MAX, x)
+#define I32_TRUNC_SAT_S_F64(x) TRUNC_SAT_S(uint, int, double, -2147483649., INT32_MIN, >, 2147483648., INT32_MAX, x)
+#define I64_TRUNC_SAT_S_F64(x) TRUNC_SAT_S(ulong, long, double, (double)INT64_MIN, INT64_MIN, >=, (double)INT64_MAX, INT64_MAX, x)
 
 #define FMIN(x, y)                                \
    (((x) != (x)) ? NAN                            \
