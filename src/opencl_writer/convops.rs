@@ -27,7 +27,7 @@ pub fn emit_i64_extend_8_s(
     stack_ctx: &mut StackCtx,
     _debug: bool,
 ) -> String {
-    let reg = stack_ctx.vstack_pop(StackType::i32);
+    let reg = stack_ctx.vstack_pop(StackType::i64);
     let result_register = stack_ctx.vstack_alloc(StackType::i64);
     format!("\t{} = (char)({});\n", result_register, reg)
 }
@@ -57,7 +57,7 @@ pub fn emit_i64_extend_16_s(
     stack_ctx: &mut StackCtx,
     _debug: bool,
 ) -> String {
-    let reg = stack_ctx.vstack_pop(StackType::i32);
+    let reg = stack_ctx.vstack_pop(StackType::i64);
     let result_register = stack_ctx.vstack_alloc(StackType::i64);
     format!("\t{} = (short)({});\n", result_register, reg)
 }

@@ -1718,12 +1718,10 @@ impl OpenCLRunner {
             profiling_event = ocl::Event::empty();
 
             // For debugging
-            /*
             println!(
                 "Running partition: {:?}",
                 kernel_part_debug.get(&curr_func_id).unwrap()
             );
-            */
 
             write_entry_partition_reentry = false;
             unsafe {

@@ -309,6 +309,7 @@ impl<'a> StackCtx {
 
         // for each instr,
         for instruction in instructions.iter() {
+            //dbg!(&instruction);
             match instruction {
                 Instruction::Nop => {
                     // No-op
@@ -1035,7 +1036,10 @@ impl<'a> StackCtx {
                     stack_sizes.push(StackType::i32);
                 }
                 Instruction::I64Extend8S |
-                Instruction::I64Extend16S |
+                Instruction::I64Extend16S => {
+                    stack_sizes.pop();
+                    stack_sizes.push(StackType::i64);
+                }
                 Instruction::I64ExtendI32S |
                 Instruction::I64ExtendI32U => {
                     stack_sizes.pop();

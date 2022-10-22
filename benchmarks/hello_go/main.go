@@ -1,14 +1,19 @@
 package main
+
+// #include "serverless.c"
+import "C"
+
 import (
-    //"fmt"
-    //"log"
-    "bytes"
+    "fmt"
+    "runtime"
+    //"unsafe"
+    "log"
     _ "embed"
     "github.com/signintech/gopdf"
 )
 
-//go:embed LiberationSerif-Regular.ttf
-var libsanserif []byte
+//go:embed times.ttf
+var times []byte
 
 //Regular - font style regular
 //const Regular = 0 //000000
@@ -31,30 +36,28 @@ func defaultTtfFontOption() gopdf.TtfOption {
     return defa
 }
 
-func main() {
-    //fmt.Printf("%v\n", libsanserif)
-
+func generatePdf()  []byte {
     pdf := gopdf.GoPdf{}
+
     pdf.Start(gopdf.Config{ PageSize: *gopdf.PageSizeA4 })
     pdf.AddPage()
 
-
-    err := pdf.AddTTFFontByReaderWithOption("libserif", bytes.NewReader(libsanserif), defaultTtfFontOption())
-    //err := pdf.AddTTFFont("libserif", "LiberationSerif-Regular.ttf")
+    fmt.Printf("test\n")
+    pdf.SetNoCompression()
+    err := pdf.AddTTFFontDataWithOption("times", times, defaultTtfFontOption())
     if err != nil {
-        //log.Print(err.Error())
-        return
+        log.Print(err.Error())
+        panic (err)
+    }
+    fmt.Printf("loaded fonts\n")
+
+    err = pdf.SetFont("times", "", 14)
+    if err != nil {
+        log.Print(err.Error())
+        panic (err)
     }
 
-    //fmt.Printf("loaded fonts\n")
-
-    err2 := pdf.SetFont("libserif", "", 14)
-    if err2 != nil {
-        //log.Print(err.Error())
-        return
-    }
-
-    //fmt.Printf("set fonts\n")
+    fmt.Printf("set fonts\n")
     pdf.SetXY(30, 70)
     pdf.Text("Hello world!")
     pdf.SetXY(30, 100)
@@ -62,6 +65,24 @@ func main() {
     pdf.SetXY(30, 100)
     pdf.Text("A third time!")
 
-    //fmt.Printf("%v\n", pdf.GetBytesPdf())
-    println(pdf.GetBytesPdf())
+    pdf.SetNoCompression()
+    return pdf.GetBytesPdf()
+}
+
+func main() {
+
+    //input_buf := make([]byte, 1024 * 512)
+
+    for {
+        runtime.GC()
+        //C.serverless_invoke((*C.char)(unsafe.Pointer(&input_buf)), 1024 * 512)
+        result := generatePdf()
+        //copy(input_buf, result)
+        println(len(result))
+
+
+        runtime.GC()
+        //C.serverless_response((*C.char)(unsafe.Pointer(&input_buf)), 1024 * 512)
+    }
+    //fmt.Printf("%v\n", len(result))
 }

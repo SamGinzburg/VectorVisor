@@ -492,6 +492,7 @@ impl<'a> OpenCLCWriter<'_> {
         // emit OpenCL C (False) or standard C for debugging on the CPU (True)
         debug: bool,
     ) -> String {
+        //dbg!(&instr);
         match instr {
             Instruction::Nop => {
                 // No-op
