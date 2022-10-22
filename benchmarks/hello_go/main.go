@@ -8,8 +8,10 @@ import (
 	"fmt"
 	"log"
 	"unsafe"
-
+    "runtime"
 	"github.com/signintech/gopdf"
+    "github.com/buger/jsonparser"
+    "strconv"
 	//"encoding/json"
 )
 
@@ -100,15 +102,16 @@ func main() {
 	for {
 		runtime.InitHeap()
 		input_buf := make([]byte, 1024*512)
+        final_results := make([][]byte, 0)
 		in_size := C.serverless_invoke((*C.char)(unsafe.Pointer(&input_buf[0])), 1024*512)
 		//println(in_size)
 		//fmt.Printf("%v\n", string(input_buf[:in_size]))
 
 		value, _, _, _ := jsonparser.Get(input_buf[:in_size], "inputs")
-		purchases := make([]string, 0)
-		prices := make([]float64, 0)
-		bill_name := ""
 		jsonparser.ArrayEach(value, func(value []byte, dataType jsonparser.ValueType, offset int, err error) {
+            purchases := make([]string, 0)
+		    prices := make([]float64, 0)
+		    bill_name := ""
 			name, _, _, _ := jsonparser.Get(value, "name")
 			purchases_arr, _, _, _ := jsonparser.Get(value, "purchases")
 			prices_arr, _, _, _ := jsonparser.Get(value, "price")
@@ -117,18 +120,17 @@ func main() {
 				purchases = append(purchases, string(value))
 			})
 			jsonparser.ArrayEach(prices_arr, func(value []byte, dataType jsonparser.ValueType, offset int, err error) {
-				prices = append(prices, float64(value))
+                parsed_float, err := strconv.ParseFloat(string(value), 64)
+                if err != nil {
+                    panic(err)
+                }
+				prices = append(prices, parsed_float)
 			})
 
+
+		    result := generatePdf(bill_name, purchases, prices)
+            final_results = append(final_results, result)
 		})
-
-		fmt.Println(bill_name)
-		fmt.Println(prices)
-		fmt.Println(purchases)
-
-		result := generatePdf(bill_name, purchases, prices)
-
-		println(len(result))
 
 		C.serverless_response((*C.char)(unsafe.Pointer(&input_buf[0])), 1024*512)
 	}
