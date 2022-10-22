@@ -50,19 +50,17 @@ func defaultTtfFontOption() gopdf.TtfOption {
     return defa
 }
 
-func generatePdf()  []byte {
+func generatePdf(name string, purchases []string, prices []string)  []byte {
     pdf := gopdf.GoPdf{}
 
     pdf.Start(gopdf.Config{ PageSize: *gopdf.PageSizeA4 })
     pdf.AddPage()
 
-    fmt.Printf("test\n")
     err := pdf.AddTTFFontDataWithOption("times", times, defaultTtfFontOption())
     if err != nil {
         log.Print(err.Error())
         panic (err)
     }
-    fmt.Printf("loaded fonts\n")
 
     err = pdf.SetFont("times", "", 14)
     if err != nil {
@@ -70,13 +68,17 @@ func generatePdf()  []byte {
         panic (err)
     }
 
-    fmt.Printf("set fonts\n")
-    pdf.SetXY(30, 70)
-    pdf.Text("Hello world!")
-    pdf.SetXY(30, 100)
-    pdf.Text("Hello world again!")
-    pdf.SetXY(30, 100)
-    pdf.Text("A third time!")
+    // Header
+    pdf.SetXY(30, 50)
+    pdf.Text("Fake bill for:\t" + name)
+
+    start := 100
+    iter := zip(purchases, prices)
+    for tuple := iter(); tuple != nil; tuple = iter() {
+        pdf.SetXY(30, start)
+        pdf.Text(tuple[0] + "\t$" + tuple[1])
+        start += 30
+    }
 
     return pdf.GetBytesPdf()
 }
@@ -86,35 +88,30 @@ func main() {
         runtime.InitHeap()
         input_buf := make([]byte, 1024 * 512)
         in_size := C.serverless_invoke((*C.char)(unsafe.Pointer(&input_buf[0])), 1024 * 512)
-        println(in_size)
-        fmt.Printf("%v\n", string(input_buf[:in_size]))
+        //println(in_size)
+        //fmt.Printf("%v\n", string(input_buf[:in_size]))
 
-        value, dtype, _, _ := jsonparser.Get(input_buf[:in_size], "inputs")
-        fmt.Printf("%v\t%v\n", value, dtype)
-
+        value, _, _, _ := jsonparser.Get(input_buf[:in_size], "inputs")
+        purchases := make([]string, 0)
+        prices := make([]string, 0)
+        bill_name := ""
         jsonparser.ArrayEach(value, func(value []byte, dataType jsonparser.ValueType, offset int, err error) {
             name, _, _, _ := jsonparser.Get(value, "name")
             purchases_arr, _, _, _ := jsonparser.Get(value, "purchases")
             prices_arr, _, _, _ := jsonparser.Get(value, "price")
-
-            fmt.Println(string(name))
+            bill_name = string(name)
             jsonparser.ArrayEach(purchases_arr, func(value []byte, dataType jsonparser.ValueType, offset int, err error) {
-                fmt.Println(string(value))
+                purchases = append(purchases, string(value))
             })
             jsonparser.ArrayEach(prices_arr, func(value []byte, dataType jsonparser.ValueType, offset int, err error) {
-                fmt.Println(string(value))
+                prices = append(prices, string(value))
             })
 
         })
 
-        /*
-        pdf_reqs := map[string]interface{}{}
-        err := json.Unmarshal(input_buf[:in_size], &pdf_reqs)
-        if err != nil {
-            panic(err)
-        }
-        fmt.Printf("%v\n", pdf_reqs)
-        */
+        fmt.Println(bill_name)
+        fmt.Println(prices)
+        fmt.Println(purchases)
 
         result := generatePdf()
 
