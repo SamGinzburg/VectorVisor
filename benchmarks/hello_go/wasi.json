@@ -20,7 +20,8 @@
         "--gc-sections",
         "--print-gc-sections",
         "--initial-memory=4194304",
-        "--max-memory=4194304"
+        "--max-memory=4194304",
+        "--lto-O3"
 	],
 	"emulator":      "wasmtime {}",
 	"wasm-abi":      "generic"

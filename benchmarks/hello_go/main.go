@@ -6,11 +6,25 @@ import "C"
 import (
     "fmt"
     "runtime"
-    //"unsafe"
+    "unsafe"
     "log"
     _ "embed"
     "github.com/signintech/gopdf"
+    "github.com/buger/jsonparser"
+    //"encoding/json"
 )
+
+//tinyjson:json
+type Payload struct {
+    Text string
+    Purchases []string
+    Price []float64
+}
+
+//tinyjson:json
+type BatchPayload struct {
+    Inputs []Payload
+}
 
 //go:embed times.ttf
 var times []byte
@@ -43,7 +57,6 @@ func generatePdf()  []byte {
     pdf.AddPage()
 
     fmt.Printf("test\n")
-    pdf.SetNoCompression()
     err := pdf.AddTTFFontDataWithOption("times", times, defaultTtfFontOption())
     if err != nil {
         log.Print(err.Error())
@@ -65,24 +78,48 @@ func generatePdf()  []byte {
     pdf.SetXY(30, 100)
     pdf.Text("A third time!")
 
-    pdf.SetNoCompression()
     return pdf.GetBytesPdf()
 }
 
 func main() {
-
-    //input_buf := make([]byte, 1024 * 512)
-
     for {
-        runtime.GC()
-        //C.serverless_invoke((*C.char)(unsafe.Pointer(&input_buf)), 1024 * 512)
+        runtime.InitHeap()
+        input_buf := make([]byte, 1024 * 512)
+        in_size := C.serverless_invoke((*C.char)(unsafe.Pointer(&input_buf[0])), 1024 * 512)
+        println(in_size)
+        fmt.Printf("%v\n", string(input_buf[:in_size]))
+
+        value, dtype, _, _ := jsonparser.Get(input_buf[:in_size], "inputs")
+        fmt.Printf("%v\t%v\n", value, dtype)
+
+        jsonparser.ArrayEach(value, func(value []byte, dataType jsonparser.ValueType, offset int, err error) {
+            name, _, _, _ := jsonparser.Get(value, "name")
+            purchases_arr, _, _, _ := jsonparser.Get(value, "purchases")
+            prices_arr, _, _, _ := jsonparser.Get(value, "price")
+
+            fmt.Println(string(name))
+            jsonparser.ArrayEach(purchases_arr, func(value []byte, dataType jsonparser.ValueType, offset int, err error) {
+                fmt.Println(string(value))
+            })
+            jsonparser.ArrayEach(prices_arr, func(value []byte, dataType jsonparser.ValueType, offset int, err error) {
+                fmt.Println(string(value))
+            })
+
+        })
+
+        /*
+        pdf_reqs := map[string]interface{}{}
+        err := json.Unmarshal(input_buf[:in_size], &pdf_reqs)
+        if err != nil {
+            panic(err)
+        }
+        fmt.Printf("%v\n", pdf_reqs)
+        */
+
         result := generatePdf()
-        //copy(input_buf, result)
+
         println(len(result))
 
-
-        runtime.GC()
-        //C.serverless_response((*C.char)(unsafe.Pointer(&input_buf)), 1024 * 512)
+        C.serverless_response((*C.char)(unsafe.Pointer(&input_buf[0])), 1024 * 512)
     }
-    //fmt.Printf("%v\n", len(result))
 }
