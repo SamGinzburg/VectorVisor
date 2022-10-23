@@ -104,6 +104,14 @@ func main() {
 		input_buf := make([]byte, 1024*512)
         final_results := make([][]byte, 0)
 		in_size := C.serverless_invoke((*C.char)(unsafe.Pointer(&input_buf[0])), 1024*512)
+
+        // if in_size == 0, there is no input
+        if in_size == 0 {
+            fakeaddr := uintptr(0x0)
+		    C.serverless_response((*C.char)(unsafe.Pointer(fakeaddr)), 0)
+            continue
+        }
+
 		//println(in_size)
 		//fmt.Printf("%v\n", string(input_buf[:in_size]))
 
@@ -132,7 +140,12 @@ func main() {
             final_results = append(final_results, result)
 		})
 
-		C.serverless_response((*C.char)(unsafe.Pointer(&input_buf[0])), 1024*512)
+        final_results_len := 0
+        for count := 0; count < len(final_results); count++ {
+            final_results_len += len(final_results[count])
+        }
+
+		C.serverless_response((*C.char)(unsafe.Pointer(&final_results[0])), (C.uint)(final_results_len))
 	}
 }
 
