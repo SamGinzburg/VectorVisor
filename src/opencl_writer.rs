@@ -2449,6 +2449,8 @@ __attribute__((always_inline)) void {}(global uint   *stack_u32,
         if debug {
             result += &String::from("\nvoid data_init(uint *stack_u32, uint *heap_u32, uint *globals_buffer, uint *curr_mem, uint *max_mem, uchar *is_calling, ulong *sfp, uchar* data_segment) {\n");
             result += &String::from("\tulong warp_idx = 0;\n");
+            result += &String::from("\tprintf(\"stack_u32: %p\\n\", stack_u32);\n");
+            result += &String::from("\tprintf(\"heap_u32: %p\\n\", heap_u32);\n");
             result += &format!("local ulong2 scratch_space[{}];", (local_work_group));
             // each page = 64KiB
             result += &format!("\tcurr_mem[warp_idx] = {};\n", program_start_mem_pages);
@@ -2472,6 +2474,8 @@ __attribute__((always_inline)) void {}(global uint   *stack_u32,
             result += &format!("\tulong warp_idx = get_global_id(0) / {};\n", mexec);
             result += &format!("\tulong thread_idx = get_local_id(0);\n");
             result += &format!("\tulong read_idx = thread_idx % {};\n", mexec);
+            result += &String::from("\tprintf(\"stack_u32: %p\\n\", stack_u32_global);\n");
+            result += &String::from("\tprintf(\"heap_u32: %p\\n\", heap_u32_global);\n");
             // these structures are not interleaved, so its fine to just read/write them as is
             // they are already implicitly interleaved (like sp for example)
             result += &format!(
@@ -3033,7 +3037,7 @@ ulong get_clock() {
             indirect_call_mapping_formatted.push(f_name);
         }
 
-        let fast_function_set = if !disable_fastcalls {
+        let mut fast_function_set = if !disable_fastcalls {
             compute_fastcall_set(
                 self,
                 &self.func_map,
@@ -3122,45 +3126,6 @@ ulong get_clock() {
             final_hset
         };
 
-        // Generate the fastcall header
-        // first generate the function declarations
-        let mut heavy_fastcalls: HashMap<String, bool> = HashMap::new();
-        for fastfunc in fast_function_set.iter() {
-            let func = self.func_map.get(&fastfunc.to_string()).unwrap();
-            // Get parameters & return type of the function
-            let params = get_func_params(self, &func.ty);
-            let mut parameter_list = String::from("");
-            for parameter in params {
-                let fn_ty_name = match parameter {
-                    StackType::i32 => format!("uint"),
-                    StackType::i64 => format!("ulong"),
-                    StackType::f32 => format!("float"),
-                    StackType::f64 => format!("double"),
-                    StackType::u128 => format!("ulong2"),
-                };
-                parameter_list += &format!("{}, ", fn_ty_name);
-            }
-
-            let ret_val = get_func_result(self, &func.ty);
-            let func_ret_val = match ret_val {
-                Some(ty) => match ty {
-                    StackType::i32 => format!("uint"),
-                    StackType::i64 => format!("ulong"),
-                    StackType::f32 => format!("float"),
-                    StackType::f64 => format!("double"),
-                    StackType::u128 => format!("ulong2"),
-                },
-                None => {
-                    format!("void")
-                }
-            };
-            let calling_func_name = format!("{}{}", "__", format_fn_name(fastfunc));
-            let func_declaration = format!("{} {}_fastcall({}global uint *, global uint *, global uint *, global uint *, uint, uint, uint, global ulong*, local uchar*);\n", func_ret_val, calling_func_name, parameter_list);
-
-            write!(fastcall_header, "{}", func_declaration).unwrap();
-        }
-
-        // emit functions
         // Each fastcall has a stack frame size (size of intermediate values) + list of funcs it calls
         // We track these to resolve register spilling to shared memory
         let mut fast_func_size: HashMap<String, u32> = HashMap::new();
@@ -3168,7 +3133,7 @@ ulong get_clock() {
         let mut fastcall_called_func_sizes: HashMap<String, Vec<u32>> = HashMap::new();
 
         for fastfunc in fast_function_set.iter() {
-            let (func, func_size, func_called) = self.emit_function(
+            let (_, func_size, func_called) = self.emit_function(
                 self.func_map.get(&fastfunc.to_string()).unwrap(),
                 fastfunc.to_string(),
                 call_ret_map,
@@ -3212,11 +3177,6 @@ ulong get_clock() {
                     for called_func in funcs_called {
                         seen_funcs.insert(called_func.clone());
                         // Get all the funcs that this func calls
-                        /*
-                        let funcs_called: Vec<&String> = fast_func_called
-                                            .get(&called_func as &str).unwrap()
-                                            .iter().filter(|func| !seen_funcs.contains(*func)).collect();
-                        */
                         let funcs_called = fast_func_called.get(&called_func as &str).unwrap();
 
                         // If len==0, then the size is known, else if len>0, then we need to keep it in the set
@@ -3241,6 +3201,69 @@ ulong get_clock() {
                 break;
             }
             iterations -= 1;
+        }
+
+        // Demote fastcalls that are too large
+        for fastfunc in fast_function_set.clone().iter() {
+            let tmp = vec![0];
+            let sum = fastcall_called_func_sizes
+                .get(fastfunc)
+                .unwrap_or(&tmp)
+                .iter()
+                .sum::<u32>();
+            if sum > 500 {
+                // Any fastcall that called this function is also no longer a fastcall
+                for func in fast_function_set.clone().iter() {
+                    if fast_func_called.get(func).unwrap().contains(fastfunc) {
+                        fast_function_set.remove(func);
+                        fastcall_called_func_sizes.remove(func);
+                        fast_func_called.remove(func);
+                        fast_func_size.remove(func);
+                    }
+                }
+
+                fast_function_set.remove(fastfunc);
+                fastcall_called_func_sizes.remove(fastfunc);
+                fast_func_called.remove(fastfunc);
+                fast_func_size.remove(fastfunc);
+            }
+        } 
+
+        // Generate the fastcall header
+        // first generate the function declarations
+        for fastfunc in fast_function_set.iter() {
+            let func = self.func_map.get(&fastfunc.to_string()).unwrap();
+            // Get parameters & return type of the function
+            let params = get_func_params(self, &func.ty);
+            let mut parameter_list = String::from("");
+            for parameter in params {
+                let fn_ty_name = match parameter {
+                    StackType::i32 => format!("uint"),
+                    StackType::i64 => format!("ulong"),
+                    StackType::f32 => format!("float"),
+                    StackType::f64 => format!("double"),
+                    StackType::u128 => format!("ulong2"),
+                };
+                parameter_list += &format!("{}, ", fn_ty_name);
+            }
+
+            let ret_val = get_func_result(self, &func.ty);
+            let func_ret_val = match ret_val {
+                Some(ty) => match ty {
+                    StackType::i32 => format!("uint"),
+                    StackType::i64 => format!("ulong"),
+                    StackType::f32 => format!("float"),
+                    StackType::f64 => format!("double"),
+                    StackType::u128 => format!("ulong2"),
+                },
+                None => {
+                    format!("void")
+                }
+            };
+            let calling_func_name = format!("{}{}", "__", format_fn_name(fastfunc));
+            let func_declaration = format!("{} {}_fastcall({}global uint *, global uint *, global uint *, global uint *, uint, uint, uint, global ulong*, local uchar*);\n", func_ret_val, calling_func_name, parameter_list);
+
+            write!(fastcall_header, "{}", func_declaration).unwrap();
         }
 
         // Now update fast_func_size with max possible sizes

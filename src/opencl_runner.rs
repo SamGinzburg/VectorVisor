@@ -1718,10 +1718,12 @@ impl OpenCLRunner {
             profiling_event = ocl::Event::empty();
 
             // For debugging
+            /*
             println!(
                 "Running partition: {:?}",
                 kernel_part_debug.get(&curr_func_id).unwrap()
             );
+            */
 
             write_entry_partition_reentry = false;
             unsafe {
@@ -1797,7 +1799,7 @@ impl OpenCLRunner {
                 ocl::core::enqueue_read_buffer(
                     &queue,
                     &buffers.entry,
-                    false,
+                    true,
                     0,
                     &mut entry_point_temp,
                     None::<Event>,
@@ -1865,7 +1867,7 @@ impl OpenCLRunner {
                     divergence_stack.insert(
                         *kernel_partition_mappings
                             .get(&entry_point_temp[idx])
-                            .expect(&format!("Error getting entry point for the divergence stack: {:?}, idx: {:?}", entry_point_temp, idx)),
+                            .expect(&format!("Error getting entry point for the divergence stack: {:?}, idx: {:?}, mappings: {:?}, kernel_part_debug: {:?}", entry_point_temp, idx, kernel_partition_mappings, kernel_part_debug)),
                     );
                     //stored_entry_points[idx] = entry_point_temp[idx];
                 } else if hypercall_num_temp[idx] != -2
@@ -1890,8 +1892,8 @@ impl OpenCLRunner {
                 }
             }
 
-            println!("divergence stack: {:?}", &divergence_stack);
-            println!("hcall divergence stack: {:?}", &hcall_divergence_stack);
+            //println!("divergence stack: {:?}", &divergence_stack);
+            //println!("hcall divergence stack: {:?}", &hcall_divergence_stack);
 
             // if we found a VM that needs to run another function, we do that first
             if divergence_stack.len() > 0 {

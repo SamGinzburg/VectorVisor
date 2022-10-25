@@ -1,0 +1,21 @@
+[package]
+name = "cuda-blockhash"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+rustacuda = "0.1"
+rustacuda_derive = "0.1"
+rustacuda_core = "0.1"
+tokio = { version = "1", features = ["full"] }
+warp = "0.3"
+hyper = "0.14.13"
+crossbeam = "0.8.0"
+num_cpus = "1.13.0"
+bytes = "1"
+image = "0.24.3"
+base64 = "0.13.0"
+serde = { version = "1.0.62", features = ["derive"] }
+rmp-serde = "0.15.5"
