@@ -45,9 +45,9 @@
 	cvta.to.global.u64 	%rd1, %rd10;
 	cvta.to.global.u64 	%rd2, %rd6;
 	cvta.to.global.u64 	%rd3, %rd9;
-	mov.u32 	%r1, %tid.x;
+	mov.u32 	%r1, %ctaid.x;
 	setp.lt.u32 	%p1, %r1, %r42;
-	mov.u32 	%r2, %tid.y;
+	mov.u32 	%r2, %tid.x;
 	setp.lt.u32 	%p2, %r2, %r41;
 	and.pred  	%p3, %p2, %p1;
 	mad.lo.s32 	%r45, %r1, %r41, %r2;

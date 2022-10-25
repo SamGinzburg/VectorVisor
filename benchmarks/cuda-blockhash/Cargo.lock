@@ -201,8 +201,10 @@ dependencies = [
  "bytes",
  "crossbeam",
  "hyper",
- "image",
+ "image 0.24.3",
+ "img_hash",
  "num_cpus",
+ "pdqselect",
  "rmp-serde",
  "rustacuda",
  "rustacuda_core",
@@ -533,6 +535,20 @@ dependencies = [
 
 [[package]]
 name = "image"
+version = "0.23.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "24ffcb7e7244a9bf19d35bf2883b9c080c4ced3c07a9895572178cdb8f13f6a1"
+dependencies = [
+ "bytemuck",
+ "byteorder",
+ "color_quant",
+ "num-iter",
+ "num-rational 0.3.2",
+ "num-traits",
+]
+
+[[package]]
+name = "image"
 version = "0.24.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7e30ca2ecf7666107ff827a8e481de6a132a9b687ed3bb20bb1c144a36c00964"
@@ -543,11 +559,23 @@ dependencies = [
  "exr",
  "gif",
  "jpeg-decoder",
- "num-rational",
+ "num-rational 0.4.1",
  "num-traits",
  "png",
  "scoped_threadpool",
  "tiff",
+]
+
+[[package]]
+name = "img_hash"
+version = "3.2.0"
+source = "git+https://github.com/SamGinzburg/img_hash.git?rev=ebc59b1#ebc59b1f17603bf48e18ce735029b37177d8a9eb"
+dependencies = [
+ "base64",
+ "image 0.23.14",
+ "rustdct",
+ "serde",
+ "transpose 0.2.1",
 ]
 
 [[package]]
@@ -704,12 +732,44 @@ dependencies = [
 ]
 
 [[package]]
+name = "num-complex"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b6b19411a9719e753aff12e5187b74d60d3dc449ec3f4dc21e3989c3f554bc95"
+dependencies = [
+ "autocfg",
+ "num-traits",
+]
+
+[[package]]
 name = "num-integer"
 version = "0.1.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "225d3389fb3509a24c93f5c29eb6bde2586b98d9f016636dff58d7c6f7569cd9"
 dependencies = [
  "autocfg",
+ "num-traits",
+]
+
+[[package]]
+name = "num-iter"
+version = "0.1.43"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7d03e6c028c5dc5cac6e2dec0efda81fc887605bb3d884578bb6d6bf7514e252"
+dependencies = [
+ "autocfg",
+ "num-integer",
+ "num-traits",
+]
+
+[[package]]
+name = "num-rational"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "12ac428b1cb17fce6f731001d307d351ec70a6d202fc2e60f7d4c5e42d8f4f07"
+dependencies = [
+ "autocfg",
+ "num-integer",
  "num-traits",
 ]
 
@@ -783,6 +843,12 @@ name = "paste"
 version = "1.0.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b1de2e551fb905ac83f73f7aedf2f0cb4a0da7e35efa24a202a936269f1f18e1"
+
+[[package]]
+name = "pdqselect"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7778906d9321dd56cde1d1ffa69a73e59dcf5fda6d366f62727adf2bd4193aee"
 
 [[package]]
 name = "percent-encoding"
@@ -988,6 +1054,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "rustdct"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ef4d167674b4cf68c2114bdbcd34c95aa9071652b73b0f43b19298f1d2780b7d"
+dependencies = [
+ "rustfft",
+]
+
+[[package]]
+name = "rustfft"
+version = "3.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "77008ed59a8923c8b4ac2e5eaa6d28fbe893d3b9515098a4a5fc7767d6430fe5"
+dependencies = [
+ "num-complex",
+ "num-integer",
+ "num-traits",
+ "strength_reduce",
+ "transpose 0.1.0",
+]
+
+[[package]]
 name = "ryu"
 version = "1.0.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1126,6 +1214,12 @@ checksum = "7f6002a767bff9e83f8eeecf883ecb8011875a21ae8da43bffb817a57e78cc09"
 dependencies = [
  "lock_api",
 ]
+
+[[package]]
+name = "strength_reduce"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a3ff2f71c82567c565ba4b3009a9350a96a7269eaa4001ebedae926230bc2254"
 
 [[package]]
 name = "syn"
@@ -1316,6 +1410,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5aeea4303076558a00714b823f9ad67d58a3bbda1df83d8827d21193156e22f7"
 dependencies = [
  "once_cell",
+]
+
+[[package]]
+name = "transpose"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "643e21580bb0627c7bb09e5cedbb42c8705b19d012de593ed6b0309270b3cd1e"
+
+[[package]]
+name = "transpose"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "95f9c900aa98b6ea43aee227fd680550cdec726526aab8ac801549eadb25e39f"
+dependencies = [
+ "num-integer",
+ "strength_reduce",
 ]
 
 [[package]]

@@ -32,7 +32,7 @@
 	ld.param.u32 	%r4, [blockhash_param_3];
 	ld.param.u32 	%r5, [blockhash_param_4];
 	cvta.to.global.u64 	%rd1, %rd49;
-	mov.u32 	%r1, %tid.x;
+	mov.u32 	%r1, %ctaid.x;
 	mov.u32 	%r2, %tid.y;
 	setp.eq.s32 	%p1, %r4, 0;
 	mov.u64 	%rd48, 0;
@@ -40,7 +40,7 @@
 	@%p1 bra 	$L__BB0_31;
 
 	cvt.u64.u32 	%rd2, %r3;
-	mul.lo.s32 	%r6, %r2, %r3;
+	mul.lo.s32 	%r6, %r1, %r3;
 	cvt.u64.u32 	%rd3, %r6;
 	setp.eq.s32 	%p2, %r3, 0;
 	@%p2 bra 	$L__BB0_31;
@@ -53,7 +53,7 @@
 	add.s64 	%rd7, %rd54, 7;
 	shl.b64 	%rd8, %rd2, 2;
 	cvt.u64.u32 	%rd9, %r4;
-	mul.lo.s32 	%r7, %r1, %r4;
+	mul.lo.s32 	%r7, %r2, %r4;
 	cvt.u64.u32 	%rd10, %r7;
 	setp.lt.u64 	%p3, %rd4, 3;
 	setp.eq.s64 	%p9, %rd5, 0;
@@ -207,7 +207,7 @@ $L__BB0_30:
 	@%p15 bra 	$L__BB0_3;
 
 $L__BB0_31:
-	mad.lo.s32 	%r8, %r1, %r5, %r2;
+	mad.lo.s32 	%r8, %r2, %r5, %r1;
 	cvta.to.global.u64 	%rd99, %rd47;
 	mul.wide.u32 	%rd100, %r8, 4;
 	add.s64 	%rd101, %rd99, %rd100;

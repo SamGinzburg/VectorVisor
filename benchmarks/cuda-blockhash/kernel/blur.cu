@@ -2,8 +2,11 @@ extern "C" __global__ void blur_and_sub(const unsigned char *input, const unsign
 
     //const unsigned int col = threadIdx.x + blockIdx.x * blockDim.x;
     //const unsigned int row = threadIdx.y + blockIdx.y * blockDim.y;
-    const unsigned int col = threadIdx.y;
-    const unsigned int row = threadIdx.x;
+    const unsigned int row = blockIdx.x;
+    const unsigned int col = threadIdx.x;
+
+    //printf("col: %d\n", col);
+    //printf("row: %d\n", row);
 
     // blur once with the higher sigma kernel
     if (row < height && col < width) {

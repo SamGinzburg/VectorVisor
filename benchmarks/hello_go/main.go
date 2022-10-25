@@ -90,7 +90,8 @@ func generatePdf(name string, purchases []string, prices []float64) []byte {
 		pdf.Text(string(purchases[count]))
 
 		pdf.SetXY(500, float64(start))
-		pdf.Text(fmt.Sprintf("$%.2f", prices[count]))
+		//pdf.Text(fmt.Sprintf("$%.2f", prices[count]))
+		pdf.Text(fmt.Sprintf("%d", int64(prices[count])))
 
 		start += 20
 	}
@@ -102,7 +103,6 @@ func main() {
 	for {
 		runtime.InitHeap()
 		input_buf := make([]byte, 1024*512)
-        final_results := make([][]byte, 0)
 		in_size := C.serverless_invoke((*C.char)(unsafe.Pointer(&input_buf[0])), 1024*512)
 
         // if in_size == 0, there is no input
@@ -136,16 +136,11 @@ func main() {
 			})
 
 
-		    result := generatePdf(bill_name, purchases, prices)
-            final_results = append(final_results, result)
+		    generatePdf(bill_name, purchases, prices)
 		})
 
-        final_results_len := 0
-        for count := 0; count < len(final_results); count++ {
-            final_results_len += len(final_results[count])
-        }
-
-		C.serverless_response((*C.char)(unsafe.Pointer(&final_results[0])), (C.uint)(final_results_len))
+		//C.serverless_response((*C.char)(unsafe.Pointer(&result[0])), (C.uint)(len(result)))
+		C.serverless_response((*C.char)(unsafe.Pointer(&input_buf[0])), 1024)
 	}
 }
 

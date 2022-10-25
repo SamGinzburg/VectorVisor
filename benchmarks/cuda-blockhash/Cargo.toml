@@ -19,3 +19,5 @@ image = "0.24.3"
 base64 = "0.13.0"
 serde = { version = "1.0.62", features = ["derive"] }
 rmp-serde = "0.15.5"
+pdqselect = "0.1.1"
+img_hash = { git = "https://github.com/SamGinzburg/img_hash.git", rev="ebc59b1" }

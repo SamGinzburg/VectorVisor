@@ -31,7 +31,8 @@ use image::ColorType;
 use serde::Deserialize;
 use serde::Serialize;
 use std::borrow::Cow;
-
+use img_hash::HashBytes;
+use img_hash::BitSet;
 
 #[derive(Debug, Deserialize)]
 struct FuncInput<'a> {
@@ -170,6 +171,26 @@ async fn response(body: bytes::Bytes,
                 ));
 } 
 
+fn get_median<T: PartialOrd + Copy + std::cmp::Ord>(data: &[T]) -> T {
+    let mut scratch = data.to_owned();
+    let median = scratch.len() / 2;
+    pdqselect::select(&mut scratch, median);
+    scratch[median]
+}
+
+// hash width, 64-bit hash --> width of "8"
+fn translate_blocks_to_hash<B: HashBytes>(blocks: Vec<u32>, hash_width: u32) -> B {
+    let bandsize = blocks.len() / 4;
+    let group_len: usize = (hash_width*4).try_into().unwrap();
+    let medians: Vec<u32> = blocks.chunks(group_len).map(get_median).collect();
+    BitSet::from_bools(
+        blocks.chunks(group_len).zip(medians).flat_map(|(blocks, median)|
+            blocks.iter().map(move |&block| block > median || block == median && median > 255)
+        ) 
+    ) 
+}
+
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     // Initialize the CUDA API
@@ -226,7 +247,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
             // Get incoming request from channel
             let mut test_image: image::ImageBuffer<image::Rgba<u8>, Vec<u8>> = image::open(&Path::new("0.jpg")).unwrap().to_rgba8();
             let data_size: usize = test_image.as_raw().len() * 4;
-            let block_size: usize = 32; //test_image.as_raw().len() / 256 / 8;
+            let bits = 8; // 64-bit hash
+            let block_size: usize = test_image.as_raw().len() / 256 / bits;
 
             let mut kernel_matrix_20 = create_kernel(20);
             let mut kernel_matrix_10 = create_kernel(10);
@@ -236,7 +258,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             let mut kernel_10: DeviceBuffer<f32> = unsafe { DeviceBuffer::zeroed(kernel_matrix_10.len()).unwrap() };
             let mut result: DeviceBuffer<u8> = unsafe { DeviceBuffer::zeroed(data_size).unwrap() };
             let mut result2: DeviceBuffer<u8> = unsafe { DeviceBuffer::zeroed(data_size).unwrap() };
-            let mut result_blocks: DeviceBuffer<u32> = unsafe { DeviceBuffer::zeroed(block_size*block_size).unwrap() };
+            let mut result_blocks: DeviceBuffer<u32> = unsafe { DeviceBuffer::zeroed(bits*bits).unwrap() };
 
             loop {
                 let now_cpu = Instant::now();
@@ -256,7 +278,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 // First we perform blockhash preprocessing
                 // To do this, we blur the same image twice (different params) and subtract the difference
                 unsafe {
-                    launch!(module.blur_and_sub<<<256, 256, 0, stream>>>(
+                    launch!(module.blur_and_sub<<<(256,1,1), (256, 1, 1), 0, stream>>>(
                         x.as_device_ptr(),
                         y.as_device_ptr(),
                         result.as_device_ptr(),
@@ -271,11 +293,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     )).unwrap();
 
                     // Compute the blockhash
-                    launch!(module_blockhash.blockhash<<<64, 64, 0, stream>>>(
+                    launch!(module_blockhash.blockhash<<<256, 256, 0, stream>>>(
                         result.as_device_ptr(),
                         result_blocks.as_device_ptr(),
-                        8, 8,
-                        32,
+                        bits, bits,
+                        block_size, // our benchmark only operates on square images (e.g., 256x256)
                         1
                     )).unwrap();
 
@@ -285,13 +307,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 stream.synchronize().unwrap();
                 // Copy the result back to the host
                 let mut blocks_result: Vec<u32> = vec![];
-                blocks_result.resize(block_size*block_size, 0);
+                blocks_result.resize(bits*bits, 0);
                 result_blocks.copy_to(&mut blocks_result).unwrap();
-                dbg!(&blocks_result);
+                let hash: Vec<u8> = translate_blocks_to_hash(blocks_result, 8);
+                //dbg!(&hash);
+                // We can now examine the block values to compute the image hash itself TODO
 
-                // We can now examine the block values to compute the image hash itself
-
-                let final_resp = encode::to_vec(&FuncResponse { hash: vec![]  }).unwrap();
+                let final_resp = encode::to_vec(&FuncResponse { hash: hash  }).unwrap();
                 server_send.lock().unwrap().blocking_send(bytes::Bytes::from(final_resp));
             }
 
