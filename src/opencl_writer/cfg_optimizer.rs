@@ -359,9 +359,11 @@ pub fn form_partitions(
 
         // If we couldn't form a group with anyone, set this function aside for now
         // We will get back to it later if we can't find a partition for it
+        /*
         if current_partition.len() == 1 {
             continue;
         }
+        */
 
         // only remove this if we managed to form a partition with at least 1 other function
         func_set.remove(&f_name);

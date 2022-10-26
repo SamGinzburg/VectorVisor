@@ -1686,6 +1686,8 @@ impl<'a> OpenCLCWriter<'_> {
                 // emit the necessary intermediate values
                 final_string += &stack_ctx.emit_intermediates(is_fastcall, local_work_group);
 
+                //write!(final_string, "\t\tprintf(\"func_name = %s\\n\", __func__);\n").unwrap();
+
                 if debug_call_print && !is_fastcall {
                     write!(final_string, "\t\tprintf(\"*sfp = %d\\n\", *sfp);\n").unwrap();
                     write!(final_string, "\t\tprintf(\"*sp = %d\\n\", *sp);\n").unwrap();
@@ -3173,7 +3175,7 @@ ulong get_clock() {
                 } else {
                     // Try to go through the called funcs and see if we know the sizes for any called functions
                     // If so - we remove the func from the set
-                    let mut new_called_set: HashSet<String> = HashSet::new();
+                    let mut new_called_set: HashSet<String> = fast_func_called.get(&fastfunc as &str).unwrap().clone();
                     for called_func in funcs_called {
                         seen_funcs.insert(called_func.clone());
                         // Get all the funcs that this func calls
@@ -3202,8 +3204,11 @@ ulong get_clock() {
             }
             iterations -= 1;
         }
+        /*
+        println!("Num fastcalls before pruning: {:?}", fast_function_set.len());
 
         // Demote fastcalls that are too large
+        let mut funcs_to_process: HashSet<String> = HashSet::new();
         for fastfunc in fast_function_set.clone().iter() {
             let tmp = vec![0];
             let sum = fastcall_called_func_sizes
@@ -3211,14 +3216,11 @@ ulong get_clock() {
                 .unwrap_or(&tmp)
                 .iter()
                 .sum::<u32>();
-            if sum > 500 {
+            if sum > 1000 {
                 // Any fastcall that called this function is also no longer a fastcall
                 for func in fast_function_set.clone().iter() {
                     if fast_func_called.get(func).unwrap().contains(fastfunc) {
-                        fast_function_set.remove(func);
-                        fastcall_called_func_sizes.remove(func);
-                        fast_func_called.remove(func);
-                        fast_func_size.remove(func);
+                       funcs_to_process.insert(func.clone()); 
                     }
                 }
 
@@ -3227,7 +3229,32 @@ ulong get_clock() {
                 fast_func_called.remove(fastfunc);
                 fast_func_size.remove(fastfunc);
             }
-        } 
+        }
+        
+        // Process the remaining fastcalls
+        while funcs_to_process.len() > 0 {
+            let mut temp: HashSet<String> = HashSet::new();
+            for fastfunc in funcs_to_process.drain() { 
+                // Add the funcs that call this func to the set
+                for func in fast_function_set.clone().iter() {
+                    if fast_func_called.get(&func.clone()).unwrap().contains(&fastfunc) {
+                        temp.insert(func.clone()); 
+                    }
+                }
+
+                fast_function_set.remove(&fastfunc);
+                fastcall_called_func_sizes.remove(&fastfunc);
+                fast_func_called.remove(&fastfunc);
+                fast_func_size.remove(&fastfunc);
+            }
+
+            for f in temp {
+                funcs_to_process.insert(f);
+            }
+        }
+
+        println!("Num fastcalls after pruning: {:?}", fast_function_set.len());
+        */
 
         // Generate the fastcall header
         // first generate the function declarations
@@ -3266,18 +3293,6 @@ ulong get_clock() {
             write!(fastcall_header, "{}", func_declaration).unwrap();
         }
 
-        // Now update fast_func_size with max possible sizes
-        for fastfunc in fast_function_set.iter() {
-            let tmp = vec![0];
-            let max = fastcall_called_func_sizes
-                .get(fastfunc)
-                .unwrap_or(&tmp)
-                .iter()
-                .max()
-                .unwrap();
-            *fast_func_size.entry(fastfunc.to_string()).or_insert(0) += max;
-        }
-
         // Finish fastcall register demotion pass
         for fastfunc in fast_function_set.iter() {
             let (func, func_size, func_called) = self.emit_function(
@@ -3301,41 +3316,7 @@ ulong get_clock() {
                 true,
                 debug,
             );
-
-            let mut fastcall_size_vec = vec![0];
-            for fastcall in func_called.iter() {
-                let fsize = fast_func_size.get(fastcall).unwrap();
-                fastcall_size_vec.push(*fsize);
-            }
-            let final_size = func_size + fastcall_size_vec.iter().max().unwrap();
-            if final_size > 300 && false {
-                //println!("register demotion for fastcall: {:?}", fastfunc.to_string());
-                // THIS IS DISABLED FOR NOW
-                let (func, func_size, func_called) = self.emit_function(
-                    self.func_map.get(&fastfunc.to_string()).unwrap(),
-                    fastfunc.to_string(),
-                    call_ret_map,
-                    &mut call_ret_idx,
-                    function_idx_label.clone(),
-                    hypercall_id_count,
-                    local_work_group,
-                    mexec,
-                    indirect_call_mapping,
-                    &global_mappings,
-                    fast_function_set.clone(),
-                    force_inline,
-                    debug_print_function_calls,
-                    start_func.clone(),
-                    interleave,
-                    is_gpu,
-                    &mut 16,
-                    true,
-                    debug,
-                );
-                write!(fastcall_header, "{}", func).unwrap();
-            } else {
-                write!(fastcall_header, "{}", func).unwrap();
-            }
+            write!(fastcall_header, "{}", func).unwrap();
         }
 
         // We have limited smem space available.
@@ -3661,6 +3642,19 @@ ulong get_clock() {
         .unwrap();
 
         write!(output, "}}\n").unwrap();
+
+        for (part_idx, part_vec) in partition_hashmap.iter() {
+            for func in part_vec {
+                let fname_idx = function_idx_label.get(&func as &str).unwrap();
+                println!("inserting func idx: {:?} into part: {:?}", *fname_idx, *part_idx);
+                kernel_partition_mappings.insert(*fname_idx, *part_idx);
+            }
+        }
+
+        // Assert that for partitioned binaries we can map function ID --> partition ID in all cases
+        for func_idx in function_idx_label.values() {
+            assert!(kernel_partition_mappings.contains_key(&func_idx), format!("Assertion failure: failed to find partition for func_idx: {:?}", func_idx));
+        }
 
         (
             output,
