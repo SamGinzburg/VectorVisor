@@ -31,7 +31,6 @@ function cachebin() {
 }
 
 cachebin "pbkdf2" "3145728" "262144" "131072" "4096" "6144"
-exit
 cachebin "imagehash" "4194304" "131072" "262144" "3072" "4608"
 cachebin "imagehash-modified" "4194304" "131072" "262144" "3072" "4608"
 cachebin "imageblur" "4194304" "262144" "409600" "3072" "4608"
