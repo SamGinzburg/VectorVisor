@@ -3396,6 +3396,13 @@ impl<'a> StackCtx {
 
         ret_str += &format!("{{\n");
         ret_str += &format!("\tulong start = get_clock();\n");
+        let sfp_val = emit_read_u32_aligned(
+                "(ulong)(stack_frames+*sfp)",
+                "(ulong)stack_frames",
+                "warp_idx",
+        );
+        ret_str += &format!("\tuint sfp_ptr = {};\n", sfp_val);
+        let sfp_ptr = "sfp_ptr";
 
         let map_idx = self.stack_frame_stack.last().unwrap();
         let locals_set = self.save_context_map.get(map_idx).unwrap().clone();
@@ -3427,11 +3434,7 @@ impl<'a> StackCtx {
                                 &format!(
                                     "(ulong)(stack_u32+{}+{})",
                                     offset,
-                                    &emit_read_u32_aligned(
-                                        "(ulong)(stack_frames+*sfp)",
-                                        "(ulong)stack_frames",
-                                        "warp_idx"
-                                    )
+                                    &sfp_ptr,
                                 ),
                                 "(ulong)stack_u32",
                                 &local,
@@ -3447,11 +3450,7 @@ impl<'a> StackCtx {
                                 &format!(
                                     "(ulong)(stack_u32+{}+{})",
                                     offset,
-                                    &emit_read_u32_aligned(
-                                        "(ulong)(stack_frames+*sfp)",
-                                        "(ulong)stack_frames",
-                                        "warp_idx"
-                                    )
+                                    &sfp_ptr,
                                 ),
                                 "(ulong)stack_u32",
                                 &local,
@@ -3472,11 +3471,7 @@ impl<'a> StackCtx {
                                 &format!(
                                     "(ulong)(stack_u32+{}+{})",
                                     offset,
-                                    &emit_read_u32_aligned(
-                                        "(ulong)(stack_frames+*sfp)",
-                                        "(ulong)stack_frames",
-                                        "warp_idx"
-                                    )
+                                    &sfp_ptr,
                                 ),
                                 "(ulong)stack_u32",
                                 "temp",
@@ -3498,11 +3493,7 @@ impl<'a> StackCtx {
                                 &format!(
                                     "(ulong)(stack_u32+{}+{})",
                                     offset,
-                                    &emit_read_u32_aligned(
-                                        "(ulong)(stack_frames+*sfp)",
-                                        "(ulong)stack_frames",
-                                        "warp_idx"
-                                    )
+                                    &sfp_ptr,
                                 ),
                                 "(ulong)stack_u32",
                                 "temp",
@@ -3522,11 +3513,7 @@ impl<'a> StackCtx {
                                 &format!(
                                     "(ulong)(stack_u32+{}+{})",
                                     offset,
-                                    &emit_read_u32_aligned(
-                                        "(ulong)(stack_frames+*sfp)",
-                                        "(ulong)stack_frames",
-                                        "warp_idx"
-                                    )
+                                    &sfp_ptr,
                                 ),
                                 "(ulong)stack_u32",
                                 "temp_lower",
@@ -3540,11 +3527,7 @@ impl<'a> StackCtx {
                                 &format!(
                                     "(ulong)(stack_u32+{}+{})",
                                     offset + 2,
-                                    &emit_read_u32_aligned(
-                                        "(ulong)(stack_frames+*sfp)",
-                                        "(ulong)stack_frames",
-                                        "warp_idx"
-                                    )
+                                    &sfp_ptr,
                                 ),
                                 "(ulong)stack_u32",
                                 "temp_upper",
@@ -3563,11 +3546,6 @@ impl<'a> StackCtx {
             // We only want to save the intermediates on our current stack frame
             let (i32_range, i64_range, f32_range, f64_range, u128_range) =
                 self.generate_intermediate_ranges();
-            let sfp_val = emit_read_u32_aligned(
-                "(ulong)(stack_frames+*sfp)",
-                "(ulong)stack_frames",
-                "warp_idx",
-            );
 
             /*
              * The ctx saving structure is:
@@ -3584,7 +3562,7 @@ impl<'a> StackCtx {
                     &emit_write_u32_aligned(
                         &format!(
                             "(ulong)(stack_u32+{}+{}+{})",
-                            sfp_val, self.stack_frame_offset, i_name_offset
+                            &sfp_ptr, self.stack_frame_offset, i_name_offset
                         ),
                         "(ulong)stack_u32",
                         &i_name,
@@ -3602,7 +3580,7 @@ impl<'a> StackCtx {
                     &emit_write_u64_aligned(
                         &format!(
                             "(ulong)(stack_u32+{}+{}+{})",
-                            sfp_val, self.stack_frame_offset, i_name_offset
+                            &sfp_ptr, self.stack_frame_offset, i_name_offset
                         ),
                         "(ulong)stack_u32",
                         &i_name,
@@ -3627,7 +3605,7 @@ impl<'a> StackCtx {
                     &emit_write_u32_aligned(
                         &format!(
                             "(ulong)(stack_u32+{}+{}+{})",
-                            sfp_val, self.stack_frame_offset, i_name_offset
+                            &sfp_ptr, self.stack_frame_offset, i_name_offset
                         ),
                         "(ulong)stack_u32",
                         "temp",
@@ -3653,7 +3631,7 @@ impl<'a> StackCtx {
                     &emit_write_u64_aligned(
                         &format!(
                             "(ulong)(stack_u32+{}+{}+{})",
-                            sfp_val, self.stack_frame_offset, i_name_offset
+                            &sfp_ptr, self.stack_frame_offset, i_name_offset
                         ),
                         "(ulong)stack_u32",
                         "temp",
@@ -3677,7 +3655,7 @@ impl<'a> StackCtx {
                     &emit_write_u64_aligned(
                         &format!(
                             "(ulong)(stack_u32+{}+{}+{})",
-                            sfp_val, self.stack_frame_offset, i_name_offset
+                            &sfp_ptr, self.stack_frame_offset, i_name_offset
                         ),
                         "(ulong)stack_u32",
                         "temp_lower",
@@ -3690,7 +3668,7 @@ impl<'a> StackCtx {
                     &emit_write_u64_aligned(
                         &format!(
                             "(ulong)(stack_u32+{}+{}+{})",
-                            sfp_val,
+                            sfp_ptr,
                             self.stack_frame_offset + 4,
                             i_name_offset
                         ),
@@ -3746,6 +3724,13 @@ impl<'a> StackCtx {
 
         ret_str += &format!("{{\n");
         ret_str += &format!("\tulong start = get_clock();\n");
+        let sfp_val = emit_read_u32_aligned(
+                "(ulong)(stack_frames+*sfp)",
+                "(ulong)stack_frames",
+                "warp_idx",
+        );
+        ret_str += &format!("\tuint sfp_ptr = {};\n", sfp_val);
+        let sfp_ptr = "sfp_ptr";
 
         // First, load all locals from memory
         if !restore_intermediates_only {
@@ -3781,11 +3766,7 @@ impl<'a> StackCtx {
                                 &format!(
                                     "(ulong)(stack_u32+{}+{})",
                                     offset,
-                                    &emit_read_u32_aligned(
-                                        "(ulong)(stack_frames+*sfp)",
-                                        "(ulong)stack_frames",
-                                        "warp_idx"
-                                    )
+                                    &sfp_ptr,
                                 ),
                                 "(ulong)stack_u32",
                                 "warp_idx"
@@ -3801,11 +3782,7 @@ impl<'a> StackCtx {
                                 &format!(
                                     "(ulong)(stack_u32+{}+{})",
                                     offset,
-                                    &emit_read_u32_aligned(
-                                        "(ulong)(stack_frames+*sfp)",
-                                        "(ulong)stack_frames",
-                                        "warp_idx"
-                                    )
+                                    &sfp_ptr
                                 ),
                                 "(ulong)stack_u32",
                                 "warp_idx"
@@ -3820,11 +3797,7 @@ impl<'a> StackCtx {
                                 &format!(
                                     "(ulong)(stack_u32+{}+{})",
                                     offset,
-                                    &emit_read_u32_aligned(
-                                        "(ulong)(stack_frames+*sfp)",
-                                        "(ulong)stack_frames",
-                                        "warp_idx"
-                                    )
+                                    &sfp_ptr,
                                 ),
                                 "(ulong)stack_u32",
                                 "warp_idx"
@@ -3845,11 +3818,7 @@ impl<'a> StackCtx {
                                 &format!(
                                     "(ulong)(stack_u32+{}+{})",
                                     offset,
-                                    &emit_read_u32_aligned(
-                                        "(ulong)(stack_frames+*sfp)",
-                                        "(ulong)stack_frames",
-                                        "warp_idx"
-                                    )
+                                    &sfp_ptr,
                                 ),
                                 "(ulong)stack_u32",
                                 "warp_idx"
@@ -3872,11 +3841,7 @@ impl<'a> StackCtx {
                                 &format!(
                                     "(ulong)(stack_u32+{}+{})",
                                     offset,
-                                    &emit_read_u32_aligned(
-                                        "(ulong)(stack_frames+*sfp)",
-                                        "(ulong)stack_frames",
-                                        "warp_idx"
-                                    )
+                                    &sfp_ptr,
                                 ),
                                 "(ulong)stack_u32",
                                 "warp_idx"
@@ -3890,11 +3855,7 @@ impl<'a> StackCtx {
                                 &format!(
                                     "(ulong)(stack_u32+{}+{})",
                                     offset + 4,
-                                    &emit_read_u32_aligned(
-                                        "(ulong)(stack_frames+*sfp)",
-                                        "(ulong)stack_frames",
-                                        "warp_idx"
-                                    )
+                                    &sfp_ptr,
                                 ),
                                 "(ulong)stack_u32",
                                 "warp_idx"
@@ -3911,11 +3872,6 @@ impl<'a> StackCtx {
 
             let (i32_range, i64_range, f32_range, f64_range, u128_range) =
                 self.generate_intermediate_ranges();
-            let sfp_val = emit_read_u32_aligned(
-                "(ulong)(stack_frames+*sfp)",
-                "(ulong)stack_frames",
-                "warp_idx",
-            );
 
             for idx in i32_range {
                 let i_name = self.i32_stack.get(idx).unwrap();
@@ -3928,7 +3884,7 @@ impl<'a> StackCtx {
                     &emit_read_u32_aligned(
                         &format!(
                             "(ulong)(stack_u32+{}+{}+{})",
-                            sfp_val, self.stack_frame_offset, i_name_offset
+                            &sfp_ptr, self.stack_frame_offset, i_name_offset
                         ),
                         "(ulong)stack_u32",
                         "warp_idx"
@@ -3947,7 +3903,7 @@ impl<'a> StackCtx {
                     &emit_read_u64_aligned(
                         &format!(
                             "(ulong)(stack_u32+{}+{}+{})",
-                            sfp_val, self.stack_frame_offset, i_name_offset
+                            &sfp_ptr, self.stack_frame_offset, i_name_offset
                         ),
                         "(ulong)stack_u32",
                         "warp_idx"
@@ -3966,7 +3922,7 @@ impl<'a> StackCtx {
                     &emit_read_u32_aligned(
                         &format!(
                             "(ulong)(stack_u32+{}+{}+{})",
-                            sfp_val, self.stack_frame_offset, i_name_offset
+                            &sfp_ptr, self.stack_frame_offset, i_name_offset
                         ),
                         "(ulong)stack_u32",
                         "warp_idx"
@@ -3990,7 +3946,7 @@ impl<'a> StackCtx {
                     &emit_read_u64_aligned(
                         &format!(
                             "(ulong)(stack_u32+{}+{}+{})",
-                            sfp_val, self.stack_frame_offset, i_name_offset
+                            &sfp_ptr, self.stack_frame_offset, i_name_offset
                         ),
                         "(ulong)stack_u32",
                         "warp_idx"
@@ -4015,7 +3971,7 @@ impl<'a> StackCtx {
                     &emit_read_u64_aligned(
                         &format!(
                             "(ulong)(stack_u32+{}+{}+{})",
-                            sfp_val, self.stack_frame_offset, i_name_offset
+                            &sfp_ptr, self.stack_frame_offset, i_name_offset
                         ),
                         "(ulong)stack_u32",
                         "warp_idx"
@@ -4028,7 +3984,7 @@ impl<'a> StackCtx {
                     &emit_read_u64_aligned(
                         &format!(
                             "(ulong)(stack_u32+{}+{}+{})",
-                            sfp_val,
+                            &sfp_ptr,
                             self.stack_frame_offset + 4,
                             i_name_offset
                         ),

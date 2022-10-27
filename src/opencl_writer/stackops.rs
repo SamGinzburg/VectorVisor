@@ -1,6 +1,5 @@
 use crate::opencl_writer;
-use crate::opencl_writer::mem_interleave::emit_write_u32_aligned;
-use crate::opencl_writer::mem_interleave::emit_write_u64;
+use crate::opencl_writer::mem_interleave::*;
 use crate::opencl_writer::StackCtx;
 use crate::opencl_writer::StackType;
 use crate::opencl_writer::ValType;
@@ -133,26 +132,37 @@ pub fn emit_local_tee(
     }
 }
 
-pub fn emit_local(_writer: &opencl_writer::OpenCLCWriter, local: &Local, _debug: bool) -> String {
+pub fn emit_local(writer: &opencl_writer::OpenCLCWriter, local: &Local, _debug: bool) -> String {
     /*
      * When emitting locals we know we have access to the global stack.
      * We zero-init all values.
      *
      */
     match local.ty {
+        ValType::I32 if writer.interleave == 1 => {
+            String::from(format!(
+                "\t{};\n\t{}\n",
+                &emit_write_u32_aligned(
+                    "(ulong)(stack_u32+*sp)",
+                    "(ulong)(stack_u32)",
+                    "(uint)0",
+                    "warp_idx"
+                ),
+                "*sp += 2;"
+            ))
+        },
         ValType::I32 => String::from(format!(
             "\t{};\n\t{}\n",
-            &emit_write_u32_aligned(
-                "(ulong)(stack_u32+*sp)",
-                "(ulong)(stack_u32)",
+            &emit_write_u32_fast(
+                "(ulong)(*sp)",
+                "(ulong)(stack_base)",
                 "(uint)0",
-                "warp_idx"
             ),
             "*sp += 2;"
         )),
         ValType::I64 => String::from(format!(
             "\t{};\n\t{}\n",
-            &emit_write_u64(
+            &emit_write_u64_aligned(
                 "(ulong)(stack_u32+*sp)",
                 "(ulong)(stack_u32)",
                 "(ulong)0",
@@ -160,19 +170,30 @@ pub fn emit_local(_writer: &opencl_writer::OpenCLCWriter, local: &Local, _debug:
             ),
             "*sp += 2;"
         )),
+        ValType::F32 if writer.interleave == 1 => {
+            String::from(format!(
+                "\t{};\n\t{}\n",
+                &emit_write_u32_aligned(
+                    "(ulong)(stack_u32+*sp)",
+                    "(ulong)(stack_u32)",
+                    "(uint)0",
+                    "warp_idx"
+                ),
+                "*sp += 2;"
+            ))
+        }
         ValType::F32 => String::from(format!(
             "\t{};\n\t{}\n",
-            &emit_write_u32_aligned(
-                "(ulong)(stack_u32+*sp)",
-                "(ulong)(stack_u32)",
+            &emit_write_u32_fast(
+                "(ulong)(*sp)",
+                "(ulong)(stack_base)",
                 "(uint)0",
-                "warp_idx"
             ),
             "*sp += 2;"
         )),
         ValType::F64 => String::from(format!(
             "\t{};\n\t{}\n",
-            &emit_write_u64(
+            &emit_write_u64_aligned(
                 "(ulong)(stack_u32+*sp)",
                 "(ulong)(stack_u32)",
                 "(ulong)0",
@@ -182,14 +203,14 @@ pub fn emit_local(_writer: &opencl_writer::OpenCLCWriter, local: &Local, _debug:
         )),
         ValType::V128 => String::from(format!(
             "\t{};\n\t{}\n\t{};\n\t{}\n",
-            &emit_write_u64(
+            &emit_write_u64_aligned(
                 "(ulong)(stack_u32+*sp)",
                 "(ulong)(stack_u32)",
                 "(ulong)0",
                 "warp_idx"
             ),
             "*sp += 2;",
-            &emit_write_u64(
+            &emit_write_u64_aligned(
                 "(ulong)(stack_u32+*sp)",
                 "(ulong)(stack_u32)",
                 "(ulong)0",

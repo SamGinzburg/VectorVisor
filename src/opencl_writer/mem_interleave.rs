@@ -2005,6 +2005,21 @@ pub fn emit_read_u32_aligned(addr: &str, mem_start: &str, warp_id: &str) -> Stri
     )
 }
 
+
+pub fn emit_read_u32_fast(offset: &str, base: &str) -> String {
+    format!(
+        "read_u32_fast({}, {})",
+        offset, base 
+    )
+}
+
+pub fn emit_write_u32_fast(offset: &str, base: &str, value: &str) -> String {
+    format!(
+        "write_u32_fast({}, {}, {})",
+        offset, base, value 
+    )
+}
+
 pub fn emit_write_u32_aligned(addr: &str, mem_start: &str, value: &str, warp_id: &str) -> String {
     format!(
         "write_u32_aligned({}, {}, {}, {}, read_idx, thread_idx, scratch_space)",
