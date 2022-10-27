@@ -226,7 +226,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
             let mut test_image: image::ImageBuffer<image::Rgba<u8>, Vec<u8>> = image::open(&Path::new("0.jpg")).unwrap().to_rgba8();
             let data_size: usize = test_image.as_raw().len();
 
-            let mut kernel_matrix = create_kernel(10);
+            // 20 --> sigma of 10
+            let mut kernel_matrix = create_kernel(20);
 
             // Allocate space on the device and copy numbers to it.
             let mut kernel: DeviceBuffer<f32> = unsafe { DeviceBuffer::zeroed(kernel_matrix.len()).unwrap() };
@@ -246,11 +247,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
                 unsafe {
                     // Launch the `sum` function with one block containing one thread on the given stream.
-                    launch!(module.blur<<<250, 250, 0, stream>>>(
+                    launch!(module.blur<<<256, 256, 0, stream>>>(
                         x.as_device_ptr(),
                         result.as_device_ptr(),
-                        250,
-                        250,
+                        256,
+                        256,
                         kernel.as_device_ptr(),
                         10,
                         1
@@ -265,7 +266,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
                 let mut output_buf = vec![];
                 let mut bmp_encoder = BmpEncoder::new(&mut output_buf);
-                match bmp_encoder.encode(&mut img_result, 250, 250, ColorType::Rgba8) {
+                match bmp_encoder.encode(&mut img_result, 256, 256, ColorType::Rgba8) {
                     Ok(_) => (),
                     Err(_) => (),
                 }
