@@ -208,8 +208,8 @@ def run_scrypt_bench():
     x=$(cloud-init status)
     done
 
-    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/scrypt/target/wasm32-wasi/release/scrypt-opt.wasm --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=131072 --partition=true --serverless=true --vmcount=4096 --wasmtime=true --fastreply={fastreply} &> /vv/scrypt.log &
-    """.format(fastreply=fastreply)
+    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/scrypt-opt-{interleave}.wasm --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=131072 --partition=true --serverless=true --vmcount=4096 --wasmtime=true --fastreply={fastreply} &> /vv/scrypt.log &
+    """.format(fastreply=fastreply, interleave=interleave)
 
     run_command(run_scrypt_command_wasmtime, "scrypt_cpu", cpu_bench_instance[0].id)
 
@@ -222,7 +222,14 @@ def run_scrypt_bench():
     x=$(cloud-init status)
     done
 
-    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/scrypt/target/wasm32-wasi/release/scrypt-opt.wasm --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=131072 --partition=true --partitions={maxfuncs} --maxloc={maxloc} --serverless=true --vmcount={vmcount} --vmgroups=1 --maxdup=3 --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} &> /vv/scrypt.log &
+    export CUDA_CACHE_MAXSIZE=4294967296
+    export CUDA_CACHE_PATH=~/.nv/ComputeCache/
+    export PATH=~/.cargo/bin:$PATH
+    export PATH=/vv/binaryen-version_109/bin:$PATH
+
+    cd /vv/VectorVisor/benchmarks/
+
+    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/scrypt-opt-{interleave}.wasm.bin --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=131072 --partition=false --serverless=true --vmcount={vmcount} --vmgroups=1 --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply}  &> /vv/scrypt.log &
     """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, \
                maxfuncs=999, maxloc=maxloc*10, vmcount=vmcount)
 
@@ -353,8 +360,8 @@ def run_pbkdf2_bench():
     x=$(cloud-init status)
     done
 
-    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/pbkdf2/target/wasm32-wasi/release/pbkdf2-opt.wasm --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=131072 --partition=true --serverless=true --vmcount=4096 --wasmtime=true --fastreply={fastreply} &> /vv/pbkdf2.log &
-    """.format(fastreply=fastreply)
+    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/pbkdf2-opt-{interleave}.wasm --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=131072 --partition=true --serverless=true --vmcount=4096 --wasmtime=true --fastreply={fastreply} &> /vv/pbkdf2.log &
+    """.format(fastreply=fastreply, interleave=interleave)
 
     run_command(run_pbkdf2_command_wasmtime, "pbkdf2_cpu", cpu_bench_instance[0].id)
 
@@ -367,7 +374,14 @@ def run_pbkdf2_bench():
     x=$(cloud-init status)
     done
 
-    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/pbkdf2/target/wasm32-wasi/release/pbkdf2-opt.wasm --maxdup=0 --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=16384 --partition=false --serverless=true --vmcount={vmcount} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --rt=0 &> /vv/pbkdf2.log &
+    export CUDA_CACHE_MAXSIZE=4294967296
+    export CUDA_CACHE_PATH=~/.nv/ComputeCache/
+    export PATH=~/.cargo/bin:$PATH
+    export PATH=/vv/binaryen-version_109/bin:$PATH
+
+    cd /vv/VectorVisor/benchmarks/
+
+    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/pbkdf2-opt-{interleave}.wasm.bin --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=16384 --partition=false --serverless=true --vmcount={vmcount} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --rt=50 &> /vv/pbkdf2.log &
     """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, \
                maxfuncs=999, maxloc=maxloc*10, vmcount=vmcount)
 
@@ -471,27 +485,6 @@ def run_pbkdf2_bench():
     # we need to kill the running VV instance first
     cleanup()
 
-    run_invoker_hashcat = """#!/bin/bash
-	    sudo su
-	    ulimit -n 65536
-	    apt install -y hashcat
-	    hashcat -b -m 9200
-	    """
-
-    for idx in range(NUM_REPEAT):
-        command_id = run_command(run_invoker_hashcat, "run hashcat", gpu_instance[0].id)
-
-        time.sleep(20)
-
-        # Block until benchmark is complete
-        output = block_on_command(command_id, gpu_instance[0].id)
-        print (output)
-        with open(temp_dir+"hashcat_bench_pbkdf2_{idx}.txt".format(idx=idx), "w") as text_file:
-            text_file.write(str(output))
-        time.sleep(SLEEP_TIME)
-
-
-
 def run_lz4_bench():
     if run_a10g:
         vmcount = 4608
@@ -520,8 +513,15 @@ def run_lz4_bench():
     x=$(cloud-init status)
     done
 
-    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/json-compression-lz4/target/wasm32-wasi/release/json-compression-opt.wasm --ip=0.0.0.0 --heap=4194304 --stack=131072 --hcallsize=524288 --partition=true --serverless=true --vmcount=4096 --wasmtime=true --fastreply={fastreply} &> /vv/json-compression.log &
-    """.format(fastreply=fastreply)
+    export CUDA_CACHE_MAXSIZE=4294967296
+    export CUDA_CACHE_PATH=~/.nv/ComputeCache/
+    export PATH=~/.cargo/bin:$PATH
+    export PATH=/vv/binaryen-version_109/bin:$PATH
+
+    cd /vv/VectorVisor/benchmarks/
+
+    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/json-compression-opt-{interleave}.wasm.bin --ip=0.0.0.0 --heap=4194304 --stack=131072 --hcallsize=524288 --partition=false --serverless=true --vmcount=4096 --wasmtime=true --fastreply={fastreply} &> /vv/json-compression.log &
+    """.format(fastreply=fastreply, interleave=interleave)
 
     run_command(run_json_lz4_command_wasmtime, "run_json_lz4_command_wasmtime", cpu_bench_instance[0].id)
 
@@ -534,7 +534,14 @@ def run_lz4_bench():
     x=$(cloud-init status)
     done
 
-    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/json-compression-lz4/target/wasm32-wasi/release/json-compression-opt.wasm --ip=0.0.0.0 --heap=4194304 --stack=131072 --hcallsize=262144 --partition=true --serverless=true --vmcount={vmcount} --vmgroups=1 --maxdup=3 --partitions={maxfuncs} --maxloc={maxloc} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} --rt=200 &> /vv/json-compression.log &
+    export CUDA_CACHE_MAXSIZE=4294967296
+    export CUDA_CACHE_PATH=~/.nv/ComputeCache/
+    export PATH=~/.cargo/bin:$PATH
+    export PATH=/vv/binaryen-version_109/bin:$PATH
+
+    cd /vv/VectorVisor/benchmarks/
+
+    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/json-compression-opt-{interleave}.wasm.bin --ip=0.0.0.0 --heap=4194304 --stack=131072 --hcallsize=262144 --partition=false --serverless=true --vmcount={vmcount} --vmgroups=1 --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --rt=200 &> /vv/json-compression.log &
     """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, \
                maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount)
 
@@ -660,10 +667,10 @@ def run_genpdf_bench():
     x=$(cloud-init status)
     done
 
-    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/genpdf/target/wasm32-wasi/release/genpdf-opt.wasm --ip=0.0.0.0 --heap=3145728 --stack=131072 --hcallsize=262144 --partition=true --serverless=true --vmcount=4096 --wasmtime=true --fastreply={fastreply} &> /vv/genpdf.log &
-    """.format(fastreply=fastreply)
+    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/genpdf-opt-{interleave}.wasm --ip=0.0.0.0 --heap=3145728 --stack=131072 --hcallsize=262144 --partition=true --serverless=true --vmcount=4096 --wasmtime=true --fastreply={fastreply} &> /vv/genpdf.log &
+    """.format(fastreply=fastreply, interleave=interleave)
 
-    run_command(run_genpdf_command_wasmtime, "run_average_command_wasmtime", cpu_bench_instance[0].id)
+    run_command(run_genpdf_command_wasmtime, "run_genpdf_command_wasmtime", cpu_bench_instance[0].id)
 
     run_genpdf_command = """#!/bin/bash
     sudo su
@@ -674,7 +681,14 @@ def run_genpdf_bench():
     x=$(cloud-init status)
     done
 
-    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/genpdf/target/wasm32-wasi/release/genpdf-opt.wasm --ip=0.0.0.0 --heap=3000000 --stack=131072 --hcallsize=200000 --partition=true --serverless=true --vmcount={vmcount} --wasmtime=false --maxdup=2 --partitions={maxfuncs} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} --rt=200 &> /vv/genpdf.log &
+    export CUDA_CACHE_MAXSIZE=4294967296
+    export CUDA_CACHE_PATH=~/.nv/ComputeCache/
+    export PATH=~/.cargo/bin:$PATH
+    export PATH=/vv/binaryen-version_109/bin:$PATH
+
+    cd /vv/VectorVisor/benchmarks/
+
+    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/genpdf-opt-{interleave}.wasm.bin --ip=0.0.0.0 --heap=3000000 --stack=131072 --hcallsize=200000 --partition=true --serverless=true --vmcount={vmcount} --wasmtime=false --maxdup=2 --partitions={maxfuncs} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} --rt=200 &> /vv/genpdf.log &
     """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, \
                maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount)
 
@@ -797,8 +811,8 @@ def run_average_bench():
     x=$(cloud-init status)
     done
 
-    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/average/target/wasm32-wasi/release/average-opt.wasm --ip=0.0.0.0 --heap=3145728 --stack=131072 --hcallsize=262144 --partition=true --serverless=true --vmcount=4096 --wasmtime=true --fastreply={fastreply} &> /vv/average.log &
-    """.format(fastreply=fastreply)
+    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/average-opt-{interleave}.wasm --ip=0.0.0.0 --heap=3145728 --stack=131072 --hcallsize=262144 --partition=true --serverless=true --vmcount=4096 --wasmtime=true --fastreply={fastreply} &> /vv/average.log &
+    """.format(fastreply=fastreply, interleave=interleave)
 
     run_command(run_average_command_wasmtime, "run_average_command_wasmtime", cpu_bench_instance[0].id)
 
@@ -811,7 +825,14 @@ def run_average_bench():
     x=$(cloud-init status)
     done
 
-    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/average/target/wasm32-wasi/release/average-opt.wasm --ip=0.0.0.0 --heap=3145728 --stack=131072 --hcallsize=262144 --partition=true --serverless=true --vmcount={vmcount} --wasmtime=false --maxdup=3 --partitions={maxfuncs} --maxloc={maxloc} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} --rt=0 &> /vv/average.log &
+    export CUDA_CACHE_MAXSIZE=4294967296
+    export CUDA_CACHE_PATH=~/.nv/ComputeCache/
+    export PATH=~/.cargo/bin:$PATH
+    export PATH=/vv/binaryen-version_109/bin:$PATH
+
+    cd /vv/VectorVisor/benchmarks/
+
+    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/average-opt-{interleave}.wasm.bin --ip=0.0.0.0 --heap=3145728 --stack=131072 --hcallsize=262144 --partition=false --serverless=true --vmcount={vmcount} --wasmtime=false  --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --rt=100 &> /vv/average.log &
     """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, \
                maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount)
 
@@ -1135,10 +1156,10 @@ def run_image_blur_bench(run_bmp = False):
         vmcount = 3072
 
     if not run_bmp:
-        bin_path = "/vv/VectorVisor/benchmarks/imageblur/target/wasm32-wasi/release/imageblur-opt.wasm"
+        bin_path = "/vv/VectorVisor/benchmarks/imageblur-opt-{interleave}.wasm".format(interleave=interleave)
         exe_path = "/vv/VectorVisor/benchmarks/imageblur/"
     else:
-        bin_path = "/vv/VectorVisor/benchmarks/imageblur-bmp/target/wasm32-wasi/release/imageblur-opt.wasm"
+        bin_path = "/vv/VectorVisor/benchmarks/imageblur-modified-opt-{interleave}.wasm".format(interleave=interleave)
         exe_path = "/vv/VectorVisor/benchmarks/imageblur-bmp/"
 
     run_image_command_x86 = """#!/bin/bash
@@ -1177,7 +1198,7 @@ def run_image_blur_bench(run_bmp = False):
     x=$(cloud-init status)
     done
 
-    /vv/VectorVisor/target/release/vectorvisor --input {bin_path} --ip=0.0.0.0 --heap=4194304 --stack=262144 --hcallsize=409600 --partition=true --serverless=true --vmcount={vmcount} --vmgroups=1 --maxdup=2 --disablefastcalls=false --partitions={maxfuncs} --maxloc={maxloc} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} &> /vv/imageblur.log &
+    /vv/VectorVisor/target/release/vectorvisor --input {bin_path}.bin --ip=0.0.0.0 --heap=4194304 --stack=262144 --hcallsize=409600 --partition=false --serverless=true --vmcount={vmcount} --vmgroups=1 --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} &> /vv/imageblur.log &
     """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, bin_path=bin_path, maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount)
 
     run_command(run_image_command, "run_imageblur_gpu_command", gpu_instance[0].id)
@@ -1369,8 +1390,8 @@ def run_nlp_count_bench():
     x=$(cloud-init status)
     done
 
-    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/nlp-count-vectorizer/target/wasm32-wasi/release/nlp-count-vectorizer-opt.wasm --ip=0.0.0.0 --heap=4194304 --stack=131072 --hcallsize=524288 --partition=true --serverless=true --vmcount=4096 --wasmtime=true --fastreply={fastreply} &> /vv/nlp-count-vectorizer.log &
-    """.format(fastreply=fastreply)
+    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/nlp-count-vectorizer-opt-{interleave}.wasm --ip=0.0.0.0 --heap=4194304 --stack=131072 --hcallsize=524288 --partition=true --serverless=true --vmcount=4096 --wasmtime=true --fastreply={fastreply} &> /vv/nlp-count-vectorizer.log &
+    """.format(fastreply=fastreply, interleave=interleave)
 
     run_command(run_nlp_command_wasmtime, "run_nlp_command_wasmtime", cpu_bench_instance[0].id)
 
@@ -1383,7 +1404,14 @@ def run_nlp_count_bench():
     x=$(cloud-init status)
     done
 
-    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/nlp-count-vectorizer/target/wasm32-wasi/release/nlp-count-vectorizer-opt.wasm --ip=0.0.0.0 --heap=4194304 --stack=131072 --hcallsize=524288 --partition=true --serverless=true --vmcount={vmcount} --vmgroups=1 --maxdup=3 --disablefastcalls=false --partitions={maxfuncs} --maxloc={maxloc} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} &> /vv/nlp-count-vectorizer.log &
+    export CUDA_CACHE_MAXSIZE=4294967296
+    export CUDA_CACHE_PATH=~/.nv/ComputeCache/
+    export PATH=~/.cargo/bin:$PATH
+    export PATH=/vv/binaryen-version_109/bin:$PATH
+
+    cd /vv/VectorVisor/benchmarks/
+
+    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/nlp-count-vectorizer-opt-{interleave}.wasm.bin --ip=0.0.0.0 --heap=4194304 --stack=131072 --hcallsize=524288 --partition=false --serverless=true --vmcount={vmcount} --vmgroups=1 --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} &> /vv/nlp-count-vectorizer.log &
     """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount)
 
     run_command(run_nlp_command, "run_nlp_command", gpu_instance[0].id)
