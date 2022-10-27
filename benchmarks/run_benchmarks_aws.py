@@ -13,9 +13,11 @@ parser.add_argument("--membench", required=False)
 parser.add_argument("--breakdown", required=False)
 parser.add_argument("--dir", required=False)
 parser.add_argument("--skip-membench", required=False)
+parser.add_argument("--ami", required=True)
 
 args = vars(parser.parse_args())
 
+ami = args['ami']
 gpu = args['gpu']
 cpu = args['cpu']
 interleave = args['interleave']
@@ -24,6 +26,7 @@ breakdown = args['breakdown']
 outdir = args['dir']
 skip_membench = args['skip_membench']
 
+print ("ami: ", ami)
 print ("gpu: ", gpu)
 print ("cpu: ", cpu)
 print ("interleave: ", interleave)
@@ -97,48 +100,6 @@ region = "us-east-1"
 ec2 = boto3.resource('ec2', region_name=region)
 ec2_client = boto3.client('ec2', region_name=region)
 
-userdata = """#cloud-config
-    runcmd:
-     - /home/ec2-user/sudo npm run prod
-     - cd /tmp
-     - curl https://amazon-ssm-%s.s3.amazonaws.com/latest/linux_amd64/amazon-ssm-agent.rpm -o amazon-ssm-agent.rpm
-     - yum install -y amazon-ssm-agent.rpm
-     - yum install -y git
-     - yum install -y htop
-     - yum install -y gcc
-     - yum install -y golang
-     - yum install -y curl
-     - yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
-     - yum update -y
-     - yum install -y ocl*
-     - curl https://sh.rustup.rs -sSf | sh -s -- -y
-     - ~/.cargo/bin/rustup target add wasm32-wasi
-     - git clone https://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:x-oauth-basic@github.com/SamGinzburg/VectorVisor.git
-     - cd /tmp/VectorVisor/
-     - ~/.cargo/bin/cargo build --release
-     - cd benchmarks/
-     - cd json-compression-lz4/
-     - ~/.cargo/bin/cargo build --release
-     - cd ..
-     - cd json-compression/
-     - ~/.cargo/bin/cargo build --release
-     - cd ..
-     - cd average/
-     - ~/.cargo/bin/cargo build --release
-     - cd ..
-     - cd pbkdf2/
-     - ~/.cargo/bin/cargo build --release
-     - cd ..
-     - cd nlp-count-vectorizer/
-     - ~/.cargo/bin/cargo build --release
-     - cd ..
-     - cd imageblur/
-     - ~/.cargo/bin/cargo build --release
-     - cd ..
-     - cd imagehash/
-     - ~/.cargo/bin/cargo build --release
-""" % region
-
 if run_only_membench: 
     userdata_ubuntu = """#cloud-config
     runcmd:
@@ -148,7 +109,7 @@ if run_only_membench:
      - export HOME=/root
      - export CUDA_CACHE_MAXSIZE=4294967296
      - export CUDA_CACHE_PATH=~/.nv/ComputeCache/
-     - cd /tmp
+     - cd /vv
      - sudo apt update
      - sudo apt install -y git
      - sudo apt install -y git-lfs
@@ -160,7 +121,7 @@ if run_only_membench:
      - . $HOME/.cargo/env
      - sudo ~/.cargo/bin/rustup target add wasm32-wasi
      - git clone https://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:x-oauth-basic@github.com/SamGinzburg/VectorVisor.git
-     - cd /tmp/VectorVisor/
+     - cd /vv/VectorVisor/
      - sudo ~/.cargo/bin/cargo build --release
 """.format(opt=OPT_LEVEL, snip_args=WASM_SNIP_ARGS, snip_custom=WASM_SNIP_CUSTOM)
 else:
@@ -172,81 +133,6 @@ else:
      - export HOME=/root
      - export CUDA_CACHE_MAXSIZE=4294967296
      - export CUDA_CACHE_PATH=~/.nv/ComputeCache/
-     - cd /tmp
-     - sudo apt update
-     - sudo apt install -y git
-     - sudo apt install -y git-lfs
-     - sudo apt install -y htop
-     - sudo apt install -y gcc
-     - sudo apt install -y curl
-     - sudo apt install -y clinfo
-     - wget https://golang.org/dl/go1.17.1.linux-amd64.tar.gz
-     - rm -rf /usr/local/go && tar -C /usr/local -xzf go1.17.1.linux-amd64.tar.gz
-     - sudo curl https://sh.rustup.rs -sSf | sh -s -- -y
-     - . $HOME/.cargo/env
-     - sudo ~/.cargo/bin/rustup target add wasm32-wasi
-     - git clone https://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:x-oauth-basic@github.com/SamGinzburg/VectorVisor.git
-     - wget https://github.com/WebAssembly/binaryen/releases/download/version_109/binaryen-version_109-x86_64-linux.tar.gz
-     - tar -xzvf binaryen-version_109-x86_64-linux.tar.gz
-     - cargo install --git https://github.com/SamGinzburg/wasm-snip.git
-     - cd /tmp/VectorVisor/
-     - sudo ~/.cargo/bin/cargo build --release
-     - cd benchmarks/
-     - mkdir -p ~/.nv/ComputeCache/
-     - cd json-compression-lz4/
-     - ~/.cargo/bin/cargo build --release
-     - ~/.cargo/bin/wasm-snip target/wasm32-wasi/release/json-compression.wasm {snip_args} -o target/wasm32-wasi/release/json-compression.wasm -p {snip_custom}
-     - /tmp/binaryen-version_109/bin/wasm-opt target/wasm32-wasi/release/json-compression.wasm {opt} -c -o target/wasm32-wasi/release/json-compression-opt.wasm
-     - cd ..
-     - cd json-compression/
-     - ~/.cargo/bin/cargo build --release
-     - ~/.cargo/bin/wasm-snip target/wasm32-wasi/release/json-compression.wasm {snip_args} -o target/wasm32-wasi/release/json-compression.wasm -p {snip_custom}
-     - /tmp/binaryen-version_109/bin/wasm-opt target/wasm32-wasi/release/json-compression.wasm {opt} -c -o target/wasm32-wasi/release/json-compression-opt.wasm
-     - cd ..
-     - cd average/
-     - ~/.cargo/bin/cargo build --release
-     - ~/.cargo/bin/wasm-snip target/wasm32-wasi/release/average.wasm {snip_args} -o target/wasm32-wasi/release/average.wasm -p {snip_custom}
-     - /tmp/binaryen-version_109/bin/wasm-opt target/wasm32-wasi/release/average.wasm {opt} -c -o target/wasm32-wasi/release/average-opt.wasm
-     - cd ..
-     - cd pbkdf2/
-     - ~/.cargo/bin/cargo build --release
-     - ~/.cargo/bin/wasm-snip target/wasm32-wasi/release/pbkdf2.wasm {snip_args} -o target/wasm32-wasi/release/pbkdf2.wasm -p {snip_custom}
-     - /tmp/binaryen-version_109/bin/wasm-opt target/wasm32-wasi/release/pbkdf2.wasm {opt} -c -o target/wasm32-wasi/release/pbkdf2-opt.wasm
-     - cd ..
-     - cd scrypt/
-     - ~/.cargo/bin/cargo build --release
-     - ~/.cargo/bin/wasm-snip target/wasm32-wasi/release/scrypt.wasm {snip_args} -o target/wasm32-wasi/release/scrypt.wasm -p {snip_custom}
-     - /tmp/binaryen-version_109/bin/wasm-opt target/wasm32-wasi/release/scrypt.wasm {opt} -c -o target/wasm32-wasi/release/scrypt-opt.wasm
-     - cd ..
-     - cd nlp-count-vectorizer/
-     - ~/.cargo/bin/cargo build --release
-     - ~/.cargo/bin/wasm-snip target/wasm32-wasi/release/nlp-count-vectorizer.wasm {snip_args} -o target/wasm32-wasi/release/nlp-count-vectorizer.wasm -p {snip_custom}
-     - /tmp/binaryen-version_109/bin/wasm-opt target/wasm32-wasi/release/nlp-count-vectorizer.wasm {opt} -c -o target/wasm32-wasi/release/nlp-count-vectorizer-opt.wasm
-     - cd ..
-     - cd imageblur/
-     - sudo ~/.cargo/bin/cargo build --release
-     - ~/.cargo/bin/wasm-snip target/wasm32-wasi/release/imageblur.wasm {snip_args} --snip-rust-fmt-code -o target/wasm32-wasi/release/imageblur.wasm -p {snip_custom}
-     - /tmp/binaryen-version_109/bin/wasm-opt target/wasm32-wasi/release/imageblur.wasm {opt} -c -o target/wasm32-wasi/release/imageblur-opt.wasm
-     - cd ..
-     - cd imageblur-bmp/
-     - ~/.cargo/bin/cargo build --release
-     - ~/.cargo/bin/wasm-snip target/wasm32-wasi/release/imageblur-bmp.wasm {snip_args} --snip-rust-fmt-code -o target/wasm32-wasi/release/imageblur-bmp.wasm -p {snip_custom}
-     - /tmp/binaryen-version_109/bin/wasm-opt target/wasm32-wasi/release/imageblur-bmp.wasm {opt} -c -o target/wasm32-wasi/release/imageblur-opt.wasm
-     - cd ..
-     - cd imagehash/
-     - sudo ~/.cargo/bin/cargo build --release
-     - ~/.cargo/bin/wasm-snip target/wasm32-wasi/release/imagehash.wasm {snip_args} --snip-rust-fmt-code -o target/wasm32-wasi/release/imagehash.wasm -p {snip_custom}
-     - /tmp/binaryen-version_109/bin/wasm-opt target/wasm32-wasi/release/imagehash.wasm {opt} -c -o target/wasm32-wasi/release/imagehash-opt.wasm
-     - cd ..
-     - cd imagehash-modified/
-     - sudo ~/.cargo/bin/cargo build --release
-     - ~/.cargo/bin/wasm-snip target/wasm32-wasi/release/imagehash-modified.wasm {snip_args} --snip-rust-fmt-code -o target/wasm32-wasi/release/imagehash-modified.wasm -p {snip_custom}
-     - /tmp/binaryen-version_109/bin/wasm-opt target/wasm32-wasi/release/imagehash-modified.wasm {opt} -c -o target/wasm32-wasi/release/imagehash-opt.wasm
-     - cd ..
-     - cd genpdf/
-     - sudo ~/.cargo/bin/cargo build --release
-     - ~/.cargo/bin/wasm-snip target/wasm32-wasi/release/genpdf.wasm {snip_args} -o target/wasm32-wasi/release/genpdf.wasm -p {snip_custom}
-     - /tmp/binaryen-version_109/bin/wasm-opt target/wasm32-wasi/release/genpdf.wasm {opt} -c -o target/wasm32-wasi/release/genpdf-opt.wasm
 """.format(opt=OPT_LEVEL, snip_args=WASM_SNIP_ARGS, snip_custom=WASM_SNIP_CUSTOM)
 
 def run_command(command, command_name, instance_id):
@@ -309,8 +195,8 @@ def run_scrypt_bench():
     x=$(cloud-init status)
     done
 
-    cd /tmp/VectorVisor/benchmarks/scrypt/
-    ~/.cargo/bin/cargo run --release --target x86_64-unknown-linux-gnu &> /tmp/scrypt.log &
+    cd /vv/VectorVisor/benchmarks/scrypt/
+    ~/.cargo/bin/cargo run --release --target x86_64-unknown-linux-gnu &> /vv/scrypt.log &
     """
 
     run_scrypt_command_wasmtime = """#!/bin/bash
@@ -322,7 +208,7 @@ def run_scrypt_bench():
     x=$(cloud-init status)
     done
 
-    /tmp/VectorVisor/target/release/vectorvisor --input /tmp/VectorVisor/benchmarks/scrypt/target/wasm32-wasi/release/scrypt-opt.wasm --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=131072 --partition=true --serverless=true --vmcount=4096 --wasmtime=true --fastreply={fastreply} &> /tmp/scrypt.log &
+    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/scrypt/target/wasm32-wasi/release/scrypt-opt.wasm --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=131072 --partition=true --serverless=true --vmcount=4096 --wasmtime=true --fastreply={fastreply} &> /vv/scrypt.log &
     """.format(fastreply=fastreply)
 
     run_command(run_scrypt_command_wasmtime, "scrypt_cpu", cpu_bench_instance[0].id)
@@ -336,7 +222,7 @@ def run_scrypt_bench():
     x=$(cloud-init status)
     done
 
-    /tmp/VectorVisor/target/release/vectorvisor --input /tmp/VectorVisor/benchmarks/scrypt/target/wasm32-wasi/release/scrypt-opt.wasm --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=131072 --partition=true --partitions={maxfuncs} --maxloc={maxloc} --serverless=true --vmcount={vmcount} --vmgroups=1 --maxdup=3 --lgroup={lgroup} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} &> /tmp/scrypt.log &
+    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/scrypt/target/wasm32-wasi/release/scrypt-opt.wasm --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=131072 --partition=true --partitions={maxfuncs} --maxloc={maxloc} --serverless=true --vmcount={vmcount} --vmgroups=1 --maxdup=3 --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} &> /vv/scrypt.log &
     """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, \
                maxfuncs=999, maxloc=maxloc*10, vmcount=vmcount)
 
@@ -362,9 +248,9 @@ def run_scrypt_bench():
     x=$(cloud-init status)
     done
 
-    cd /tmp/VectorVisor/benchmarks/scrypt/
+    cd /vv/VectorVisor/benchmarks/scrypt/
 
-    /usr/local/go/bin/go run /tmp/VectorVisor/benchmarks/scrypt/run_scrypt.go {addr} 8000 {target_rps} 1 {duration} {hashes}
+    /usr/local/go/bin/go run /vv/VectorVisor/benchmarks/scrypt/run_scrypt.go {addr} 8000 {target_rps} 1 {duration} {hashes}
     """.format(addr=gpu_instance[0].private_dns_name, target_rps=vmcount, duration=benchmark_duration, hashes=256)
     for idx in range(NUM_REPEAT):
         command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
@@ -398,9 +284,9 @@ def run_scrypt_bench():
     x=$(cloud-init status)
     done
 
-    cd /tmp/VectorVisor/benchmarks/scrypt/
+    cd /vv/VectorVisor/benchmarks/scrypt/
 
-    /usr/local/go/bin/go run /tmp/VectorVisor/benchmarks/scrypt/run_scrypt.go {addr} 8000 {target_rps} 1 {duration} {hashes}
+    /usr/local/go/bin/go run /vv/VectorVisor/benchmarks/scrypt/run_scrypt.go {addr} 8000 {target_rps} 1 {duration} {hashes}
     """.format(addr=cpu_bench_instance[0].private_dns_name, target_rps=target_rps_cpu, duration=benchmark_duration, hashes=256)
     for idx in range(NUM_REPEAT):
         command_id = run_command(run_invoker_cpu, "run invoker for cpu", invoker_instance[0].id)
@@ -454,8 +340,8 @@ def run_pbkdf2_bench():
     x=$(cloud-init status)
     done
 
-    cd /tmp/VectorVisor/benchmarks/pbkdf2/
-    ~/.cargo/bin/cargo run --release --target x86_64-unknown-linux-gnu &> /tmp/pbkdf2.log &
+    cd /vv/VectorVisor/benchmarks/pbkdf2/
+    ~/.cargo/bin/cargo run --release --target x86_64-unknown-linux-gnu &> /vv/pbkdf2.log &
     """
 
     run_pbkdf2_command_wasmtime = """#!/bin/bash
@@ -467,7 +353,7 @@ def run_pbkdf2_bench():
     x=$(cloud-init status)
     done
 
-    /tmp/VectorVisor/target/release/vectorvisor --input /tmp/VectorVisor/benchmarks/pbkdf2/target/wasm32-wasi/release/pbkdf2-opt.wasm --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=131072 --partition=true --serverless=true --vmcount=4096 --wasmtime=true --fastreply={fastreply} &> /tmp/pbkdf2.log &
+    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/pbkdf2/target/wasm32-wasi/release/pbkdf2-opt.wasm --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=131072 --partition=true --serverless=true --vmcount=4096 --wasmtime=true --fastreply={fastreply} &> /vv/pbkdf2.log &
     """.format(fastreply=fastreply)
 
     run_command(run_pbkdf2_command_wasmtime, "pbkdf2_cpu", cpu_bench_instance[0].id)
@@ -481,7 +367,7 @@ def run_pbkdf2_bench():
     x=$(cloud-init status)
     done
 
-    /tmp/VectorVisor/target/release/vectorvisor --input /tmp/VectorVisor/benchmarks/pbkdf2/target/wasm32-wasi/release/pbkdf2-opt.wasm --maxdup=0 --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=16384 --partition=false --serverless=true --vmcount={vmcount} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --rt=200 &> /tmp/pbkdf2.log &
+    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/pbkdf2/target/wasm32-wasi/release/pbkdf2-opt.wasm --maxdup=0 --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=16384 --partition=false --serverless=true --vmcount={vmcount} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --rt=0 &> /vv/pbkdf2.log &
     """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, \
                maxfuncs=999, maxloc=maxloc*10, vmcount=vmcount)
 
@@ -507,9 +393,9 @@ def run_pbkdf2_bench():
     x=$(cloud-init status)
     done
 
-    cd /tmp/VectorVisor/benchmarks/pbkdf2/
+    cd /vv/VectorVisor/benchmarks/pbkdf2/
 
-    /usr/local/go/bin/go run /tmp/VectorVisor/benchmarks/pbkdf2/run_pbkdf2.go {addr} 8000 {target_rps} 1 {duration}
+    /usr/local/go/bin/go run /vv/VectorVisor/benchmarks/pbkdf2/run_pbkdf2.go {addr} 8000 {target_rps} 1 {duration}
     """.format(addr=gpu_instance[0].private_dns_name, target_rps=vmcount, duration=benchmark_duration)
     
     for idx in range(NUM_REPEAT):
@@ -543,9 +429,9 @@ def run_pbkdf2_bench():
     x=$(cloud-init status)
     done
 
-    cd /tmp/VectorVisor/benchmarks/pbkdf2/
+    cd /vv/VectorVisor/benchmarks/pbkdf2/
 
-    /usr/local/go/bin/go run /tmp/VectorVisor/benchmarks/pbkdf2/run_pbkdf2.go {addr} 8000 {target_rps} 1 {duration}
+    /usr/local/go/bin/go run /vv/VectorVisor/benchmarks/pbkdf2/run_pbkdf2.go {addr} 8000 {target_rps} 1 {duration}
     """.format(addr=cpu_bench_instance[0].private_dns_name, target_rps=target_rps_cpu, duration=benchmark_duration)
 
     for idx in range(NUM_REPEAT):
@@ -621,8 +507,8 @@ def run_lz4_bench():
     x=$(cloud-init status)
     done
 
-    cd /tmp/VectorVisor/benchmarks/json-compression-lz4/
-    ~/.cargo/bin/cargo run --release --target x86_64-unknown-linux-gnu &> /tmp/json-compression.log &
+    cd /vv/VectorVisor/benchmarks/json-compression-lz4/
+    ~/.cargo/bin/cargo run --release --target x86_64-unknown-linux-gnu &> /vv/json-compression.log &
     """.format(fastreply=fastreply)
 
     run_json_lz4_command_wasmtime = """#!/bin/bash
@@ -634,7 +520,7 @@ def run_lz4_bench():
     x=$(cloud-init status)
     done
 
-    /tmp/VectorVisor/target/release/vectorvisor --input /tmp/VectorVisor/benchmarks/json-compression-lz4/target/wasm32-wasi/release/json-compression-opt.wasm --ip=0.0.0.0 --heap=4194304 --stack=131072 --hcallsize=524288 --partition=true --serverless=true --vmcount=4096 --wasmtime=true --fastreply={fastreply} &> /tmp/json-compression.log &
+    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/json-compression-lz4/target/wasm32-wasi/release/json-compression-opt.wasm --ip=0.0.0.0 --heap=4194304 --stack=131072 --hcallsize=524288 --partition=true --serverless=true --vmcount=4096 --wasmtime=true --fastreply={fastreply} &> /vv/json-compression.log &
     """.format(fastreply=fastreply)
 
     run_command(run_json_lz4_command_wasmtime, "run_json_lz4_command_wasmtime", cpu_bench_instance[0].id)
@@ -648,7 +534,7 @@ def run_lz4_bench():
     x=$(cloud-init status)
     done
 
-    /tmp/VectorVisor/target/release/vectorvisor --input /tmp/VectorVisor/benchmarks/json-compression-lz4/target/wasm32-wasi/release/json-compression-opt.wasm --ip=0.0.0.0 --heap=4194304 --stack=131072 --hcallsize=262144 --partition=true --serverless=true --vmcount={vmcount} --vmgroups=1 --maxdup=3 --partitions={maxfuncs} --maxloc={maxloc} --lgroup={lgroup} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} --rt=200 &> /tmp/json-compression.log &
+    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/json-compression-lz4/target/wasm32-wasi/release/json-compression-opt.wasm --ip=0.0.0.0 --heap=4194304 --stack=131072 --hcallsize=262144 --partition=true --serverless=true --vmcount={vmcount} --vmgroups=1 --maxdup=3 --partitions={maxfuncs} --maxloc={maxloc} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} --rt=200 &> /vv/json-compression.log &
     """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, \
                maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount)
 
@@ -674,9 +560,9 @@ def run_lz4_bench():
     x=$(cloud-init status)
     done
 
-    cd /tmp/VectorVisor/benchmarks/json-compression-lz4/
+    cd /vv/VectorVisor/benchmarks/json-compression-lz4/
 
-    /usr/local/go/bin/go run /tmp/VectorVisor/benchmarks/json-compression-lz4/run_lz4.go {addr} 8000 {target_rps} 1 {duration} /tmp/VectorVisor/benchmarks/json-compression/smaller_tweets.txt {input_size}
+    /usr/local/go/bin/go run /vv/VectorVisor/benchmarks/json-compression-lz4/run_lz4.go {addr} 8000 {target_rps} 1 {duration} /vv/VectorVisor/benchmarks/json-compression/smaller_tweets.txt {input_size}
     """.format(addr=gpu_instance[0].private_dns_name, input_size=2000, target_rps=vmcount, duration=benchmark_duration)
 
     for idx in range(NUM_REPEAT):
@@ -710,9 +596,9 @@ def run_lz4_bench():
     x=$(cloud-init status)
     done
 
-    cd /tmp/VectorVisor/benchmarks/json-compression-lz4/
+    cd /vv/VectorVisor/benchmarks/json-compression-lz4/
 
-    /usr/local/go/bin/go run /tmp/VectorVisor/benchmarks/json-compression-lz4/run_lz4.go {addr} 8000 {target_rps} 1 {duration} /tmp/VectorVisor/benchmarks/json-compression-lz4/smaller_tweets.txt {input_size}
+    /usr/local/go/bin/go run /vv/VectorVisor/benchmarks/json-compression-lz4/run_lz4.go {addr} 8000 {target_rps} 1 {duration} /vv/VectorVisor/benchmarks/json-compression-lz4/smaller_tweets.txt {input_size}
     """.format(addr=cpu_bench_instance[0].private_dns_name, input_size=2000, target_rps=target_rps_cpu, duration=benchmark_duration)
 
     for idx in range(NUM_REPEAT):
@@ -761,8 +647,8 @@ def run_genpdf_bench():
     x=$(cloud-init status)
     done
 
-    cd /tmp/VectorVisor/benchmarks/genpdf/
-    ~/.cargo/bin/cargo run --release --target x86_64-unknown-linux-gnu &> /tmp/genpdf.log &
+    cd /vv/VectorVisor/benchmarks/genpdf/
+    ~/.cargo/bin/cargo run --release --target x86_64-unknown-linux-gnu &> /vv/genpdf.log &
     """.format(fastreply=fastreply)
 
     run_genpdf_command_wasmtime = """#!/bin/bash
@@ -774,7 +660,7 @@ def run_genpdf_bench():
     x=$(cloud-init status)
     done
 
-    /tmp/VectorVisor/target/release/vectorvisor --input /tmp/VectorVisor/benchmarks/genpdf/target/wasm32-wasi/release/genpdf-opt.wasm --ip=0.0.0.0 --heap=3145728 --stack=131072 --hcallsize=262144 --partition=true --serverless=true --vmcount=4096 --wasmtime=true --fastreply={fastreply} &> /tmp/genpdf.log &
+    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/genpdf/target/wasm32-wasi/release/genpdf-opt.wasm --ip=0.0.0.0 --heap=3145728 --stack=131072 --hcallsize=262144 --partition=true --serverless=true --vmcount=4096 --wasmtime=true --fastreply={fastreply} &> /vv/genpdf.log &
     """.format(fastreply=fastreply)
 
     run_command(run_genpdf_command_wasmtime, "run_average_command_wasmtime", cpu_bench_instance[0].id)
@@ -788,7 +674,7 @@ def run_genpdf_bench():
     x=$(cloud-init status)
     done
 
-    /tmp/VectorVisor/target/release/vectorvisor --input /tmp/VectorVisor/benchmarks/genpdf/target/wasm32-wasi/release/genpdf-opt.wasm --ip=0.0.0.0 --heap=3000000 --stack=131072 --hcallsize=200000 --partition=true --serverless=true --vmcount={vmcount} --wasmtime=false --maxdup=2 --lgroup={lgroup} --partitions={maxfuncs} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} --rt=200 &> /tmp/genpdf.log &
+    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/genpdf/target/wasm32-wasi/release/genpdf-opt.wasm --ip=0.0.0.0 --heap=3000000 --stack=131072 --hcallsize=200000 --partition=true --serverless=true --vmcount={vmcount} --wasmtime=false --maxdup=2 --partitions={maxfuncs} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} --rt=200 &> /vv/genpdf.log &
     """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, \
                maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount)
 
@@ -813,9 +699,9 @@ def run_genpdf_bench():
     x=$(cloud-init status)
     done
 
-    cd /tmp/VectorVisor/benchmarks/genpdf/
+    cd /vv/VectorVisor/benchmarks/genpdf/
 
-    /usr/local/go/bin/go run /tmp/VectorVisor/benchmarks/genpdf/run_genpdf.go {addr} 8000 {target_rps} 1 {duration}
+    /usr/local/go/bin/go run /vv/VectorVisor/benchmarks/genpdf/run_genpdf.go {addr} 8000 {target_rps} 1 {duration}
     """.format(addr=gpu_instance[0].private_dns_name, target_rps=vmcount, duration=benchmark_duration)
 
     for idx in range(NUM_REPEAT):
@@ -849,9 +735,9 @@ def run_genpdf_bench():
     x=$(cloud-init status)
     done
 
-    cd /tmp/VectorVisor/benchmarks/genpdf/
+    cd /vv/VectorVisor/benchmarks/genpdf/
 
-    /usr/local/go/bin/go run /tmp/VectorVisor/benchmarks/genpdf/run_genpdf.go {addr} 8000 {target_rps} 1 {duration}
+    /usr/local/go/bin/go run /vv/VectorVisor/benchmarks/genpdf/run_genpdf.go {addr} 8000 {target_rps} 1 {duration}
     """.format(addr=cpu_bench_instance[0].private_dns_name, target_rps=target_rps_cpu, duration=benchmark_duration)
     for idx in range(NUM_REPEAT):
         command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
@@ -898,8 +784,8 @@ def run_average_bench():
     x=$(cloud-init status)
     done
 
-    cd /tmp/VectorVisor/benchmarks/average/
-    ~/.cargo/bin/cargo run --release --target x86_64-unknown-linux-gnu &> /tmp/average.log &
+    cd /vv/VectorVisor/benchmarks/average/
+    ~/.cargo/bin/cargo run --release --target x86_64-unknown-linux-gnu &> /vv/average.log &
     """.format(fastreply=fastreply)
 
     run_average_command_wasmtime = """#!/bin/bash
@@ -911,7 +797,7 @@ def run_average_bench():
     x=$(cloud-init status)
     done
 
-    /tmp/VectorVisor/target/release/vectorvisor --input /tmp/VectorVisor/benchmarks/average/target/wasm32-wasi/release/average-opt.wasm --ip=0.0.0.0 --heap=3145728 --stack=131072 --hcallsize=262144 --partition=true --serverless=true --vmcount=4096 --wasmtime=true --fastreply={fastreply} &> /tmp/average.log &
+    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/average/target/wasm32-wasi/release/average-opt.wasm --ip=0.0.0.0 --heap=3145728 --stack=131072 --hcallsize=262144 --partition=true --serverless=true --vmcount=4096 --wasmtime=true --fastreply={fastreply} &> /vv/average.log &
     """.format(fastreply=fastreply)
 
     run_command(run_average_command_wasmtime, "run_average_command_wasmtime", cpu_bench_instance[0].id)
@@ -925,7 +811,7 @@ def run_average_bench():
     x=$(cloud-init status)
     done
 
-    /tmp/VectorVisor/target/release/vectorvisor --input /tmp/VectorVisor/benchmarks/average/target/wasm32-wasi/release/average-opt.wasm --ip=0.0.0.0 --heap=3145728 --stack=131072 --hcallsize=262144 --partition=true --serverless=true --vmcount={vmcount} --wasmtime=false --maxdup=3 --lgroup={lgroup} --partitions={maxfuncs} --maxloc={maxloc} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} --rt=200 &> /tmp/average.log &
+    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/average/target/wasm32-wasi/release/average-opt.wasm --ip=0.0.0.0 --heap=3145728 --stack=131072 --hcallsize=262144 --partition=true --serverless=true --vmcount={vmcount} --wasmtime=false --maxdup=3 --partitions={maxfuncs} --maxloc={maxloc} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} --rt=0 &> /vv/average.log &
     """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, \
                maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount)
 
@@ -950,9 +836,9 @@ def run_average_bench():
     x=$(cloud-init status)
     done
 
-    cd /tmp/VectorVisor/benchmarks/average/
+    cd /vv/VectorVisor/benchmarks/average/
 
-    /usr/local/go/bin/go run /tmp/VectorVisor/benchmarks/average/run_average_bench.go {addr} 8000 {target_rps} 1 {duration} {input_size}
+    /usr/local/go/bin/go run /vv/VectorVisor/benchmarks/average/run_average_bench.go {addr} 8000 {target_rps} 1 {duration} {input_size}
     """.format(addr=gpu_instance[0].private_dns_name, input_size=20, target_rps=vmcount, duration=benchmark_duration)
 
     for idx in range(NUM_REPEAT):
@@ -986,9 +872,9 @@ def run_average_bench():
     x=$(cloud-init status)
     done
 
-    cd /tmp/VectorVisor/benchmarks/average/
+    cd /vv/VectorVisor/benchmarks/average/
 
-    /usr/local/go/bin/go run /tmp/VectorVisor/benchmarks/average/run_average_bench.go {addr} 8000 {target_rps} 1 {duration} {input_size}
+    /usr/local/go/bin/go run /vv/VectorVisor/benchmarks/average/run_average_bench.go {addr} 8000 {target_rps} 1 {duration} {input_size}
     """.format(addr=cpu_bench_instance[0].private_dns_name, input_size=20, target_rps=target_rps_cpu, duration=benchmark_duration)
     for idx in range(NUM_REPEAT):
         command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
@@ -1025,9 +911,9 @@ def run_image_hash_bench(run_modified = False):
     else:
         vmcount = 3072
     
-    imagehash_path = "/tmp/VectorVisor/benchmarks/imagehash/"
+    imagehash_path = "/vv/VectorVisor/benchmarks/imagehash"
     if run_modified:
-        imagehash_path = "/tmp/VectorVisor/benchmarks/imagehash-modified/"
+        imagehash_path = "/vv/VectorVisor/benchmarks/imagehash-modified"
 
     run_image_command_x86 = """#!/bin/bash
     sudo su
@@ -1039,7 +925,7 @@ def run_image_hash_bench(run_modified = False):
     done
     
     cd {imagehash_path}
-    ~/.cargo/bin/cargo run --release --target x86_64-unknown-linux-gnu &> /tmp/imagehash.log &
+    ~/.cargo/bin/cargo run --release --target x86_64-unknown-linux-gnu &> /vv/imagehash.log &
     """.format(fastreply=fastreply, imagehash_path=imagehash_path)
 
     run_image_command_wasmtime = """#!/bin/bash
@@ -1051,8 +937,8 @@ def run_image_hash_bench(run_modified = False):
     x=$(cloud-init status)
     done
 
-    /tmp/VectorVisor/target/release/vectorvisor --input {imagehash_path}target/wasm32-wasi/release/imagehash-opt.wasm --ip=0.0.0.0 --heap=4194304 --stack=131072 --hcallsize=262144 --partition=true --serverless=true --vmcount=3072 --wasmtime=true --fastreply={fastreply} &> /tmp/imagehash.log &
-    """.format(fastreply=fastreply, imagehash_path=imagehash_path)
+    /vv/VectorVisor/target/release/vectorvisor --input {imagehash_path}-opt-{interleave}.wasm --ip=0.0.0.0 --heap=4194304 --stack=131072 --hcallsize=294912 --partition=true --serverless=true --vmcount=3072 --wasmtime=true --fastreply={fastreply} &> /vv/imagehash.log &
+    """.format(fastreply=fastreply, imagehash_path=imagehash_path, interleave=interleave)
 
     run_command(run_image_command_wasmtime, "run_imagehash_command_wasmtime", cpu_bench_instance[0].id)
 
@@ -1065,7 +951,14 @@ def run_image_hash_bench(run_modified = False):
     x=$(cloud-init status)
     done
 
-    /tmp/VectorVisor/target/release/vectorvisor --input {imagehash_path}target/wasm32-wasi/release/imagehash-opt.wasm --ip=0.0.0.0 --heap=4194304 --stack=131072 --hcallsize=262144 --partition=true --serverless=true --vmcount={vmcount} --vmgroups=1 --maxdup=2 --partitions={maxfuncs} --maxloc={maxloc} --lgroup={lgroup} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} --rt=200 &> /tmp/imagehash.log &
+    export CUDA_CACHE_MAXSIZE=4294967296
+    export CUDA_CACHE_PATH=~/.nv/ComputeCache/
+    export PATH=~/.cargo/bin:$PATH
+    export PATH=/vv/binaryen-version_109/bin:$PATH
+
+    cd /vv/VectorVisor/benchmarks/
+
+    /vv/VectorVisor/target/release/vectorvisor --input {imagehash_path}-opt-{interleave}.wasm.bin --ip=0.0.0.0 --heap=4194304 --stack=131072 --hcallsize=294912 --partition=false --serverless=true --vmcount={vmcount} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --rt=200 &> /vv/imagehash.log &
     """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, imagehash_path=imagehash_path, maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount)
 
     run_command(run_image_command, "run_imagehash_gpu_command", gpu_instance[0].id)
@@ -1091,7 +984,7 @@ def run_image_hash_bench(run_modified = False):
     x=$(cloud-init status)
     done
 
-    cd {imagehash_path}
+    cd {imagehash_path}/
 
     /usr/local/go/bin/go run run_image_hash.go {addr} 8000 {target_rps} 1 {duration}
     """.format(addr=gpu_instance[0].private_dns_name, input_size=1000, target_rps=vmcount, imagehash_path=imagehash_path, duration=benchmark_duration)
@@ -1134,7 +1027,7 @@ def run_image_hash_bench(run_modified = False):
     x=$(cloud-init status)
     done
 
-    cd {imagehash_path}
+    cd {imagehash_path}/
 
     /usr/local/go/bin/go run run_image_hash.go {addr} 8000 {target_rps} 1 {duration}
     """.format(addr=cpu_bench_instance[0].private_dns_name, input_size=1000, target_rps=target_rps_cpu, imagehash_path=imagehash_path, duration=benchmark_duration)
@@ -1179,6 +1072,61 @@ def run_image_hash_bench(run_modified = False):
 
         time.sleep(SLEEP_TIME)
 
+    if run_modified:
+        run_cuda_command = """#!/bin/bash
+            sudo su
+            ulimit -n 65536
+            x=$(cloud-init status)
+            until [ "$x" == "status: done" ]; do
+            sleep 10
+            x=$(cloud-init status)
+            done
+
+            cd {bin_path}
+            cd kernel
+            make
+            cd ..
+            ~/.cargo/bin/cargo run --release --target x86_64-unknown-linux-gnu &> /vv/imagehash_cuda.log &
+            """.format(bin_path="/vv/VectorVisor/benchmarks/cuda-blockhash/")
+            
+        run_invoker = """#!/bin/bash
+            sudo su
+            ulimit -n 65536
+            mkdir -p ~/gocache/
+            mkdir -p ~/gopath/
+            mkdir -p ~/xdg/
+            export GOCACHE=~/gocache/
+            export GOPATH=~/gopath/
+            export XDG_CACHE_HOME=~/xdg/
+
+            x=$(cloud-init status)
+            until [ "$x" == "status: done" ]; do
+            sleep 10
+            x=$(cloud-init status)
+            done
+
+            cd {exe_path}/
+
+            /usr/local/go/bin/go run run_image_hash.go {addr} 8000 {target_rps} 1 {duration}
+            """.format(addr=gpu_instance[0].private_dns_name, input_size=1000, target_rps=256, exe_path=imagehash_path, duration=benchmark_duration)
+
+        run_command(run_cuda_command, "run_imagehash_cuda_gpu_command", gpu_instance[0].id)
+
+        for idx in range(NUM_REPEAT): 
+            command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
+
+            time.sleep(20)
+
+            # Block until benchmark is complete
+            output = block_on_command(command_id, invoker_instance[0].id)
+            print (output)
+
+            # save output
+            with open(temp_dir+"gpu_cuda_bench_imageblur_bmp_{idx}.txt".format(idx=idx), "w") as text_file:
+                text_file.write(str(output))
+            time.sleep(SLEEP_TIME)
+
+    cleanup()
 
 def run_image_blur_bench(run_bmp = False):
     if run_a10g:
@@ -1187,11 +1135,11 @@ def run_image_blur_bench(run_bmp = False):
         vmcount = 3072
 
     if not run_bmp:
-        bin_path = "/tmp/VectorVisor/benchmarks/imageblur/target/wasm32-wasi/release/imageblur-opt.wasm"
-        exe_path = "/tmp/VectorVisor/benchmarks/imageblur/"
+        bin_path = "/vv/VectorVisor/benchmarks/imageblur/target/wasm32-wasi/release/imageblur-opt.wasm"
+        exe_path = "/vv/VectorVisor/benchmarks/imageblur/"
     else:
-        bin_path = "/tmp/VectorVisor/benchmarks/imageblur-bmp/target/wasm32-wasi/release/imageblur-opt.wasm"
-        exe_path = "/tmp/VectorVisor/benchmarks/imageblur-bmp/"
+        bin_path = "/vv/VectorVisor/benchmarks/imageblur-bmp/target/wasm32-wasi/release/imageblur-opt.wasm"
+        exe_path = "/vv/VectorVisor/benchmarks/imageblur-bmp/"
 
     run_image_command_x86 = """#!/bin/bash
     sudo su
@@ -1203,7 +1151,7 @@ def run_image_blur_bench(run_bmp = False):
     done
 
     cd {bin_path}
-    ~/.cargo/bin/cargo run --release --target x86_64-unknown-linux-gnu &> /tmp/imageblur.log &
+    ~/.cargo/bin/cargo run --release --target x86_64-unknown-linux-gnu &> /vv/imageblur.log &
     """.format(fastreply=fastreply, bin_path=exe_path)
 
     run_image_command_wasmtime = """#!/bin/bash
@@ -1215,7 +1163,7 @@ def run_image_blur_bench(run_bmp = False):
     x=$(cloud-init status)
     done
 
-    /tmp/VectorVisor/target/release/vectorvisor --input {bin_path} --ip=0.0.0.0 --heap=4194304 --stack=262144 --hcallsize=409600 --partition=true --serverless=true --vmcount=3072 --wasmtime=true --fastreply={fastreply} &> /tmp/imageblur.log &
+    /vv/VectorVisor/target/release/vectorvisor --input {bin_path} --ip=0.0.0.0 --heap=4194304 --stack=262144 --hcallsize=409600 --partition=true --serverless=true --vmcount=3072 --wasmtime=true --fastreply={fastreply} &> /vv/imageblur.log &
     """.format(fastreply=fastreply, bin_path=bin_path)
 
     run_command(run_image_command_wasmtime, "run_imageblur_command_wasmtime", cpu_bench_instance[0].id)
@@ -1229,7 +1177,7 @@ def run_image_blur_bench(run_bmp = False):
     x=$(cloud-init status)
     done
 
-    /tmp/VectorVisor/target/release/vectorvisor --input {bin_path} --ip=0.0.0.0 --heap=4194304 --stack=262144 --hcallsize=409600 --partition=true --serverless=true --vmcount={vmcount} --vmgroups=1 --maxdup=2 --disablefastcalls=false --partitions={maxfuncs} --maxloc={maxloc} --lgroup={lgroup} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} &> /tmp/imageblur.log &
+    /vv/VectorVisor/target/release/vectorvisor --input {bin_path} --ip=0.0.0.0 --heap=4194304 --stack=262144 --hcallsize=409600 --partition=true --serverless=true --vmcount={vmcount} --vmgroups=1 --maxdup=2 --disablefastcalls=false --partitions={maxfuncs} --maxloc={maxloc} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} &> /vv/imageblur.log &
     """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, bin_path=bin_path, maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount)
 
     run_command(run_image_command, "run_imageblur_gpu_command", gpu_instance[0].id)
@@ -1351,8 +1299,8 @@ def run_image_blur_bench(run_bmp = False):
             cd kernel
             make
             cd ..
-            ~/.cargo/bin/cargo run --release --target x86_64-unknown-linux-gnu &> /tmp/imageblur_cuda.log &
-            """.format(bin_path="/tmp/VectorVisor/benchmarks/cuda-blur/")
+            ~/.cargo/bin/cargo run --release --target x86_64-unknown-linux-gnu &> /vv/imageblur_cuda.log &
+            """.format(bin_path="/vv/VectorVisor/benchmarks/cuda-blur/")
             
         run_invoker = """#!/bin/bash
             sudo su
@@ -1408,8 +1356,8 @@ def run_nlp_count_bench():
     x=$(cloud-init status)
     done
 
-    cd /tmp/VectorVisor/benchmarks/nlp-count-vectorizer/
-    ~/.cargo/bin/cargo run --release --target x86_64-unknown-linux-gnu &> /tmp/nlp-count-vectorizer.log &
+    cd /vv/VectorVisor/benchmarks/nlp-count-vectorizer/
+    ~/.cargo/bin/cargo run --release --target x86_64-unknown-linux-gnu &> /vv/nlp-count-vectorizer.log &
     """.format(fastreply=fastreply)
 
     run_nlp_command_wasmtime = """#!/bin/bash
@@ -1421,7 +1369,7 @@ def run_nlp_count_bench():
     x=$(cloud-init status)
     done
 
-    /tmp/VectorVisor/target/release/vectorvisor --input /tmp/VectorVisor/benchmarks/nlp-count-vectorizer/target/wasm32-wasi/release/nlp-count-vectorizer-opt.wasm --ip=0.0.0.0 --heap=4194304 --stack=131072 --hcallsize=524288 --partition=true --serverless=true --vmcount=4096 --wasmtime=true --fastreply={fastreply} &> /tmp/nlp-count-vectorizer.log &
+    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/nlp-count-vectorizer/target/wasm32-wasi/release/nlp-count-vectorizer-opt.wasm --ip=0.0.0.0 --heap=4194304 --stack=131072 --hcallsize=524288 --partition=true --serverless=true --vmcount=4096 --wasmtime=true --fastreply={fastreply} &> /vv/nlp-count-vectorizer.log &
     """.format(fastreply=fastreply)
 
     run_command(run_nlp_command_wasmtime, "run_nlp_command_wasmtime", cpu_bench_instance[0].id)
@@ -1435,7 +1383,7 @@ def run_nlp_count_bench():
     x=$(cloud-init status)
     done
 
-    /tmp/VectorVisor/target/release/vectorvisor --input /tmp/VectorVisor/benchmarks/nlp-count-vectorizer/target/wasm32-wasi/release/nlp-count-vectorizer-opt.wasm --ip=0.0.0.0 --heap=4194304 --stack=131072 --hcallsize=524288 --partition=true --serverless=true --vmcount={vmcount} --vmgroups=1 --maxdup=3 --disablefastcalls=false --lgroup={lgroup} --partitions={maxfuncs} --maxloc={maxloc} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} &> /tmp/nlp-count-vectorizer.log &
+    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/nlp-count-vectorizer/target/wasm32-wasi/release/nlp-count-vectorizer-opt.wasm --ip=0.0.0.0 --heap=4194304 --stack=131072 --hcallsize=524288 --partition=true --serverless=true --vmcount={vmcount} --vmgroups=1 --maxdup=3 --disablefastcalls=false --partitions={maxfuncs} --maxloc={maxloc} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} &> /vv/nlp-count-vectorizer.log &
     """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount)
 
     run_command(run_nlp_command, "run_nlp_command", gpu_instance[0].id)
@@ -1458,9 +1406,9 @@ def run_nlp_count_bench():
     x=$(cloud-init status)
     done
 
-    cd /tmp/VectorVisor/benchmarks/nlp-count-vectorizer/
+    cd /vv/VectorVisor/benchmarks/nlp-count-vectorizer/
 
-    /usr/local/go/bin/go run /tmp/VectorVisor/benchmarks/nlp-count-vectorizer/run_nlp.go {addr} 8000 {target_rps} 1 {duration} /tmp/VectorVisor/benchmarks/nlp-count-vectorizer/smaller_tweets.txt {input_size}
+    /usr/local/go/bin/go run /vv/VectorVisor/benchmarks/nlp-count-vectorizer/run_nlp.go {addr} 8000 {target_rps} 1 {duration} /vv/VectorVisor/benchmarks/nlp-count-vectorizer/smaller_tweets.txt {input_size}
     """.format(addr=gpu_instance[0].private_dns_name, input_size=500, target_rps=vmcount, duration=benchmark_duration)
 
     for idx in range(NUM_REPEAT):
@@ -1494,9 +1442,9 @@ def run_nlp_count_bench():
     x=$(cloud-init status)
     done
 
-    cd /tmp/VectorVisor/benchmarks/nlp-count-vectorizer/
+    cd /vv/VectorVisor/benchmarks/nlp-count-vectorizer/
 
-    /usr/local/go/bin/go run /tmp/VectorVisor/benchmarks/nlp-count-vectorizer/run_nlp.go {addr} 8000 {target_rps} 1 {duration} /tmp/VectorVisor/benchmarks/nlp-count-vectorizer/smaller_tweets.txt {input_size}
+    /usr/local/go/bin/go run /vv/VectorVisor/benchmarks/nlp-count-vectorizer/run_nlp.go {addr} 8000 {target_rps} 1 {duration} /vv/VectorVisor/benchmarks/nlp-count-vectorizer/smaller_tweets.txt {input_size}
     """.format(addr=cpu_bench_instance[0].private_dns_name, input_size=500, target_rps=target_rps_cpu, duration=benchmark_duration)
     
     for idx in range(NUM_REPEAT):
@@ -1546,7 +1494,7 @@ def run_membench(membench_interleave=4):
     x=$(cloud-init status)
     done
 
-    /tmp/VectorVisor/target/release/vectorvisor --input /tmp/VectorVisor/examples/mem/memloop.wat --ip=0.0.0.0 --heap=3145728 --stack=1024 --hcallsize=1024 --partition=false --serverless=true --volatile=true --vmcount={vmcount} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} &> test.log && tail -n 30 test.log
+    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/examples/mem/memloop.wat --ip=0.0.0.0 --heap=3145728 --stack=1024 --hcallsize=1024 --partition=false --serverless=true --volatile=true --vmcount={vmcount} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} &> test.log && tail -n 30 test.log
     """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=membench_interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount)
 
     for idx in range(50):
@@ -1570,7 +1518,7 @@ def run_membench(membench_interleave=4):
     x=$(cloud-init status)
     done
 
-    /tmp/VectorVisor/target/release/vectorvisor --input /tmp/VectorVisor/examples/mem/memloop_unroll.wat --ip=0.0.0.0 --heap=3145728 --stack=1024 --hcallsize=1024 --partition=false --serverless=true --volatile=true --vmcount={vmcount} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} &> test.log && tail -n 30 test.log
+    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/examples/mem/memloop_unroll.wat --ip=0.0.0.0 --heap=3145728 --stack=1024 --hcallsize=1024 --partition=false --serverless=true --volatile=true --vmcount={vmcount} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} &> test.log && tail -n 30 test.log
     """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=membench_interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount)
 
     for idx in range(50):
@@ -1595,7 +1543,7 @@ def run_membench(membench_interleave=4):
     x=$(cloud-init status)
     done
 
-    /tmp/VectorVisor/target/release/vectorvisor --input /tmp/VectorVisor/examples/mem/memloop64.wat --ip=0.0.0.0 --heap=3145728 --stack=1024 --hcallsize=1024 --partition=false --serverless=true --volatile=true --vmcount={vmcount} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} &> test.log && tail -n 30 test.log
+    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/examples/mem/memloop64.wat --ip=0.0.0.0 --heap=3145728 --stack=1024 --hcallsize=1024 --partition=false --serverless=true --volatile=true --vmcount={vmcount} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} &> test.log && tail -n 30 test.log
     """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=membench_interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount)
 
     for idx in range(50):
@@ -1620,7 +1568,7 @@ def run_membench(membench_interleave=4):
     x=$(cloud-init status)
     done
 
-    /tmp/VectorVisor/target/release/vectorvisor --input /tmp/VectorVisor/examples/mem/memloop64_unroll.wat --ip=0.0.0.0 --heap=3145728 --stack=1024 --hcallsize=1024 --partition=false --serverless=true --volatile=true --vmcount={vmcount} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} &> test.log && tail -n 30 test.log
+    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/examples/mem/memloop64_unroll.wat --ip=0.0.0.0 --heap=3145728 --stack=1024 --hcallsize=1024 --partition=false --serverless=true --volatile=true --vmcount={vmcount} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} &> test.log && tail -n 30 test.log
     """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=membench_interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount)
 
     for idx in range(50):
@@ -1660,7 +1608,8 @@ us-east-1 AMI: ami-094c089c38ed069f2
 
 if region == "us-east-1":
     #gpu_ami = 'ami-09a83b91fc98e860f'
-    gpu_ami = 'ami-02e8976fea9b1f568'
+    #gpu_ami = 'ami-02e8976fea9b1f568'
+    gpu_ami = ami
 elif region == "us-east-2":
     gpu_ami = 'ami-01463836f7041cd10'
 
@@ -1689,7 +1638,8 @@ us-east-1 AMI: ami-083654bd07b5da81d
 """
 
 if region == "us-east-1":
-    cpu_ami = 'ami-09a83b91fc98e860f'
+    #cpu_ami = 'ami-09a83b91fc98e860f'
+    cpu_ami = ami
 elif region == "us-east-2":
     cpu_ami = 'ami-028dbc12531690cf4'
 
@@ -1778,7 +1728,7 @@ if run_only_membench and skip_membench is None:
 
 # run image hash bench
 
-run_image_blur_bench(run_bmp = True)
+run_image_hash_bench(run_modified = True)
 
 cleanup()
 
