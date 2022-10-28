@@ -1066,9 +1066,9 @@ pub fn emit_call_indirect(
 
     // generate a temp var to store the result of attempting to perform an optmized indirect call
 
-    result += &format!("\tuchar indirect{} = 1;\n", call_indirect_count);
+    //result += &format!("\tuchar indirect{} = 1;\n", call_indirect_count);
+    //result += &format!("\t{}\n", &format!("switch({}) {{", index_register));
 
-    result += &format!("\t{}\n", &format!("switch({}) {{", index_register));
     /* Only emit cases here that:
      * 1) match the type signature
      * 2) are fastcall optimized
@@ -1101,6 +1101,7 @@ pub fn emit_call_indirect(
         */
     }
 
+    /*
     // emit a default case, to handle lookups to invalid indicies!
     result += &format!("\t\t{}\n", "default:");
     // Set a flag indicating we didn't perform the fastcall
@@ -1112,6 +1113,7 @@ pub fn emit_call_indirect(
     result += &format!("\tif (indirect{}) {{\n", call_indirect_count);
     result += &format!("\t\tgoto call_indirect_fastpath_{};\n", call_indirect_count);
     result += &format!("\t}}\n");
+    */
 
     // After trying to perform fastcalls, we check the remaining cases
     // Save the context before entering the switch case
@@ -1345,7 +1347,7 @@ pub fn emit_call_indirect(
         }
     }
 
-    result += &format!("\tcall_indirect_fastpath_{}:\n", call_indirect_count);
+    //result += &format!("\tcall_indirect_fastpath_{}:\n", call_indirect_count);
 
     *call_indirect_count += 1;
 

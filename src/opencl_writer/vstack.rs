@@ -8,6 +8,9 @@
  * In the vstack model, all parameters, locals are also intermediates as well
  *
  */
+
+use crate::opencl_writer::emit_read_u32_fast;
+use crate::opencl_writer::emit_write_u32_fast;
 use crate::opencl_writer::emit_read_u32_aligned;
 use crate::opencl_writer::emit_read_u64_aligned;
 use crate::opencl_writer::emit_write_u32_aligned;
@@ -125,6 +128,8 @@ pub struct StackCtx {
     // Track if we encounter any hcalls / call_indirects / non-opt calls
     // If we don't, then we don't have to emit any context saving/restoring at all
     fastcall_opt_possible: bool,
+    // Track the memory interleaving for emitting optimized context saving ops
+    interleave: u32,
 }
 
 type ControlStackType = Vec<(
@@ -156,6 +161,7 @@ impl<'a> StackCtx {
         curr_fn_name: String,
         reduction_size: &mut u32,
         local_work_group: usize,
+        interleave: u32,
         is_gpu: bool,
     ) -> StackCtx {
         let mut stack_sizes: Vec<StackType> = vec![];
@@ -2675,6 +2681,7 @@ impl<'a> StackCtx {
             max_emitted_context: 0,
             opt_loop_tracking: vec![],
             fastcall_opt_possible: is_fastcall,
+            interleave: interleave,
         }
     }
 
@@ -3426,7 +3433,7 @@ impl<'a> StackCtx {
                 }
 
                 match ty {
-                    StackType::i32 => {
+                    StackType::i32 if self.interleave == 1 => {
                         ret_str += &format!(
                             "\tif (local_cache[{}]) {};\n",
                             cache_idx,
@@ -3439,6 +3446,21 @@ impl<'a> StackCtx {
                                 "(ulong)stack_u32",
                                 &local,
                                 "warp_idx"
+                            )
+                        );
+                    }
+                    StackType::i32 => {
+                        ret_str += &format!(
+                            "\tif (local_cache[{}]) {};\n",
+                            cache_idx,
+                            &emit_write_u32_fast(
+                                &format!(
+                                    "(ulong)({}+{})*4",
+                                    offset,
+                                    &sfp_ptr,
+                                ),
+                                "(ulong)stack_base",
+                                &local,
                             )
                         );
                     }
@@ -3458,7 +3480,7 @@ impl<'a> StackCtx {
                             )
                         );
                     }
-                    StackType::f32 => {
+                    StackType::f32 if self.interleave == 1 => {
                         ret_str += &format!("\tif (local_cache[{}]) {{\n", cache_idx);
                         ret_str += &format!("\t\tuint temp = 0;\n");
                         ret_str += &format!("\t\tfloat tempaddr = {};\n", local);
@@ -3476,6 +3498,27 @@ impl<'a> StackCtx {
                                 "(ulong)stack_u32",
                                 "temp",
                                 "warp_idx"
+                            )
+                        );
+                        ret_str += &format!("\t}}\n");
+                    }
+                    StackType::f32 => {
+                        ret_str += &format!("\tif (local_cache[{}]) {{\n", cache_idx);
+                        ret_str += &format!("\t\tuint temp = 0;\n");
+                        ret_str += &format!("\t\tfloat tempaddr = {};\n", local);
+                        ret_str += &format!(
+                            "\t\t___private_memcpy_nonmmu(&temp, &tempaddr, sizeof(float));\n"
+                        );
+                        ret_str += &format!(
+                            "\t\t{};\n",
+                            &emit_write_u32_fast(
+                                &format!(
+                                    "(ulong)({}+{})*4",
+                                    offset,
+                                    &sfp_ptr,
+                                ),
+                                "(ulong)stack_base",
+                                "temp",
                             )
                         );
                         ret_str += &format!("\t}}\n");
@@ -3557,18 +3600,32 @@ impl<'a> StackCtx {
                 is_empty = false;
                 let i_name = self.i32_stack.get(idx).unwrap();
                 let i_name_offset = self.intermediate_offsets.get(i_name).unwrap();
-                ret_str += &format!(
+                if self.interleave == 1 {
+                    ret_str += &format!(
+                        "\t{};\n",
+                        &emit_write_u32_aligned(
+                            &format!(
+                             "(ulong)(stack_u32+{}+{}+{})",
+                                &sfp_ptr, self.stack_frame_offset, i_name_offset
+                            ),
+                            "(ulong)stack_u32",
+                            &i_name,
+                            "warp_idx"
+                        )
+                    );
+                } else {
+                    ret_str += &format!(
                     "\t{};\n",
-                    &emit_write_u32_aligned(
+                    &emit_write_u32_fast(
                         &format!(
-                            "(ulong)(stack_u32+{}+{}+{})",
+                            "(ulong)({}+{}+{})*4",
                             &sfp_ptr, self.stack_frame_offset, i_name_offset
                         ),
-                        "(ulong)stack_u32",
+                        "(ulong)stack_base",
                         &i_name,
-                        "warp_idx"
                     )
-                );
+                    );
+                }
             }
 
             for idx in i64_range {
@@ -3600,7 +3657,8 @@ impl<'a> StackCtx {
                     "\t\t___private_memcpy_nonmmu(&temp, &{}, sizeof(float));\n",
                     &i_name
                 );
-                ret_str += &format!(
+                if self.interleave == 1 {
+                    ret_str += &format!(
                     "\t\t{};\n",
                     &emit_write_u32_aligned(
                         &format!(
@@ -3611,7 +3669,20 @@ impl<'a> StackCtx {
                         "temp",
                         "warp_idx"
                     )
-                );
+                    );
+                } else {
+                    ret_str += &format!(
+                    "\t\t{};\n",
+                    &emit_write_u32_fast(
+                        &format!(
+                            "(ulong)({}+{}+{})*4",
+                            &sfp_ptr, self.stack_frame_offset, i_name_offset
+                        ),
+                        "(ulong)stack_base",
+                        "temp",
+                    )
+                    );
+                }
                 ret_str += &format!("\t}}\n");
             }
 
@@ -3757,7 +3828,7 @@ impl<'a> StackCtx {
 
                 match ty {
                     // Only load locals if they *haven't* been written to
-                    StackType::i32 => {
+                    StackType::i32 if self.interleave == 1 => {
                         ret_str += &format!(
                             "\tif (!local_cache[{}]) {} = {};\n",
                             cache_idx,
@@ -3770,6 +3841,21 @@ impl<'a> StackCtx {
                                 ),
                                 "(ulong)stack_u32",
                                 "warp_idx"
+                            )
+                        );
+                    }
+                    StackType::i32 => {
+                        ret_str += &format!(
+                            "\tif (!local_cache[{}]) {} = {};\n",
+                            cache_idx,
+                            local,
+                            &emit_read_u32_fast(
+                                &format!(
+                                    "(ulong)({}+{})*4",
+                                    offset,
+                                    &sfp_ptr,
+                                ),
+                                "(ulong)stack_base",
                             )
                         );
                     }
@@ -3789,7 +3875,7 @@ impl<'a> StackCtx {
                             )
                         );
                     }
-                    StackType::f32 => {
+                    StackType::f32 if self.interleave == 1 => {
                         ret_str += &format!("\tif (!local_cache[{}]) {{\n", cache_idx);
                         ret_str += &format!(
                             "\t\tuint temp = {};\n",
@@ -3801,6 +3887,26 @@ impl<'a> StackCtx {
                                 ),
                                 "(ulong)stack_u32",
                                 "warp_idx"
+                            )
+                        );
+                        ret_str += &format!("\t\tfloat tempaddr = 0.0f;\n");
+                        ret_str += &format!(
+                            "\t\t___private_memcpy_nonmmu(&tempaddr, &temp, sizeof(float));\n"
+                        );
+                        ret_str += &format!("\t\t{} = tempaddr;\n", local);
+                        ret_str += &format!("\t}}\n");
+                    }
+                    StackType::f32 => {
+                        ret_str += &format!("\tif (!local_cache[{}]) {{\n", cache_idx);
+                        ret_str += &format!(
+                            "\t\tuint temp = {};\n",
+                            &emit_read_u32_fast(
+                                &format!(
+                                    "(ulong)({}+{})*4",
+                                    offset,
+                                    &sfp_ptr,
+                                ),
+                                "(ulong)stack_base",
                             )
                         );
                         ret_str += &format!("\t\tfloat tempaddr = 0.0f;\n");
@@ -3877,8 +3983,8 @@ impl<'a> StackCtx {
                 let i_name = self.i32_stack.get(idx).unwrap();
                 let i_name_offset = self.intermediate_offsets.get(i_name).unwrap();
                 is_empty = false;
-
-                ret_str += &format!(
+                if self.interleave == 1 {
+                    ret_str += &format!(
                     "\t{} = {};\n",
                     &i_name,
                     &emit_read_u32_aligned(
@@ -3889,7 +3995,20 @@ impl<'a> StackCtx {
                         "(ulong)stack_u32",
                         "warp_idx"
                     )
-                );
+                    );
+                } else {
+                    ret_str += &format!(
+                    "\t{} = {};\n",
+                    &i_name,
+                    &emit_read_u32_fast(
+                        &format!(
+                            "(ulong)({}+{}+{})*4",
+                            &sfp_ptr, self.stack_frame_offset, i_name_offset
+                        ),
+                        "(ulong)stack_base",
+                    )
+                    );
+                }
             }
 
             for idx in i64_range {
@@ -3917,7 +4036,8 @@ impl<'a> StackCtx {
                 is_empty = false;
 
                 ret_str += &format!("\t{{\n");
-                ret_str += &format!(
+                if self.interleave == 1 {
+                    ret_str += &format!(
                     "\t\tuint temp = {};\n",
                     &emit_read_u32_aligned(
                         &format!(
@@ -3927,7 +4047,19 @@ impl<'a> StackCtx {
                         "(ulong)stack_u32",
                         "warp_idx"
                     )
-                );
+                    );
+                } else {
+                    ret_str += &format!(
+                    "\t\tuint temp = {};\n",
+                    &emit_read_u32_fast(
+                        &format!(
+                            "(ulong)({}+{}+{})*4",
+                            &sfp_ptr, self.stack_frame_offset, i_name_offset
+                        ),
+                        "(ulong)stack_base",
+                    )
+                    );
+                }
                 ret_str += &format!(
                     "\t\t___private_memcpy_nonmmu(&{}, &temp, sizeof(float));\n",
                     &i_name

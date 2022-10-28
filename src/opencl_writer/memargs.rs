@@ -190,7 +190,7 @@ pub fn emit_memload_i32(
                 "warp_idx"
             )
         )
-    } else {
+    } else if writer.interleave == 1 {
         format!(
             "({})",
             emit_read_u32_aligned(
@@ -200,6 +200,17 @@ pub fn emit_memload_i32(
                 ),
                 "(ulong)(heap_u32)",
                 "warp_idx"
+            )
+        )
+    } else {
+        format!(
+            "({})",
+            emit_read_u32_fast(
+                &format!(
+                    "(ulong)({}+(int)({}))",
+                    args.offset, i_load
+                ),
+                "(ulong)(heap_base)",
             )
         )
     };
@@ -322,7 +333,7 @@ pub fn emit_memload_f32(
                 "warp_idx"
             )
         )
-    } else {
+    } else if writer.interleave == 1 {
         format!(
             "({})",
             emit_read_u32_aligned(
@@ -332,6 +343,17 @@ pub fn emit_memload_f32(
                 ),
                 "(ulong)(heap_u32)",
                 "warp_idx"
+            )
+        )
+    } else {
+        format!(
+            "({})",
+            emit_read_u32_fast(
+                &format!(
+                    "(ulong)({}+(int)({}))",
+                    args.offset, i_load
+                ),
+                "(ulong)(heap_base)",
             )
         )
     };
@@ -426,7 +448,7 @@ pub fn emit_memload_i64_32u(
                 "warp_idx"
             )
         )
-    } else {
+    } else if writer.interleave == 1 {
         format!(
             "(ulong)({})",
             emit_read_u32_aligned(
@@ -436,6 +458,17 @@ pub fn emit_memload_i64_32u(
                 ),
                 "(ulong)(heap_u32)",
                 "warp_idx"
+            )
+        )
+    } else {
+        format!(
+            "(ulong)({})",
+            emit_read_u32_fast(
+                &format!(
+                    "(ulong)({}+(int)({}))",
+                    args.offset, i_load
+                ),
+                "(ulong)(heap_base)",
             )
         )
     };
@@ -468,7 +501,7 @@ pub fn emit_memload_i64_32s(
                 "warp_idx"
             )
         )
-    } else {
+    } else if writer.interleave == 1 {
         format!(
             "(int)({})",
             &emit_read_u32_aligned(
@@ -478,6 +511,17 @@ pub fn emit_memload_i64_32s(
                 ),
                 "(ulong)(heap_u32)",
                 "warp_idx"
+            )
+        )
+    } else {
+        format!(
+            "(int)({})",
+            &emit_read_u32_fast(
+                &format!(
+                    "(ulong)({}+(int)({}))",
+                    args.offset, i_load
+                ),
+                "(ulong)(heap_base)",
             )
         )
     };
@@ -597,7 +641,7 @@ pub fn emit_memstore_i32(
                 "warp_idx"
             )
         );
-    } else {
+    } else if writer.interleave == 1 {
         ret_str += &format!(
             "\t{};\n",
             &emit_write_u32_aligned(
@@ -608,6 +652,18 @@ pub fn emit_memstore_i32(
                 "(ulong)(heap_u32)",
                 &stored_val,
                 "warp_idx"
+            )
+        );
+    } else {
+        ret_str += &format!(
+            "\t{};\n",
+            &emit_write_u32_fast(
+                &format!(
+                    "(ulong)({}+(int)({}))",
+                    args.offset, i_load
+                ),
+                "(ulong)(heap_base)",
+                &stored_val,
             )
         );
     }
@@ -875,7 +931,7 @@ pub fn emit_memstore_f32(
                 "warp_idx"
             )
         );
-    } else {
+    } else if writer.interleave == 1 {
         ret_str += &format!(
             "\t\t{};\n",
             &emit_write_u32_aligned(
@@ -886,6 +942,18 @@ pub fn emit_memstore_f32(
                 "(ulong)(heap_u32)",
                 "temp",
                 "warp_idx"
+            )
+        );
+    } else {
+        ret_str += &format!(
+            "\t\t{};\n",
+            &emit_write_u32_fast(
+                &format!(
+                    "(ulong)({}+(int)({}))",
+                    args.offset, i_load
+                ),
+                "(ulong)(heap_base)",
+                "temp",
             )
         );
     }
@@ -919,7 +987,7 @@ pub fn emit_memstore32_i64(
                 "warp_idx"
             )
         );
-    } else {
+    } else if writer.interleave == 1 {
         ret_str += &format!(
             "\t{};\n",
             &emit_write_u32_aligned(
@@ -930,6 +998,18 @@ pub fn emit_memstore32_i64(
                 "(ulong)(heap_u32)",
                 &format!("(int)({})", stored_val),
                 "warp_idx"
+            )
+        );
+    } else {
+        ret_str += &format!(
+            "\t{};\n",
+            &emit_write_u32_fast(
+                &format!(
+                    "(ulong)({}+(int)({}))",
+                    args.offset, i_load
+                ),
+                "(ulong)(heap_base)",
+                &format!("(int)({})", stored_val),
             )
         );
     }

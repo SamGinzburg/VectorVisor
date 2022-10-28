@@ -1873,6 +1873,7 @@ impl OpenCLRunner {
                 } else if hypercall_num_temp[idx] != -2
                     && entry_point_temp[idx] != ((-1) as i32) as u32
                 {
+                    
                     /*
                     hcall_divergence_stack.insert(
                         *kernel_partition_mappings
@@ -1880,6 +1881,7 @@ impl OpenCLRunner {
                             .expect(&format!("Error getting entry point for the hcall divergence stack: {:?}, idx: {:?}", entry_point_temp, idx)),
                     );
                     */
+                    
                     hcall_divergence_stack.insert(curr_func_id);
                     stored_entry_points[idx] = entry_point_temp[idx];
                     entry_point_temp[idx] = ((-1) as i32) as u32;

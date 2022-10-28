@@ -154,7 +154,7 @@ pub fn emit_local(writer: &opencl_writer::OpenCLCWriter, local: &Local, _debug: 
         ValType::I32 => String::from(format!(
             "\t{};\n\t{}\n",
             &emit_write_u32_fast(
-                "(ulong)(*sp)",
+                "(ulong)(*sp)*4",
                 "(ulong)(stack_base)",
                 "(uint)0",
             ),
@@ -185,7 +185,7 @@ pub fn emit_local(writer: &opencl_writer::OpenCLCWriter, local: &Local, _debug: 
         ValType::F32 => String::from(format!(
             "\t{};\n\t{}\n",
             &emit_write_u32_fast(
-                "(ulong)(*sp)",
+                "(ulong)(*sp)*4",
                 "(ulong)(stack_base)",
                 "(uint)0",
             ),

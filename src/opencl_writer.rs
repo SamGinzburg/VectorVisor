@@ -1618,6 +1618,7 @@ impl<'a> OpenCLCWriter<'_> {
                     fn_name.clone(),
                     reduction_size,
                     local_work_group,
+                    interleave,
                     is_gpu,
                 );
                 fastfunc_calls = stack_ctx.called_fastcalls();
@@ -1694,7 +1695,7 @@ impl<'a> OpenCLCWriter<'_> {
                     final_string+= &format!("\tglobal uint *stack_base = (global uint*)((global uchar*)stack_u32 + (warp_idx*{}));\n", interleave);
                 }
 
-                write!(final_string, "\tprintf(\"func_name = %s\\n\", __func__);\n").unwrap();
+                //write!(final_string, "\tprintf(\"func_name = %s\\n\", __func__);\n").unwrap();
 
                 if debug_call_print && !is_fastcall {
                     write!(final_string, "\t\tprintf(\"*sfp = %d\\n\", *sfp);\n").unwrap();
