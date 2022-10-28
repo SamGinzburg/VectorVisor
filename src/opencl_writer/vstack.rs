@@ -2882,7 +2882,7 @@ impl<'a> StackCtx {
             .local_types
             .iter()
             .collect::<Vec<(&String, &StackType)>>();
-        params.sort_by(|(a, _), (b, _)| a.cmp(b));
+        params.sort_by(|(a, _), (b, _)| self.local_offsets.get(&a.to_string()).unwrap().cmp(self.local_offsets.get(&b.to_string()).unwrap()));
 
         for (local_name, local_type) in params.clone() {
             let param_found = match self.is_param.get(local_name) {
