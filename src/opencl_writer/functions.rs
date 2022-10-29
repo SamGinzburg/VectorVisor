@@ -1064,23 +1064,26 @@ pub fn emit_call_indirect(
         String::from("")
     };
 
-    // generate a temp var to store the result of attempting to perform an optmized indirect call
-
-    //result += &format!("\tuchar indirect{} = 1;\n", call_indirect_count);
-    //result += &format!("\t{}\n", &format!("switch({}) {{", index_register));
+    // check if we can perform an optimized call
+    let opt = stack_ctx.check_optimized_indirect_call(*call_indirect_count);
+    if opt {
+        result += &format!("\t{}\n", &format!("switch({}) {{", index_register));
+    }
 
     /* Only emit cases here that:
      * 1) match the type signature
      * 2) are fastcall optimized
      * 3) are not recursive
      */
-    for (_key, value) in table {
+    let mut debug_count = 0;
+    let mut table_count = 0;
+    for (key, value) in table {
         let f_name = match **value {
             Index::Id(id) => format_fn_name(id.name()),
             Index::Num(val, _) => format!("func_{}", val),
         };
         let func_type_signature = &writer.func_map.get(&f_name).unwrap().ty;
-        let _func_type_index = match func_type_signature.index {
+        let func_type_index = match func_type_signature.index {
             Some(Index::Id(id)) => id.name().to_string(),
             Some(Index::Num(val, _)) => format!("t{}", val),
             None => panic!(
@@ -1088,32 +1091,34 @@ pub fn emit_call_indirect(
             ),
         };
 
-        /*
-        // fastcalls as indirect calls appear to overflow the stack, related to hardware stack limits
-        // TODO: figure out a way to re-enable this
+        if func_type_index == call_indirect_type_index {
+            table_count += 1;
+        }
+
         if fastcalls.contains(&f_name) &&
            curr_fn_name != f_name &&
-           func_type_index == call_indirect_type_index {
+           func_type_index == call_indirect_type_index &&
+           opt {
+            debug_count += 1;
             result += &format!("\t\t{}\n", format!("case {}:", key));
             result += &format!("{}", emit_fn_call(writer, stack_ctx, curr_fn_name.clone(), **value, call_ret_map, call_ret_idx, &function_id_map, true, true, result_register.clone(), stack_params.clone(), debug));
             result += &format!("\t\t\t{}\n", format!("break;"));
         }
-        */
     }
 
-    /*
     // emit a default case, to handle lookups to invalid indicies!
-    result += &format!("\t\t{}\n", "default:");
-    // Set a flag indicating we didn't perform the fastcall
-    result += &format!("\t\t\tindirect{} = 0;\n", call_indirect_count);
-    result += &format!("\t\t\t{}\n", "break;");
-    result += &format!("\t}}\n");
-
-    // If we successfully performed a hypercall the temp var is now set to true, so we can check that to see if we can skip
-    result += &format!("\tif (indirect{}) {{\n", call_indirect_count);
-    result += &format!("\t\tgoto call_indirect_fastpath_{};\n", call_indirect_count);
-    result += &format!("\t}}\n");
-    */
+    if opt {
+        assert!(debug_count == table_count, curr_fn_name);
+        result += &format!("\t\t{}\n", "default:");
+        result += &format!(
+            "\t\t\t{}\n",
+            emit_trap(TrapCode::TrapCallIndirectNotFound, true)
+        );
+        result += &format!("\t\t\t{}\n", "break;");
+        result += &format!("\t}}\n");
+        *call_indirect_count += 1;
+        return result;
+    }
 
     // After trying to perform fastcalls, we check the remaining cases
     // Save the context before entering the switch case
@@ -1346,8 +1351,6 @@ pub fn emit_call_indirect(
             }
         }
     }
-
-    //result += &format!("\tcall_indirect_fastpath_{}:\n", call_indirect_count);
 
     *call_indirect_count += 1;
 

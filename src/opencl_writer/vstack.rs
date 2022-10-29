@@ -130,6 +130,8 @@ pub struct StackCtx {
     fastcall_opt_possible: bool,
     // Track the memory interleaving for emitting optimized context saving ops
     interleave: u32,
+    // Track which indirect calls should be optimized (and only emit fastcalls)
+    indirect_call_map: HashMap<u32, bool>,
 }
 
 type ControlStackType = Vec<(
@@ -164,6 +166,9 @@ impl<'a> StackCtx {
         interleave: u32,
         is_gpu: bool,
     ) -> StackCtx {
+        let mut indirect_call_map: HashMap<u32, bool> = HashMap::new();
+        let mut indirect_call_count = 0;
+
         let mut stack_sizes: Vec<StackType> = vec![];
         let mut is_fastcall = true;
 
@@ -1319,7 +1324,7 @@ impl<'a> StackCtx {
                             // Track how many targetable indirect function calls match the given type
                             let mut matching_types = 0;
                             let mut fastcall_opt = 0;
-
+                            
                             // We only need to call functions with matching type signatures, the rest would trap
                             for func_id in indirect_call_mapping.values() {
                                 let f_name = match func_id {
@@ -1345,8 +1350,18 @@ impl<'a> StackCtx {
 
                             // Track the number of function call stubs to generate
                             // We only generate stubs for non-fastcalls
-                            //num_fn_calls += matching_types - fastcall_opt;
-                            num_fn_calls += matching_types;
+                            if matching_types < 10 && fastcall_opt == matching_types {
+                                //num_fn_calls += matching_types - fastcall_opt;
+                                // no-op in this case
+                                indirect_call_map.insert(indirect_call_count, true);
+                            } else if matching_types > 0 {
+                                num_fn_calls += matching_types;
+                                taint_open_loops(&mut tainted_loops, open_loop_stack.clone());
+                                is_fastcall = false;
+                                indirect_call_map.insert(indirect_call_count, false);
+                            }
+
+                            indirect_call_count += 1;
 
                             // Pop the CallIndirect index
                             stack_sizes.pop();
@@ -1393,13 +1408,6 @@ impl<'a> StackCtx {
                                 );
                             }
 
-                            // If we have no matching types for the call, then we can ignore it
-                            // since it will always fault
-                            if matching_types > 0 {
-                                // Taint open loops
-                                taint_open_loops(&mut tainted_loops, open_loop_stack.clone());
-                                is_fastcall = false;
-                            }
                         }
                         (_, Some(_inline)) => {
                             panic!("Inline types for call_indirect not implemented yet (vstack)")
@@ -2682,7 +2690,12 @@ impl<'a> StackCtx {
             opt_loop_tracking: vec![],
             fastcall_opt_possible: is_fastcall,
             interleave: interleave,
+            indirect_call_map: indirect_call_map,
         }
+    }
+
+    pub fn check_optimized_indirect_call(&self, idx: u32) -> bool {
+        *self.indirect_call_map.get(&idx).unwrap_or(&false)
     }
 
     pub fn is_local_local(&self, local: String) -> bool {

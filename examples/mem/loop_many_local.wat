@@ -23,10 +23,10 @@
         ;; load l0
         local.get 0
         (i32.const 1)
-        ;;(i32.const 0) ;; the indirect call table index
+        (i32.const 0) ;; the indirect call table index
         ;; Save 0 here
-        ;;call_indirect (type 0)
-        i32.add
+        call_indirect (type 0)
+        ;;i32.add
         ;; load 0
         local.tee 0
         i32.const 10000
@@ -49,7 +49,7 @@
     end
     end
     ;; load 0
-    local.get 0
+    local.get 2
   )
   (table $T0 5 5 funcref)
   (elem $e1 0 (i32.const 0) $_add2) ;; the table index can be implicitly 0

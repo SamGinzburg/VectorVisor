@@ -51,6 +51,7 @@ func defaultTtfFontOption() gopdf.TtfOption {
 	return defa
 }
 
+//go:noinline
 func generatePdf(name string, purchases []string, prices []float64) []byte {
 	pdf := gopdf.GoPdf{}
 
@@ -90,8 +91,9 @@ func generatePdf(name string, purchases []string, prices []float64) []byte {
 		pdf.Text(string(purchases[count]))
 
 		pdf.SetXY(500, float64(start))
-		//pdf.Text(fmt.Sprintf("$%.2f", prices[count]))
-		pdf.Text(fmt.Sprintf("%d", int64(prices[count])))
+		pdf.Text(fmt.Sprintf("$%.2f", prices[count]))
+		//pdf.SetXY(500, float64(start))
+		//pdf.Text(fmt.Sprintf("%d", int64(prices[count])))
 
 		start += 20
 	}
@@ -102,8 +104,9 @@ func generatePdf(name string, purchases []string, prices []float64) []byte {
 func main() {
 	for {
 		runtime.InitHeap()
-		input_buf := make([]byte, 1024*512)
-		in_size := C.serverless_invoke((*C.char)(unsafe.Pointer(&input_buf[0])), 1024*512)
+		input_buf := make([]byte, 1024*16)
+        result_buf := make([]byte, 0)
+		in_size := C.serverless_invoke((*C.char)(unsafe.Pointer(&input_buf[0])), 1024*16)
 
         // if in_size == 0, there is no input
         if in_size == 0 {
@@ -116,6 +119,8 @@ func main() {
 		//fmt.Printf("%v\n", string(input_buf[:in_size]))
 
 		value, _, _, _ := jsonparser.Get(input_buf[:in_size], "inputs")
+		//fmt.Printf("%v\n", string(value))
+
 		jsonparser.ArrayEach(value, func(value []byte, dataType jsonparser.ValueType, offset int, err error) {
             purchases := make([]string, 0)
 		    prices := make([]float64, 0)
@@ -134,13 +139,11 @@ func main() {
                 }
 				prices = append(prices, parsed_float)
 			})
-
-
-		    generatePdf(bill_name, purchases, prices)
+		    result_buf = generatePdf(bill_name, purchases, prices)
 		})
 
-		//C.serverless_response((*C.char)(unsafe.Pointer(&result[0])), (C.uint)(len(result)))
-		C.serverless_response((*C.char)(unsafe.Pointer(&input_buf[0])), 1024)
+		//C.serverless_response((*C.char)(unsafe.Pointer(&input_buf[0])), 1024)
+	    C.serverless_response((*C.char)(unsafe.Pointer(&result_buf[0])), (C.uint)(len(result_buf)))
 	}
 }
 

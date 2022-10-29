@@ -1,7 +1,7 @@
 {
 	"llvm-target":   "wasm32-unknown-wasi",
 	"cpu":           "generic",
-	"features":      "+bulk-memory,+nontrapping-fptoint,+sign-ext",
+	"features":      "+nontrapping-fptoint,+sign-ext",
 	"build-tags":    ["tinygo.wasm", "wasi", "runtime_memhash_leveldb"],
 	"goos":          "linux",
 	"goarch":        "arm",
@@ -10,7 +10,6 @@
 	"scheduler":     "none",
 	"default-stack-size": 1048576,
 	"cflags": [
-		"-mbulk-memory",
 		"-mnontrapping-fptoint",
 		"-msign-ext"
 	],
@@ -19,9 +18,7 @@
 		"--no-demangle",
         "--gc-sections",
         "--print-gc-sections",
-        "--initial-memory=4194304",
-        "--max-memory=4194304",
-        "--lto-O3"
+        "--initial-memory=4194304"
 	],
 	"emulator":      "wasmtime {}",
 	"wasm-abi":      "generic"

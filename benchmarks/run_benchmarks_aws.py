@@ -1484,7 +1484,7 @@ def run_nlp_count_bench():
         output = block_on_command(command_id, invoker_instance[0].id)
         print (output)
         # save output
-        with open(temp_dir+"cpu_bench_nlp_{}.txt".format(idx=idx), "w") as text_file:
+        with open(temp_dir+"cpu_bench_nlp_{idx}.txt".format(idx=idx), "w") as text_file:
             text_file.write(str(output))
         time.sleep(SLEEP_TIME)
 
@@ -1644,7 +1644,7 @@ elif region == "us-east-2":
 if run_a10g:
     gpuinstance = "g5.xlarge"
 else:
-    gpuinstance = "g4dn.xlarge"
+    gpuinstance = "g4dn.2xlarge"
 
 
 gpu_instance = ec2.create_instances(ImageId=gpu_ami,
@@ -1757,6 +1757,10 @@ if run_only_membench and skip_membench is None:
 # run image hash bench
 
 run_image_hash_bench(run_modified = True)
+
+cleanup()
+
+run_nlp_count_bench()
 
 cleanup()
 

@@ -171,6 +171,9 @@ fn is_fastcall(
                     }
                     Instruction::CallIndirect(call_indirect) => {
                         let mut matching_types = 0;
+
+                        let mut tmp_ambiguous_dep_list = HashSet::new();
+
                         // Check to see if this call_indirect has 0 targets (and will always fault)
                         // If so, we can emit this as a fastcall
                         match (
@@ -205,16 +208,21 @@ fn is_fastcall(
                                         Some(Index::Num(val, _)) => format!("t{}", val),
                                         None => panic!("Only type indicies supported for call_indirect in vstack pass"),
                                     };
-
                                     if func_type_index == type_index {
+                                        tmp_ambiguous_dep_list.insert(f_name);
                                         matching_types += 1;
                                     }
                                 }
                             }
                             _ => (),
                         }
-
-                        if matching_types > 0 {
+    
+                        // if the threshold < 10, we can de-virtualize the fastcall entirely 
+                        if matching_types < 10 {
+                            //dbg!(&matching_types, &func_name);
+                            dbg!(&tmp_ambiguous_dep_list);
+                            ambiguous_dep_list.extend(tmp_ambiguous_dep_list);
+                        } else if matching_types > 0 {
                             return FastcallPassStatus::fastcall_false(String::from(
                                 "performs indirect call",
                             ));
