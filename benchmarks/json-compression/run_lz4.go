@@ -105,6 +105,7 @@ func IssueRequests(ip string, port int, req [][]byte, req_len []uint64, exec_tim
 			}
 			_ = body
 		*/
+		io.Copy(ioutil.Discard, resp.Body)
 		resp.Body.Close()
 		read_secs := time.Since(start_read)
 		_ = read_secs
@@ -277,7 +278,6 @@ func main() {
 	//fmt.Printf("server is active... starting benchmark\n")
 	time.Sleep(5000 * time.Millisecond)
 
-
 	ch_exec_time := make(chan float64, 1000000)
 	ch_latency := make(chan float64, 1000000)
 	ch_queue_time := make(chan float64, 1000000)
@@ -355,7 +355,7 @@ func main() {
 	fmt.Printf("Device Time: %f\n", device_time)
 	fmt.Printf("overhead: %f\n", overhead)
 	fmt.Printf("compile time: %f\n", compile)
-	fmt.Printf("Total Throughput (bytes/s): %f\n", float64(bytes_compressed) / duration)
+	fmt.Printf("Total Throughput (bytes/s): %f\n", float64(bytes_compressed)/duration)
 
 	/*
 		on_device_compute_time := 0.0

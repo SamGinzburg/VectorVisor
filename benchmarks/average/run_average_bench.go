@@ -4,6 +4,7 @@ import (
 	"bytes"
 	b64 "encoding/base64"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"math/rand"
 	"net/http"
@@ -91,6 +92,7 @@ func IssueRequests(ip string, port int, req [][]byte, exec_time chan<- float64, 
 			}
 			_ = body
 		*/
+		io.Copy(ioutil.Discard, resp.Body)
 		resp.Body.Close()
 		read_secs := time.Since(start_read)
 		_ = read_secs

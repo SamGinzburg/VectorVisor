@@ -103,6 +103,7 @@ func IssueRequests(ip string, port int, req [][]byte, exec_time chan<- float64, 
 			}
 			_ = body
 		*/
+		io.Copy(ioutil.Discard, resp.Body)
 		resp.Body.Close()
 		read_secs := time.Since(start_read)
 		_ = read_secs
@@ -261,7 +262,6 @@ func main() {
 	}
 	//fmt.Printf("server is active... starting benchmark\n")
 	time.Sleep(5000 * time.Millisecond)
-
 
 	ch_exec_time := make(chan float64, 1000000)
 	ch_latency := make(chan float64, 1000000)

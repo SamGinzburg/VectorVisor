@@ -3,12 +3,14 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"math/rand"
 	"net/http"
 	"os"
 	"strconv"
 	"time"
+
 	msgpack "github.com/vmihailenco/msgpack/v5"
 )
 
@@ -63,9 +65,9 @@ func RandString(n int) Payload {
 func RandBatch(n int) PayloadBatch {
 	batch := make([]Payload, 0, n)
 	for i := 0; i < n; i++ {
-		batch = append(batch, RandString(32));
+		batch = append(batch, RandString(32))
 	}
-	return PayloadBatch {
+	return PayloadBatch{
 		Batch: batch,
 	}
 }
@@ -103,6 +105,7 @@ func IssueRequests(ip string, port int, req [][]byte, exec_time chan<- float64, 
 			}
 			_ = body
 		*/
+		io.Copy(ioutil.Discard, resp.Body)
 		resp.Body.Close()
 		read_secs := time.Since(start_read)
 		_ = read_secs
@@ -232,7 +235,6 @@ func main() {
 	}
 	//fmt.Printf("server is active... starting benchmark\n")
 	time.Sleep(5000 * time.Millisecond)
-
 
 	ch_exec_time := make(chan float64, 1000000)
 	ch_latency := make(chan float64, 1000000)

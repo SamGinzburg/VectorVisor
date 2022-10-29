@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"math/rand"
 	"net/http"
@@ -14,14 +15,14 @@ import (
 )
 
 /*
-    name: String,
-    purchases: Vec<(String, f64)>
+   name: String,
+   purchases: Vec<(String, f64)>
 */
 
 type Payload struct {
-	Text string `msgpack:"name"`
-	Purchases []string `msgpack:"purchases"`
-	Price []float64 `msgpack:"price"`
+	Text      string    `msgpack:"name"`
+	Purchases []string  `msgpack:"purchases"`
+	Price     []float64 `msgpack:"price"`
 }
 
 type BatchPayload struct {
@@ -48,23 +49,23 @@ func CreatePayload() Payload {
 	max := 15.00
 	min := 7.00
 	for i := 0; i < 15; i++ {
-		purchases = append(purchases, RandString(15));
-		prices = append(prices, min + rand.Float64() * (max - min));
+		purchases = append(purchases, RandString(15))
+		prices = append(prices, min+rand.Float64()*(max-min))
 	}
 
 	return Payload{
-		Text: RandString(10),
+		Text:      RandString(10),
 		Purchases: purchases,
-		Price: prices,
+		Price:     prices,
 	}
 }
 
 func CreateBatchPayload(n int) BatchPayload {
 	batch := make([]Payload, 0, n)
 	for i := 0; i < n; i++ {
-		batch = append(batch, CreatePayload());
+		batch = append(batch, CreatePayload())
 	}
-	return BatchPayload {
+	return BatchPayload{
 		Payload: batch,
 	}
 }
@@ -102,6 +103,7 @@ func IssueRequests(ip string, port int, req [][]byte, exec_time chan<- float64, 
 			}
 			_ = body
 		*/
+		io.Copy(ioutil.Discard, resp.Body)
 		resp.Body.Close()
 		read_secs := time.Since(start_read)
 		_ = read_secs
@@ -231,7 +233,6 @@ func main() {
 	}
 	//fmt.Printf("server is active... starting benchmark\n")
 	time.Sleep(5000 * time.Millisecond)
-
 
 	ch_exec_time := make(chan float64, 1000000)
 	ch_latency := make(chan float64, 1000000)
