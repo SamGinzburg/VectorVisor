@@ -220,7 +220,7 @@ fn is_fastcall(
                         // if the threshold < 10, we can de-virtualize the fastcall entirely 
                         if matching_types < 10 {
                             //dbg!(&matching_types, &func_name);
-                            dbg!(&tmp_ambiguous_dep_list);
+                            //dbg!(&tmp_ambiguous_dep_list);
                             ambiguous_dep_list.extend(tmp_ambiguous_dep_list);
                         } else if matching_types > 0 {
                             return FastcallPassStatus::fastcall_false(String::from(

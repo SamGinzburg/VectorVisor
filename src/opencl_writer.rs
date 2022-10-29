@@ -2657,8 +2657,6 @@ __attribute__((always_inline)) void {}(global uint   *stack_u32,
         write!(ret_str, "\t{}\n", "do {").unwrap();
         write!(ret_str, "\t{}\n", "switch (*entry_point) {").unwrap();
 
-        dbg!(&function_idx_label);
-
         for key in function_idx_label.keys() {
             write!(
                 ret_str,
@@ -3609,7 +3607,6 @@ ulong get_clock() {
 
         write!(output, "\t{}\n", "do {").unwrap();
         write!(output, "\t{}\n", "switch (*entry_point) {").unwrap();
-        dbg!(&function_idx_label);
         for key in function_idx_label.keys() {
             write!(
                 output,

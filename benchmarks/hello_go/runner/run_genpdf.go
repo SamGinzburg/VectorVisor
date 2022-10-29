@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"time"
     "encoding/json"
+    "io"
 )
 
 /*
@@ -101,6 +102,7 @@ func IssueRequests(ip string, port int, req [][]byte, exec_time chan<- float64, 
 			}
 			_ = body
 		*/
+        io.Copy(ioutil.Discard, resp.Body)
 		resp.Body.Close()
 		read_secs := time.Since(start_read)
 		_ = read_secs
@@ -121,6 +123,7 @@ func IssueRequests(ip string, port int, req [][]byte, exec_time chan<- float64, 
 		device_time, _ = strconv.ParseFloat(resp.Header.Get("device_time"), 64)
 		overhead_time, _ = strconv.ParseFloat(resp.Header.Get("overhead_time_ns"), 64)
 		compile_time, _ = strconv.ParseFloat(resp.Header.Get("compile_time_ns"), 64)
+
 		select {
 		case compile_ch <- compile_time:
 		default:
@@ -206,7 +209,8 @@ func main() {
 	}
 
 	tr := &http.Transport{
-		MaxIdleConnsPerHost: num_vms * 2 * num_vmgroups,
+		MaxIdleConns: 4096 * 4,
+		MaxIdleConnsPerHost: 4096 * 4,
 	}
 	client = &http.Client{Transport: tr}
 
