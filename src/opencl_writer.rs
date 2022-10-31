@@ -3173,6 +3173,8 @@ ulong get_clock() {
         let mut fast_func_called: HashMap<String, HashSet<String>> = HashMap::new();
         let mut fastcall_called_func_sizes: HashMap<String, Vec<u32>> = HashMap::new();
 
+        dbg!(&fast_function_set);
+
         for fastfunc in fast_function_set.iter() {
             let (_, func_size, func_called) = self.emit_function(
                 self.func_map.get(&fastfunc.to_string()).unwrap(),

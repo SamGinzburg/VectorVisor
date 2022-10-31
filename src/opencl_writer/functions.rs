@@ -1230,6 +1230,7 @@ pub fn emit_call_indirect(
 
         // emit the function call here!
         if func_type_index == call_indirect_type_index {
+            assert!(is_fastcall != true, "CallIndirect cannot be generated: fastcalls cannot perform slowpath: ".to_owned() + &curr_fn_name.clone());
             result += &format!("\t\t{}\n", format!("case {}:", key));
             result += &format!(
                 "{}",
