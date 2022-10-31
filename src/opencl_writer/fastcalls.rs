@@ -55,6 +55,7 @@ fn is_fastcall(
     indirect_calls: &mut HashSet<String>,
     start_func: String,
     indirect_call_mapping: &HashMap<u32, &Index>,
+    unsafe_writes: bool,
 ) -> FastcallPassStatus {
     match (&func.kind, &func.id, &func.ty) {
         (FuncKind::Import(_), _, _) => {
@@ -102,11 +103,13 @@ fn is_fastcall(
                 };
             }
 
+            /*
             if size > 256 {
                 return FastcallPassStatus::fastcall_false(String::from(
                     "local/param size too large to convert to fastcall",
                 ));
             }
+            */
 
             // Is this function the start function?
             if func_name == start_func {
@@ -145,6 +148,9 @@ fn is_fastcall(
                                             &"proc_exit" => {
                                                 // proc_exit is special cased, since we don't
                                                 // actually need to return
+                                            }
+                                            &"fd_write" if unsafe_writes => {
+                                                // if we are allowing unsafe writes, we will allow fd_writes to trap on execution
                                             }
                                             _ => {
                                                 // if we found a WASI hypercall...
@@ -251,6 +257,7 @@ pub fn compute_fastcall_set(
     indirect_calls: &mut HashSet<String>,
     start_func: String,
     indirect_call_mapping: &HashMap<u32, &Index>,
+    unsafe_writes: bool,
 ) -> HashSet<String> {
     let mut called_funcs = HashSet::new();
     let mut known_bad_calls = HashSet::new();
@@ -270,6 +277,7 @@ pub fn compute_fastcall_set(
                 indirect_calls,
                 start_func.clone(),
                 indirect_call_mapping,
+                unsafe_writes,
             );
             match is_fastcall {
                 FastcallPassStatus::fastcall_true => {

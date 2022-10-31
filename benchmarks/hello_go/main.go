@@ -99,6 +99,7 @@ func generatePdf(name string, purchases []string, prices []float64) []byte {
 	}
 
 	return pdf.GetBytesPdf()
+    //return make([]byte, 1)
 }
 
 func main() {

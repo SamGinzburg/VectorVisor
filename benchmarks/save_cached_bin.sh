@@ -24,7 +24,7 @@ function cachebin() {
   cp ${1}-opt.wasm a10g_${1}-opt.wasm
   cp ${1}-opt.wasm a10g_${1}-opt-4.wasm
   cp ${1}-opt.wasm a10g_${1}-opt-8.wasm
-  cargo run --release -- -i $1-opt-4.wasm --heap=$2 --stack=$3 --hcallsize=$4 --vmcount=$5 --partition=false --maxdup=0 --jt=true --interleave=4
+  cargo run --release -- -i $1-opt-4.wasm --heap=$2 --stack=$3 --hcallsize=$4 --vmcount=$5 --partition=false --maxdup=0 --jt=true --interleave=4 --lgroup=8
   #cargo run --release -- -i $1-opt-8.wasm --heap=$2 --stack=$3 --hcallsize=$4 --vmcount=$5 --partition=false --maxdup=0 --jt=true --interleave=8
   #cargo run --release -- -i a10g_$1-opt-4.wasm --heap=$2 --stack=$3 --hcallsize=$4 --vmcount=$6 --partition=false --maxdup=0 --jt=true --interleave=4
   #cargo run --release -- -i a10g_$1-opt-8.wasm --heap=$2 --stack=$3 --hcallsize=$4 --vmcount=$6 --partition=false --maxdup=0 --jt=true --interleave=8

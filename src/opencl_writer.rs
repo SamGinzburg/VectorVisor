@@ -491,6 +491,8 @@ impl<'a> OpenCLCWriter<'_> {
         fastcall_set: &HashSet<String>,
         // emit an optimized function that does not require a CPS-style transformation
         is_fastcall: bool,
+        // trap on writes to fd when enabled, allows for more agressive code optimizations
+        unsafe_writes: bool,
         // emit OpenCL C (False) or standard C for debugging on the CPU (True)
         debug: bool,
     ) -> String {
@@ -845,6 +847,14 @@ impl<'a> OpenCLCWriter<'_> {
                                 // ignore WASI API scoping for now
                                 (_, Some(true)) => {
                                     match wasi_fn_name {
+                                        &"fd_write" if unsafe_writes => {
+                                                let _buf_len = stack_ctx.vstack_pop(StackType::i32);
+                                                let _iovec_count = stack_ctx.vstack_pop(StackType::i32);
+                                                let _iovec_ptr = stack_ctx.vstack_pop(StackType::i32);
+                                                let _fd = stack_ctx.vstack_pop(StackType::i32);
+                                                let _result_register = stack_ctx.vstack_alloc(StackType::i32);
+                                                emit_trap(TrapCode::TrapUnreachable, true)
+                                        },
                                         &"fd_write"               => self.emit_hypercall(WasmHypercallId::fd_write, stack_ctx, hypercall_id_count, fn_name.to_string(), false, debug),
                                         &"proc_exit"              => {
                                             if !is_fastcall {
@@ -1508,6 +1518,7 @@ impl<'a> OpenCLCWriter<'_> {
         is_gpu: bool,
         reduction_size: &mut u32,
         is_fastcall: bool,
+        unsafe_writes: bool,
         debug: bool,
     ) -> (String, u32, HashSet<String>) {
         let mut final_string = String::from("");
@@ -1620,6 +1631,7 @@ impl<'a> OpenCLCWriter<'_> {
                     local_work_group,
                     interleave,
                     is_gpu,
+                    unsafe_writes,
                 );
                 fastfunc_calls = stack_ctx.called_fastcalls();
 
@@ -1911,6 +1923,7 @@ impl<'a> OpenCLCWriter<'_> {
                         call_indirect_count,
                         &fastcall_set,
                         is_fastcall,
+                        unsafe_writes,
                         // if we are compiling a CPU kernel
                         // we have to force this to true, even if we aren't
                         // actually emitting "debug" code
@@ -2744,6 +2757,7 @@ __attribute__((always_inline)) void {}(global uint   *stack_u32,
         debug: bool,
         is_nvidia_gpu: bool,
         emit_volatile_reads_writes: bool,
+        unsafe_writes: bool,
     ) -> (
         String,
         String,
@@ -3069,6 +3083,7 @@ ulong get_clock() {
                 &mut indirect_call_set,
                 start_func.clone(),
                 indirect_call_mapping,
+                unsafe_writes,
             )
         } else {
             //let allowed_fastcalls: Vec<String> = vec![];
@@ -3125,6 +3140,7 @@ ulong get_clock() {
                 &mut indirect_call_set,
                 start_func.clone(),
                 indirect_call_mapping,
+                unsafe_writes,
             );
 
             // now filter to only allow the allowed list and functions they call
@@ -3177,6 +3193,7 @@ ulong get_clock() {
                 is_gpu,
                 &mut 0,
                 true,
+                unsafe_writes,
                 debug,
             );
             fast_func_size.insert(fastfunc.to_string(), func_size);
@@ -3337,6 +3354,7 @@ ulong get_clock() {
                 is_gpu,
                 &mut 0,
                 true,
+                unsafe_writes,
                 debug,
             );
             write!(fastcall_header, "{}", func).unwrap();
@@ -3393,6 +3411,7 @@ ulong get_clock() {
                     is_gpu,
                     &mut 0,
                     false,
+                    unsafe_writes,
                     debug,
                 );
                 // perform conservative estimate of required register space
@@ -3470,6 +3489,7 @@ ulong get_clock() {
                         is_gpu,
                         reduction_size,
                         false,
+                        unsafe_writes,
                         debug,
                     );
                     // perform conservative estimate of required register space

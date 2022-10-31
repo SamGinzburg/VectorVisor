@@ -165,6 +165,7 @@ impl<'a> StackCtx {
         local_work_group: usize,
         interleave: u32,
         is_gpu: bool,
+        unsafe_writes: bool,
     ) -> StackCtx {
         let mut indirect_call_map: HashMap<u32, bool> = HashMap::new();
         let mut indirect_call_count = 0;
@@ -1071,13 +1072,17 @@ impl<'a> StackCtx {
                                     // ignore WASI API scoping for now
                                     (_, Some(true)) => {
                                         // Taint loops that perform hypercalls
-                                        if wasi_fn_name != &"proc_exit" {
-                                            taint_open_loops(&mut tainted_loops, open_loop_stack.clone());
-                                            is_fastcall = false;
+                                        match wasi_fn_name {
+                                            &"proc_exit" |
+                                            &"fd_write" if unsafe_writes => {
+                                                // some hypercalls emit traps/proc_exit instead, and are "safe"
+                                            }
+                                            _ => {
+                                                taint_open_loops(&mut tainted_loops, open_loop_stack.clone());
+                                                is_fastcall = false;
+                                                num_hypercalls += 1;
+                                            }
                                         }
-
-                                        // Track how many hypercalls we perform
-                                        num_hypercalls += 1;
 
                                         match wasi_fn_name {
                                             &"fd_write"               => {

@@ -105,6 +105,14 @@ fn main() {
             .multiple(false)
             .number_of_values(1)
             .takes_value(true))
+        .arg(Arg::with_name("unsafewrite")
+            .short("uw")
+            .long("uw")
+            .help("Assume that the input program never writes to a fd (breaks programs that use fd_write) to better optimize programs")
+            .default_value("false")
+            .multiple(false)
+            .number_of_values(1)
+            .takes_value(true))
         // now for less frequently changed arguments...
         .arg(Arg::with_name("callstack")
             .short("cs")
@@ -372,7 +380,8 @@ fn main() {
         value_t!(matches.value_of("disablefastcalls"), bool).unwrap_or_else(|e| e.exit());
     let local_work_group =
         value_t!(matches.value_of("localworkgroup"), usize).unwrap_or_else(|e| e.exit());
-    let mexec = value_t!(matches.value_of("mexec"), usize).unwrap_or_else(|e| e.exit());
+    let mexec: usize = 1; //value_t!(matches.value_of("mexec"), usize).unwrap_or_else(|e| e.exit());
+    let unsafewrite = value_t!(matches.value_of("unsafewrite"), bool).unwrap_or_else(|e| e.exit());
     let pinput = value_t!(matches.value_of("pinput"), bool).unwrap_or_else(|e| e.exit());
     let volatile = value_t!(matches.value_of("volatile"), bool).unwrap_or_else(|e| e.exit());
     let fastreply = value_t!(matches.value_of("fastreply"), bool).unwrap_or_else(|e| e.exit());
@@ -439,6 +448,7 @@ fn main() {
             false,
             is_nvidia_gpu,
             volatile,
+            unsafewrite,
         );
 
         println!("The following info is needed to later run compiled pre-compiled/externally compiled binaries");
@@ -518,6 +528,7 @@ fn main() {
                     false,
                     is_nvidia_gpu,
                     volatile,
+                    unsafewrite
                 );
                 println!("Compiled: {} functions", num_compiled_funcs);
                 println!("Entry point: {}", entry_point);
@@ -583,6 +594,7 @@ fn main() {
                     false,
                     is_nvidia_gpu,
                     volatile,
+                    unsafewrite
                 );
                 println!("Compiled: {} functions", num_compiled_funcs);
                 println!("Entry point: {}", entry_point);
@@ -651,6 +663,7 @@ fn main() {
                     false,
                     is_nvidia_gpu,
                     volatile,
+                    unsafewrite
                 );
                 println!("Compiled: {} functions", num_compiled_funcs);
                 println!("Entry point: {}", entry_point);
@@ -717,6 +730,7 @@ fn main() {
                     false,
                     is_nvidia_gpu,
                     volatile,
+                    unsafewrite
                 );
                 println!("Compiled: {} functions", num_compiled_funcs);
                 println!("Entry point: {}", entry_point);
