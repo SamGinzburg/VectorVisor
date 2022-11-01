@@ -141,8 +141,6 @@ fn makePdf(event: FuncInput) -> Vec<u8> {
     content.show(Str(b"-------------------------------------------------------------------"));
     content.end_text();
     
-
-
     content.begin_text();
     content.set_font(font_name, 14.0);
     content.next_line(50.0, 755.0);
@@ -159,7 +157,7 @@ fn makePdf(event: FuncInput) -> Vec<u8> {
         idx -= 10.0;
     }
 
-    let dynamic = image::load_from_memory(&EMBED_IMAGE).unwrap();
+    //let dynamic = image::load_from_memory(&EMBED_IMAGE).unwrap();
     let encoded = &EMBED_IMAGE;
     let filter = Filter::DctDecode;
 
@@ -196,6 +194,7 @@ fn makePdf(event: FuncInput) -> Vec<u8> {
 fn batch_genpdf(inputs: BatchInput) -> BatchFuncResponse {
     let mut results = vec![];
     for input in inputs.inputs {
+        //makePdf(input);
         results.push(FuncResponse { resp: makePdf(input) });
     }
     return BatchFuncResponse{ resp: results };

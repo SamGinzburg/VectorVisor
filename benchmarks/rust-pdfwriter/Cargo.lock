@@ -656,7 +656,6 @@ checksum = "b1de2e551fb905ac83f73f7aedf2f0cb4a0da7e35efa24a202a936269f1f18e1"
 [[package]]
 name = "pdf-writer"
 version = "0.6.0"
-source = "git+https://github.com/SamGinzburg/pdf-writer.git?branch=main#1348f369db891b6859fe16654796cade2def6052"
 dependencies = [
  "bitflags",
  "itoa",
