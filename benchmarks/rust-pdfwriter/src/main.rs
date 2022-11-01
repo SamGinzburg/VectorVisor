@@ -31,8 +31,7 @@ struct BatchInput {
 
 #[derive(Debug, Serialize)]
 struct FuncResponse {
-    resp: Vec<u8>,
-    tag: Vec<u8>,
+    resp: Vec<u8>
 }
 
 #[derive(Debug, Serialize)]
@@ -194,6 +193,19 @@ fn makePdf(event: FuncInput) -> Vec<u8> {
     return writer.finish();
 }
 
+fn batch_genpdf(inputs: BatchInput) -> BatchFuncResponse {
+    let mut results = vec![];
+    for input in inputs.inputs {
+        results.push(FuncResponse { resp: makePdf(input) });
+    }
+    return BatchFuncResponse{ resp: results };
+}
+
+fn main() {
+    let handler = WasmHandler::new(&batch_genpdf);
+    handler.run_with_format(1024*512, MsgPack);
+}
+/*
 #[inline(never)]
 fn main() {
     let mut buf2 = vec![];
@@ -213,6 +225,6 @@ fn main() {
     let mut file = File::create("test.pdf").unwrap();
     file.write_all(&buf2).unwrap();
         
-
     //println!("{:?}", buf);
 }
+*/
