@@ -1355,7 +1355,7 @@ impl<'a> StackCtx {
 
                             // Track the number of function call stubs to generate
                             // We only generate stubs for non-fastcalls
-                            if matching_types < 10 && fastcall_opt == matching_types {
+                            if fastcall_opt == matching_types {
                                 //num_fn_calls += matching_types - fastcall_opt;
                                 // no-op in this case
                                 indirect_call_map.insert(indirect_call_count, true);
@@ -1364,7 +1364,7 @@ impl<'a> StackCtx {
                                 taint_open_loops(&mut tainted_loops, open_loop_stack.clone());
                                 is_fastcall = false;
                                 indirect_call_map.insert(indirect_call_count, false);
-                                assert!(!fastcalls.contains(&curr_fn_name), "Incorrect fastcall opt found, cannot emmit call_indirect slowpath: {:?}", &curr_fn_name);
+                                assert!(!fastcalls.contains(&curr_fn_name), "Incorrect fastcall opt found, cannot emit call_indirect slowpath: {:?}", &curr_fn_name);
                             } else {
                                 // indirect call with 0 functions
                                 indirect_call_map.insert(indirect_call_count, true);

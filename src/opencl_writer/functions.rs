@@ -1066,6 +1066,7 @@ pub fn emit_call_indirect(
 
     // check if we can perform an optimized call
     let opt = stack_ctx.check_optimized_indirect_call(*call_indirect_count);
+    dbg!(&is_fastcall);
     if opt {
         result += &format!("\t{}\n", &format!("switch({}) {{", index_register));
     }

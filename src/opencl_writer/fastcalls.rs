@@ -57,6 +57,7 @@ fn is_fastcall(
     indirect_call_mapping: &HashMap<u32, &Index>,
     unsafe_writes: bool,
 ) -> FastcallPassStatus {
+    let mut ambiguous_dep_list = HashSet::new();
     match (&func.kind, &func.id, &func.ty) {
         (FuncKind::Import(_), _, _) => {
             panic!("InlineImport functions not yet implemented (fastcall pass)");
@@ -118,11 +119,10 @@ fn is_fastcall(
 
             // Is this function the target of an indirect call?
             if indirect_calls.contains(&func_name) {
-                // return FastcallPassStatus::fastcall_false(String::from("indirect call target"))
+                //return FastcallPassStatus::fastcall_false(String::from("indirect call target"))
             }
 
             // Is this function in the indirect call table?
-            let mut ambiguous_dep_list = HashSet::new();
             for instruction in expression.instrs.iter() {
                 match instruction {
                     Instruction::Call(idx) => {
@@ -218,9 +218,15 @@ fn is_fastcall(
                                     };
                                     if func_type_index == type_index && f_name != func_name {
                                         if !fastcall_set.contains(&f_name) {
-                                            tmp_ambiguous_dep_list.insert(f_name);
+                                            tmp_ambiguous_dep_list.insert(f_name.clone());
                                         }
                                         matching_types += 1;
+                                    }
+
+                                    if f_name == func_name {
+                                        return FastcallPassStatus::fastcall_false(String::from(
+                                            "performs recursive indirect call",
+                                        ));
                                     }
                                 }
                             }
@@ -228,8 +234,7 @@ fn is_fastcall(
                         }
     
                         // if the threshold < 10, we can de-virtualize the fastcall entirely 
-                        if matching_types < 10 {
-                            //dbg!(&matching_types, &func_name);
+                        if matching_types < 999 {
                             ambiguous_dep_list.extend(tmp_ambiguous_dep_list);
                         } else if matching_types > 0 {
                             return FastcallPassStatus::fastcall_false(String::from(
@@ -240,11 +245,12 @@ fn is_fastcall(
                     _ => (),
                 }
             }
-            if ambiguous_dep_list.clone().len() > 0 {
-                return FastcallPassStatus::fastcall_ambiguous(ambiguous_dep_list);
-            }
         }
         (_, _, _) => panic!("Inline function must always have a valid identifier in wasm"),
+    }
+
+    if ambiguous_dep_list.clone().len() > 0 {
+        return FastcallPassStatus::fastcall_ambiguous(ambiguous_dep_list);
     }
 
     FastcallPassStatus::fastcall_true
