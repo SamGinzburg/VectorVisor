@@ -1,9 +1,50 @@
+#[macro_use]
+extern crate lazy_static;
+
 use pdf_writer::*;
 use pdf_writer::types::{ActionType, AnnotationType, BorderType};
+use std::fs::File;
+use std::io::Write;
+use std::time::Instant;
+use wasm_serverless_invoke::wasm_handler;
+use wasm_serverless_invoke::wasm_handler::WasmHandler;
+use wasm_serverless_invoke::wasm_handler::SerializationFormat::MsgPack;
+use serde::Deserialize;
+use serde::Serialize;
+use image::{ColorType, GenericImageView, ImageFormat};
 
+lazy_static! {
+    static ref EMBED_IMAGE: &'static [u8] = include_bytes!("test.jpg");
+}
+
+#[derive(Debug, Deserialize)]
+struct FuncInput {
+    name: String,
+    purchases: Vec<String>,
+    price: Vec<f64>,
+}
+
+#[derive(Debug, Deserialize)]
+struct BatchInput {
+    inputs: Vec<FuncInput>
+}
+
+#[derive(Debug, Serialize)]
+struct FuncResponse {
+    resp: Vec<u8>,
+    tag: Vec<u8>,
+}
+
+#[derive(Debug, Serialize)]
+struct BatchFuncResponse {
+    resp: Vec<FuncResponse>
+}
 
 #[inline(never)]
-fn main() {
+fn makePdf(event: FuncInput) -> Vec<u8> {
+    let name = event.name;
+    let purchases: Vec<(&String, &f64)> = event.purchases.iter().zip(event.price.iter()).collect();
+
     // Start writing.
     let mut writer = PdfWriter::new();
 
@@ -13,6 +54,10 @@ fn main() {
     let page_id = Ref::new(3);
     let font_id = Ref::new(4);
     let content_id = Ref::new(5);
+    let image_id = Ref::new(6);
+    let s_mask_id = Ref::new(7);
+
+    let image_name = Name(b"Im1");
     let font_name = Name(b"F1");
 
     // Write the document catalog with a reference to the page tree.
@@ -26,7 +71,8 @@ fn main() {
 
     // Set the size to A4 (measured in points) using `media_box` and set the
     // text object we'll write later as the page's contents.
-    page.media_box(Rect::new(0.0, 0.0, 595.0, 842.0));
+    let a4 = Rect::new(0.0, 0.0, 595.0, 842.0);
+    page.media_box(a4);
     page.parent(page_tree_id);
     page.contents(content_id);
 
@@ -36,18 +82,21 @@ fn main() {
     let mut annotation = annotations.push();
 
     // Write the type, area, alt-text, and color for our link annotation.
+    /*
     annotation.subtype(AnnotationType::Link);
     annotation.rect(Rect::new(215.0, 730.0, 251.0, 748.0));
     annotation.contents(TextStr("Link to the Rust project web page"));
     annotation.color_rgb(0.0, 0.0, 1.0);
-
+    */
     // Write an action for the annotation, telling it where to link to. Actions
     // can be associated with annotations, outline objects, and more and allow
     // creating interactive PDFs (open links, play sounds...).
+    /*
     annotation
         .action()
         .action_type(ActionType::Uri)
         .uri(Str(b"https://www.rust-lang.org/"));
+    */
 
     // Set border and style for the link annotation.
     annotation.border_style().width(2.0).style(BorderType::Underline);
@@ -63,6 +112,8 @@ fn main() {
     // We also need to specify which resources the page needs, which in our case
     // is only a font that we name "F1" (the specific name doesn't matter).
     page.resources().fonts().pair(font_name, font_id);
+    page.resources().x_objects().pair(image_name, image_id);
+
     page.finish();
 
     // Specify the font we want to use. Because Helvetica is one of the 14 base
@@ -78,17 +129,90 @@ fn main() {
     // the standard encoding is used which happens to work with most ASCII
     // characters.
     let mut content = Content::new();
+
     content.begin_text();
     content.set_font(font_name, 14.0);
-    content.next_line(108.0, 734.0);
-    content.show(Str(b"Hello World from Rust!"));
+    content.next_line(50.0, 800.0);
+    content.show(Str(format!("Fake Bill for: {}", name).as_bytes()));
     content.end_text();
+
+    content.begin_text();
+    content.set_font(font_name, 14.0);
+    content.next_line(50.0, 770.0);
+    content.show(Str(b"-------------------------------------------------------------------"));
+    content.end_text();
+    
+
+
+    content.begin_text();
+    content.set_font(font_name, 14.0);
+    content.next_line(50.0, 755.0);
+    content.show(Str(b"Purchases"));
+    content.end_text();
+    let mut idx = 735.0;
+
+    for (purchase, price) in purchases.iter() {
+        content.begin_text();
+        content.set_font(font_name, 14.0);
+        content.next_line(50.0, idx);
+        content.show(Str(format!("{}                                                        ${:.2}", purchase, price).as_bytes()));
+        content.end_text();
+        idx -= 10.0;
+    }
+
+    let dynamic = image::load_from_memory(&EMBED_IMAGE).unwrap();
+    let encoded = &EMBED_IMAGE;
+    let filter = Filter::DctDecode;
+
+    let mut image = writer.image_xobject(image_id, &encoded);
+    let im_x = 250;
+    let im_y = 250;
+    image.filter(filter);
+    image.width(im_x);
+    image.height(im_y);
+    image.color_space().device_rgb();
+    image.bits_per_component(8);
+
+    image.finish();
+    // Size the image at 1pt per pixel.
+    let w = im_x as f32; //dynamic.width() as f32;
+    let h = im_y as f32; //dynamic.height() as f32;
+
+    // Center the image on the page.
+    let x = (a4.x2 - w) / 2.0;
+    let y = (a4.y2 - h) / 2.0;
+
+    content.save_state();
+    content.transform([w as f32, 0.0, 0.0, h as f32, x, y]);
+    content.x_object(image_name);
+    content.restore_state();
+
     writer.stream(content_id, &content.finish());
 
     // Finish writing (this automatically creates the cross-reference table and
     // file trailer) and retrieve the resulting byte buffer.
-    let buf: Vec<u8> = writer.finish();
- 
+    return writer.finish();
+}
 
-    println!("{:?}", buf);
+#[inline(never)]
+fn main() {
+    let mut buf2 = vec![];
+    let now = Instant::now();
+    for _idx in 0..1 {
+        buf2.extend(makePdf(FuncInput{
+            name: "test".to_string(),
+            purchases: vec!["test".to_string()],
+            price: vec![10.10],
+        }));
+    }
+
+    let elapsed = now.elapsed();
+    println!("Elapsed: {:.2?}", elapsed);
+
+
+    let mut file = File::create("test.pdf").unwrap();
+    file.write_all(&buf2).unwrap();
+        
+
+    //println!("{:?}", buf);
 }
