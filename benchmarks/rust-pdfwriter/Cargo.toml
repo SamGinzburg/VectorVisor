@@ -7,4 +7,5 @@ edition = "2021"
 
 [dependencies]
 #pdf-writer = "0.6"
-pdf-writer = { path = "/home/ginzburgsam/pdf-writer" }
+#pdf-writer = { path = "/home/ginzburgsam/pdf-writer" }
+pdf-writer = { git = "https://github.com/SamGinzburg/pdf-writer.git", branch = "main" }
