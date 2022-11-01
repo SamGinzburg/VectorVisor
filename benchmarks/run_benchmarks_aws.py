@@ -641,9 +641,9 @@ def run_lz4_bench():
 
 def run_genpdf_bench():
     if run_a10g:
-        vmcount = 5120
+        vmcount = 4608
     else:
-        vmcount = 4096
+        vmcount = 3072
 
     run_genpdf_command_x86 = """#!/bin/bash
     sudo su
@@ -654,8 +654,8 @@ def run_genpdf_bench():
     x=$(cloud-init status)
     done
 
-    cd /vv/VectorVisor/benchmarks/genpdf/
-    ~/.cargo/bin/cargo run --release --target x86_64-unknown-linux-gnu &> /vv/genpdf.log &
+    cd /vv/VectorVisor/benchmarks/rust-pdfwriter/
+    ~/.cargo/bin/cargo run --release --target x86_64-unknown-linux-gnu &> /vv/rust-pdfwriter.log &
     """.format(fastreply=fastreply)
 
     run_genpdf_command_wasmtime = """#!/bin/bash
@@ -667,8 +667,8 @@ def run_genpdf_bench():
     x=$(cloud-init status)
     done
 
-    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/genpdf-opt-{interleave}.wasm --ip=0.0.0.0 --heap=3145728 --stack=131072 --hcallsize=262144 --partition=true --serverless=true --vmcount=4096 --wasmtime=true --fastreply={fastreply} &> /vv/genpdf.log &
-    """.format(fastreply=fastreply, interleave=interleave)
+    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/rust-pdfwriter-opt-{interleave}.wasm --ip=0.0.0.0 --heap=4194304 --stack=131072 --hcallsize=409600 --partition=false --serverless=true --vmcount={vmcount} --wasmtime=true --fastreply={fastreply} &> /vv/rust-pdfwriter.log &
+    """.format(fastreply=fastreply, interleave=interleave, vmcount=vmcount)
 
     run_command(run_genpdf_command_wasmtime, "run_genpdf_command_wasmtime", cpu_bench_instance[0].id)
 
@@ -688,11 +688,11 @@ def run_genpdf_bench():
 
     cd /vv/VectorVisor/benchmarks/
 
-    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/genpdf-opt-{interleave}.wasm.bin --ip=0.0.0.0 --heap=3000000 --stack=131072 --hcallsize=200000 --partition=true --serverless=true --vmcount={vmcount} --wasmtime=false --maxdup=2 --partitions={maxfuncs} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} --rt=200 &> /vv/genpdf.log &
+    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/rust-pdfwriter-opt-{interleave}.wasm.bin --ip=0.0.0.0 --heap=4194304 --stack=131072 --hcallsize=409600 --partition=false --serverless=true --vmcount={vmcount} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --rt=100 &> /vv/rust-pdfwriter.log &
     """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, \
                maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount)
 
-    run_command(run_genpdf_command, "run_average_command", gpu_instance[0].id)
+    run_command(run_genpdf_command, "run_rust-pdfwriter_command", gpu_instance[0].id)
 
     # Now set up the invoker
     if not run_latency_breakdown:
@@ -713,9 +713,9 @@ def run_genpdf_bench():
     x=$(cloud-init status)
     done
 
-    cd /vv/VectorVisor/benchmarks/genpdf/
+    cd /vv/VectorVisor/benchmarks/rust-pdfwriter/
 
-    /usr/local/go/bin/go run /vv/VectorVisor/benchmarks/genpdf/run_genpdf.go {addr} 8000 {target_rps} 1 {duration}
+    /usr/local/go/bin/go run /vv/VectorVisor/benchmarks/rust-pdfwriter/run_genpdf.go {addr} 8000 {target_rps} 1 {duration}
     """.format(addr=gpu_instance[0].private_dns_name, target_rps=vmcount, duration=benchmark_duration)
 
     for idx in range(NUM_REPEAT):
@@ -749,9 +749,9 @@ def run_genpdf_bench():
     x=$(cloud-init status)
     done
 
-    cd /vv/VectorVisor/benchmarks/genpdf/
+    cd /vv/VectorVisor/benchmarks/rust-pdfwriter/
 
-    /usr/local/go/bin/go run /vv/VectorVisor/benchmarks/genpdf/run_genpdf.go {addr} 8000 {target_rps} 1 {duration}
+    /usr/local/go/bin/go run /vv/VectorVisor/benchmarks/rust-pdfwriter/run_genpdf.go {addr} 8000 {target_rps} 1 {duration}
     """.format(addr=cpu_bench_instance[0].private_dns_name, target_rps=target_rps_cpu, duration=benchmark_duration)
     for idx in range(NUM_REPEAT):
         command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
@@ -1756,14 +1756,7 @@ if run_only_membench and skip_membench is None:
 
 # run image hash bench
 
-run_image_hash_bench(run_modified = True)
-
-cleanup()
-
-run_nlp_count_bench()
-
-cleanup()
-
+run_genpdf_bench()
 
 """
 

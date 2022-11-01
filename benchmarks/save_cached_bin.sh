@@ -31,6 +31,7 @@ function cachebin() {
 }
 
 cachebin "rust-pdfwriter" "4194304" "131072" "409600" "3072" "4608"
+exit
 cachebin "pbkdf2" "3145728" "262144" "131072" "4096" "6144"
 cachebin "imagehash" "4194304" "131072" "262144" "3072" "4608"
 cachebin "imagehash-modified" "4194304" "131072" "262144" "3072" "4608"
