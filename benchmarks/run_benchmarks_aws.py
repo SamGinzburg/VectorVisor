@@ -109,20 +109,8 @@ if run_only_membench:
      - export HOME=/root
      - export CUDA_CACHE_MAXSIZE=4294967296
      - export CUDA_CACHE_PATH=~/.nv/ComputeCache/
-     - cd /vv
-     - sudo apt update
-     - sudo apt install -y git
-     - sudo apt install -y git-lfs
-     - sudo apt install -y htop
-     - sudo apt install -y gcc
-     - sudo apt install -y curl
-     - sudo apt install -y clinfo
-     - sudo curl https://sh.rustup.rs -sSf | sh -s -- -y
-     - . $HOME/.cargo/env
-     - sudo ~/.cargo/bin/rustup target add wasm32-wasi
-     - git clone https://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:x-oauth-basic@github.com/SamGinzburg/VectorVisor.git
      - cd /vv/VectorVisor/
-     - sudo ~/.cargo/bin/cargo build --release
+     - git pull
 """.format(opt=OPT_LEVEL, snip_args=WASM_SNIP_ARGS, snip_custom=WASM_SNIP_CUSTOM)
 else:
     userdata_ubuntu = """#cloud-config
@@ -133,6 +121,8 @@ else:
      - export HOME=/root
      - export CUDA_CACHE_MAXSIZE=4294967296
      - export CUDA_CACHE_PATH=~/.nv/ComputeCache/
+     - cd /vv/VectorVisor/
+     - git pull
 """.format(opt=OPT_LEVEL, snip_args=WASM_SNIP_ARGS, snip_custom=WASM_SNIP_CUSTOM)
 
 def run_command(command, command_name, instance_id):
