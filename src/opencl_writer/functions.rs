@@ -1,5 +1,7 @@
 use crate::opencl_writer;
 use crate::opencl_writer::format_fn_name;
+use crate::opencl_writer::emit_read_u32_fast;
+use crate::opencl_writer::emit_write_u32_fast;
 use crate::opencl_writer::mem_interleave::emit_read_u32_aligned;
 use crate::opencl_writer::mem_interleave::emit_read_u64_aligned;
 use crate::opencl_writer::mem_interleave::emit_write_u32_aligned;
@@ -249,7 +251,7 @@ pub fn emit_fn_call(
     if !is_indirect && !is_fastcall {
         for (param, ty) in stack_params.iter().zip(stack_params_types.iter()) {
             match ty {
-                StackType::i32 => {
+                StackType::i32 if writer.interleave == 1 => {
                     ret_str += &format!(
                         "\t{};\n\t*sp += 2;\n",
                         emit_write_u32_aligned(
@@ -257,6 +259,16 @@ pub fn emit_fn_call(
                             "(ulong)(stack_u32)",
                             &param,
                             "warp_idx"
+                        )
+                    );
+                }
+                StackType::i32 => {
+                    ret_str += &format!(
+                        "\t{};\n\t*sp += 2;\n",
+                        emit_write_u32_fast(
+                            "(ulong)(*sp)*4",
+                            "(ulong)(stack_base)",
+                            &param,
                         )
                     );
                 }
@@ -271,7 +283,7 @@ pub fn emit_fn_call(
                         )
                     );
                 }
-                StackType::f32 => {
+                StackType::f32 if writer.interleave == 1 => {
                     ret_str += &format!("\t{{\n");
                     ret_str += &format!("\t\tuint temp = 0;\n");
                     ret_str += &format!(
@@ -285,6 +297,23 @@ pub fn emit_fn_call(
                             "(ulong)(stack_u32)",
                             "temp",
                             "warp_idx"
+                        )
+                    );
+                    ret_str += &format!("\t}}\n");
+                }
+                StackType::f32 => {
+                    ret_str += &format!("\t{{\n");
+                    ret_str += &format!("\t\tuint temp = 0;\n");
+                    ret_str += &format!(
+                        "\t\t___private_memcpy_nonmmu(&temp, &{}, sizeof(uint));\n",
+                        param
+                    );
+                    ret_str += &format!(
+                        "\t\t{};\n\t*sp += 2;\n",
+                        emit_write_u32_fast(
+                            "(ulong)(*sp)*4",
+                            "(ulong)(stack_base)",
+                            "temp",
                         )
                     );
                     ret_str += &format!("\t}}\n");
@@ -479,7 +508,7 @@ pub fn emit_fn_call(
         let result_register =
             stack_ctx.vstack_alloc(StackCtx::convert_wast_types(&return_type.unwrap()));
         match StackCtx::convert_wast_types(&return_type.unwrap()) {
-            StackType::i32 => {
+            StackType::i32 if writer.interleave == 1 => {
                 ret_str += &format!(
                     "\t{} = {};\n\t{};\n",
                     result_register,
@@ -487,6 +516,17 @@ pub fn emit_fn_call(
                         "(ulong)(stack_u32+*sp-2)",
                         "(ulong)(stack_u32)",
                         "warp_idx"
+                    ),
+                    "*sp -= 2"
+                );
+            }
+            StackType::i32 => {
+                ret_str += &format!(
+                    "\t{} = {};\n\t{};\n",
+                    result_register,
+                    emit_read_u32_fast(
+                        "(ulong)(*sp-2)*4",
+                        "(ulong)(stack_base)",
                     ),
                     "*sp -= 2"
                 );
@@ -503,7 +543,7 @@ pub fn emit_fn_call(
                     "*sp -= 2;"
                 );
             }
-            StackType::f32 => {
+            StackType::f32 if writer.interleave == 1 => {
                 ret_str += &format!("\t{{\n");
                 ret_str += &format!(
                     "\t\tuint temp = {};\n",
@@ -511,6 +551,22 @@ pub fn emit_fn_call(
                         "(ulong)(stack_u32+*sp-2)",
                         "(ulong)(stack_u32)",
                         "warp_idx"
+                    )
+                );
+                ret_str += &format!(
+                    "\t\t___private_memcpy_nonmmu(&{}, &temp, sizeof(uint));\n",
+                    result_register
+                );
+                ret_str += &format!("\t\t*sp -= 2;\n");
+                ret_str += &format!("\t}}\n");
+            }
+            StackType::f32 => {
+                ret_str += &format!("\t{{\n");
+                ret_str += &format!(
+                    "\t\tuint temp = {};\n",
+                    emit_read_u32_fast(
+                        "(ulong)(*sp-2)*4",
+                        "(ulong)(stack_base)",
                     )
                 );
                 ret_str += &format!(
@@ -1130,7 +1186,7 @@ pub fn emit_call_indirect(
     if !is_fastcall {
         for (param, ty) in stack_params.iter().zip(stack_params_types.iter()) {
             match ty {
-                StackType::i32 => {
+                StackType::i32 if writer.interleave == 1 => {
                     result += &format!(
                         "\t{};\n\t*sp += 2;\n",
                         emit_write_u32_aligned(
@@ -1138,6 +1194,16 @@ pub fn emit_call_indirect(
                             "(ulong)(stack_u32)",
                             &param,
                             "warp_idx"
+                        )
+                    );
+                }
+                StackType::i32 => {
+                    result += &format!(
+                        "\t{};\n\t*sp += 2;\n",
+                        emit_write_u32_fast(
+                            "(ulong)(*sp)*4",
+                            "(ulong)(stack_base)",
+                            &param,
                         )
                     );
                 }
@@ -1152,7 +1218,7 @@ pub fn emit_call_indirect(
                         )
                     );
                 }
-                StackType::f32 => {
+                StackType::f32 if writer.interleave == 1 => {
                     result += &format!("\t{{\n");
                     result += &format!("\t\tuint temp = 0;\n");
                     result += &format!(
@@ -1166,6 +1232,23 @@ pub fn emit_call_indirect(
                             "(ulong)(stack_u32)",
                             "temp",
                             "warp_idx"
+                        )
+                    );
+                    result += &format!("\t}}\n");
+                }
+                StackType::f32 => {
+                    result += &format!("\t{{\n");
+                    result += &format!("\t\tuint temp = 0;\n");
+                    result += &format!(
+                        "\t\t___private_memcpy_nonmmu(&temp, &{}, sizeof(uint));\n",
+                        param
+                    );
+                    result += &format!(
+                        "\t\t{};\n\t\t*sp += 2;\n",
+                        emit_write_u32_fast(
+                            "(ulong)(*sp)*4",
+                            "(ulong)(stack_base)",
+                            "temp",
                         )
                     );
                     result += &format!("\t}}\n");
@@ -1270,7 +1353,7 @@ pub fn emit_call_indirect(
     // Read the result value into a register
     if result_types.len() > 0 && !is_fastcall {
         match StackCtx::convert_wast_types(&result_types[0]) {
-            StackType::i32 => {
+            StackType::i32 if writer.interleave == 1 => {
                 result += &format!(
                     "\t{} = {};\n\t{};\n",
                     result_register,
@@ -1278,6 +1361,17 @@ pub fn emit_call_indirect(
                         "(ulong)(stack_u32+*sp-2)",
                         "(ulong)(stack_u32)",
                         "warp_idx"
+                    ),
+                    "*sp -= 2"
+                );
+            }
+            StackType::i32 => {
+                result += &format!(
+                    "\t{} = {};\n\t{};\n",
+                    result_register,
+                    emit_read_u32_fast(
+                        "(ulong)(*sp-2)*4",
+                        "(ulong)(stack_base)",
                     ),
                     "*sp -= 2"
                 );
@@ -1294,7 +1388,7 @@ pub fn emit_call_indirect(
                     "*sp -= 2;"
                 );
             }
-            StackType::f32 => {
+            StackType::f32 if writer.interleave == 1 => {
                 result += &format!("\t{{\n");
                 result += &format!(
                     "\t\tuint temp = {};\n",
@@ -1302,6 +1396,22 @@ pub fn emit_call_indirect(
                         "(ulong)(stack_u32+*sp-2)",
                         "(ulong)(stack_u32)",
                         "warp_idx"
+                    )
+                );
+                result += &format!(
+                    "\t\t___private_memcpy_nonmmu(&{}, &temp, sizeof(uint));\n",
+                    result_register
+                );
+                result += &format!("\t\t*sp -= 2;\n");
+                result += &format!("\t}}\n");
+            }
+            StackType::f32 => {
+                result += &format!("\t{{\n");
+                result += &format!(
+                    "\t\tuint temp = {};\n",
+                    emit_read_u32_fast(
+                        "(ulong)(*sp-2)*4",
+                        "(ulong)(stack_base)",
                     )
                 );
                 result += &format!(
