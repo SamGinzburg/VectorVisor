@@ -73,7 +73,7 @@ pub struct UnsafeCellWrapper<T: 'static> {
 }
 
 impl<T> UnsafeCellWrapper<T> {
-    pub fn new(t: &'static mut [T]) -> Self {
+    pub unsafe fn new(t: &'static mut [T]) -> Self {
         Self {
             buf: UnsafeCell::new(t),
         }
@@ -473,7 +473,7 @@ impl OpenCLRunner {
         let sfp = unsafe {
             ocl::core::create_buffer::<_, u8>(
                 context,
-                ocl::core::MEM_READ_WRITE | ocl::core::MEM_ALLOC_HOST_PTR,
+                ocl::core::MEM_READ_WRITE,
                 (stack_frame_ptr_size * 8 * self.num_vms * mexec) as usize,
                 None,
             )
@@ -485,7 +485,7 @@ impl OpenCLRunner {
         let call_stack = unsafe {
             ocl::core::create_buffer::<_, u8>(
                 context,
-                ocl::core::MEM_READ_WRITE | ocl::core::MEM_ALLOC_HOST_PTR,
+                ocl::core::MEM_READ_WRITE,
                 (call_stack_size * 8 * self.num_vms) as usize,
                 None,
             )
@@ -1156,7 +1156,10 @@ impl OpenCLRunner {
         data_segment: Vec<u8>,
     ) -> VMMRuntimeStatus {
         let mut kernels: HashMap<u32, ocl::core::Kernel> = HashMap::new();
-
+        let buffers = match &self.buffers {
+            Some(b) => b,
+            _ => panic!("run_vector_vms called before allocating buffers for kernels..."),
+        };
         // setup the data kernel
         let data_program = program_map.get(&99999).unwrap();
         kernels.insert(
@@ -1171,12 +1174,82 @@ impl OpenCLRunner {
             }
         }
 
-        let mut stack_pointer_temp: &mut [u64] = &mut vec![0u64; self.num_vms as usize * mexec];
-        let mut overhead_tracker: &'static mut [u64] =
-            Box::leak(vec![0u64; self.num_vms as usize].into_boxed_slice());
-        let mut entry_point_temp = vec![0u32; self.num_vms as usize * mexec];
-        let mut hypercall_num_temp = vec![0i32; self.num_vms as usize * mexec];
-        let mut hypercall_retval_temp = vec![0i32; self.num_vms as usize];
+        // Create DMA mappings...
+        let mut stack_map: ocl::core::MemMap<u64> = unsafe { ocl::core::enqueue_map_buffer(
+                        &queue,
+                        &buffers.sp,
+                        true,
+                        ocl::core::MapFlags::READ,
+                        0,
+                        self.num_vms as usize * mexec,
+                        None::<Event>,
+                        None::<&mut Event>).unwrap() };
+
+        let mut stack_pointer_temp: &mut [u64] = unsafe { stack_map.as_slice_mut(self.num_vms as usize * mexec) };
+        //let mut stack_pointer_temp: &mut [u64] = &mut vec![0u64; self.num_vms as usize * mexec];
+        
+        let mut overhead_tracker_map: ocl::core::MemMap<u64> = unsafe { ocl::core::enqueue_map_buffer(
+                        &queue,
+                        &buffers.overhead_tracker,
+                        true,
+                        ocl::core::MapFlags::READ,
+                        0,
+                        self.num_vms as usize * mexec,
+                        None::<Event>,
+                        None::<&mut Event>).unwrap() };
+
+        let mut overhead_tracker:  &mut [u64] = unsafe { overhead_tracker_map.as_slice_mut(self.num_vms as usize * mexec) };
+        //let mut overhead_tracker: &'static mut [u64] =
+        //    Box::leak(vec![0u64; self.num_vms as usize].into_boxed_slice());
+
+        let mut entry_map: ocl::core::MemMap<u32> = unsafe { ocl::core::enqueue_map_buffer(
+                        &queue,
+                        &buffers.entry,
+                        true,
+                        ocl::core::MapFlags::READ | ocl::core::MapFlags::WRITE,
+                        0,
+                        self.num_vms as usize * mexec,
+                        None::<Event>,
+                        None::<&mut Event>).unwrap() };
+        let mut entry_point_temp:  &mut [u32] = unsafe { entry_map.as_slice_mut(self.num_vms as usize * mexec) };
+        //let mut entry_point_temp = vec![0u32; self.num_vms as usize * mexec];
+
+        let mut hcall_num_map: ocl::core::MemMap<i32> = unsafe { ocl::core::enqueue_map_buffer(
+                        &queue,
+                        &buffers.hypercall_num,
+                        true,
+                        ocl::core::MapFlags::READ | ocl::core::MapFlags::WRITE,
+                        0,
+                        self.num_vms as usize * mexec,
+                        None::<Event>,
+                        None::<&mut Event>).unwrap() };
+
+        let mut hypercall_num_temp:  &mut [i32] = unsafe { hcall_num_map.as_slice_mut(self.num_vms as usize * mexec) };
+        //let mut hypercall_num_temp = vec![0i32; self.num_vms as usize * mexec];
+
+        // Allocate buffer to return values
+        let hcall_retval_buffer = unsafe {
+            ocl::core::create_buffer::<_, u8>(
+                ctx,
+                ocl::core::MEM_READ_WRITE | ocl::core::MEM_ALLOC_HOST_PTR,
+                (4 * self.num_vms) as usize,
+                None,
+            )
+            .unwrap()
+        };
+        let mut hcall_retval_map: ocl::core::MemMap<i32> = unsafe { ocl::core::enqueue_map_buffer(
+                        &queue,
+                        &hcall_retval_buffer,
+                        true,
+                        ocl::core::MapFlags::WRITE_INVALIDATE_REGION,
+                        0,
+                        self.num_vms as usize * mexec,
+                        None::<Event>,
+                        None::<&mut Event>).unwrap() };
+
+        let mut hypercall_retval_temp:  &mut [i32] = unsafe { hcall_retval_map.as_slice_mut(self.num_vms as usize * mexec) };
+        //let mut hypercall_retval_temp = vec![0i32; self.num_vms as usize];
+
         let mut entry_point_exit_flag;
         let vm_slice: Vec<u32> = std::ops::Range {
             start: 0,
@@ -1185,11 +1258,11 @@ impl OpenCLRunner {
         .collect();
         //let mut hypercall_sender = vec![];
         let overhead_tracker_buffer: Arc<UnsafeCellWrapper<u64>> =
-            Arc::new(UnsafeCellWrapper::new(overhead_tracker));
+            unsafe { Arc::new(UnsafeCellWrapper::new(overhead_tracker)) };
         let hcall_read_buffer: Arc<UnsafeCellWrapper<u8>> =
-            Arc::new(UnsafeCellWrapper::new(hypercall_buffer_read_buffer));
+            unsafe { Arc::new(UnsafeCellWrapper::new(hypercall_buffer_read_buffer)) };
         let hcall_async_buffer: Arc<Mutex<UnsafeCellWrapper<u8>>> =
-            Arc::new(Mutex::new(UnsafeCellWrapper::new(hypercall_input_buffer)));
+            unsafe { Arc::new(Mutex::new(UnsafeCellWrapper::new(hypercall_input_buffer))) };
 
         let mut total_gpu_execution_time: u64 = 0;
         let mut queue_submit_delta: u64 = 0;
@@ -1210,18 +1283,27 @@ impl OpenCLRunner {
             )
             .unwrap()
         };
-
-        /*
-         * Allocate the buffer to return values
-         */
-        let hcall_retval_buffer = unsafe {
-            ocl::core::create_buffer::<_, u8>(
-                ctx,
-                ocl::core::MEM_READ_WRITE | ocl::core::MEM_ALLOC_HOST_PTR,
-                (4 * self.num_vms) as usize,
-                None,
-            )
-            .unwrap()
+        let mut map: ocl::core::MemMap<u8> = unsafe { ocl::core::enqueue_map_buffer(
+                        &queue,
+                        &hypercall_buffer,
+                        true,
+                        ocl::core::MapFlags::WRITE_INVALIDATE_REGION,
+                        0,
+                        (hypercall_buffer_size * self.num_vms) as usize,
+                        None::<Event>,
+                        None::<&mut Event>).unwrap() };
+        let mut hcall_read_map: ocl::core::MemMap<u8> = unsafe { ocl::core::enqueue_map_buffer(
+                        &queue,
+                        &hypercall_buffer,
+                        true,
+                        ocl::core::MapFlags::READ,
+                        0,
+                        (hypercall_buffer_size * self.num_vms) as usize,
+                        None::<Event>,
+                        None::<&mut Event>).unwrap() };
+        let hcall_read_buffer: Arc<UnsafeCellWrapper<u8>> = unsafe {
+            Arc::new(UnsafeCellWrapper::new(hcall_read_map
+                                            .as_slice_mut((hypercall_buffer_size * self.num_vms) as usize)))
         };
 
         /*
@@ -1360,11 +1442,13 @@ impl OpenCLRunner {
 
                 loop {
                     thread::sleep(sleep_time);
+
                     ellapsed_time += poll_freq;
                     // Check if we have an incoming function input to write to the hcall buffer
                     // Each thread polls a set of VMs to see if we can write to the hcall buf yet
                     // We will only poll if we know we have open slots in our group of VMs
                     // for each VM that we have, check if we have a request waiting
+
                     if recv_reqs < avail_vm_count {
                         for vm_idx in &vm_id_vec {
                             let worker_vm_idx = *vm_id_mapping.get(vm_idx).unwrap() as usize;
@@ -1389,7 +1473,7 @@ impl OpenCLRunner {
                             }
                         }
                     }
-
+    
                     // Check to see if we have a hypercall to dispatch for the VM
                     for vm_idx in &vm_id_vec {
                         match receiver[*vm_idx as usize].try_recv() {
@@ -1415,6 +1499,7 @@ impl OpenCLRunner {
                     }
                     // If serverless invoke, block until no vms available
                     // else, we just dispatch
+
                     if !block_on_inputs {
                         for mut incoming_call in &mut dispatchable_hcalls {
                             let worker_vm_idx =
@@ -1445,11 +1530,6 @@ impl OpenCLRunner {
                 }
             });
         }
-
-        let buffers = match &self.buffers {
-            Some(b) => b,
-            _ => panic!("run_vector_vms called before allocating buffers for kernels..."),
-        };
 
         println!("{:?}", buffers.stack_buffer);
 
@@ -1890,7 +1970,7 @@ impl OpenCLRunner {
                     // this is the case where a VM is blocked off on some call
                     // we can safely ignore this
                 } else {
-                    panic!("missing case: entry: {:?}, hcall: {:?}", entry_point_temp[idx], hypercall_num_temp[idx]);
+                    panic!("missing case: entry: {:?}, hcall: {:?}", entry_point_temp[idx].clone(), hypercall_num_temp[idx]);
                 }
             }
 
@@ -1980,12 +2060,12 @@ impl OpenCLRunner {
             let mut resp_ctr = 0;
             let mut rand_ctr = 0;
             let mut invoke = 0;
-            for call in &hypercall_num_temp {
-                if *call == 10000 {
+            for idx in 0..hypercall_num_temp.len() {
+                if hypercall_num_temp[idx] == 10000 {
                     resp_ctr += 1;
-                } else if *call == 6 {
+                } else if hypercall_num_temp[idx] == 6 {
                     rand_ctr += 1;
-                } else if *call == 9999 {
+                } else if hypercall_num_temp[idx] == 9999 {
                     invoke += 1;
                 }
             }
@@ -1997,16 +2077,18 @@ impl OpenCLRunner {
                 let overhead_buf: &mut [u64] = *overhead_tracker_buffer.buf.get();
 
                 // We don't need to read previous buffer values for serverless invoke
-                ocl::core::enqueue_read_buffer(
-                    &queue,
-                    &hypercall_buffer,
-                    false,
-                    0,
-                    buf,
-                    None::<Event>,
-                    None::<&mut Event>,
-                )
-                .unwrap();
+                if invoke == self.num_vms {
+                    ocl::core::enqueue_read_buffer(
+                        &queue,
+                        &hypercall_buffer,
+                        false,
+                        0,
+                        buf,
+                        None::<Event>,
+                        None::<&mut Event>,
+                    )
+                    .unwrap();
+                }
                 ocl::core::enqueue_read_buffer(
                     &queue,
                     &buffers.sp,
@@ -2017,6 +2099,7 @@ impl OpenCLRunner {
                     None::<&mut Event>,
                 )
                 .unwrap();
+
                 ocl::core::enqueue_read_buffer(
                     &queue,
                     &buffers.overhead_tracker,
@@ -2107,12 +2190,12 @@ impl OpenCLRunner {
 
             let mut total_recv = 0;
             for _idx in 0..(number_hcalls_blocking + num_hcall_resp) {
-                let start_recv = std::time::Instant::now();
+                //let start_recv = std::time::Instant::now();
                 let result = result_receiver.recv().unwrap();
-                let end_recv = std::time::Instant::now();
+                //let end_recv = std::time::Instant::now();
                 //dbg!(&_idx);
                 //println!("hcall recv time: {}", (end_recv-start_recv).as_nanos());
-                total_recv += (end_recv - start_recv).as_nanos();
+                //total_recv += (end_recv - start_recv).as_nanos();
                 // we want to special case proc_exit to exit the VM
                 match result.get_type() {
                     WasiSyscalls::ProcExit => {
@@ -2147,8 +2230,8 @@ impl OpenCLRunner {
             // proc_exit(...) can actually block off additional threads
             // we don't have to read again, we can have proc_exit write directly to entry_point_temp
             entry_point_exit_flag = true;
-            for e in &entry_point_temp {
-                entry_point_exit_flag = (*e as i32 == (-1)) & entry_point_exit_flag;
+            for idx in 0..entry_point_temp.len() {
+                entry_point_exit_flag = (entry_point_temp[idx] as i32 == (-1)) & entry_point_exit_flag;
             }
 
             if entry_point_exit_flag {
@@ -2184,16 +2267,38 @@ impl OpenCLRunner {
                         &*hcall_read_buffer.buf.get()
                     };
 
+                    /*
+                    let mut map: ocl::core::MemMap<u8> = ocl::core::enqueue_map_buffer(
+                        &queue,
+                        &hypercall_buffer,
+                        true,
+                        ocl::core::MapFlags::WRITE_INVALIDATE_REGION,
+                        0,
+                        (*hcall_read_buffer.buf.get()).len(),
+                        None::<Event>,
+                        None::<&mut Event>).unwrap();
+                    */
+                    let slice = map.as_slice_mut((*hcall_read_buffer.buf.get()).len());
+                    slice.copy_from_slice(hcall_buf);
+                      
+                    /*
+                    ocl::core::enqueue_unmap_mem_object(&queue,
+                                                        &hypercall_buffer,
+                                                        &map,
+                                                        None::<Event>,
+                                                        None::<&mut Event>).unwrap();
+                    */
                     ocl::core::enqueue_write_buffer(
                         &queue,
                         &hypercall_buffer,
                         true,
                         0,
-                        hcall_buf,
+                        &slice,
                         None::<Event>,
                         None::<&mut Event>,
                     )
                     .unwrap();
+
                     if is_serverless_invoke && !non_serverless_invoke_call_found {
                         invoke_complete.broadcast(true);
                         is_serverless_invoke = false;
