@@ -20,8 +20,12 @@ use ocl::core::Event;
 use std::convert::TryFrom;
 use std::ffi::CString;
 
+use tokio::sync::mpsc;
+use tokio::sync::mpsc::Receiver as AsyncReceiver;
+use tokio::sync::Mutex as AsyncMutex;
 use crossbeam::channel::bounded;
 use crossbeam::channel::unbounded;
+
 use std::collections::HashMap;
 
 use ocl::core::types::abs::MemMap;
@@ -37,6 +41,7 @@ use core::task::Poll;
 use crossbeam::channel::Receiver as SyncReceiver;
 use crossbeam::channel::Sender as SyncSender;
 use tokio::sync::mpsc::{Receiver, Sender};
+use tokio::sync::mpsc::Sender as AsyncSender;
 
 use std::cell::UnsafeCell;
 use std::collections::BTreeSet;
@@ -264,7 +269,7 @@ impl OpenCLRunner {
         local_work_group: usize,
         mexec: usize,
         req_timeout: u32,
-        vm_sender: Arc<Vec<Mutex<Sender<VmSenderType>>>>,
+        vm_sender: Arc<Vec<AsyncMutex<AsyncSender<VmSenderType>>>>,
         vm_recv: Arc<Vec<Mutex<Receiver<VmRecvType>>>>,
         _compile_flags: String,
         _link_flags: String,
@@ -1150,7 +1155,7 @@ impl OpenCLRunner {
         hypercall_buffer_size: u32,
         ctx: &ocl::core::Context,
         print_return: bool,
-        vm_sender: Arc<Vec<Mutex<Sender<VmSenderType>>>>,
+        vm_sender: Arc<Vec<AsyncMutex<AsyncSender<VmSenderType>>>>,
         vm_recv: Arc<Vec<Mutex<Receiver<VmRecvType>>>>,
         req_timeout: u32,
         data_segment: Vec<u8>,
@@ -1280,17 +1285,12 @@ impl OpenCLRunner {
 
         //let num_threads = 1;
         //let num_threads = num_cpus::get() as u32;
-        let thread_pool = rayon::ThreadPoolBuilder::new()
-            .num_threads(num_threads.try_into().unwrap())
-            .stack_size(1024 * 256)
-            .build()
-            .unwrap();
 
         let number_vms = self.num_vms.clone();
-        let (result_sender, result_receiver): (
-            SyncSender<HyperCallResult>,
-            SyncReceiver<HyperCallResult>,
-        ) = unbounded();
+        let (result_sender, mut result_receiver): (
+            AsyncSender<HyperCallResult>,
+            AsyncReceiver<HyperCallResult>,
+        ) = mpsc::channel(16384);
 
         let mut hcall_sender_vec = vec![];
         let mut hcall_recv_vec = vec![];
@@ -1312,7 +1312,7 @@ impl OpenCLRunner {
         let shareable_rx = Arc::new(invoke_rx);
 
         for thread_idx in 0..num_threads {
-            //let (sender, recv): (SyncSender<Box<HyperCall>>, SyncReceiver<Box<HyperCall>>) = unbounded();
+            //let (sender, recv): (AsyncSender<Box<HyperCall>>, SyncReceiver<Box<HyperCall>>) = unbounded();
             let hcall_recv_clone = hcall_recv_vec.clone();
             let sender_copy = result_sender.clone();
             //hypercall_sender.push(sender.clone());
@@ -1323,8 +1323,9 @@ impl OpenCLRunner {
             let async_buffer = hcall_async_buffer.clone();
             let invoke_blocker = shareable_rx.clone();
 
-            thread_pool.spawn(move || {
+            thread::spawn(move || {
                 let receiver = hcall_recv_clone.clone();
+                let async_rt = Arc::new(Mutex::new(tokio::runtime::Runtime::new().unwrap()));
                 // copy the references to the WASI contexts for this thread
                 let mut worker_vms: Vec<VectorizedVM> = vec![];
                 let mut vm_id_vec = vec![];
@@ -1420,7 +1421,10 @@ impl OpenCLRunner {
                             let worker_vm_idx =
                                 *vm_id_mapping.get(&incoming_call.vm_id).unwrap() as usize;
                             let wasi_context = &mut worker_vms[worker_vm_idx];
-                            wasi_context.dispatch_hypercall(&mut incoming_call, &sender_copy);
+
+                            let fut = wasi_context.dispatch_hypercall(incoming_call, sender_copy.clone());
+                            use futures::executor::block_on;
+                            block_on(fut);
                         }
                         dispatchable_hcalls.clear();
                         let hcall_end = std::time::Instant::now();
@@ -2108,7 +2112,7 @@ impl OpenCLRunner {
             let mut total_recv = 0;
             for _idx in 0..(number_hcalls_blocking + num_hcall_resp) {
                 let start_recv = std::time::Instant::now();
-                let result = result_receiver.recv().unwrap();
+                let result = result_receiver.blocking_recv().unwrap();
                 let end_recv = std::time::Instant::now();
                 //dbg!(&_idx);
                 //println!("hcall recv time: {}", (end_recv-start_recv).as_nanos());

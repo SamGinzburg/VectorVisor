@@ -13,7 +13,9 @@ use wiggle::GuestPtr;
 use byteorder::ByteOrder;
 use byteorder::LittleEndian;
 
-use crossbeam::channel::Sender;
+//use crossbeam::channel::Sender;
+
+use tokio::sync::mpsc::{Sender};
 
 use std::convert::TryInto;
 
@@ -49,7 +51,7 @@ impl Environment {
                 result,
                 vm_idx,
                 WasiSyscalls::EnvironSizeGet,
-            ))
+            )).await
             .unwrap();
     }
 
@@ -82,7 +84,7 @@ impl Environment {
                 result,
                 vm_idx,
                 WasiSyscalls::ArgsSizesGet,
-            ))
+            )).await
             .unwrap();
     }
 
@@ -138,7 +140,7 @@ impl Environment {
         //dbg!(&ptrs);
 
         sender
-            .send(HyperCallResult::new(0, vm_idx, WasiSyscalls::EnvironGet))
+            .send(HyperCallResult::new(0, vm_idx, WasiSyscalls::EnvironGet)).await
             .unwrap();
     }
 
@@ -183,7 +185,7 @@ impl Environment {
         }
 
         sender
-            .send(HyperCallResult::new(0, vm_idx, WasiSyscalls::ArgsGet))
+            .send(HyperCallResult::new(0, vm_idx, WasiSyscalls::ArgsGet)).await
             .unwrap();
     }
 }

@@ -13,7 +13,7 @@ use wiggle::GuestPtr;
 use byteorder::ByteOrder;
 use byteorder::LittleEndian;
 
-use crossbeam::channel::Sender;
+use tokio::sync::mpsc::Sender;
 
 use std::convert::TryFrom;
 use std::convert::TryInto;
@@ -49,7 +49,7 @@ impl Clock {
         hcall_buf[0..8].clone_from_slice(&timestamp.to_le_bytes());
 
         sender
-            .send(HyperCallResult::new(0, vm_idx, WasiSyscalls::ClockTimeGet))
+            .send(HyperCallResult::new(0, vm_idx, WasiSyscalls::ClockTimeGet)).await
             .unwrap();
     }
 }

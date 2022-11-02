@@ -23,7 +23,8 @@ use byteorder::ByteOrder;
 use byteorder::LittleEndian;
 use byteorder::WriteBytesExt;
 
-use crossbeam::channel::Sender;
+use tokio::sync::mpsc::Sender;
+//use crossbeam::channel::Sender;
 
 use std::convert::TryInto;
 
@@ -88,7 +89,7 @@ impl WasiFd {
                 result.unwrap() as i32,
                 vm_idx,
                 WasiSyscalls::FdWrite,
-            ))
+            )).await
             .unwrap();
     }
 
@@ -126,7 +127,7 @@ impl WasiFd {
                 result as i32,
                 vm_idx,
                 WasiSyscalls::FdPrestatGet,
-            ))
+            )).await
             .unwrap();
     }
 
@@ -178,7 +179,7 @@ impl WasiFd {
                 result as i32,
                 vm_idx,
                 WasiSyscalls::FdPrestatDirName,
-            ))
+            )).await
             .unwrap();
     }
 
@@ -229,7 +230,7 @@ impl WasiFd {
                 result as i32,
                 vm_idx,
                 WasiSyscalls::FdFdstatGet,
-            ))
+            )).await
             .unwrap();
     }
 }

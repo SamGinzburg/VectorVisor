@@ -12,7 +12,10 @@ use wiggle::GuestPtr;
 use byteorder::ByteOrder;
 use byteorder::LittleEndian;
 
-use crossbeam::channel::Sender;
+use tokio::sync::mpsc::Sender;
+//use crossbeam::channel::Sender;
+use tokio::sync::Mutex as AsyncMutex;
+
 
 use std::convert::TryInto;
 
@@ -44,7 +47,7 @@ impl Random {
         hcall_buf[0..(random_len as usize)].clone_from_slice(&raw_mem[0..(random_len as usize)]);
 
         sender
-            .send(HyperCallResult::new(0, vm_idx, WasiSyscalls::RandomGet))
+            .send(HyperCallResult::new(0, vm_idx, WasiSyscalls::RandomGet)).await
             .unwrap();
     }
 }

@@ -841,10 +841,12 @@ fn main() {
             jitcache,
         );
 
+        /*
         rayon::ThreadPoolBuilder::new()
             .num_threads(num_cpus::get() * 2)
             .build_global()
             .unwrap();
+        */
 
         (0..num_vm_groups)
             .collect::<Vec<u32>>()
@@ -882,7 +884,7 @@ fn main() {
                         tokio::sync::mpsc::Sender<VmSenderType>,
                         tokio::sync::mpsc::Receiver<VmSenderType>,
                     ) = mpsc::channel(16384);
-                    vm_sender_vec.push(Mutex::new(sender));
+                    vm_sender_vec.push(AsyncMutex::new(sender));
                     server_recv_vec.push(AsyncMutex::new(recv));
                 }
 
