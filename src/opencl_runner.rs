@@ -584,7 +584,7 @@ impl OpenCLRunner {
         let overhead_tracker = unsafe {
             ocl::core::create_buffer::<_, u8>(
                 context,
-                ocl::core::MEM_READ_WRITE,
+                ocl::core::MEM_READ_WRITE | ocl::core::MEM_ALLOC_HOST_PTR,
                 (self.num_vms * 8) as usize,
                 None,
             )
@@ -1283,7 +1283,7 @@ impl OpenCLRunner {
             )
             .unwrap()
         };
-        let mut map: ocl::core::MemMap<u8> = unsafe { ocl::core::enqueue_map_buffer(
+        let mut hcall_write_map: ocl::core::MemMap<u8> = unsafe { ocl::core::enqueue_map_buffer(
                         &queue,
                         &hypercall_buffer,
                         true,
@@ -1292,6 +1292,8 @@ impl OpenCLRunner {
                         (hypercall_buffer_size * self.num_vms) as usize,
                         None::<Event>,
                         None::<&mut Event>).unwrap() };
+        let mut hcall_write_buf:  &mut [u8] = unsafe { hcall_write_map.as_slice_mut((hypercall_buffer_size * self.num_vms) as usize) };
+
         let mut hcall_read_map: ocl::core::MemMap<u8> = unsafe { ocl::core::enqueue_map_buffer(
                         &queue,
                         &hypercall_buffer,
@@ -2267,33 +2269,14 @@ impl OpenCLRunner {
                         &*hcall_read_buffer.buf.get()
                     };
 
-                    /*
-                    let mut map: ocl::core::MemMap<u8> = ocl::core::enqueue_map_buffer(
-                        &queue,
-                        &hypercall_buffer,
-                        true,
-                        ocl::core::MapFlags::WRITE_INVALIDATE_REGION,
-                        0,
-                        (*hcall_read_buffer.buf.get()).len(),
-                        None::<Event>,
-                        None::<&mut Event>).unwrap();
-                    */
-                    let slice = map.as_slice_mut((*hcall_read_buffer.buf.get()).len());
-                    slice.copy_from_slice(hcall_buf);
+                    hcall_write_buf.copy_from_slice(hcall_buf);
                       
-                    /*
-                    ocl::core::enqueue_unmap_mem_object(&queue,
-                                                        &hypercall_buffer,
-                                                        &map,
-                                                        None::<Event>,
-                                                        None::<&mut Event>).unwrap();
-                    */
                     ocl::core::enqueue_write_buffer(
                         &queue,
                         &hypercall_buffer,
-                        true,
+                        false,
                         0,
-                        &slice,
+                        &hcall_write_buf,
                         None::<Event>,
                         None::<&mut Event>,
                     )
