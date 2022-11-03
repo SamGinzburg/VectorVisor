@@ -154,11 +154,11 @@ fn makePdf(event: FuncInput) -> Vec<u8> {
         content.next_line(50.0, idx);
         content.show(Str(format!("{}                                                        ${:.2}", purchase, price).as_bytes()));
         content.end_text();
-        idx -= 10.0;
+        idx -= 15.0;
     }
 
     //let dynamic = image::load_from_memory(&EMBED_IMAGE).unwrap();
-    /*
+
     let encoded = &EMBED_IMAGE;
     let filter = Filter::DctDecode;
 
@@ -178,13 +178,13 @@ fn makePdf(event: FuncInput) -> Vec<u8> {
 
     // Center the image on the page.
     let x = (a4.x2 - w) / 2.0;
-    let y = (a4.y2 - h) / 2.0;
+    let y = 50.0; //(a4.y2 - h) / 2.0;
 
     content.save_state();
     content.transform([w as f32, 0.0, 0.0, h as f32, x, y]);
     content.x_object(image_name);
     content.restore_state();
-    */
+
 
     writer.stream(content_id, &content.finish());
 
@@ -206,20 +206,21 @@ fn main() {
     let handler = WasmHandler::new(&batch_genpdf);
     handler.run_with_format(1024*512, MsgPack);
 }
+
 /*
 #[inline(never)]
 fn main() {
     let mut buf2 = vec![];
     let now = Instant::now();
-    for _idx in 0..1 {
+    for _idx in 0..35 {
         buf2.extend(makePdf(FuncInput{
             name: "test".to_string(),
-            purchases: vec!["test".to_string()],
-            price: vec![10.10],
+            purchases: vec!["test".to_string(), "test1".to_string(), "test2".to_string()],
+            price: vec![10.10, 123.32, 100.00],
         }));
     }
 
-    let elapsed = now.elapsed();
+    let elapsed = now.elapsed().as_nanos();
     println!("Elapsed: {:.2?}", elapsed);
 
 
