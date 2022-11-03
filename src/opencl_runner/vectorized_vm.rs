@@ -260,6 +260,7 @@ impl VectorizedVM {
         let hcall_buf_size: u32 = self.hcall_buf_size;
         let vm_hcall_buf = &mut hcall_buf
             [(self.vm_id * hcall_buf_size) as usize..((self.vm_id + 1) * hcall_buf_size) as usize];
+        assert!(msg.len() <= hcall_buf_size.try_into().unwrap(), "Input > hcall buf size");
         vm_hcall_buf[0..msg.len()].copy_from_slice(&msg);
         self.ready_for_input.store(false, Ordering::Relaxed);
         self.input_msg_len = msg.len();
