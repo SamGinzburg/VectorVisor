@@ -24,11 +24,10 @@ struct FuncResponse {
 }
 
 #[inline(never)]
-fn compress_input(data: Vec<u8>, mut encoder: Encoder<BufWriter<Vec<u8>>>) -> String {
+fn compress_input(data: Vec<u8>, mut encoder: Encoder<BufWriter<Vec<u8>>>) -> BufWriter<Vec<u8>> {
     encoder.write(&data).unwrap();
     let (compressed_bytes, _) = encoder.finish();
-    let encoded = encode(compressed_bytes.into_inner().unwrap());
-    return encoded;
+    return compressed_bytes;
 }
 
 #[inline(never)]
@@ -36,7 +35,8 @@ fn compress_json(event: FuncInput) -> FuncResponse {
     let mut resp = vec![];
     for tweet in event.tweets {
         let mut encoder = Encoder::new(BufWriter::new(Vec::new()));
-        let encoded = compress_input(tweet.as_bytes().to_vec(), encoder);
+        let compressed_bytes = compress_input(tweet.as_bytes().to_vec(), encoder);
+        let encoded = encode(compressed_bytes.into_inner().unwrap());
         resp.push(encoded);
     }
     FuncResponse { encoded_resp: resp }

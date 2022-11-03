@@ -23,8 +23,5 @@ pub fn emit_i64_eqz(
     let reg = stack_ctx.vstack_pop(StackType::i64);
     let result_register = stack_ctx.vstack_alloc(StackType::i32);
 
-    format!(
-        "\t{} = !({});\n",
-        result_register, reg
-    )
+    format!("\t{} = !({});\n", result_register, reg)
 }

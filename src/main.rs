@@ -528,7 +528,7 @@ fn main() {
                     false,
                     is_nvidia_gpu,
                     volatile,
-                    unsafewrite
+                    unsafewrite,
                 );
                 println!("Compiled: {} functions", num_compiled_funcs);
                 println!("Entry point: {}", entry_point);
@@ -594,7 +594,7 @@ fn main() {
                     false,
                     is_nvidia_gpu,
                     volatile,
-                    unsafewrite
+                    unsafewrite,
                 );
                 println!("Compiled: {} functions", num_compiled_funcs);
                 println!("Entry point: {}", entry_point);
@@ -663,7 +663,7 @@ fn main() {
                     false,
                     is_nvidia_gpu,
                     volatile,
-                    unsafewrite
+                    unsafewrite,
                 );
                 println!("Compiled: {} functions", num_compiled_funcs);
                 println!("Entry point: {}", entry_point);
@@ -730,7 +730,7 @@ fn main() {
                     false,
                     is_nvidia_gpu,
                     volatile,
-                    unsafewrite
+                    unsafewrite,
                 );
                 println!("Compiled: {} functions", num_compiled_funcs);
                 println!("Entry point: {}", entry_point);

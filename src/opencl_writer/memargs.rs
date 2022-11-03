@@ -206,10 +206,7 @@ pub fn emit_memload_i32(
         format!(
             "({})",
             emit_read_u32_fast(
-                &format!(
-                    "(ulong)({}+(int)({}))",
-                    args.offset, i_load
-                ),
+                &format!("(ulong)({}+(int)({}))", args.offset, i_load),
                 "(ulong)(heap_base)",
             )
         )
@@ -349,10 +346,7 @@ pub fn emit_memload_f32(
         format!(
             "({})",
             emit_read_u32_fast(
-                &format!(
-                    "(ulong)({}+(int)({}))",
-                    args.offset, i_load
-                ),
+                &format!("(ulong)({}+(int)({}))", args.offset, i_load),
                 "(ulong)(heap_base)",
             )
         )
@@ -464,10 +458,7 @@ pub fn emit_memload_i64_32u(
         format!(
             "(ulong)({})",
             emit_read_u32_fast(
-                &format!(
-                    "(ulong)({}+(int)({}))",
-                    args.offset, i_load
-                ),
+                &format!("(ulong)({}+(int)({}))", args.offset, i_load),
                 "(ulong)(heap_base)",
             )
         )
@@ -517,10 +508,7 @@ pub fn emit_memload_i64_32s(
         format!(
             "(int)({})",
             &emit_read_u32_fast(
-                &format!(
-                    "(ulong)({}+(int)({}))",
-                    args.offset, i_load
-                ),
+                &format!("(ulong)({}+(int)({}))", args.offset, i_load),
                 "(ulong)(heap_base)",
             )
         )
@@ -658,10 +646,7 @@ pub fn emit_memstore_i32(
         ret_str += &format!(
             "\t{};\n",
             &emit_write_u32_fast(
-                &format!(
-                    "(ulong)({}+(int)({}))",
-                    args.offset, i_load
-                ),
+                &format!("(ulong)({}+(int)({}))", args.offset, i_load),
                 "(ulong)(heap_base)",
                 &stored_val,
             )
@@ -948,10 +933,7 @@ pub fn emit_memstore_f32(
         ret_str += &format!(
             "\t\t{};\n",
             &emit_write_u32_fast(
-                &format!(
-                    "(ulong)({}+(int)({}))",
-                    args.offset, i_load
-                ),
+                &format!("(ulong)({}+(int)({}))", args.offset, i_load),
                 "(ulong)(heap_base)",
                 "temp",
             )
@@ -1004,10 +986,7 @@ pub fn emit_memstore32_i64(
         ret_str += &format!(
             "\t{};\n",
             &emit_write_u32_fast(
-                &format!(
-                    "(ulong)({}+(int)({}))",
-                    args.offset, i_load
-                ),
+                &format!("(ulong)({}+(int)({}))", args.offset, i_load),
                 "(ulong)(heap_base)",
                 &format!("(int)({})", stored_val),
             )
@@ -1728,14 +1707,17 @@ pub fn emit_memcpy(
     let n_bytes = stack_ctx.vstack_pop(StackType::i32);
     let src = stack_ctx.vstack_pop(StackType::i32);
     let dst = stack_ctx.vstack_pop(StackType::i32);
-    format!("\t{}\n", emit_intra_vm_memcpy(
-        &format!("((global char*)(heap_u32)+{})", src),
-        "(global char*)(heap_u32)",
-        &format!("((global char*)(heap_u32)+{})", dst),
-        "(global char*)(heap_u32)",
-        &n_bytes,
-        "warp_idx",
-    ))
+    format!(
+        "\t{}\n",
+        emit_intra_vm_memcpy(
+            &format!("((global char*)(heap_u32)+{})", src),
+            "(global char*)(heap_u32)",
+            &format!("((global char*)(heap_u32)+{})", dst),
+            "(global char*)(heap_u32)",
+            &n_bytes,
+            "warp_idx",
+        )
+    )
 }
 
 pub fn emit_memfill(
@@ -1748,11 +1730,14 @@ pub fn emit_memfill(
     let val = stack_ctx.vstack_pop(StackType::i32);
     let dst = stack_ctx.vstack_pop(StackType::i32);
 
-    format!("\t{}\n", emit_intra_vm_memfill(
-        &format!("((global char*)(heap_u32)+{})", dst),
-        "(global char*)(heap_u32)",
-        &val,
-        &n_bytes,
-        "warp_idx",
-    ))
+    format!(
+        "\t{}\n",
+        emit_intra_vm_memfill(
+            &format!("((global char*)(heap_u32)+{})", dst),
+            "(global char*)(heap_u32)",
+            &val,
+            &n_bytes,
+            "warp_idx",
+        )
+    )
 }

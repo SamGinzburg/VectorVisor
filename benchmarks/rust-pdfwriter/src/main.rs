@@ -158,6 +158,7 @@ fn makePdf(event: FuncInput) -> Vec<u8> {
     }
 
     //let dynamic = image::load_from_memory(&EMBED_IMAGE).unwrap();
+    /*
     let encoded = &EMBED_IMAGE;
     let filter = Filter::DctDecode;
 
@@ -183,6 +184,7 @@ fn makePdf(event: FuncInput) -> Vec<u8> {
     content.transform([w as f32, 0.0, 0.0, h as f32, x, y]);
     content.x_object(image_name);
     content.restore_state();
+    */
 
     writer.stream(content_id, &content.finish());
 

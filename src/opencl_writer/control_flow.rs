@@ -19,14 +19,21 @@ use wast::token::Index;
  * We store the label,
  */
 
- #[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq)]
 pub enum WasmBlockType {
     BasicBlock,
     LoopBlock,
     IfBlock,
 }
 
-pub type ControlStackEntryType = (String, WasmBlockType, i32, u32, Option<StackType>, Option<String>);
+pub type ControlStackEntryType = (
+    String,
+    WasmBlockType,
+    i32,
+    u32,
+    Option<StackType>,
+    Option<String>,
+);
 
 // TODO: double check the semantics of this?
 pub fn emit_return(
@@ -170,7 +177,8 @@ pub fn emit_br(
         }
         WasmBlockType::LoopBlock => {
             // For loops, we need to check if we are targeting a tainted loop
-            let is_loop_tainted = stack_ctx.is_loop_tainted((*block_or_loop_idx).try_into().unwrap());
+            let is_loop_tainted =
+                stack_ctx.is_loop_tainted((*block_or_loop_idx).try_into().unwrap());
             if !is_fastcall && is_loop_tainted {
                 // If we are targeting a loop, we have to emit a return instead, to convert the iterative loop into a recursive function call
                 // save the context, since we are about to call a function (ourself)
@@ -555,7 +563,14 @@ pub fn emit_if(
     stack_ctx.vstack_push_stack_info(stack_ctx.stack_frame_size().try_into().unwrap());
 
     // for the control stack, we don't use the third parameter for blocks
-    control_stack.push((label, WasmBlockType::IfBlock, -1, *if_name_count, block_type, result_register));
+    control_stack.push((
+        label,
+        WasmBlockType::IfBlock,
+        -1,
+        *if_name_count,
+        block_type,
+        result_register,
+    ));
     *if_name_count += 1;
 
     result

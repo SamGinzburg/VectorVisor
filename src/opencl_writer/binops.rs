@@ -372,7 +372,10 @@ pub fn emit_i64_shl(
     let reg2 = stack_ctx.vstack_pop(StackType::i64);
     let result_register = stack_ctx.vstack_alloc(StackType::i64);
 
-    format!("\t{} = (ulong)({}) << ({} & 63);\n", result_register, reg2, reg1)
+    format!(
+        "\t{} = (ulong)({}) << ({} & 63);\n",
+        result_register, reg2, reg1
+    )
 }
 
 pub fn emit_i32_xor(
@@ -636,7 +639,10 @@ pub fn emit_i64_shr_s(
     let reg2 = stack_ctx.vstack_pop(StackType::i64);
     let result_register = stack_ctx.vstack_alloc(StackType::i64);
 
-    format!("\t{} = (long){} >> ({} & 63);\n", result_register, reg2, reg1)
+    format!(
+        "\t{} = (long){} >> ({} & 63);\n",
+        result_register, reg2, reg1
+    )
 }
 
 pub fn emit_i32_rotl(

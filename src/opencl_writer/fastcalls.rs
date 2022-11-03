@@ -148,11 +148,11 @@ fn is_fastcall(
                                             &"proc_exit" => {
                                                 // proc_exit is special cased, since we don't
                                                 // actually need to return
-                                                continue
+                                                continue;
                                             }
                                             &"fd_write" if unsafe_writes => {
                                                 // if we are allowing unsafe writes, we will allow fd_writes to trap on execution
-                                                continue
+                                                continue;
                                             }
                                             _ => {
                                                 // if we found a WASI hypercall...
@@ -232,8 +232,8 @@ fn is_fastcall(
                             }
                             _ => (),
                         }
-    
-                        // if the threshold < 10, we can de-virtualize the fastcall entirely 
+
+                        // if the threshold < 10, we can de-virtualize the fastcall entirely
                         if matching_types < 999 {
                             ambiguous_dep_list.extend(tmp_ambiguous_dep_list);
                         } else if matching_types > 0 {
@@ -331,7 +331,8 @@ pub fn compute_fastcall_set(
     for (call, set) in ambiguous_fastcalls.clone().iter() {
         // check for bad calls
         let bad_intersection = set.intersection(&known_bad_calls);
-        let contains_bad_calls: bool = bad_intersection.into_iter().collect::<Vec<&String>>().len() > 0;
+        let contains_bad_calls: bool =
+            bad_intersection.into_iter().collect::<Vec<&String>>().len() > 0;
         if contains_bad_calls {
             continue;
         }
@@ -340,7 +341,7 @@ pub fn compute_fastcall_set(
         for func in set {
             if !called_funcs.contains(func) {
                 // we found an undetermined call
-                undetermined_call = true; 
+                undetermined_call = true;
             }
         }
         if !undetermined_call {

@@ -156,14 +156,13 @@ impl Environment {
         let raw_mem: &mut [u8] = memory.data_mut(&mut vm_ctx.store);
 
         // environ_get is likely to always be called *after* environ_sizes_get, so we can cache the results from that call in the VM object
-        let (num_arg_vars, arg_str_size) =
-            match (vm_ctx.args_size, vm_ctx.args_str_size) {
-                (Some(args_size), Some(args_str_size)) => (args_size, args_str_size),
-                (_, _) => {
-                    // if we haven't cached the values yet, we have to get them
-                    vm_ctx.ctx.args_sizes_get().await.unwrap()
-                }
-            };
+        let (num_arg_vars, arg_str_size) = match (vm_ctx.args_size, vm_ctx.args_str_size) {
+            (Some(args_size), Some(args_str_size)) => (args_size, args_str_size),
+            (_, _) => {
+                // if we haven't cached the values yet, we have to get them
+                vm_ctx.ctx.args_sizes_get().await.unwrap()
+            }
+        };
 
         let wasm_mem = WasmtimeGuestMemory::new(raw_mem);
         let ciovec_ptr = &GuestPtr::new(&wasm_mem, 8);

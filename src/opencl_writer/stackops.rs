@@ -139,25 +139,19 @@ pub fn emit_local(writer: &opencl_writer::OpenCLCWriter, local: &Local, _debug: 
      *
      */
     match local.ty {
-        ValType::I32 if writer.interleave == 1 => {
-            String::from(format!(
-                "\t{};\n\t{}\n",
-                &emit_write_u32_aligned(
-                    "(ulong)(stack_u32+*sp)",
-                    "(ulong)(stack_u32)",
-                    "(uint)0",
-                    "warp_idx"
-                ),
-                "*sp += 2;"
-            ))
-        },
+        ValType::I32 if writer.interleave == 1 => String::from(format!(
+            "\t{};\n\t{}\n",
+            &emit_write_u32_aligned(
+                "(ulong)(stack_u32+*sp)",
+                "(ulong)(stack_u32)",
+                "(uint)0",
+                "warp_idx"
+            ),
+            "*sp += 2;"
+        )),
         ValType::I32 => String::from(format!(
             "\t{};\n\t{}\n",
-            &emit_write_u32_fast(
-                "(ulong)(*sp)*4",
-                "(ulong)(stack_base)",
-                "(uint)0",
-            ),
+            &emit_write_u32_fast("(ulong)(*sp)*4", "(ulong)(stack_base)", "(uint)0",),
             "*sp += 2;"
         )),
         ValType::I64 => String::from(format!(
@@ -170,25 +164,19 @@ pub fn emit_local(writer: &opencl_writer::OpenCLCWriter, local: &Local, _debug: 
             ),
             "*sp += 2;"
         )),
-        ValType::F32 if writer.interleave == 1 => {
-            String::from(format!(
-                "\t{};\n\t{}\n",
-                &emit_write_u32_aligned(
-                    "(ulong)(stack_u32+*sp)",
-                    "(ulong)(stack_u32)",
-                    "(uint)0",
-                    "warp_idx"
-                ),
-                "*sp += 2;"
-            ))
-        }
+        ValType::F32 if writer.interleave == 1 => String::from(format!(
+            "\t{};\n\t{}\n",
+            &emit_write_u32_aligned(
+                "(ulong)(stack_u32+*sp)",
+                "(ulong)(stack_u32)",
+                "(uint)0",
+                "warp_idx"
+            ),
+            "*sp += 2;"
+        )),
         ValType::F32 => String::from(format!(
             "\t{};\n\t{}\n",
-            &emit_write_u32_fast(
-                "(ulong)(*sp)*4",
-                "(ulong)(stack_base)",
-                "(uint)0",
-            ),
+            &emit_write_u32_fast("(ulong)(*sp)*4", "(ulong)(stack_base)", "(uint)0",),
             "*sp += 2;"
         )),
         ValType::F64 => String::from(format!(

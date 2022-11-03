@@ -1,7 +1,7 @@
 use crate::opencl_writer;
-use crate::opencl_writer::format_fn_name;
 use crate::opencl_writer::emit_read_u32_fast;
 use crate::opencl_writer::emit_write_u32_fast;
+use crate::opencl_writer::format_fn_name;
 use crate::opencl_writer::mem_interleave::emit_read_u32_aligned;
 use crate::opencl_writer::mem_interleave::emit_read_u64_aligned;
 use crate::opencl_writer::mem_interleave::emit_write_u32_aligned;
@@ -265,11 +265,7 @@ pub fn emit_fn_call(
                 StackType::i32 => {
                     ret_str += &format!(
                         "\t{};\n\t*sp += 2;\n",
-                        emit_write_u32_fast(
-                            "(ulong)(*sp)*4",
-                            "(ulong)(stack_base)",
-                            &param,
-                        )
+                        emit_write_u32_fast("(ulong)(*sp)*4", "(ulong)(stack_base)", &param,)
                     );
                 }
                 StackType::i64 => {
@@ -310,11 +306,7 @@ pub fn emit_fn_call(
                     );
                     ret_str += &format!(
                         "\t\t{};\n\t*sp += 2;\n",
-                        emit_write_u32_fast(
-                            "(ulong)(*sp)*4",
-                            "(ulong)(stack_base)",
-                            "temp",
-                        )
+                        emit_write_u32_fast("(ulong)(*sp)*4", "(ulong)(stack_base)", "temp",)
                     );
                     ret_str += &format!("\t}}\n");
                 }
@@ -524,10 +516,7 @@ pub fn emit_fn_call(
                 ret_str += &format!(
                     "\t{} = {};\n\t{};\n",
                     result_register,
-                    emit_read_u32_fast(
-                        "(ulong)(*sp-2)*4",
-                        "(ulong)(stack_base)",
-                    ),
+                    emit_read_u32_fast("(ulong)(*sp-2)*4", "(ulong)(stack_base)",),
                     "*sp -= 2"
                 );
             }
@@ -564,10 +553,7 @@ pub fn emit_fn_call(
                 ret_str += &format!("\t{{\n");
                 ret_str += &format!(
                     "\t\tuint temp = {};\n",
-                    emit_read_u32_fast(
-                        "(ulong)(*sp-2)*4",
-                        "(ulong)(stack_base)",
-                    )
+                    emit_read_u32_fast("(ulong)(*sp-2)*4", "(ulong)(stack_base)",)
                 );
                 ret_str += &format!(
                     "\t\t___private_memcpy_nonmmu(&{}, &temp, sizeof(uint));\n",
@@ -1151,13 +1137,30 @@ pub fn emit_call_indirect(
             table_count += 1;
         }
 
-        if fastcalls.contains(&f_name) &&
-           curr_fn_name != f_name &&
-           func_type_index == call_indirect_type_index &&
-           opt {
+        if fastcalls.contains(&f_name)
+            && curr_fn_name != f_name
+            && func_type_index == call_indirect_type_index
+            && opt
+        {
             debug_count += 1;
             result += &format!("\t\t{}\n", format!("case {}:", key));
-            result += &format!("{}", emit_fn_call(writer, stack_ctx, curr_fn_name.clone(), **value, call_ret_map, call_ret_idx, &function_id_map, true, true, result_register.clone(), stack_params.clone(), debug));
+            result += &format!(
+                "{}",
+                emit_fn_call(
+                    writer,
+                    stack_ctx,
+                    curr_fn_name.clone(),
+                    **value,
+                    call_ret_map,
+                    call_ret_idx,
+                    &function_id_map,
+                    true,
+                    true,
+                    result_register.clone(),
+                    stack_params.clone(),
+                    debug
+                )
+            );
             result += &format!("\t\t\t{}\n", format!("break;"));
         }
     }
@@ -1200,11 +1203,7 @@ pub fn emit_call_indirect(
                 StackType::i32 => {
                     result += &format!(
                         "\t{};\n\t*sp += 2;\n",
-                        emit_write_u32_fast(
-                            "(ulong)(*sp)*4",
-                            "(ulong)(stack_base)",
-                            &param,
-                        )
+                        emit_write_u32_fast("(ulong)(*sp)*4", "(ulong)(stack_base)", &param,)
                     );
                 }
                 StackType::i64 => {
@@ -1245,11 +1244,7 @@ pub fn emit_call_indirect(
                     );
                     result += &format!(
                         "\t\t{};\n\t\t*sp += 2;\n",
-                        emit_write_u32_fast(
-                            "(ulong)(*sp)*4",
-                            "(ulong)(stack_base)",
-                            "temp",
-                        )
+                        emit_write_u32_fast("(ulong)(*sp)*4", "(ulong)(stack_base)", "temp",)
                     );
                     result += &format!("\t}}\n");
                 }
@@ -1313,7 +1308,11 @@ pub fn emit_call_indirect(
 
         // emit the function call here!
         if func_type_index == call_indirect_type_index {
-            assert!(is_fastcall != true, "CallIndirect cannot be generated: fastcalls cannot perform slowpath: ".to_owned() + &curr_fn_name.clone());
+            assert!(
+                is_fastcall != true,
+                "CallIndirect cannot be generated: fastcalls cannot perform slowpath: ".to_owned()
+                    + &curr_fn_name.clone()
+            );
             result += &format!("\t\t{}\n", format!("case {}:", key));
             result += &format!(
                 "{}",
@@ -1369,10 +1368,7 @@ pub fn emit_call_indirect(
                 result += &format!(
                     "\t{} = {};\n\t{};\n",
                     result_register,
-                    emit_read_u32_fast(
-                        "(ulong)(*sp-2)*4",
-                        "(ulong)(stack_base)",
-                    ),
+                    emit_read_u32_fast("(ulong)(*sp-2)*4", "(ulong)(stack_base)",),
                     "*sp -= 2"
                 );
             }
@@ -1409,10 +1405,7 @@ pub fn emit_call_indirect(
                 result += &format!("\t{{\n");
                 result += &format!(
                     "\t\tuint temp = {};\n",
-                    emit_read_u32_fast(
-                        "(ulong)(*sp-2)*4",
-                        "(ulong)(stack_base)",
-                    )
+                    emit_read_u32_fast("(ulong)(*sp-2)*4", "(ulong)(stack_base)",)
                 );
                 result += &format!(
                     "\t\t___private_memcpy_nonmmu(&{}, &temp, sizeof(uint));\n",

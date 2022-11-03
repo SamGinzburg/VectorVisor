@@ -329,14 +329,12 @@ pub fn emit_args_sizes_get_post(
             "warp_idx"
         )
     );
-        
+
     // now return the error code
     ret_str += &format!("\t{} = {};\n", result_register, "hcall_ret_val");
 
     ret_str
 }
-
-
 
 pub fn emit_path_unlink_file_pre(
     _writer: &opencl_writer::OpenCLCWriter,
@@ -712,16 +710,23 @@ pub fn emit_environ_get_post(
 
     // Fix the environ ptrs, as they are offset to 0 (from the host-VM)
     // We just need to add the environ ptr buf to each ptr
-    let ptr_list_head =
-        format!("*((global uint*)((global char*)hypercall_buffer+(hcall_size*warp_idx)+(count*4)+8))");
+    let ptr_list_head = format!(
+        "*((global uint*)((global char*)hypercall_buffer+(hcall_size*warp_idx)+(count*4)+8))"
+    );
 
     //ret_str += &format!("\t\tprintf(\"environ ptr %d\\n\", {});\n", environ_ptr_buf);
     //ret_str += &format!("\t\tprintf(\"string buf %d\\n\", {});\n", string_buf);
 
     // Remap the ptrs from the host VM to the GPU VM
-    ret_str += &format!("\tfor (uint count = 0; count < {}; count++) {{\n", env_count);
+    ret_str += &format!(
+        "\tfor (uint count = 0; count < {}; count++) {{\n",
+        env_count
+    );
     //ret_str += &format!("\t\tprintf(\"before: %d\\n\", {});\n", ptr_list_head);
-    ret_str += &format!("\t\t{} -= ({}*4) - {};\n", ptr_list_head, env_count, string_buf);
+    ret_str += &format!(
+        "\t\t{} -= ({}*4) - {};\n",
+        ptr_list_head, env_count, string_buf
+    );
     //ret_str += &format!("\t\tprintf(\"after: %d\\n\", {});\n", ptr_list_head);
     ret_str += &format!("\t}}\n");
 
@@ -773,7 +778,6 @@ pub fn emit_args_get_post(
                         &format!("(global char *)heap_u32+{}", size_ptr_buf),
                         "heap_u32", // mem_start_src
                         &"*((global uint*)((global char*)hypercall_buffer+(hcall_size*warp_idx)))");
-
 
     // copy the string data
     ret_str += &format!("\t___private_memcpy_cpu2gpu((ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), warp_idx, read_idx, thread_idx, scratch_space);\n",
@@ -842,12 +846,17 @@ pub fn emit_serverless_invoke_post(
 
     // we need to copy the data stored in the hcall buffer, to the json_buf_ptr
     // specifically, we need to de-interleave the data, so the CPU sees the data `normally`
+    //ret_str += &format!("\t{{\n");
+    //ret_str += &format!("\tulong t1 = get_clock();\n");
     ret_str += &format!("\t___private_memcpy_cpu2gpu((ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), warp_idx, read_idx, thread_idx, scratch_space);\n",
                         "(ulong)((global char *)hypercall_buffer + (hcall_size*warp_idx))", // src
                         "hypercall_buffer", // mem_start_src
                         &format!("(global char *)heap_u32+{}", json_buf_ptr), //dst
                         "heap_u32", // mem_start_dst
                         "hcall_ret_val"); // hcall_ret_val is the number of bytes read;
+    //ret_str += &format!("\tulong t2 = get_clock();\n");
+    //ret_str += &format!("\tprintf(\"time: %ld\\n\", t2-t1);\n");
+    //ret_str += &format!("\t}}\n");
 
     // this function returns the length of the message in bytes
     ret_str += &format!("\t{} = {};\n", result_register, "hcall_ret_val");

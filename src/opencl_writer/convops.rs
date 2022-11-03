@@ -164,19 +164,19 @@ pub fn emit_truncsat_f64(
         (true, TruncType::I32) => {
             let result_register = stack_ctx.vstack_alloc(StackType::i32);
             format!("\t{} = I32_TRUNC_SAT_S_F64({});\n", result_register, reg)
-        },
+        }
         (true, TruncType::I64) => {
             let result_register = stack_ctx.vstack_alloc(StackType::i64);
             format!("\t{} = I64_TRUNC_SAT_S_F64({});\n", result_register, reg)
-        },
+        }
         (false, TruncType::I32) => {
             let result_register = stack_ctx.vstack_alloc(StackType::i32);
             format!("\t{} = I32_TRUNC_SAT_U_F64({});\n", result_register, reg)
-        },
+        }
         (false, TruncType::I64) => {
             let result_register = stack_ctx.vstack_alloc(StackType::i64);
             format!("\t{} = I64_TRUNC_SAT_U_F64({});\n", result_register, reg)
-        },
+        }
     }
 }
 
