@@ -78,36 +78,32 @@ fn makePdf(event: FuncInput) -> Vec<u8> {
 
     // We also create the annotations list here that allows us to have things
     // like links or comments on the page.
-    let mut annotations = page.annotations();
-    let mut annotation = annotations.push();
+    //let mut annotations = page.annotations();
+    //let mut annotation = annotations.push();
 
     // Write the type, area, alt-text, and color for our link annotation.
-    /*
-    annotation.subtype(AnnotationType::Link);
-    annotation.rect(Rect::new(215.0, 730.0, 251.0, 748.0));
-    annotation.contents(TextStr("Link to the Rust project web page"));
-    annotation.color_rgb(0.0, 0.0, 1.0);
-    */
+    //annotation.subtype(AnnotationType::Link);
+    //annotation.rect(Rect::new(215.0, 730.0, 251.0, 748.0));
+    //annotation.contents(TextStr("Link to the Rust project web page"));
+    //annotation.color_rgb(0.0, 0.0, 1.0);
     // Write an action for the annotation, telling it where to link to. Actions
     // can be associated with annotations, outline objects, and more and allow
     // creating interactive PDFs (open links, play sounds...).
-    /*
-    annotation
-        .action()
-        .action_type(ActionType::Uri)
-        .uri(Str(b"https://www.rust-lang.org/"));
-    */
+    //annotation
+    //    .action()
+    //    .action_type(ActionType::Uri)
+    //    .uri(Str(b"https://www.rust-lang.org/"));
 
     // Set border and style for the link annotation.
-    annotation.border_style().width(2.0).style(BorderType::Underline);
+    //annotation.border_style().width(2.0).style(BorderType::Underline);
 
     // We have to finish all the writers that depend on the page here because
     // otherwise they would be mutably borrowed until the end of the block.
     // Finishing is handled through the writer's `Drop` implementations, so that
     // you cannot accidentally forget it. The `finish()` method from the `Finish`
     // trait is just a postfix-style version of dropping.
-    annotation.finish();
-    annotations.finish();
+    //annotation.finish();
+    //annotations.finish();
 
     // We also need to specify which resources the page needs, which in our case
     // is only a font that we name "F1" (the specific name doesn't matter).
@@ -162,7 +158,7 @@ fn makePdf(event: FuncInput) -> Vec<u8> {
 
     //let encoded = &EMBED_IMAGE;
 
-    let level = CompressionLevel::DefaultLevel as u8;
+    let level = CompressionLevel::BestCompression as u8;
     let encoded = compress_to_vec_zlib(dynamic.to_rgb8().as_raw(), level);
 
     // If there's an alpha channel, extract the pixel alpha values.
@@ -173,20 +169,28 @@ fn makePdf(event: FuncInput) -> Vec<u8> {
     let filter = Filter::FlateDecode;
 
     let mut image = writer.image_xobject(image_id, &encoded);
-    let im_x = 250;
-    let im_y = 250;
     image.filter(filter);
-    image.width(im_x);
-    image.height(im_y);
+    image.width(dynamic.width() as i32);
+    image.height(dynamic.height() as i32);
     image.color_space().device_rgb();
     image.bits_per_component(8);
     if mask.is_some() {
         image.s_mask(s_mask_id);
     }
     image.finish();
+
+    if let Some(encoded) = &mask {
+        let mut s_mask = writer.image_xobject(s_mask_id, &encoded);
+        s_mask.filter(filter);
+        s_mask.width(dynamic.width() as i32);
+        s_mask.height(dynamic.height() as i32);
+        s_mask.color_space().device_gray();
+        s_mask.bits_per_component(8);
+    }
+
     // Size the image at 1pt per pixel.
-    let w = im_x as f32; //dynamic.width() as f32;
-    let h = im_y as f32; //dynamic.height() as f32;
+    let w = dynamic.width() as f32;
+    let h = dynamic.height() as f32;
 
     // Center the image on the page.
     let x = (a4.x2 - w) / 2.0;
@@ -196,7 +200,6 @@ fn makePdf(event: FuncInput) -> Vec<u8> {
     content.transform([w as f32, 0.0, 0.0, h as f32, x, y]);
     content.x_object(image_name);
     content.restore_state();
-
 
     writer.stream(content_id, &content.finish());
 
@@ -214,17 +217,19 @@ fn batch_genpdf(inputs: BatchInput) -> BatchFuncResponse {
     return BatchFuncResponse{ resp: results };
 }
 
+
 fn main() {
     let handler = WasmHandler::new(&batch_genpdf);
     handler.run_with_format(1024*512, MsgPack);
 }
+
 
 /*
 #[inline(never)]
 fn main() {
     let mut buf2 = vec![];
     let now = Instant::now();
-    for _idx in 0..35 {
+    for _idx in 0..1 {
         buf2.extend(makePdf(FuncInput{
             name: "test".to_string(),
             purchases: vec!["test".to_string(), "test1".to_string(), "test2".to_string()],
