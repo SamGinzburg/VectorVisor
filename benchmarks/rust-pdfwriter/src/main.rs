@@ -12,9 +12,10 @@ use wasm_serverless_invoke::wasm_handler::SerializationFormat::MsgPack;
 use serde::Deserialize;
 use serde::Serialize;
 use image::{ColorType, GenericImageView, ImageFormat};
+use miniz_oxide::deflate::{compress_to_vec_zlib, CompressionLevel};
 
 lazy_static! {
-    static ref EMBED_IMAGE: &'static [u8] = include_bytes!("test.jpg");
+    static ref EMBED_IMAGE: &'static [u8] = include_bytes!("test.png");
 }
 
 #[derive(Debug, Deserialize)]
@@ -157,10 +158,19 @@ fn makePdf(event: FuncInput) -> Vec<u8> {
         idx -= 15.0;
     }
 
-    //let dynamic = image::load_from_memory(&EMBED_IMAGE).unwrap();
+    let dynamic = image::load_from_memory(&EMBED_IMAGE).unwrap();
 
-    let encoded = &EMBED_IMAGE;
-    let filter = Filter::DctDecode;
+    //let encoded = &EMBED_IMAGE;
+
+    let level = CompressionLevel::DefaultLevel as u8;
+    let encoded = compress_to_vec_zlib(dynamic.to_rgb8().as_raw(), level);
+
+    // If there's an alpha channel, extract the pixel alpha values.
+    let mask = dynamic.color().has_alpha().then(|| {
+        let alphas: Vec<_> = dynamic.pixels().map(|p| (p.2).0[3]).collect();
+        compress_to_vec_zlib(&alphas, level)
+    });
+    let filter = Filter::FlateDecode;
 
     let mut image = writer.image_xobject(image_id, &encoded);
     let im_x = 250;
@@ -170,7 +180,9 @@ fn makePdf(event: FuncInput) -> Vec<u8> {
     image.height(im_y);
     image.color_space().device_rgb();
     image.bits_per_component(8);
-
+    if mask.is_some() {
+        image.s_mask(s_mask_id);
+    }
     image.finish();
     // Size the image at 1pt per pixel.
     let w = im_x as f32; //dynamic.width() as f32;
