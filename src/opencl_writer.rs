@@ -2939,26 +2939,11 @@ __attribute__((always_inline)) void {}(global uint   *stack_u32,
             write!(
                 output,
                 r#"
-#define read_u64_aligned(addr, mem_start, warp_id, read_idx, thread_idx, scratch_space) \
-    *(global ulong*)(((global uchar*)(((addr-mem_start)/8)*(NUM_THREADS*8) + (warp_id*8) + mem_start)))
-
-#define read_u32_aligned(addr, mem_start, warp_id, read_idx, thread_idx, scratch_space) \
-    *(global uint*)(((global uchar*)(((addr-mem_start)/8)*(NUM_THREADS*8) + (warp_id*8) + mem_start)) + GET_POW2_OFFSET((addr-mem_start), 8))
-
 #define read_u32_fast(offset, base) \
     *(global uint*)(((global uchar*)((offset/8)*(NUM_THREADS*8) + base + GET_POW2_OFFSET((offset), 8))))
 
 #define write_u32_fast(offset, base, value) \
     *(global uint*)(((global uchar*)(((offset)/8)*(NUM_THREADS*8) + base + GET_POW2_OFFSET((offset), 8)))) = (uint)value
-
-#define write_u64_fast(offset, base, value) \
-    *(global uint*)(((global uchar*)(((offset)/8)*(NUM_THREADS*8) + base))) = (ulong)value
-
-#define write_u64_aligned(addr, mem_start, value, warp_id, read_idx, thread_idx, scratch_space) \
-    *(global ulong*)(((global uchar*)(((addr-mem_start)/8)*(NUM_THREADS*8) + (warp_id*8) + mem_start))) = (ulong)value
-
-#define write_u32_aligned(addr, mem_start, value, warp_id, read_idx, thread_idx, scratch_space) \
-    *(global ushort*)(((global uchar*)(((addr-mem_start)/8)*(NUM_THREADS*8) + (warp_id*8) + mem_start)) + GET_POW2_OFFSET((addr-mem_start), 8)) = (uint)value
 "#,
             );
         }
