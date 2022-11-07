@@ -5,10 +5,21 @@ use std::convert::TryInto;
 use std::error::Error;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::collections::HashMap;
+use serde::Serialize;
 use tokio::sync::mpsc::{Receiver, Sender};
 use wasi_cap_std_sync::WasiCtxBuilder;
 use wasi_common::WasiCtx;
 use wasmtime::*;
+use rmp_serde::encode;
+use std::fs::File;
+use std::io::Write;
+
+#[derive(Serialize)]
+struct Profiling {
+    map: HashMap<usize, i32>,
+}
+
 
 pub struct WasmtimeRunner {
     vm_idx: usize,
@@ -34,7 +45,10 @@ impl WasmtimeRunner {
         program: String,
         hcall_buf_size: usize,
         heap_size: u32,
+        profile: bool,
     ) -> Result<(), Box<dyn Error>> {
+        let profiling_count = Arc::new(Mutex::<i64>::new(0));
+
         let curr_time = Arc::new(Mutex::<i64>::new(0));
 
         let mut config = Config::new();
@@ -95,6 +109,27 @@ impl WasmtimeRunner {
         let serverless_response = Func::wrap(
             &mut store,
             move |mut caller: Caller<'_, _>, buf_ptr: u32, buf_len: u32| -> () {
+                let mut count = profiling_count.lock().unwrap();
+
+                if *count == 100 && profile == true {
+                    let mut value_map = HashMap::new();
+                    for idx in 0..5000 {
+                        let global = match caller.get_export(&format!("profiling_global_{}", idx)) {
+                            Some(Extern::Global(g)) => g,
+                            _ => continue,
+                        };
+                        dbg!(&global.get(caller.as_context_mut()));
+                        value_map.insert(idx as usize,
+                                         global.get(caller.as_context_mut()).unwrap_i32());
+                    }
+
+                    let profile = Profiling { map: value_map };
+                    let prof_bytes = encode::to_vec(&profile).unwrap();
+                    let mut file = File::create(format!("vv.profile")).unwrap();
+                    file.write_all(&prof_bytes).unwrap();
+                }
+                *count += 1;
+
                 let mem = match caller.get_export("memory") {
                     Some(Extern::Memory(mem)) => Ok(mem),
                     _ => Err(Trap::new("failed to find host memory")),
@@ -158,6 +193,10 @@ impl WasmtimeRunner {
             memory.grow(&mut store, (heap_size as u64) - current_mem_size)?;
         }
         //dbg!(&memory.size());
+        for export in instance.exports(&mut store) {
+            let test: wasmtime::Export = export;
+            dbg!(&test.name());
+        }
 
         let entry_point = instance
             .get_func(&mut store, "_start")

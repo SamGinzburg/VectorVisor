@@ -1240,6 +1240,7 @@ fn emit_read_u64_body(
                     "\t{}\n",
                     "temp[2] = (uint)*((global uint*)cell1+(NUM_THREADS*2));"
                 );
+
                 result += &format!("\t{}\n", "result[0] = combined[cell_offset];");
                 result += &format!("\t{}\n", "result[1] = combined[cell_offset+1];");
                 result += &format!("\t{}\n", "result[2] = combined[cell_offset+2];");
@@ -1248,6 +1249,7 @@ fn emit_read_u64_body(
                 result += &format!("\t{}\n", "result[5] = combined[cell_offset+5];");
                 result += &format!("\t{}\n", "result[6] = combined[cell_offset+6];");
                 result += &format!("\t{}\n", "result[7] = combined[cell_offset+7];");
+
                 result += &format!("\tulong final_result = 0;\n");
                 result += &format!(
                     "\t___private_memcpy_nonmmu((void*)&final_result, (void*)&result, sizeof(ulong));\n",

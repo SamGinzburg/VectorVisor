@@ -344,6 +344,14 @@ fn main() {
             .multiple(false)
             .number_of_values(1)
             .takes_value(true))
+        .arg(Arg::with_name("profile")
+            .long("profile")
+            .value_name("Enable emitting results from binary instrumentation")
+            .default_value("false")
+            .help("")
+            .multiple(false)
+            .number_of_values(1)
+            .takes_value(true))
         .get_matches();
 
     dbg!(matches.clone());
@@ -382,6 +390,7 @@ fn main() {
         value_t!(matches.value_of("localworkgroup"), usize).unwrap_or_else(|e| e.exit());
     let mexec: usize = 1; //value_t!(matches.value_of("mexec"), usize).unwrap_or_else(|e| e.exit());
     let unsafewrite = value_t!(matches.value_of("unsafewrite"), bool).unwrap_or_else(|e| e.exit());
+    let profile = value_t!(matches.value_of("profile"), bool).unwrap_or_else(|e| e.exit());
     let pinput = value_t!(matches.value_of("pinput"), bool).unwrap_or_else(|e| e.exit());
     let volatile = value_t!(matches.value_of("volatile"), bool).unwrap_or_else(|e| e.exit());
     let fastreply = value_t!(matches.value_of("fastreply"), bool).unwrap_or_else(|e| e.exit());
@@ -1032,7 +1041,7 @@ fn main() {
                 let leaked_runner: &'static WasmtimeRunner = Box::leak(Box::new(wasmtime_runner));
 
                 // run the WASM VM...
-                match leaked_runner.run(filedata.clone(), hcall_size, heap_size / (1024 * 64)) {
+                match leaked_runner.run(filedata.clone(), hcall_size, heap_size / (1024 * 64), profile) {
                     Ok(()) => {
                         println!("Wasmtime VM: {:?} finished running!", idx);
                     }
