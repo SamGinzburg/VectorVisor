@@ -3172,7 +3172,7 @@ ulong get_clock() {
         let mut fast_func_called: HashMap<String, HashSet<String>> = HashMap::new();
         let mut fastcall_called_func_sizes: HashMap<String, Vec<u32>> = HashMap::new();
 
-        dbg!(&fast_function_set);
+        dbg!(&fast_function_set.len());
 
         for fastfunc in fast_function_set.iter() {
             let (_, func_size, func_called) = self.emit_function(
@@ -3434,10 +3434,12 @@ ulong get_clock() {
             // Check the partition size to see if we need to regenerate registers with constraints
             let max_partition_reg_usage: u32 = *partition_intermediate_size.iter().max().unwrap();
             let sum_partition_reg_usage = partition_intermediate_size.iter().sum::<u32>();
+            /*
             println!(
                 "max size: {}, sum size: {}, part_idx: {}",
                 &max_partition_reg_usage, &sum_partition_reg_usage, partition_idx
             );
+            */
 
             // If constraint exceeded, regenerate the partition with constraints
             //if sum_partition_reg_usage > 5000 && remaining_smem_alloc > 0 {
@@ -3690,10 +3692,12 @@ ulong get_clock() {
         for (part_idx, part_vec) in partition_hashmap.iter() {
             for func in part_vec {
                 let fname_idx = function_idx_label.get(&func as &str).unwrap();
+                /*
                 println!(
                     "inserting func idx: {:?} into part: {:?}",
                     *fname_idx, *part_idx
                 );
+                */
                 kernel_partition_mappings.insert(*fname_idx, *part_idx);
             }
         }

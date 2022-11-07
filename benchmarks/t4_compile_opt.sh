@@ -12,19 +12,8 @@
 # 5 = vmcount (T4)
 # 6 = vmcount (A10G)
 function cachebin() {
-  cd ${1}/
-  cargo build --release
-  #RUSTFLAGS='-C llvm-args=-unroll-threshold=1000' cargo build --release
-  cd ..
-  cp ${1}/target/wasm32-wasi/release/${1}.wasm .
-  wasm-snip ${1}.wasm --snip-rust-panicking-code -o ${1}-snip.wasm -p rust_oom __rg_oom
-  wasm-opt ${1}-snip.wasm -O1 -g -c -o ${1}-opt.wasm
-  cp ${1}-opt.wasm ${1}-opt-4.wasm
-  cp ${1}-opt.wasm ${1}-opt-8.wasm
-  # generate an instrumented binary as well
-  vv-profile --input ${1}-opt.wasm --output ${1}-opt-instrument.wasm
-  cargo run --release -- -i $1-opt-4.wasm --heap=$2 --stack=$3 --hcallsize=$4 --vmcount=$5 --partition=false --maxdup=0 --jt=true --interleave=4 --uw=true &> /vv/$1-opt-4.log
-  cargo run --release -- -i $1-opt-8.wasm --heap=$2 --stack=$3 --hcallsize=$4 --vmcount=$5 --partition=false --maxdup=0 --jt=true --interleave=8 --uw=true &> /vv/$1-opt-8.log
+  cargo run --release -- -i $1-opt-profile.wasm --heap=$2 --stack=$3 --hcallsize=$4 --vmcount=$5 --partition=false --maxdup=0 --jt=true --interleave=4 --uw=true &> /vv/$1-opt-4-profile.log
+  #cargo run --release -- -i $1-opt-profile.wasm --heap=$2 --stack=$3 --hcallsize=$4 --vmcount=$5 --partition=false --maxdup=0 --jt=true --interleave=8 --uw=true &> /vv/$1-opt-8.log
 }
 
 cachebin "rust-pdfwriter" "4194304" "131072" "409600" "3072" "4608"

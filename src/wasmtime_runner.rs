@@ -46,6 +46,8 @@ impl WasmtimeRunner {
         hcall_buf_size: usize,
         heap_size: u32,
         profile: bool,
+        input_file: String,
+        vm_index: usize,
     ) -> Result<(), Box<dyn Error>> {
         let profiling_count = Arc::new(Mutex::<i64>::new(0));
 
@@ -118,15 +120,16 @@ impl WasmtimeRunner {
                             Some(Extern::Global(g)) => g,
                             _ => continue,
                         };
-                        dbg!(&global.get(caller.as_context_mut()));
+                        //dbg!(&global.get(caller.as_context_mut()));
                         value_map.insert(idx as usize,
                                          global.get(caller.as_context_mut()).unwrap_i32());
                     }
-
+                    println!("Wrote profiling data to: {}", format!("{}_{}.profile", input_file, vm_index));
                     let profile = Profiling { map: value_map };
                     let prof_bytes = encode::to_vec(&profile).unwrap();
-                    let mut file = File::create(format!("vv.profile")).unwrap();
+                    let mut file = File::create(format!("{}_{}.profile", input_file, vm_index)).unwrap();
                     file.write_all(&prof_bytes).unwrap();
+                    std::process::exit(0);
                 }
                 *count += 1;
 
@@ -193,10 +196,12 @@ impl WasmtimeRunner {
             memory.grow(&mut store, (heap_size as u64) - current_mem_size)?;
         }
         //dbg!(&memory.size());
+        /*
         for export in instance.exports(&mut store) {
             let test: wasmtime::Export = export;
             dbg!(&test.name());
         }
+        */
 
         let entry_point = instance
             .get_func(&mut store, "_start")

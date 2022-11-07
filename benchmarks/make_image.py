@@ -39,6 +39,7 @@ maxloc = 2000000
 benchmark_duration = 600
 SLEEP_TIME=120
 NUM_REPEAT=1
+interleave=4
 
 if run_a10g:
     maxdemospace = 0
@@ -82,6 +83,7 @@ userdata_ubuntu = """#cloud-config
      - cd benchmarks/
      - mkdir -p ~/.nv/ComputeCache/
      - export PATH=/vv/binaryen-version_109/bin:$PATH
+     - sudo ~/.cargo/bin/cargo install --git https://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:x-oauth-basic@github.com/SamGinzburg/vv-pgo-instrument.git
 """.format(opt=OPT_LEVEL, snip_args=WASM_SNIP_ARGS, snip_custom=WASM_SNIP_CUSTOM)
 
 def run_command(command, command_name, instance_id):
@@ -114,6 +116,80 @@ def block_on_command(command_id, instance_id):
         else:
             print ("Command has completed with status: " + str(output['Status']))
             return output
+
+def run_profile_generic(bench_name, params=""):
+    run_command_wasmtime = """#!/bin/bash
+    sudo su
+    ulimit -n 65536
+    x=$(cloud-init status)
+    until [ "$x" == "status: done" ]; do
+    sleep 10
+    x=$(cloud-init status)
+    done
+
+    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/{name}-opt-instrument.wasm --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=1310720 --partition=true --serverless=true --vmcount=4096 --wasmtime=true --profile=true &
+    """.format(interleave=interleave, name=bench_name)
+
+    run_command(run_command_wasmtime, "rustpdfwriter_cpu", gpu_instance[0].id)
+
+    # now run the invoker(s) for pbkdf2
+    run_invoker = """#!/bin/bash
+    sudo su
+    ulimit -n 65536
+    mkdir -p ~/gocache/
+    mkdir -p ~/gopath/
+    mkdir -p ~/xdg/
+    export GOCACHE=~/gocache/
+    export GOPATH=~/gopath/
+    export XDG_CACHE_HOME=~/xdg/
+
+    x=$(cloud-init status)
+    until [ "$x" == "status: done" ]; do
+    sleep 10
+    x=$(cloud-init status)
+    done
+
+    cd /vv/VectorVisor/benchmarks/{name}/
+
+    /usr/local/go/bin/go run /vv/VectorVisor/benchmarks/{name}/run_*.go {addr} 8000 {target_rps} 1 {duration} {params}
+    """.format(addr=gpu_instance[0].private_dns_name, target_rps=vmcount, duration=60, name=bench_name, params=params)
+    command_id = run_command(run_invoker, "run invoker for gpu", gpu_instance[0].id)
+
+    time.sleep(20)
+
+    # Block until benchmark is complete
+    output = block_on_command(command_id, gpu_instance[0].id)
+    print (output)
+
+    run_invoker = """#!/bin/bash
+    sudo su
+    ulimit -n 65536
+    mkdir -p ~/gocache/
+    mkdir -p ~/gopath/
+    mkdir -p ~/xdg/
+    export GOCACHE=~/gocache/
+    export GOPATH=~/gopath/
+    export XDG_CACHE_HOME=~/xdg/
+
+    x=$(cloud-init status)
+    until [ "$x" == "status: done" ]; do
+    sleep 10
+    x=$(cloud-init status)
+    done
+
+    cd /vv/VectorVisor/benchmarks/
+    vv-profile --input /vv/VectorVisor/benchmarks/{name}-opt-instrument.wasm --output /vv/VectorVisor/benchmarks/{name}-opt-profile.wasm --profile=/vv/VectorVisor/benchmarks/{name}-opt-instrument_*.wasm
+    wasm-opt -O1 -g /vv/VectorVisor/benchmarks/{name}-opt-profile.wasm -o /vv/VectorVisor/benchmarks/{name}-opt-profile.wasm
+    """.format(addr=gpu_instance[0].private_dns_name, target_rps=vmcount, duration=60, hashes=256)
+    command_id = run_command(run_invoker, "run invoker for gpu", gpu_instance[0].id)
+
+    time.sleep(20)
+    output = block_on_command(command_id, gpu_instance[0].id)
+    print (output)
+
+    # Block until benchmark is complete
+
+    time.sleep(SLEEP_TIME)
 
 """
 Create VMs for the test
@@ -203,6 +279,42 @@ export PATH=~/.cargo/bin:$PATH
 export PATH=/vv/binaryen-version_109/bin:$PATH
 
 cd /vv/VectorVisor/benchmarks/
+./{gpu}_save_cached_bin.sh
+""".format(gpu=gpu)
+
+command_id = run_command(block_until_done, "precompile GPU binaries", gpu_instance[0].id)
+time.sleep(20)
+
+# Block until benchmark is complete
+output = block_on_command(command_id, gpu_instance[0].id)
+print (output)
+
+time.sleep(120)
+
+# Now generate the profiling data
+# For each benchmark we need to:
+# 1) Generate an instrumented binary
+# 2) Run VV-wasm with the instrumented binary w/some workload
+# 3) Use the generated profile to emit an optimized WASM binary
+
+run_profile_generic("rust-pdfwriter")
+
+block_until_done = """#!/bin/bash
+sudo su
+ulimit -n 65536
+x=$(cloud-init status)
+until [ "$x" == "status: done" ]; do
+sleep 10
+x=$(cloud-init status)
+done
+
+export CUDA_CACHE_MAXSIZE=4294967296
+export CUDA_CACHE_PATH=~/.nv/ComputeCache/
+export PATH=~/.cargo/bin:$PATH
+export PATH=/vv/binaryen-version_109/bin:$PATH
+
+cd /vv/VectorVisor/benchmarks/
+./{gpu}_compile_opt.sh
 ./{gpu}_save_cached_bin.sh
 """.format(gpu=gpu)
 

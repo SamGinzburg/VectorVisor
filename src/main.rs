@@ -1013,6 +1013,7 @@ fn main() {
         }
 
         for idx in 0..num_threads {
+            let file_path = file_path.clone();
             println!("Starting Wasmtime VM: {:?}", idx);
 
             let extension = match Path::new(&file_path).extension() {
@@ -1041,7 +1042,7 @@ fn main() {
                 let leaked_runner: &'static WasmtimeRunner = Box::leak(Box::new(wasmtime_runner));
 
                 // run the WASM VM...
-                match leaked_runner.run(filedata.clone(), hcall_size, heap_size / (1024 * 64), profile) {
+                match leaked_runner.run(filedata.clone(), hcall_size, heap_size / (1024 * 64), profile, file_path.clone(), idx) {
                     Ok(()) => {
                         println!("Wasmtime VM: {:?} finished running!", idx);
                     }
