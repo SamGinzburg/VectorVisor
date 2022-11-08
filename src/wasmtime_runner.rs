@@ -124,10 +124,10 @@ impl WasmtimeRunner {
                         value_map.insert(idx as usize,
                                          global.get(caller.as_context_mut()).unwrap_i32());
                     }
-                    println!("Wrote profiling data to: {}", format!("{}_{}.profile", input_file, vm_index));
+                    println!("Wrote profiling data to: {}", format!("{}.profile", input_file));
                     let profile = Profiling { map: value_map };
                     let prof_bytes = encode::to_vec(&profile).unwrap();
-                    let mut file = File::create(format!("{}_{}.profile", input_file, vm_index)).unwrap();
+                    let mut file = File::create(format!("{}.profile", input_file)).unwrap();
                     file.write_all(&prof_bytes).unwrap();
                     std::process::exit(0);
                 }
