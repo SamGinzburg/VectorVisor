@@ -158,7 +158,7 @@ fn makePdf(event: FuncInput) -> Vec<u8> {
 
     //let encoded = &EMBED_IMAGE;
 
-    let level = CompressionLevel::BestCompression as u8;
+    let level = CompressionLevel::DefaultCompression as u8;
     let encoded = compress_to_vec_zlib(dynamic.to_rgb8().as_raw(), level);
 
     // If there's an alpha channel, extract the pixel alpha values.
@@ -217,13 +217,10 @@ fn batch_genpdf(inputs: BatchInput) -> BatchFuncResponse {
     return BatchFuncResponse{ resp: results };
 }
 
-
 fn main() {
     let handler = WasmHandler::new(&batch_genpdf);
     handler.run_with_format(1024*512, MsgPack);
 }
-
-
 /*
 #[inline(never)]
 fn main() {
