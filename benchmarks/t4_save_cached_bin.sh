@@ -23,8 +23,8 @@ function cachebin() {
   cp ${1}-opt.wasm ${1}-opt-8.wasm
   # generate an instrumented binary as well
   vv-profile --input ${1}-opt.wasm --output ${1}-opt-instrument.wasm
-  cargo run --release -- -i $1-opt-4.wasm --heap=$2 --stack=$3 --hcallsize=$4 --vmcount=$5 --partition=false --maxdup=0 --jt=true --interleave=4 --uw=true &> /vv/$1-opt-4.log
-  cargo run --release -- -i $1-opt-8.wasm --heap=$2 --stack=$3 --hcallsize=$4 --vmcount=$5 --partition=false --maxdup=0 --jt=true --interleave=8 --uw=true &> /vv/$1-opt-8.log
+  #cargo run --release -- -i $1-opt-4.wasm --heap=$2 --stack=$3 --hcallsize=$4 --vmcount=$5 --partition=false --maxdup=0 --jt=true --interleave=4 --uw=true &> /vv/$1-opt-4.log
+  #cargo run --release -- -i $1-opt-8.wasm --heap=$2 --stack=$3 --hcallsize=$4 --vmcount=$5 --partition=false --maxdup=0 --jt=true --interleave=8 --uw=true &> /vv/$1-opt-8.log
 }
 
 cachebin "rust-pdfwriter" "4194304" "131072" "409600" "3072" "4608"
