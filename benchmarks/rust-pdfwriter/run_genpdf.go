@@ -85,8 +85,8 @@ func IssueRequests(ip string, port int, req [][]byte, exec_time chan<- float64, 
 	compile_time := 0.0
 
 	for {
-		http_request.Body = ioutil.NopCloser(bytes.NewReader(req[0]))
-		//http_request.Body = ioutil.NopCloser(bytes.NewReader(req[rand.Intn(NUM_PARAMS)]))
+		//http_request.Body = ioutil.NopCloser(bytes.NewReader(req[0]))
+	    http_request.Body = ioutil.NopCloser(bytes.NewReader(req[rand.Intn(NUM_PARAMS)]))
 		start_read := time.Now()
 		_ = start_read
 		resp, err := client.Do(http_request)
