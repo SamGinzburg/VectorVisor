@@ -14,3 +14,7 @@ serde = { version = "1.0.62", features = ["derive"] }
 lazy_static = "1.4.0"
 image = { version = "0.24", default-features = false, features = ["png"] }
 miniz_oxide = "0.5"
+
+# important!
+[profile.release]
+panic = 'abort'
