@@ -15,9 +15,9 @@ use rmp_serde::encode;
 use std::fs::File;
 use std::io::Write;
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 struct Profiling {
-    map: HashMap<usize, i32>,
+    map: HashMap<usize, Vec<i32>>,
 }
 
 
@@ -113,19 +113,29 @@ impl WasmtimeRunner {
             move |mut caller: Caller<'_, _>, buf_ptr: u32, buf_len: u32| -> () {
                 let mut count = profiling_count.lock().unwrap();
 
-                if *count == 100 && profile == true {
-                    let mut value_map = HashMap::new();
+                if *count == 200 && profile == true {
+                    let mut value_map: HashMap<usize, Vec<i32>> = HashMap::new();
                     for idx in 0..5000 {
-                        let global = match caller.get_export(&format!("profiling_global_{}", idx)) {
-                            Some(Extern::Global(g)) => g,
-                            _ => continue,
-                        };
-                        //dbg!(&global.get(caller.as_context_mut()));
-                        value_map.insert(idx as usize,
-                                         global.get(caller.as_context_mut()).unwrap_i32());
+                        let mut results = vec![];
+                        for count in 0..50 {
+                            let global = match caller
+                                    .get_export(&format!("profiling_global_{}_{}", idx, count)) {
+                                Some(Extern::Global(g)) => g,
+                                _ => continue,
+                            };
+                            //dbg!(&global.get(caller.as_context_mut()));
+                            results.push(global.get(caller.as_context_mut()).unwrap_i32());
+                        }
+                        if results.len() > 0 {
+                            value_map.insert(idx as usize,
+                                             results);
+                        } else {
+                            break;
+                        }
                     }
                     println!("Wrote profiling data to: {}", format!("{}.profile", input_file));
                     let profile = Profiling { map: value_map };
+                    dbg!(&profile);
                     let prof_bytes = encode::to_vec(&profile).unwrap();
                     let mut file = File::create(format!("{}.profile", input_file)).unwrap();
                     file.write_all(&prof_bytes).unwrap();
@@ -148,6 +158,7 @@ impl WasmtimeRunner {
                         //println!("wasmtime vm memory len: {:?}", &arr.len());
 
                         let resp_buf_len: usize = buf_len.try_into().unwrap();
+                        //dbg!(&resp_buf_len);
                         let mut resp_buf = vec![0u8; resp_buf_len];
                         let main_mem_start = buf_ptr.try_into().unwrap();
 
