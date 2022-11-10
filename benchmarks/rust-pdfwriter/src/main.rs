@@ -160,7 +160,7 @@ fn makePdf(event: FuncInput) -> Vec<u8> {
 
     //let encoded = &EMBED_IMAGE;
 
-    let level = CompressionLevel::DefaultCompression as u8;
+    let level = CompressionLevel::BestCompression as u8;
     let encoded = compress_to_vec_zlib(dynamic.to_rgb8().as_raw(), level);
 
     // If there's an alpha channel, extract the pixel alpha values.
@@ -203,6 +203,16 @@ fn makePdf(event: FuncInput) -> Vec<u8> {
     content.x_object(image_name);
     content.restore_state();
 
+    // Now add the price data to avoid diverging before image processing
+    for (purchase, price) in purchases.iter() {
+        content.begin_text();
+        content.set_font(font_name, 14.0);
+        content.next_line(50.0, idx);
+        content.show(Str(format!("{}                                                        ${:.2}", purchase, price).as_bytes()));
+        content.end_text();
+        idx -= 15.0;
+    }
+
     writer.stream(content_id, &content.finish());
 
     // Finish writing (this automatically creates the cross-reference table and
@@ -223,6 +233,7 @@ fn main() {
     let handler = WasmHandler::new(&batch_genpdf);
     handler.run_with_format(1024*512, MsgPack);
 }
+
 /*
 #[inline(never)]
 fn main() {
