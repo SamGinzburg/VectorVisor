@@ -145,6 +145,7 @@ fn makePdf(event: FuncInput) -> Vec<u8> {
     content.end_text();
     let mut idx = 735.0;
 
+    /*
     for (purchase, price) in purchases.iter() {
         content.begin_text();
         content.set_font(font_name, 14.0);
@@ -153,6 +154,7 @@ fn makePdf(event: FuncInput) -> Vec<u8> {
         content.end_text();
         idx -= 15.0;
     }
+    */
 
     let dynamic = image::load_from_memory(&EMBED_IMAGE).unwrap();
 
