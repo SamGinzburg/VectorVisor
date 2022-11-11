@@ -48,7 +48,7 @@ func CreatePayload() Payload {
 	prices := make([]float64, 0, 10)
 	max := 15.00
 	min := 7.00
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 25; i++ {
 		purchases = append(purchases, RandString(15))
 		prices = append(prices, min+rand.Float64()*(max-min))
 	}

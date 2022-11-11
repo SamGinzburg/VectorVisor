@@ -1328,32 +1328,38 @@ fn emit_read_u64_body(
     result
 }
 
-pub fn generate_bulkmem(fill: Option<String>) -> String {
+pub fn generate_bulkmem(fill: bool, interleave: u32) -> String {
     let mut result = String::from("");
 
     let name = match fill {
-        None => {
+        false => {
             result += &format!("\n{}\n",
             "void ___private_bulk_memcpy(ulong src, ulong mem_start_src, ulong dst, ulong mem_start_dst, ulong buf_len_bytes, uint warp_id, uint read_idx, uint thread_idx, local ulong2 *scratch_space) {",
             );
         }
-        _ => {
+        true => {
             result += &format!("\n{}\n",
             "void ___private_bulk_memfill(ulong dst, ulong mem_start_dst, uchar value, ulong buf_len_bytes, uint warp_id, uint read_idx, uint thread_idx, local ulong2 *scratch_space) {",
             );
         }
     };
 
+    result += &format!("\t{}\n", "printf(\"\");");
     result += &format!("\t{}\n", "uint counter = 0;");
-    match fill.clone() {
-        Some(value) => {
+    match (fill, interleave) {
+        (true, 4) => {
+            result += &format!("\t{}\n", "uint fillval = 0;");
+            result += &format!("\t{}\n", "fillval += (ulong)value;");
+            result += &format!("\t{}\n", "fillval += (ulong)value << 8;");
+            result += &format!("\t{}\n", "fillval += (ulong)value << 16;");
+            result += &format!("\t{}\n", "fillval += (ulong)value << 24;");
+        }
+        (true, _) => {
             result += &format!("\t{}\n", "ulong fillval = 0;");
             result += &format!("\t{}\n", "fillval += (ulong)value;");
             result += &format!("\t{}\n", "fillval += (ulong)value << 8;");
             result += &format!("\t{}\n", "fillval += (ulong)value << 16;");
-            result += &format!("\t{}\n", "fillval += (ulong)value << 16;");
             result += &format!("\t{}\n", "fillval += (ulong)value << 24;");
-            result += &format!("\t{}\n", "fillval += (ulong)value << 32;");
             result += &format!("\t{}\n", "fillval += (ulong)value << 32;");
             result += &format!("\t{}\n", "fillval += (ulong)value << 40;");
             result += &format!("\t{}\n", "fillval += (ulong)value << 48;");
@@ -1364,16 +1370,22 @@ pub fn generate_bulkmem(fill: Option<String>) -> String {
 
     // fastpath for u32 ops
     match fill {
-        None => {
+        false if interleave == 4 => {
+            result += &format!(
+        	"\t{}\n",
+        	"if (buf_len_bytes > 64 && IS_ALIGNED_POW2((ulong)src, 4) && IS_ALIGNED_POW2((ulong)dst, 4)) {"
+    	    );
+        }
+        false => {
             result += &format!(
         	"\t{}\n",
         	"if (buf_len_bytes > 64 && IS_ALIGNED_POW2((ulong)src, 8) && IS_ALIGNED_POW2((ulong)dst, 8)) {"
     	    );
         }
-        _ => {
+        true => {
             result += &format!(
                 "\t{}\n",
-                "if (buf_len_bytes > 64 && IS_ALIGNED_POW2((ulong)dst, 8)) {"
+                "if (buf_len_bytes > 64 && IS_ALIGNED_POW2((ulong)dst, 4)) {"
             );
         }
     };
@@ -1383,35 +1395,186 @@ pub fn generate_bulkmem(fill: Option<String>) -> String {
         "for (; counter < (buf_len_bytes-GET_POW2_OFFSET(buf_len_bytes, 64)); counter+=64) {"
     );
 
-    result += &format!(
-        "\t\t\t{}\n",
-        "for (uint unroll = 0; unroll < 64; unroll+=8) {"
-    );
+    match interleave {
+        1 | 4 => {
+            result += &format!(
+                "\t\t\t#pragma unroll(8)\n\t\t\t{}\n",
+                "for (uint unroll = 0; unroll < 64; unroll+=8) {"
+            );
+        },
+        8 => {
+            result += &format!(
+                "\t\t\t#pragma unroll(4)\n\t\t\t{}\n",
+                "for (uint unroll = 0; unroll < 64; unroll+=16) {"
+            );
+        },
+        _ => panic!("unspecified interleave in bulkmem ops"),
+    }
 
-    match fill.clone() {
-        Some(_value) => {
+    match (fill, interleave) {
+        (true, 1) => {
             result += &format!(
                 "\t\t\t\t{};\n",
-                &emit_write_u64_aligned(
+                &emit_write_u32_aligned(
                     "(ulong)(dst+counter+unroll)",
                     "(ulong)(mem_start_dst)",
                     &"fillval",
                     "warp_id"
                 ),
             );
-        }
-        _ => {
             result += &format!(
                 "\t\t\t\t{};\n",
-                &emit_write_u64_aligned(
+                &emit_write_u32_aligned(
+                    "(ulong)(dst+counter+unroll+4)",
+                    "(ulong)(mem_start_dst)",
+                    &"fillval",
+                    "warp_id"
+                ),
+            );
+        }
+        (true, 4) => {
+            result += &format!(
+                "\t\t\t\t{};\n",
+                &emit_write_u32_fast(
+                    "(ulong)(counter+unroll)",
+                    "(ulong)(mem_start_dst)",
+                    &"fillval",
+                ),
+            );
+            result += &format!(
+                "\t\t\t\t{};\n",
+                &emit_write_u32_fast(
+                    "(ulong)(counter+unroll+4)",
+                    "(ulong)(mem_start_dst)",
+                    &"fillval",
+                ),
+            );
+        },
+        (true, _) => {
+            result += &format!(
+                "\t\t\t\t{};\n",
+                &emit_write_u64_fast(
+                    "(ulong)(counter+unroll)",
+                    "(ulong)(mem_start_dst)",
+                    &"fillval",
+                ),
+            );
+            result += &format!(
+                "\t\t\t\t{};\n",
+                &emit_write_u64_fast(
+                    "(ulong)(counter+unroll+8)",
+                    "(ulong)(mem_start_dst)",
+                    &"fillval",
+                ),
+            );
+        },
+        // For interleaves of 1/8 it is better to emit standard ops
+        // But only for memcpy, for memfill this is not needed
+        (false, 1) => {
+            result += &format!(
+                "\t\t\t\tuint value1 = {};\n",
+                &emit_read_u32_aligned(
+                    "(ulong)(src+counter+unroll)",
+                    "(ulong)(mem_start_src)",
+                    "warp_id"
+                ),
+            );
+            result += &format!(
+                "\t\t\t\tuint value2 = {};\n",
+                &emit_read_u32_aligned(
+                    "(ulong)(src+counter+unroll+4)",
+                    "(ulong)(mem_start_src)",
+                    "warp_id"
+                ),
+            );
+
+            result += &format!(
+                "\t\t\t\t{};\n",
+                &emit_write_u32_aligned(
                     "(ulong)(dst+counter+unroll)",
                     "(ulong)(mem_start_dst)",
-                    &emit_read_u64_aligned(
-                        "(ulong)(src+counter+unroll)",
-                        "(ulong)(mem_start_src)",
-                        "warp_id"
-                    ),
+                    "value1",
                     "warp_id"
+
+                ),
+            );
+
+            result += &format!(
+                "\t\t\t\t{};\n",
+                &emit_write_u32_aligned(
+                    "(ulong)(dst+counter+unroll+4)",
+                    "(ulong)(mem_start_dst)",
+                    "value2",
+                    "warp_id"
+                ),
+            );
+        },
+        (false, 4) => {
+            result += &format!(
+                "\t\t\t\tuint value1 = {};\n",
+                &emit_read_u32_fast(
+                    "(ulong)(counter+unroll)",
+                    "(ulong)(mem_start_src)",
+                ),
+            );
+            result += &format!(
+                "\t\t\t\tuint value2 = {};\n",
+                &emit_read_u32_fast(
+                    "(ulong)(counter+unroll+4)",
+                    "(ulong)(mem_start_src)",
+                ),
+            );
+
+            result += &format!(
+                "\t\t\t\t{};\n",
+                &emit_write_u32_fast(
+                    "(ulong)(counter+unroll)",
+                    "(ulong)(mem_start_dst)",
+                    "value1"
+                ),
+            );
+
+            result += &format!(
+                "\t\t\t\t{};\n",
+                &emit_write_u32_fast(
+                    "(ulong)(counter+unroll+4)",
+                    "(ulong)(mem_start_dst)",
+                    "value2"
+                ),
+            );
+        },
+        (false, _) => {
+            result += &format!(
+                "\t\t\t\tulong value1 = {};\n",
+                &emit_read_u64_fast(
+                    "(ulong)(counter+unroll)",
+                    "(ulong)(mem_start_src)",
+                ),
+            );
+
+            result += &format!(
+                "\t\t\t\tulong value2 = {};\n",
+                &emit_read_u64_fast(
+                    "(ulong)(counter+unroll+8)",
+                    "(ulong)(mem_start_src)",
+                ),
+            );
+
+            result += &format!(
+                "\t\t\t\t{};\n",
+                &emit_write_u64_fast(
+                    "(ulong)(counter+unroll)",
+                    "(ulong)(mem_start_dst)",
+                    "value1",
+                ),
+            );
+
+            result += &format!(
+                "\t\t\t\t{};\n",
+                &emit_write_u64_fast(
+                    "(ulong)(counter+unroll+8)",
+                    "(ulong)(mem_start_dst)",
+                    "value2",
                 ),
             );
         }
@@ -1425,7 +1588,7 @@ pub fn generate_bulkmem(fill: Option<String>) -> String {
     result += &format!("\t{}\n", "for (; counter < buf_len_bytes; counter++) {");
 
     match fill {
-        Some(value) => {
+        true => {
             result += &format!(
                 "\t\t{};\n",
                 &emit_write_u8(
@@ -1436,7 +1599,7 @@ pub fn generate_bulkmem(fill: Option<String>) -> String {
                 )
             );
         }
-        _ => {
+        false => {
             result += &format!(
                 "\t\t{};\n",
                 &emit_write_u8(
@@ -1743,8 +1906,8 @@ pub fn generate_read_write_calls(
     result += &format!("\n{}\n", "}");
 
     // emit bulk memory operations
-    result += &generate_bulkmem(Some("memfill".to_string()));
-    result += &generate_bulkmem(None);
+    result += &generate_bulkmem(true, interleave);
+    result += &generate_bulkmem(false, interleave);
 
     // write from the GPU (interleaved) back to the CPU (non-interleaved)
     // The destination is always >> 16 byte aligned.
@@ -1989,6 +2152,14 @@ pub fn emit_read_u32_fast(offset: &str, base: &str) -> String {
 
 pub fn emit_write_u32_fast(offset: &str, base: &str, value: &str) -> String {
     format!("write_u32_fast({}, {}, {})", offset, base, value)
+}
+
+pub fn emit_read_u64_fast(offset: &str, base: &str) -> String {
+    format!("read_u64_fast({}, {})", offset, base)
+}
+
+pub fn emit_write_u64_fast(offset: &str, base: &str, value: &str) -> String {
+    format!("write_u64_fast({}, {}, {})", offset, base, value)
 }
 
 pub fn emit_write_u32_aligned(addr: &str, mem_start: &str, value: &str, warp_id: &str) -> String {

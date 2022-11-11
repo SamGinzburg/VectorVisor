@@ -161,7 +161,7 @@ fn makePdf(event: FuncInput) -> Vec<u8> {
 
     //let encoded = &EMBED_IMAGE;
 
-    let level = CompressionLevel::BestCompression as u8;
+    let level = CompressionLevel::UberCompression as u8;
     let encoded = compress_to_vec_zlib(dynamic.to_rgb8().as_raw(), level);
 
     // If there's an alpha channel, extract the pixel alpha values.

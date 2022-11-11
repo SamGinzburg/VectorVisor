@@ -1660,6 +1660,9 @@ gpu_instance = ec2.create_instances(ImageId=gpu_ami,
                                 MinCount=1,
                                 MaxCount=1,
                                 UserData=userdata_ubuntu,
+                                Placement={
+                                    'AvailabilityZone': 'us-east-1f',
+                                },
                                 IamInstanceProfile={
                                     'Arn': 'arn:aws:iam::573062721377:instance-profile/ec2-ssm',
                                     #'Name': "ec2-ssm"
@@ -1689,6 +1692,9 @@ cpu_bench_instance = ec2.create_instances(ImageId=cpu_ami,
                                 MinCount=1,
                                 MaxCount=1,
                                 UserData=userdata_ubuntu,
+                                Placement={
+                                    'AvailabilityZone': 'us-east-1f',
+                                },
                                 IamInstanceProfile={
                                     'Arn': 'arn:aws:iam::573062721377:instance-profile/ec2-ssm',
                                     #'Name': "ec2-ssm"
@@ -1702,6 +1708,9 @@ invoker_instance = ec2.create_instances(ImageId=cpu_ami,
                                 MinCount=1,
                                 MaxCount=1,
                                 UserData=userdata_ubuntu,
+                                Placement={
+                                    'AvailabilityZone': 'us-east-1f',
+                                },
                                 IamInstanceProfile={
                                     'Arn': 'arn:aws:iam::573062721377:instance-profile/ec2-ssm',
                                     #'Name': "ec2-ssm"

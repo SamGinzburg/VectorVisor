@@ -2942,6 +2942,12 @@ __attribute__((always_inline)) void {}(global uint   *stack_u32,
             write!(
                 output,
                 r#"
+#define read_u64_fast(offset, base) \
+    *(global ulong*)(((global uchar*)((offset/8)*(NUM_THREADS*8) + base)))
+
+#define write_u64_fast(offset, base, value) \
+    *(global ulong*)(((global uchar*)(((offset)/8)*(NUM_THREADS*8) + base))) = (ulong)value
+
 #define read_u32_fast(offset, base) \
     *(global uint*)(((global uchar*)((offset/8)*(NUM_THREADS*8) + base + GET_POW2_OFFSET((offset), 8))))
 

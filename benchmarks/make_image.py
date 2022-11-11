@@ -158,7 +158,7 @@ def run_profile_generic(bench_name, params=""):
     cd /vv/VectorVisor/benchmarks/{name}/
 
     /usr/local/go/bin/go run /vv/VectorVisor/benchmarks/{name}/run_*.go {addr} 8000 {target_rps} 1 {duration} {params}
-    """.format(addr=gpu_instance[0].private_dns_name, target_rps=256, duration=60, name=bench_name, params=params)
+    """.format(addr=gpu_instance[0].private_dns_name, target_rps=256, duration=120, name=bench_name, params=params)
     command_id = run_command(run_invoker, "run invoker for gpu", gpu_instance[0].id)
 
     time.sleep(20)
@@ -186,9 +186,9 @@ def run_profile_generic(bench_name, params=""):
     done
 
     cd /vv/VectorVisor/benchmarks/
-    vv-profiler --input /vv/VectorVisor/benchmarks/{name}-opt-instrument.wasm --output /vv/VectorVisor/benchmarks/{name}-opt-profile.wasm --profile=/vv/VectorVisor/benchmarks/{name}-opt-instrument_*.wasm
+    vv-profiler --input /vv/VectorVisor/benchmarks/{name}-opt-4.wasm --output /vv/VectorVisor/benchmarks/{name}-opt-profile.wasm --profile=/vv/VectorVisor/benchmarks/{name}-opt-instrument.wasm.profile
     wasm-opt -O1 -g /vv/VectorVisor/benchmarks/{name}-opt-profile.wasm -o /vv/VectorVisor/benchmarks/{name}-opt-profile.wasm
-    """.format(addr=gpu_instance[0].private_dns_name, target_rps=vmcount, duration=60, hashes=256)
+    """.format(addr=gpu_instance[0].private_dns_name, target_rps=vmcount, duration=60, hashes=256, name=bench_name)
     command_id = run_command(run_invoker, "run invoker for gpu", gpu_instance[0].id)
 
     time.sleep(20)

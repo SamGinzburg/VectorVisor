@@ -18,6 +18,8 @@ function runwasm() {
 function comp() {
   cargo build --release
   cp target/wasm32-wasi/release/${1}.wasm .
+  wizer --allow-wasi ${1}.wasm -o ${1}-wizer.wasm
+  cp ${1}-wizer.wasm ${1}.wasm
   wasm-snip ${1}.wasm --snip-rust-panicking-code -o ${1}-snip.wasm -p rust_oom __rg_oom slice_error_fail slice_index_order_fail slice_end_index_len_fail slice_start_index_len_fail
   wasm-opt ${1}-snip.wasm -O1 -g -c -o ${1}-opt.wasm
   cp ${1}-opt.wasm ${1}-opt-4.wasm
