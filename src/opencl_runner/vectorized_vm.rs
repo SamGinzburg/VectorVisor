@@ -61,6 +61,7 @@ pub enum WasiSyscalls {
     PathUnlinkFile = 23,
     ArgsSizesGet = 24,
     ArgsGet = 25,
+    VectorVisorBarrier = 9998,
     ServerlessInvoke = 9999,
     ServerlessResponse = 10000,
     InvalidHyperCallNum = -1,
@@ -312,6 +313,12 @@ impl VectorizedVM {
             }
             WasiSyscalls::FdPrestatDirName => {
                 WasiFd::hypercall_fd_prestat_dir_name(self, hypercall, sender);
+            }
+            WasiSyscalls::VectorVisorBarrier => {
+                // this call is a no-op, just for synchronization + performance
+                sender.send({
+                    HyperCallResult::new(0, hypercall.vm_id, WasiSyscalls::VectorVisorBarrier)
+                }).unwrap();
             }
             WasiSyscalls::ServerlessInvoke => {
                 Serverless::hypercall_serverless_invoke(self, hypercall, sender);

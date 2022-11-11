@@ -2102,6 +2102,7 @@ impl OpenCLRunner {
             let mut resp_ctr = 0;
             let mut rand_ctr = 0;
             let mut invoke = 0;
+            let mut barrier = 0;
             for idx in 0..hypercall_num_temp.len() {
                 if hypercall_num_temp[idx] == 10000 {
                     resp_ctr += 1;
@@ -2109,6 +2110,8 @@ impl OpenCLRunner {
                     rand_ctr += 1;
                 } else if hypercall_num_temp[idx] == 9999 {
                     invoke += 1;
+                } else if hypercall_num_temp[idx] == 9998 {
+                    barrier += 1;
                 }
             }
 
@@ -2118,8 +2121,9 @@ impl OpenCLRunner {
                 let buf: &mut [u8] = *hcall_read_buffer.buf.get();
                 let overhead_buf: &mut [u64] = *overhead_tracker_buffer.buf.get();
 
-                // We don't need to read previous buffer values for serverless invoke
-                if invoke == self.num_vms {
+                // We don't need to read previous buffer values for serverless invoke or
+                // vectorvisor_barrier calls.
+                if (invoke + barrier) != self.num_vms {
                     ocl::core::enqueue_read_buffer(
                         &queue,
                         &hypercall_buffer,
@@ -2223,6 +2227,10 @@ impl OpenCLRunner {
                         if !non_serverless_invoke_call_found {
                             number_hcalls_blocking += 1;
                         }
+                    }
+                    WasiSyscalls::VectorVisorBarrier => {
+                        // No-op!
+                        num_hcall_resp += 1;
                     }
                     _ => {
                         number_hcalls_blocking += 1;

@@ -1155,6 +1155,9 @@ impl<'a> StackCtx {
                                             &"path_symlink"  => {
                                                 current_i32_count -= 4;
                                             },
+                                            &"vectorvisor_barrier"    => {
+                                                // no-op
+                                            },
                                             &"serverless_invoke"      => {
                                                 current_i32_count -= 1;
                                             },

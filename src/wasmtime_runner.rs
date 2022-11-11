@@ -192,9 +192,16 @@ impl WasmtimeRunner {
             },
         );
 
+        let vv_barrier = Func::wrap(
+            &mut store,
+            move |mut caller: Caller<'_, _>| -> () {
+                // This func is a no-op here
+        });
+
         let mut linker = Linker::new(&engine);
         linker.define("env", "serverless_invoke", serverless_invoke)?;
         linker.define("env", "serverless_response", serverless_response)?;
+        linker.define("env", "vectorvisor_barrier", vv_barrier)?;
 
         wasmtime_wasi::sync::add_to_linker(&mut linker, |s| s)?;
 

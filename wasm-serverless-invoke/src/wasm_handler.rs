@@ -46,6 +46,14 @@ extern "C" {
     // return the json response back to the VMM
     fn serverless_response(output_arr: *mut u8, output_arr_len: u32) -> ();
 
+    // create a barrier to wait on
+    // our semantics differ from traditional OpenCL/CUDA barriers as we
+    // can have some VMs be blocked off.
+    // Instead our barrier is a no-op syscall!
+
+    #[cfg(target_arch = "wasm32")]
+    pub fn vectorvisor_barrier() -> ();
+
     // Custom syscalls for acquiring/releasing locks on VMs
     fn lock_vm(vm_id: usize) -> ();
     fn unlock_vm(vm_id: usize) -> ();
@@ -59,6 +67,9 @@ extern "C" {
     fn set_warp_idx(new_warp_idx: usize) -> ();
 }
 
+#[cfg(any(target_arch = "x86_64", target_arch = "x86"))]
+pub unsafe fn vectorvisor_barrier() -> () {
+}
 
 // VectorVisor API for "distributed" applications
 pub struct VMMailbox<T> {

@@ -6,7 +6,8 @@ use pdf_writer::types::{ActionType, AnnotationType, BorderType};
 use std::fs::File;
 use std::io::Write;
 use std::time::Instant;
-use wasm_serverless_invoke::wasm_handler;
+
+use wasm_serverless_invoke::wasm_handler::*;
 use wasm_serverless_invoke::wasm_handler::WasmHandler;
 use wasm_serverless_invoke::wasm_handler::SerializationFormat::MsgPack;
 use serde::Deserialize;
@@ -225,6 +226,8 @@ fn batch_genpdf(inputs: BatchInput) -> BatchFuncResponse {
     for input in inputs.inputs {
         //makePdf(input);
         results.push(FuncResponse { resp: makePdf(input) });
+
+        unsafe { vectorvisor_barrier() }; 
     }
     return BatchFuncResponse{ resp: results };
 }

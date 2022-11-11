@@ -40,6 +40,9 @@ impl Clock {
         let clock_id = LittleEndian::read_u32(&hcall_buf[0..4]);
         let precision = LittleEndian::read_u64(&hcall_buf[4..12]);
 
+        dbg!(&clock_id);
+        dbg!(&precision);
+
         let timestamp = vm_ctx
             .ctx
             .clock_time_get(Clockid::try_from(clock_id as i32).unwrap(), precision)

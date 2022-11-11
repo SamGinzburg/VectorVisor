@@ -98,6 +98,7 @@ lazy_static! {
         m.insert("path_unlink_file", true);       // 23
         m.insert("args_sizes_get", true);         // 24
         m.insert("args_get", true);               // 25
+        m.insert("vectorvisor_barrier", true);      // 9998
         m.insert("serverless_invoke", true);      // 9999
         m.insert("serverless_response", true);    // 10000
         m
@@ -132,6 +133,7 @@ pub enum WasmHypercallId {
     path_unlink_file = 23,
     args_sizes_get = 24,
     args_get = 25,
+    vectorvisor_barrier = 9998,
     serverless_invoke = 9999,
     serverless_response = 10000,
 }
@@ -901,6 +903,7 @@ impl<'a> OpenCLCWriter<'_> {
                                             // sched_yield is a special case, we just return an i32 value, and don't perform any context saving
                                             emit_sched_yield(self, stack_ctx, debug)
                                         },
+                                        &"vectorvisor_barrier"      => self.emit_hypercall(WasmHypercallId::vectorvisor_barrier, stack_ctx, hypercall_id_count, fn_name.to_string(), false, debug),
                                         &"serverless_invoke"      => self.emit_hypercall(WasmHypercallId::serverless_invoke, stack_ctx, hypercall_id_count, fn_name.to_string(), false, debug),
                                         &"serverless_response"    => self.emit_hypercall(WasmHypercallId::serverless_response, stack_ctx, hypercall_id_count, fn_name.to_string(), false, debug),
                                         _ => panic!("Unidentified WASI fn name: {:?}", wasi_fn_name),
@@ -3165,6 +3168,12 @@ ulong get_clock() {
 
             final_hset
         };
+
+        for func in self.func_map.keys() {
+            if !fast_function_set.contains(func) {
+                println!("Func {} cannot be optimized", func);
+            }
+        }
 
         // Each fastcall has a stack frame size (size of intermediate values) + list of funcs it calls
         // We track these to resolve register spilling to shared memory

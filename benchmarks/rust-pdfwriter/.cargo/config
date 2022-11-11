@@ -1,3 +1,4 @@
 [build]
 target = "wasm32-wasi"
-#rustflags = ["-C", "target-feature=+bulk-memory"]
+#rustflags = ["-C", "target-feature=+bulk-memory,+simd128"]
+rustflags = ["-C", "target-feature=+bulk-memory"]
