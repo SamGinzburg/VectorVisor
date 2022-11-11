@@ -204,7 +204,7 @@ func main() {
 
 	reqs := make([][]byte, NUM_PARAMS)
 	for i := 0; i < NUM_PARAMS; i++ {
-		p := CreateBatchPayload(15)
+		p := CreateBatchPayload(4)
 		request_body, _ := msgpack.Marshal(p)
 		reqs[i] = request_body
 	}
