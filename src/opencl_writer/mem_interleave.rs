@@ -44,6 +44,10 @@ fn emit_fast_read_u8(addr: &str, mem_start: &str, warp_id: &str) -> String {
     format!("fast_read_u8({}, {}, {})", addr, mem_start, warp_id)
 }
 
+fn emit_fast_write_u8(addr: &str, mem_start: &str, value: &str, warp_id: &str) -> String {
+    format!("fast_write_u8({}, {}, {}, {})", addr, mem_start, value, warp_id)
+}
+
 fn emit_write_u16_body(
     interleave: u32,
     local_work_group: usize,
@@ -1334,18 +1338,26 @@ pub fn generate_bulkmem(fill: bool, interleave: u32) -> String {
     let name = match fill {
         false => {
             result += &format!("\n{}\n",
-            "void ___private_bulk_memcpy(ulong src, ulong mem_start_src, ulong dst, ulong mem_start_dst, ulong buf_len_bytes, uint warp_id, uint read_idx, uint thread_idx, local ulong2 *scratch_space) {",
+            "void ___private_bulk_memcpy(ulong src, ulong mem_start_src, ulong dst, ulong mem_start_dst, ulong heap_base, ulong buf_len_bytes, uint warp_id, uint read_idx, uint thread_idx, local ulong2 *scratch_space) {",
             );
         }
         true => {
             result += &format!("\n{}\n",
-            "void ___private_bulk_memfill(ulong dst, ulong mem_start_dst, uchar value, ulong buf_len_bytes, uint warp_id, uint read_idx, uint thread_idx, local ulong2 *scratch_space) {",
+            "void ___private_bulk_memfill(ulong dst, ulong mem_start_dst, uchar value, ulong heap_base, ulong buf_len_bytes, uint warp_id, uint read_idx, uint thread_idx, local ulong2 *scratch_space) {",
             );
         }
     };
 
-    result += &format!("\t{}\n", "printf(\"\");");
-    result += &format!("\t{}\n", "uint counter = 0;");
+    // Copy from front-to-back
+    if !fill {
+        result += &format!(
+                    "\t{}\n",
+                    "if (dst < src) {"
+        );
+    }
+
+
+    result += &format!("\t\t{}\n", "uint counter = 0;");
     match (fill, interleave) {
         (true, 4) => {
             result += &format!("\t{}\n", "uint fillval = 0;");
@@ -1369,42 +1381,48 @@ pub fn generate_bulkmem(fill: bool, interleave: u32) -> String {
     };
 
     // fastpath for u32 ops
-    match fill {
-        false if interleave == 4 => {
+    match (fill, interleave) {
+        (false, 4) | (false, 1) => {
             result += &format!(
-        	"\t{}\n",
+        	"\t\t{}\n",
         	"if (buf_len_bytes > 64 && IS_ALIGNED_POW2((ulong)src, 4) && IS_ALIGNED_POW2((ulong)dst, 4)) {"
     	    );
         }
-        false => {
+        (false, 8) => {
             result += &format!(
-        	"\t{}\n",
+        	"\t\t{}\n",
         	"if (buf_len_bytes > 64 && IS_ALIGNED_POW2((ulong)src, 8) && IS_ALIGNED_POW2((ulong)dst, 8)) {"
     	    );
         }
-        true => {
+        (true, 4) | (true, 1) => {
             result += &format!(
-                "\t{}\n",
+                "\t\t{}\n",
                 "if (buf_len_bytes > 64 && IS_ALIGNED_POW2((ulong)dst, 4)) {"
             );
         }
+        (true, 8) => {
+            result += &format!(
+                "\t\t{}\n",
+                "if (buf_len_bytes > 64 && IS_ALIGNED_POW2((ulong)dst, 8)) {"
+            );
+        },
+        _ => panic!("unspecified interleave in bulkmem"),
     };
-
     result += &format!(
-        "\t\t{}\n",
+        "\t\t\t{}\n",
         "for (; counter < (buf_len_bytes-GET_POW2_OFFSET(buf_len_bytes, 64)); counter+=64) {"
     );
 
     match interleave {
         1 | 4 => {
             result += &format!(
-                "\t\t\t#pragma unroll(8)\n\t\t\t{}\n",
+                "\t\t\t\t#pragma unroll(8)\n\t\t\t{}\n",
                 "for (uint unroll = 0; unroll < 64; unroll+=8) {"
             );
         },
         8 => {
             result += &format!(
-                "\t\t\t#pragma unroll(4)\n\t\t\t{}\n",
+                "\t\t\t\t#pragma unroll(4)\n\t\t\t{}\n",
                 "for (uint unroll = 0; unroll < 64; unroll+=16) {"
             );
         },
@@ -1414,18 +1432,18 @@ pub fn generate_bulkmem(fill: bool, interleave: u32) -> String {
     match (fill, interleave) {
         (true, 1) => {
             result += &format!(
-                "\t\t\t\t{};\n",
+                "\t\t\t\t\t{};\n",
                 &emit_write_u32_aligned(
-                    "(ulong)(dst+counter+unroll)",
+                    "(ulong)(mem_start_dst+dst+counter+unroll)",
                     "(ulong)(mem_start_dst)",
                     &"fillval",
                     "warp_id"
                 ),
             );
             result += &format!(
-                "\t\t\t\t{};\n",
+                "\t\t\t\t\t{};\n",
                 &emit_write_u32_aligned(
-                    "(ulong)(dst+counter+unroll+4)",
+                    "(ulong)(mem_start_dst+dst+counter+unroll+4)",
                     "(ulong)(mem_start_dst)",
                     &"fillval",
                     "warp_id"
@@ -1434,36 +1452,36 @@ pub fn generate_bulkmem(fill: bool, interleave: u32) -> String {
         }
         (true, 4) => {
             result += &format!(
-                "\t\t\t\t{};\n",
+                "\t\t\t\t\t{};\n",
                 &emit_write_u32_fast(
-                    "(ulong)(counter+unroll)",
-                    "(ulong)(mem_start_dst)",
+                    "(ulong)(dst+counter+unroll)",
+                    "(ulong)(heap_base)",
                     &"fillval",
                 ),
             );
             result += &format!(
-                "\t\t\t\t{};\n",
+                "\t\t\t\t\t{};\n",
                 &emit_write_u32_fast(
-                    "(ulong)(counter+unroll+4)",
-                    "(ulong)(mem_start_dst)",
+                    "(ulong)(dst+counter+unroll+4)",
+                    "(ulong)(heap_base)",
                     &"fillval",
                 ),
             );
         },
         (true, _) => {
             result += &format!(
-                "\t\t\t\t{};\n",
+                "\t\t\t\t\t{};\n",
                 &emit_write_u64_fast(
-                    "(ulong)(counter+unroll)",
-                    "(ulong)(mem_start_dst)",
+                    "(ulong)(dst+counter+unroll)",
+                    "(ulong)(heap_base)",
                     &"fillval",
                 ),
             );
             result += &format!(
-                "\t\t\t\t{};\n",
+                "\t\t\t\t\t{};\n",
                 &emit_write_u64_fast(
-                    "(ulong)(counter+unroll+8)",
-                    "(ulong)(mem_start_dst)",
+                    "(ulong)(dst+counter+unroll+8)",
+                    "(ulong)(heap_base)",
                     &"fillval",
                 ),
             );
@@ -1472,26 +1490,26 @@ pub fn generate_bulkmem(fill: bool, interleave: u32) -> String {
         // But only for memcpy, for memfill this is not needed
         (false, 1) => {
             result += &format!(
-                "\t\t\t\tuint value1 = {};\n",
+                "\t\t\t\t\tuint value1 = {};\n",
                 &emit_read_u32_aligned(
-                    "(ulong)(src+counter+unroll)",
+                    "(ulong)(mem_start_src+src+counter+unroll)",
                     "(ulong)(mem_start_src)",
                     "warp_id"
                 ),
             );
             result += &format!(
-                "\t\t\t\tuint value2 = {};\n",
+                "\t\t\t\t\tuint value2 = {};\n",
                 &emit_read_u32_aligned(
-                    "(ulong)(src+counter+unroll+4)",
+                    "(ulong)(mem_start_src+src+counter+unroll+4)",
                     "(ulong)(mem_start_src)",
                     "warp_id"
                 ),
             );
 
             result += &format!(
-                "\t\t\t\t{};\n",
+                "\t\t\t\t\t{};\n",
                 &emit_write_u32_aligned(
-                    "(ulong)(dst+counter+unroll)",
+                    "(ulong)(mem_start_dst+dst+counter+unroll)",
                     "(ulong)(mem_start_dst)",
                     "value1",
                     "warp_id"
@@ -1500,9 +1518,9 @@ pub fn generate_bulkmem(fill: bool, interleave: u32) -> String {
             );
 
             result += &format!(
-                "\t\t\t\t{};\n",
+                "\t\t\t\t\t{};\n",
                 &emit_write_u32_aligned(
-                    "(ulong)(dst+counter+unroll+4)",
+                    "(ulong)(mem_start_dst+dst+counter+unroll+4)",
                     "(ulong)(mem_start_dst)",
                     "value2",
                     "warp_id"
@@ -1511,88 +1529,88 @@ pub fn generate_bulkmem(fill: bool, interleave: u32) -> String {
         },
         (false, 4) => {
             result += &format!(
-                "\t\t\t\tuint value1 = {};\n",
+                "\t\t\t\t\tuint value1 = {};\n",
                 &emit_read_u32_fast(
-                    "(ulong)(counter+unroll)",
-                    "(ulong)(mem_start_src)",
+                    "(ulong)(src+counter+unroll)",
+                    "(ulong)(heap_base)",
                 ),
             );
             result += &format!(
-                "\t\t\t\tuint value2 = {};\n",
+                "\t\t\t\t\tuint value2 = {};\n",
                 &emit_read_u32_fast(
-                    "(ulong)(counter+unroll+4)",
-                    "(ulong)(mem_start_src)",
+                    "(ulong)(src+counter+unroll+4)",
+                    "(ulong)(heap_base)",
                 ),
             );
 
             result += &format!(
-                "\t\t\t\t{};\n",
+                "\t\t\t\t\t{};\n",
                 &emit_write_u32_fast(
-                    "(ulong)(counter+unroll)",
-                    "(ulong)(mem_start_dst)",
+                    "(ulong)(dst+counter+unroll)",
+                    "(ulong)(heap_base)",
                     "value1"
                 ),
             );
 
             result += &format!(
-                "\t\t\t\t{};\n",
+                "\t\t\t\t\t{};\n",
                 &emit_write_u32_fast(
-                    "(ulong)(counter+unroll+4)",
-                    "(ulong)(mem_start_dst)",
+                    "(ulong)(dst+counter+unroll+4)",
+                    "(ulong)(heap_base)",
                     "value2"
                 ),
             );
         },
         (false, _) => {
             result += &format!(
-                "\t\t\t\tulong value1 = {};\n",
+                "\t\t\t\t\tulong value1 = {};\n",
                 &emit_read_u64_fast(
-                    "(ulong)(counter+unroll)",
-                    "(ulong)(mem_start_src)",
+                    "(ulong)(src+counter+unroll)",
+                    "(ulong)(heap_base)",
                 ),
             );
 
             result += &format!(
-                "\t\t\t\tulong value2 = {};\n",
+                "\t\t\t\t\tulong value2 = {};\n",
                 &emit_read_u64_fast(
-                    "(ulong)(counter+unroll+8)",
-                    "(ulong)(mem_start_src)",
+                    "(ulong)(src+counter+unroll+8)",
+                    "(ulong)(heap_base)",
                 ),
             );
 
             result += &format!(
-                "\t\t\t\t{};\n",
+                "\t\t\t\t\t{};\n",
                 &emit_write_u64_fast(
-                    "(ulong)(counter+unroll)",
-                    "(ulong)(mem_start_dst)",
+                    "(ulong)(dst+counter+unroll)",
+                    "(ulong)(heap_base)",
                     "value1",
                 ),
             );
 
             result += &format!(
-                "\t\t\t\t{};\n",
+                "\t\t\t\t\t{};\n",
                 &emit_write_u64_fast(
-                    "(ulong)(counter+unroll+8)",
-                    "(ulong)(mem_start_dst)",
+                    "(ulong)(dst+counter+unroll+8)",
+                    "(ulong)(heap_base)",
                     "value2",
                 ),
             );
         }
     };
 
+    result += &format!("\t\t\t\t{}\n", "}");
     result += &format!("\t\t\t{}\n", "}");
     result += &format!("\t\t{}\n", "}");
-    result += &format!("\t{}\n", "}");
 
     // slow path for remaining ops
-    result += &format!("\t{}\n", "for (; counter < buf_len_bytes; counter++) {");
+    result += &format!("\t\t{}\n", "for (; counter < buf_len_bytes; counter++) {");
 
     match fill {
         true => {
             result += &format!(
-                "\t\t{};\n",
+                "\t\t\t{};\n",
                 &emit_write_u8(
-                    "(ulong)(dst+counter)",
+                    "(ulong)(mem_start_dst+dst+counter)",
                     "(ulong)(mem_start_dst)",
                     &"value",
                     "warp_id"
@@ -1601,18 +1619,158 @@ pub fn generate_bulkmem(fill: bool, interleave: u32) -> String {
         }
         false => {
             result += &format!(
-                "\t\t{};\n",
+                "\t\t\t{};\n",
                 &emit_write_u8(
-                    "(ulong)(dst+counter)",
+                    "(ulong)(mem_start_dst+dst+counter)",
                     "(ulong)(mem_start_dst)",
-                    &emit_read_u8("(ulong)(src+counter)", "(ulong)(mem_start_src)", "warp_id"),
+                    &emit_read_u8("(ulong)(mem_start_src+src+counter)", "(ulong)(mem_start_src)", "warp_id"),
                     "warp_id"
                 )
             );
         }
     };
 
-    result += &format!("\t{}\n", "}");
+    result += &format!("\t\t{}\n", "}");
+
+    if !fill {
+        result += &format!(
+                    "\t{}\n",
+                    "} else if (src < dst) {"
+        );
+        // Copy back-to-front
+        // Try to perform higher-performance copies
+        match interleave {
+            4 => {
+                result += &format!(
+                "\t\t{}\n",
+                "if (buf_len_bytes > 64 && IS_ALIGNED_POW2(src+buf_len_bytes, 4) && IS_ALIGNED_POW2(dst+buf_len_bytes, 4)) {"
+                );
+                result += &format!(
+                    "\t\t\t{}\n",
+                    "for (; buf_len_bytes >= 64; buf_len_bytes -= 64) {"
+                );
+                result += &format!(
+                    "\t\t\t\t#pragma unroll(8)\n\t\t\t\t{}\n",
+                    "for (uint unroll = 0; unroll < 64; unroll+=8) {"
+                );
+                result += &format!(
+                    "\t\t\t\t\tuint value1 = {};\n",
+                    &emit_read_u32_fast(
+                        "(ulong)(src+buf_len_bytes-unroll-4)",
+                        "(ulong)(heap_base)",
+                    ),
+                );
+
+                result += &format!(
+                    "\t\t\t\t\tuint value2 = {};\n",
+                    &emit_read_u32_fast(
+                        "(ulong)(src+buf_len_bytes-unroll-8)",
+                        "(ulong)(heap_base)",
+                    ),
+                );
+
+                result += &format!(
+                    "\t\t\t\t\t{};\n",
+                    &emit_write_u32_fast(
+                        "(ulong)(dst+buf_len_bytes-unroll-4)",
+                        "(ulong)(heap_base)",
+                        "value1",
+                    ),
+                );
+
+                result += &format!(
+                    "\t\t\t\t\t{};\n",
+                    &emit_write_u32_fast(
+                        "(ulong)(dst+buf_len_bytes-unroll-8)",
+                        "(ulong)(heap_base)",
+                        "value2",
+                    ),
+                );
+                result += &format!(
+                "\t\t\t\t}}\n",
+                );
+                result += &format!(
+                "\t\t\t}}\n",
+                );
+            },
+            8 => {
+                result += &format!(
+                "\t\t{}\n",
+                "if (buf_len_bytes > 64 && IS_ALIGNED_POW2(src+buf_len_bytes, 8) && IS_ALIGNED_POW2(dst+buf_len_bytes, 8)) {"
+                );
+                result += &format!(
+                    "\t\t\t{}\n",
+                    "for (; buf_len_bytes >= 64; buf_len_bytes -= 64) {"
+                );
+                result += &format!(
+                    "\t\t\t\t#pragma unroll(4)\n\t\t\t\t{}\n",
+                    "for (uint unroll = 0; unroll < 64; unroll+=16) {"
+                );
+                result += &format!(
+                    "\t\t\t\t\tulong value1 = {};\n",
+                    &emit_read_u64_fast(
+                        "(ulong)(src+buf_len_bytes-unroll-8)",
+                        "(ulong)(heap_base)",
+                    ),
+                );
+
+                result += &format!(
+                    "\t\t\t\t\tulong value2 = {};\n",
+                    &emit_read_u64_fast(
+                        "(ulong)(src+buf_len_bytes-unroll-16)",
+                        "(ulong)(heap_base)",
+                    ),
+                );
+
+                result += &format!(
+                    "\t\t\t\t\t{};\n",
+                    &emit_write_u64_fast(
+                        "(ulong)(dst+buf_len_bytes-unroll-8)",
+                        "(ulong)(heap_base)",
+                        "value1",
+                    ),
+                );
+
+                result += &format!(
+                    "\t\t\t\t\t{};\n",
+                    &emit_write_u64_fast(
+                        "(ulong)(dst+buf_len_bytes-unroll-16)",
+                        "(ulong)(heap_base)",
+                        "value2",
+                    ),
+                );
+                result += &format!(
+                "\t\t\t\t}}\n",
+                );
+                result += &format!(
+                "\t\t\t}}\n",
+                );
+
+            },
+            _ => panic!("unimplemented interleave for back-to-front memory.copy"),
+        }
+        result += &format!(
+        "\t\t}}\n",
+        );
+
+        result += &format!("\t\t{}\n", "while (buf_len_bytes--) {");
+
+        result += &format!(
+            "\t\t\t{};\n",
+            &emit_write_u8(
+                "(ulong)(mem_start_dst+dst+buf_len_bytes)",
+                "(ulong)(mem_start_dst)",
+                &emit_read_u8("(ulong)(mem_start_src+src+buf_len_bytes)", "(ulong)(mem_start_src)", "warp_id"),
+                "warp_id"
+            )
+        );
+        result += &format!("\t\t{}\n", "}");
+        result += &format!(
+                    "\t{}\n",
+                    "}"
+        );
+    }
+
     result += &format!("\n{}\n", "}");
 
     result
@@ -1811,7 +1969,7 @@ pub fn generate_read_write_calls(
     result += &format!("\n{}\n", "}");
 
     result += &format!("\n{}\n",
-                        "__attribute__((noinline)) ushort read_u16(ulong addr, ulong mem_start, uint warp_id, uint read_idx, uint thread_idx, local ulong2 *scratch_space) {");
+                        "ushort read_u16(ulong addr, ulong mem_start, uint warp_id, uint read_idx, uint thread_idx, local ulong2 *scratch_space) {");
     result += &format!(
         "{}",
         emit_read_u16_body(interleave, local_work_group, mexec, false, false)
@@ -2245,12 +2403,13 @@ pub fn emit_intra_vm_memcpy(
     src_mem_start: &str,
     dst_addr: &str,
     dst_mem_start: &str,
+    heap_base: &str,
     buf_len_bytes: &str,
     warp_id: &str,
 ) -> String {
     format!(
-        "___private_bulk_memcpy({}, {}, {}, {}, {}, {}, read_idx, thread_idx, scratch_space);",
-        src_addr, src_mem_start, dst_addr, dst_mem_start, buf_len_bytes, warp_id
+        "___private_bulk_memcpy({}, {}, {}, {}, {}, {}, {}, read_idx, thread_idx, scratch_space);",
+        src_addr, src_mem_start, dst_addr, dst_mem_start, heap_base, buf_len_bytes, warp_id
     )
 }
 
@@ -2258,11 +2417,12 @@ pub fn emit_intra_vm_memfill(
     dst_addr: &str,
     dst_mem_start: &str,
     value: &str,
+    heap_base: &str,
     buf_len_bytes: &str,
     warp_id: &str,
 ) -> String {
     format!(
-        "___private_bulk_memfill({}, {}, {}, {}, {}, read_idx, thread_idx, scratch_space);",
-        dst_addr, dst_mem_start, value, buf_len_bytes, warp_id
+        "___private_bulk_memfill({}, {}, {}, {}, {}, {}, read_idx, thread_idx, scratch_space);",
+        dst_addr, dst_mem_start, value, heap_base, buf_len_bytes, warp_id
     )
 }
