@@ -1640,6 +1640,65 @@ pub fn generate_bulkmem(fill: bool, interleave: u32) -> String {
         // Copy back-to-front
         // Try to perform higher-performance copies
         match interleave {
+            1 => {
+                // alignments don't matter for the 1 byte interleave ("everything" is aligned)
+                result += &format!(
+                "\t\t{}\n",
+                "if (buf_len_bytes > 64) {"
+                );
+                result += &format!(
+                    "\t\t\t{}\n",
+                    "for (; buf_len_bytes >= 64; buf_len_bytes -= 64) {"
+                );
+                result += &format!(
+                    "\t\t\t\t#pragma unroll(8)\n\t\t\t\t{}\n",
+                    "for (uint unroll = 0; unroll < 64; unroll+=8) {"
+                );
+                result += &format!(
+                    "\t\t\t\t\tuint value1 = {};\n",
+                    &emit_read_u32_aligned(
+                        "(ulong)(heap_base+src+buf_len_bytes-unroll-4)",
+                        "(ulong)(heap_base)",
+                        "warp_id"
+                    ),
+                );
+
+                result += &format!(
+                    "\t\t\t\t\tuint value2 = {};\n",
+                    &emit_read_u32_aligned(
+                        "(ulong)(heap_base+src+buf_len_bytes-unroll-8)",
+                        "(ulong)(heap_base)",
+                        "warp_id"
+                    ),
+                );
+
+                result += &format!(
+                    "\t\t\t\t\t{};\n",
+                    &emit_write_u32_aligned(
+                        "(ulong)(heap_base+dst+buf_len_bytes-unroll-4)",
+                        "(ulong)(heap_base)",
+                        "value1",
+                        "warp_id"
+                    ),
+                );
+
+                result += &format!(
+                    "\t\t\t\t\t{};\n",
+                    &emit_write_u32_aligned(
+                        "(ulong)(heap_base+dst+buf_len_bytes-unroll-8)",
+                        "(ulong)(heap_base)",
+                        "value2",
+                        "warp_id"
+                    ),
+                );
+                result += &format!(
+                "\t\t\t\t}}\n",
+                );
+                result += &format!(
+                "\t\t\t}}\n",
+                );
+
+            }
             4 => {
                 result += &format!(
                 "\t\t{}\n",
