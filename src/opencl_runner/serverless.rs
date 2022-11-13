@@ -84,10 +84,11 @@ impl Serverless {
             let msg_len = LittleEndian::read_u32(&hcall_buf[0..4]);
             let resp_buf_len: usize = msg_len.try_into().unwrap();
 
-            // let mut resp_buf = vec![0u8; resp_buf_len.try_into().unwrap()];
-            let resp_buf = bytes::Bytes::from(&hcall_buf[4..4 + resp_buf_len]);
+            let mut resp_buf = vec![0u8; resp_buf_len.try_into().unwrap()];
+            //let resp_buf = bytes::Bytes::from(&hcall_buf[4..4 + resp_buf_len]);
             // copy the data from the hcall_buffer
-            // resp_buf[0..resp_buf_len].copy_from_slice(&hcall_buf[4..4+resp_buf_len]);
+            resp_buf[0..resp_buf_len].copy_from_slice(&hcall_buf[4..4+resp_buf_len]);
+            let resp_buf = bytes::Bytes::from(resp_buf);
 
             // calculate on device time and queue submit times
             let on_device_time = hypercall.timestamp_counter - *vm_ctx.timestamp_counter;

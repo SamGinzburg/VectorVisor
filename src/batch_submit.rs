@@ -139,13 +139,16 @@ impl BatchSubmitServer {
         // Tokio locks are FIFO, and tokio is cooperatively scheduled
         // The first person to acquire sender is also the first to acquire recv
         let req_queue = std::time::Instant::now();
-        let sender = tx.lock().await;
         let req_id = Uuid::new_v4().to_simple().to_string();
-        let req_start = std::time::Instant::now();
-        sender
-            .send((body.clone(), body.len(), req_id.clone()))
-            .await
-            .unwrap();
+        let req_start;
+        {
+            let sender = tx.lock().await;
+            req_start = std::time::Instant::now();
+            sender
+                .send((body.clone(), body.len(), req_id.clone()))
+                .await
+                .unwrap();
+        }
 
         while let Some((
             resp,
@@ -158,7 +161,6 @@ impl BatchSubmitServer {
             uuid,
         )) = rx.lock().await.recv().await
         {
-            //let mut hashmap = (*hashmaps).get(vm_idx).unwrap().lock().await;
             if uuid == req_id {
                 let req_end = std::time::Instant::now();
                 return Ok(BatchSubmitServer::create_response(
@@ -173,48 +175,7 @@ impl BatchSubmitServer {
                     compile_time,
                 ));
             } else {
-                /*
-                hashmap.insert(uuid.clone(), (
-                    resp,
-                    len,
-                    on_dev_time,
-                    queue_submit_time,
-                    num_queue_submits,
-                    num_unique_fns,
-                    overhead_time_ns,
-                    uuid,
-                ));
-                */
             }
-            /*
-            match hashmap.remove(&req_id) {
-                Some((resp,
-                    len,
-                    on_dev_time,
-                    queue_submit_time,
-                    num_queue_submits,
-                    num_unique_fns,
-                    overhead_time_ns,
-                    uuid,
-                   )) => {
-                    let req_end = std::time::Instant::now();
-                    return Ok(BatchSubmitServer::create_response(
-                        resp,
-                        on_dev_time,
-                        queue_submit_time,
-                        num_queue_submits,
-                        num_unique_fns,
-                        (req_start - req_queue).as_nanos(),
-                        (req_end - req_queue).as_nanos(),
-                        overhead_time_ns,
-                        compile_time,
-                    ));
-                },
-                _ => {
-                    continue;
-                },
-            }
-            */
         }
 
         Err(warp::reject::custom(LostRequest))
