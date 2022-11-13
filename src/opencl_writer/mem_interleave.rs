@@ -1657,8 +1657,8 @@ pub fn generate_bulkmem(fill: bool, interleave: u32) -> String {
                 result += &format!(
                     "\t\t\t\t\tuint value1 = {};\n",
                     &emit_read_u32_aligned(
-                        "(ulong)(heap_base+src+buf_len_bytes-unroll-4)",
-                        "(ulong)(heap_base)",
+                        "(ulong)(mem_start_src+src+buf_len_bytes-unroll-4)",
+                        "(ulong)(mem_start_src)",
                         "warp_id"
                     ),
                 );
@@ -1666,8 +1666,8 @@ pub fn generate_bulkmem(fill: bool, interleave: u32) -> String {
                 result += &format!(
                     "\t\t\t\t\tuint value2 = {};\n",
                     &emit_read_u32_aligned(
-                        "(ulong)(heap_base+src+buf_len_bytes-unroll-8)",
-                        "(ulong)(heap_base)",
+                        "(ulong)(mem_start_src+src+buf_len_bytes-unroll-8)",
+                        "(ulong)(mem_start_src)",
                         "warp_id"
                     ),
                 );
@@ -1675,8 +1675,8 @@ pub fn generate_bulkmem(fill: bool, interleave: u32) -> String {
                 result += &format!(
                     "\t\t\t\t\t{};\n",
                     &emit_write_u32_aligned(
-                        "(ulong)(heap_base+dst+buf_len_bytes-unroll-4)",
-                        "(ulong)(heap_base)",
+                        "(ulong)(mem_start_dst+dst+buf_len_bytes-unroll-4)",
+                        "(ulong)(mem_start_dst)",
                         "value1",
                         "warp_id"
                     ),
@@ -1685,8 +1685,8 @@ pub fn generate_bulkmem(fill: bool, interleave: u32) -> String {
                 result += &format!(
                     "\t\t\t\t\t{};\n",
                     &emit_write_u32_aligned(
-                        "(ulong)(heap_base+dst+buf_len_bytes-unroll-8)",
-                        "(ulong)(heap_base)",
+                        "(ulong)(mem_start_dst+dst+buf_len_bytes-unroll-8)",
+                        "(ulong)(mem_start_dst)",
                         "value2",
                         "warp_id"
                     ),
@@ -1697,7 +1697,6 @@ pub fn generate_bulkmem(fill: bool, interleave: u32) -> String {
                 result += &format!(
                 "\t\t\t}}\n",
                 );
-
             }
             4 => {
                 result += &format!(
