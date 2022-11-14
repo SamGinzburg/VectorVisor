@@ -114,15 +114,21 @@ impl BatchSubmitServer {
         fast_reply: bool,
         vm_idx: usize,
         vm_queue: Arc<VmQueue>,
-        sender: Arc<Vec<Mutex<Sender<(bytes::Bytes, usize, String)>>>>,
-        receiver: Arc<Vec<Mutex<Receiver<VmSenderType>>>>,
-        hashmaps: Arc<Vec<Mutex<HashMap<String, VmSenderType>>>>,
+        sender: Arc<Vec<(Mutex<Sender<(bytes::Bytes, usize, String)>>, Mutex<Sender<(bytes::Bytes, usize, String)>>)>>,
+        receiver: Arc<Vec<(Mutex<Receiver<VmSenderType>>, Mutex<Receiver<VmSenderType>>)>>,
+        vm_chan_ctr: Arc<Vec<AtomicU64>>,
         compile_time: u128,
     ) -> Result<impl warp::Reply, warp::Rejection> {
         //dbg!(&vm_idx);
         // Get an available VM first
-        let tx: &Mutex<Sender<VmRecvType>> = (*sender).get(vm_idx).unwrap();
-        let rx: &Mutex<Receiver<VmSenderType>> = (*receiver).get(vm_idx).unwrap();
+        let chan_id = (*vm_chan_ctr).get(vm_idx).unwrap().fetch_add(1, Ordering::SeqCst);
+        let (tx, tx2) = (*sender).get(vm_idx).unwrap();
+        let (rx, rx2) = (*receiver).get(vm_idx).unwrap();
+        let actual_recv = if chan_id % 2 == 0 {
+            rx
+        } else {
+            rx2
+        };
 
         /*
         let (tx, rx, vm_idx) = match vm_queue.try_pop() {
@@ -141,42 +147,57 @@ impl BatchSubmitServer {
         let req_queue = std::time::Instant::now();
         let req_id = Uuid::new_v4().to_simple().to_string();
         let req_start;
-        {
-            let sender = tx.lock().await;
-            req_start = std::time::Instant::now();
-            sender
-                .send((body.clone(), body.len(), req_id.clone()))
-                .await
-                .unwrap();
-        }
+        // Acquire both locks...
+        let sender = if chan_id % 2 == 0 {
+            tx.lock().await
+        } else {
+            tx2.lock().await
+        };
+        let mut recv = actual_recv.lock().await;
 
-        while let Some((
-            resp,
-            len,
-            on_dev_time,
-            queue_submit_time,
-            num_queue_submits,
-            num_unique_fns,
-            overhead_time_ns,
-            uuid,
-        )) = rx.lock().await.recv().await
-        {
-            if uuid == req_id {
-                let req_end = std::time::Instant::now();
-                return Ok(BatchSubmitServer::create_response(
-                    resp,
-                    on_dev_time,
-                    queue_submit_time,
-                    num_queue_submits,
-                    num_unique_fns,
-                    (req_start - req_queue).as_nanos(),
-                    (req_end - req_queue).as_nanos(),
-                    overhead_time_ns,
-                    compile_time,
-                ));
-            } else {
+        // clear all previous requests...
+        while true {
+            match recv.try_recv() {
+                Ok(_) => (),
+                _ => {
+                    // The queue is clear, we can continue
+                    break;
+                },
             }
         }
+
+        req_start = std::time::Instant::now();
+        sender
+            .send((body.clone(), body.len(), req_id.clone()))
+            .await
+            .unwrap();
+
+        while let Some((
+                resp,
+                len,
+                on_dev_time,
+                queue_submit_time,
+                num_queue_submits,
+                num_unique_fns,
+                overhead_time_ns,
+                uuid,
+            )) = recv.recv().await
+            {
+                if uuid == req_id {
+                    let req_end = std::time::Instant::now();
+                    return Ok(BatchSubmitServer::create_response(
+                        resp,
+                        on_dev_time,
+                        queue_submit_time,
+                        num_queue_submits,
+                        num_unique_fns,
+                        (req_start - req_queue).as_nanos(),
+                        (req_end - req_queue).as_nanos(),
+                        overhead_time_ns,
+                        compile_time,
+                    ));
+                }
+            }
 
         Err(warp::reject::custom(LostRequest))
 
@@ -187,19 +208,13 @@ impl BatchSubmitServer {
         _hcall_buf_size: usize,
         fast_reply: bool,
         is_active: Arc<SyncMutex<bool>>,
-        sender: Arc<Vec<Mutex<Sender<(bytes::Bytes, usize, String)>>>>,
-        receiver: Arc<Vec<Mutex<Receiver<VmSenderType>>>>,
+        sender: Arc<Vec<(Mutex<Sender<(bytes::Bytes, usize, String)>>, Mutex<Sender<(bytes::Bytes, usize, String)>>)>>,
+        receiver: Arc<Vec<(Mutex<Receiver<VmSenderType>>, Mutex<Receiver<VmSenderType>>)>>,
         num_vms: u32,
         server_ip: String,
         server_port: String,
         compile_time: u128,
     ) -> () {
-        let mut hashmaps = vec![];
-        for i in 0..num_vms {
-            hashmaps.push(Mutex::new(HashMap::new()));
-        }
-        let mut hashmap_vec: Arc<Vec<Mutex<HashMap<String, VmSenderType>>>> = Arc::new(hashmaps);
-
         tokio::runtime::Builder::new_multi_thread()
             //.worker_threads(4)
             .worker_threads(num_cpus::get())
@@ -220,7 +235,6 @@ impl BatchSubmitServer {
                     let warp_senders = warp::any().map(move || Arc::clone(&sender));
                     let warp_receivers = warp::any().map(move || Arc::clone(&receiver));
                     let compile_time = warp::any().map(move || compile_time.clone());
-                    let hashmaps = warp::any().map(move || hashmap_vec.clone());
 
                     let vm_idx_counter = Arc::new(AtomicU64::new(0));
 
@@ -231,6 +245,14 @@ impl BatchSubmitServer {
                         (current_idx % num_vms_u64) as usize
                     });
 
+                    // Channel counter
+                    let mut chan_ctr: Vec<AtomicU64> = vec![];
+                    for i in 0..num_vms {
+                        chan_ctr.push(AtomicU64::new(0));
+                    }
+                    let vm_chan_ctr = Arc::new(chan_ctr);
+                    let chan_ctr_moved = warp::any().map(move || Arc::clone(&vm_chan_ctr));
+
                     let batch_submit = warp::path!("batch_submit")
                         .and(warp::body::bytes())
                         .and(fast_reply_bool)
@@ -238,7 +260,7 @@ impl BatchSubmitServer {
                         .and(warp_queue)
                         .and(warp_senders)
                         .and(warp_receivers)
-                        .and(hashmaps)
+                        .and(chan_ctr_moved)
                         .and(compile_time)
                         .and_then(BatchSubmitServer::response);
 

@@ -869,31 +869,39 @@ fn main() {
                 */
                 //let runner = opencl_runner::OpenCLRunner::new(num_vms, interleave, is_gpu, entry_point, file.clone());
                 //let (program, device_id) = runner.setup_kernel(context, device_id, fname, stack_size, heap_size, num_compiled_funcs, globals_buffer_size, compile_args.clone(), link_args.clone());
-
+                // async channels
                 let mut server_sender_vec = vec![];
                 let mut vm_recv_vec = vec![];
-                for _ in 0..num_vms.clone() {
-                    let (sender, recv): (
-                        tokio::sync::mpsc::Sender<VmRecvType>,
-                        tokio::sync::mpsc::Receiver<VmRecvType>,
-                    ) = mpsc::channel(16384);
-                    server_sender_vec.push(AsyncMutex::new(sender));
-                    vm_recv_vec.push(Mutex::new(recv));
-                }
-
-                let server_sender_vec_arc = Arc::new(server_sender_vec);
-                let vm_recv_vec_arc = Arc::new(vm_recv_vec);
 
                 let mut vm_sender_vec = vec![];
                 let mut server_recv_vec = vec![];
                 for _ in 0..num_vms.clone() {
-                    let (sender, recv): (
+                    let (async_sender1, async_recv1): (
+                        tokio::sync::mpsc::Sender<VmRecvType>,
+                        tokio::sync::mpsc::Receiver<VmRecvType>,
+                    ) = mpsc::channel(16384);
+
+                    let (async_sender2, async_recv2): (
+                        tokio::sync::mpsc::Sender<VmRecvType>,
+                        tokio::sync::mpsc::Receiver<VmRecvType>,
+                    ) = mpsc::channel(16384);
+                    server_sender_vec.push((AsyncMutex::new(async_sender1), AsyncMutex::new(async_sender2)));
+                    vm_recv_vec.push((Mutex::new(async_recv1), Mutex::new(async_recv2)));
+
+                    let (sender1, recv1): (
                         tokio::sync::mpsc::Sender<VmSenderType>,
                         tokio::sync::mpsc::Receiver<VmSenderType>,
                     ) = mpsc::channel(16384);
-                    vm_sender_vec.push(Mutex::new(sender));
-                    server_recv_vec.push(AsyncMutex::new(recv));
+                    let (sender2, recv2): (
+                        tokio::sync::mpsc::Sender<VmSenderType>,
+                        tokio::sync::mpsc::Receiver<VmSenderType>,
+                    ) = mpsc::channel(16384);
+                    vm_sender_vec.push((Mutex::new(sender1), Mutex::new(sender2)));
+                    server_recv_vec.push((AsyncMutex::new(recv1), AsyncMutex::new(recv2)));
                 }
+
+                let server_sender_vec_arc = Arc::new(server_sender_vec);
+                let vm_recv_vec_arc = Arc::new(vm_recv_vec);
 
                 let vm_sender_vec_arc = Arc::new(vm_sender_vec);
                 let server_recv_vec_arc = Arc::new(server_recv_vec);
@@ -962,28 +970,36 @@ fn main() {
 
         let mut server_sender_vec = vec![];
         let mut vm_recv_vec = vec![];
-        for _ in 0..num_threads {
-            let (sender, recv): (
+
+        let mut vm_sender_vec = vec![];
+        let mut server_recv_vec = vec![];
+        for _ in 0..num_vms.clone() {
+            let (async_sender1, async_recv1): (
                 tokio::sync::mpsc::Sender<VmRecvType>,
                 tokio::sync::mpsc::Receiver<VmRecvType>,
-            ) = mpsc::channel(1);
-            server_sender_vec.push(AsyncMutex::new(sender));
-            vm_recv_vec.push(Mutex::new(recv));
+            ) = mpsc::channel(16384);
+
+            let (async_sender2, async_recv2): (
+                tokio::sync::mpsc::Sender<VmRecvType>,
+                tokio::sync::mpsc::Receiver<VmRecvType>,
+            ) = mpsc::channel(16384);
+            server_sender_vec.push((AsyncMutex::new(async_sender1), AsyncMutex::new(async_sender2)));
+            vm_recv_vec.push((Mutex::new(async_recv1), Mutex::new(async_recv2)));
+
+            let (sender1, recv1): (
+                tokio::sync::mpsc::Sender<VmSenderType>,
+                tokio::sync::mpsc::Receiver<VmSenderType>,
+            ) = mpsc::channel(16384);
+            let (sender2, recv2): (
+                tokio::sync::mpsc::Sender<VmSenderType>,
+                tokio::sync::mpsc::Receiver<VmSenderType>,
+            ) = mpsc::channel(16384);
+            vm_sender_vec.push((Mutex::new(sender1), Mutex::new(sender2)));
+            server_recv_vec.push((AsyncMutex::new(recv1), AsyncMutex::new(recv2)));
         }
 
         let server_sender_vec_arc = Arc::new(server_sender_vec);
         let vm_recv_vec_arc = Arc::new(vm_recv_vec);
-
-        let mut vm_sender_vec = vec![];
-        let mut server_recv_vec = vec![];
-        for _ in 0..num_threads {
-            let (sender, recv): (
-                tokio::sync::mpsc::Sender<VmSenderType>,
-                tokio::sync::mpsc::Receiver<VmSenderType>,
-            ) = mpsc::channel(1);
-            vm_sender_vec.push(Mutex::new(sender));
-            server_recv_vec.push(AsyncMutex::new(recv));
-        }
 
         let vm_sender_vec_arc = Arc::new(vm_sender_vec);
         let server_recv_vec_arc = Arc::new(server_recv_vec);

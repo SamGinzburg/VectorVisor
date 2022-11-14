@@ -264,8 +264,8 @@ impl OpenCLRunner {
         local_work_group: usize,
         mexec: usize,
         req_timeout: u32,
-        vm_sender: Arc<Vec<Mutex<Sender<VmSenderType>>>>,
-        vm_recv: Arc<Vec<Mutex<Receiver<VmRecvType>>>>,
+        vm_sender: Arc<Vec<(Mutex<Sender<VmSenderType>>, Mutex<Sender<VmSenderType>>)>>,
+        vm_recv: Arc<Vec<(Mutex<Receiver<VmRecvType>>, Mutex<Receiver<VmRecvType>>)>>,
         _compile_flags: String,
         _link_flags: String,
         print_return: bool,
@@ -1150,8 +1150,8 @@ impl OpenCLRunner {
         hypercall_buffer_size: u32,
         ctx: &ocl::core::Context,
         print_return: bool,
-        vm_sender: Arc<Vec<Mutex<Sender<VmSenderType>>>>,
-        vm_recv: Arc<Vec<Mutex<Receiver<VmRecvType>>>>,
+        vm_sender: Arc<Vec<(Mutex<Sender<VmSenderType>>, Mutex<Sender<VmSenderType>>)>>,
+        vm_recv: Arc<Vec<(Mutex<Receiver<VmRecvType>>, Mutex<Receiver<VmRecvType>>)>>,
         req_timeout: u32,
         data_segment: Vec<u8>,
     ) -> VMMRuntimeStatus {
@@ -1490,11 +1490,10 @@ impl OpenCLRunner {
                     if recv_reqs < avail_vm_count {
                         for vm_idx in &vm_id_vec {
                             let worker_vm_idx = *vm_id_mapping.get(vm_idx).unwrap() as usize;
+                            // Try to poll the first channel
                             if !is_empty_vm.contains(&worker_vm_idx) {
-                                match vm_recv_copy[*vm_idx as usize]
-                                    .lock()
-                                    .unwrap()
-                                    .poll_recv(&mut cx)
+                                let (vm_recv_copy1, _) = &vm_recv_copy[*vm_idx as usize];
+                                match vm_recv_copy1.lock().unwrap().poll_recv(&mut cx)
                                 {
                                     Poll::Ready(Some((msg, _, uuid))) => {
                                         let wasi_context = &mut worker_vms[worker_vm_idx];
@@ -1502,11 +1501,31 @@ impl OpenCLRunner {
                                         let buffer = async_buffer.clone();
                                         let deref_buf =
                                             unsafe { &mut *buffer.lock().unwrap().buf.get() };
-                                        wasi_context.queue_request(msg, *deref_buf, uuid);
+                                        wasi_context.queue_request(msg, *deref_buf, uuid, 0);
                                         recv_reqs += 1;
                                         is_empty_vm.insert(worker_vm_idx);
                                     }
-                                    _ => (),
+                                    _ => {
+                                    },
+                                }
+                            }
+                            // Poll the second channel
+                            if !is_empty_vm.contains(&worker_vm_idx) {
+                                let (_, vm_recv_copy2) = &vm_recv_copy[*vm_idx as usize];
+                                match vm_recv_copy2.lock().unwrap().poll_recv(&mut cx)
+                                {
+                                    Poll::Ready(Some((msg, _, uuid))) => {
+                                        let wasi_context = &mut worker_vms[worker_vm_idx];
+                                        // Queue the input in the VM
+                                        let buffer = async_buffer.clone();
+                                        let deref_buf =
+                                            unsafe { &mut *buffer.lock().unwrap().buf.get() };
+                                        wasi_context.queue_request(msg, *deref_buf, uuid, 1);
+                                        recv_reqs += 1;
+                                        is_empty_vm.insert(worker_vm_idx);
+                                    }
+                                    _ => {
+                                    },
                                 }
                             }
                         }
@@ -1529,8 +1548,7 @@ impl OpenCLRunner {
                             }
                         };
                     }
-
-                    if (recv_reqs > 0 && recv_reqs >= avail_vm_count && block_on_inputs)
+                    if (recv_reqs == avail_vm_count && block_on_inputs)
                         || (ellapsed_time >= buffer_timeout)
                     {
                         block_on_inputs = false;
@@ -1558,6 +1576,7 @@ impl OpenCLRunner {
                             .try_recv()
                         {
                             Ok(true) => {
+                                block_on_inputs = true;
                                 recv_reqs = 0;
                                 ellapsed_time = 0;
                                 is_empty_vm.clear();
@@ -2114,7 +2133,6 @@ impl OpenCLRunner {
                     barrier += 1;
                 }
             }
-
             // read the hypercall_buffer
             let start_hcall_dispatch = std::time::Instant::now();
             unsafe {
@@ -2187,7 +2205,7 @@ impl OpenCLRunner {
                     non_serverless_invoke_call_found,
                 ));
                 let serverless_invoke = if hypercall_num_temp[*vm_idx as usize]
-                    == (WasiSyscalls::ServerlessInvoke as i32)
+                    == (WasiSyscalls::ServerlessInvoke as i32) && !non_serverless_invoke_call_found
                 {
                     true
                 } else {

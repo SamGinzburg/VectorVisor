@@ -23,15 +23,15 @@ struct Profiling {
 
 pub struct WasmtimeRunner {
     vm_idx: usize,
-    vm_sender: Arc<Vec<Mutex<Sender<VmSenderType>>>>,
-    vm_recv: Arc<Vec<Mutex<Receiver<VmRecvType>>>>,
+    vm_sender: Arc<Vec<(Mutex<Sender<VmSenderType>>, Mutex<Sender<VmSenderType>>)>>,
+    vm_recv: Arc<Vec<(Mutex<Receiver<VmRecvType>>, Mutex<Receiver<VmRecvType>>)>>,
 }
 
 impl WasmtimeRunner {
     pub fn new(
         vm_idx: usize,
-        vm_sender: Arc<Vec<Mutex<Sender<VmSenderType>>>>,
-        vm_recv: Arc<Vec<Mutex<Receiver<VmRecvType>>>>,
+        vm_sender: Arc<Vec<(Mutex<Sender<VmSenderType>>, Mutex<Sender<VmSenderType>>)>>,
+        vm_recv: Arc<Vec<(Mutex<Receiver<VmRecvType>>, Mutex<Receiver<VmRecvType>>)>>,
     ) -> WasmtimeRunner {
         WasmtimeRunner {
             vm_idx: vm_idx,
@@ -76,7 +76,7 @@ impl WasmtimeRunner {
                     Some(Extern::Memory(mem)) => Ok(mem),
                     _ => Err(Trap::new("failed to find host memory")),
                 };
-                let chan = self.vm_recv.get(self.vm_idx).unwrap();
+                let (chan, _) = self.vm_recv.get(self.vm_idx).unwrap();
                 let (msg, _, uuid) = chan.lock().unwrap().blocking_recv().unwrap();
                 *curr_uuid_invoke.lock().unwrap() = uuid;
 
@@ -151,7 +151,7 @@ impl WasmtimeRunner {
                 // copy the output json
                 match mem {
                     Ok(memory) => {
-                        let chan = self.vm_sender.get(self.vm_idx).unwrap();
+                        let (chan, _) = self.vm_sender.get(self.vm_idx).unwrap();
                         let arr = memory.data(&caller);
 
                         // Debug memory usage of functions

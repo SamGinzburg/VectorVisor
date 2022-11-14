@@ -182,12 +182,12 @@ pub struct VectorizedVM {
     pub queue_submit_counter: Arc<u64>,
     pub queue_submit_qty: Arc<u64>,
     pub called_fns_set: Arc<HashSet<u32>>,
-    pub vm_sender: Arc<Vec<Mutex<Sender<VmSenderType>>>>,
-    pub vm_recv: Arc<Vec<Mutex<Receiver<VmRecvType>>>>,
+    pub vm_sender: Arc<Vec<(Mutex<Sender<VmSenderType>>, Mutex<Sender<VmSenderType>>)>>,
+    pub vm_recv: Arc<Vec<(Mutex<Receiver<VmRecvType>>, Mutex<Receiver<VmRecvType>>)>>,
     pub ready_for_input: AtomicBool,
     pub input_msg_len: usize,
     pub no_resp: bool,
-    pub uuid_queue: VecDeque<String>,
+    pub uuid_queue: VecDeque<(String, u32)>,
 }
 
 impl VectorizedVM {
@@ -195,8 +195,8 @@ impl VectorizedVM {
         vm_id: u32,
         hcall_buf_size: u32,
         _num_total_vms: u32,
-        vm_sender: Arc<Vec<Mutex<Sender<VmSenderType>>>>,
-        vm_recv: Arc<Vec<Mutex<Receiver<VmRecvType>>>>,
+        vm_sender: Arc<Vec<(Mutex<Sender<VmSenderType>>, Mutex<Sender<VmSenderType>>)>>,
+        vm_recv: Arc<Vec<(Mutex<Receiver<VmRecvType>>, Mutex<Receiver<VmRecvType>>)>>,
     ) -> VectorizedVM {
         // default context with no args yet - we can inherit arguments from the CLI if we want
         // or we can pass them in some other config file
@@ -253,19 +253,15 @@ impl VectorizedVM {
         }
     }
 
-    pub fn is_avail(&mut self) -> bool {
-        self.ready_for_input.load(Ordering::Relaxed).clone()
-    }
-
-    pub fn queue_request(&mut self, msg: bytes::Bytes, hcall_buf: &mut [u8], uuid: String) -> () {
+    pub fn queue_request(&mut self, msg: bytes::Bytes, hcall_buf: &mut [u8], uuid: String, chan_id: u32) -> () {
         let hcall_buf_size: u32 = self.hcall_buf_size;
         let vm_hcall_buf = &mut hcall_buf
             [(self.vm_id * hcall_buf_size) as usize..((self.vm_id + 1) * hcall_buf_size) as usize];
         assert!(msg.len() <= hcall_buf_size.try_into().unwrap(), "Input > hcall buf size");
         vm_hcall_buf[0..msg.len()].copy_from_slice(&msg);
-        self.ready_for_input.store(false, Ordering::Relaxed);
+        //self.ready_for_input.store(false, Ordering::Relaxed);
         self.input_msg_len = msg.len();
-        self.uuid_queue.push_back(uuid);
+        self.uuid_queue.push_back((uuid, chan_id));
     }
 
     /*

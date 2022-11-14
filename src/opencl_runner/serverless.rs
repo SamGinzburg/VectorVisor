@@ -78,7 +78,7 @@ impl Serverless {
         hcall_buf = &hcall_buf
             [(vm_idx * hcall_buf_size) as usize..((vm_idx + 1) * hcall_buf_size) as usize];
         if !vm_ctx.no_resp {
-            let send_chan = (vm_ctx.vm_sender).get(vm_idx as usize).unwrap();
+            let (send_chan1, send_chan2) = (vm_ctx.vm_sender).get(vm_idx as usize).unwrap();
             // the first 4 bytes are the length as a u32, the remainder is the buffer containing the json
 
             let msg_len = LittleEndian::read_u32(&hcall_buf[0..4]);
@@ -100,21 +100,38 @@ impl Serverless {
             for _idx in vm_ctx.called_fns_set.intersection(&hypercall.called_fns) {
                 count += 1;
             }
-
-            send_chan
-                .lock()
-                .unwrap()
-                .blocking_send((
-                    resp_buf,
-                    resp_buf_len,
-                    on_device_time,
-                    queue_submit_time,
-                    queue_submit_count,
-                    count,
-                    overhead_buf[vm_idx as usize],
-                    vm_ctx.uuid_queue.pop_front().unwrap(),
-                ))
-                .unwrap();
+            let (uuid, chan_id) = vm_ctx.uuid_queue.pop_front().unwrap();
+            if chan_id == 0 {
+                send_chan1
+                    .lock()
+                    .unwrap()
+                    .blocking_send((
+                        resp_buf,
+                        resp_buf_len,
+                        on_device_time,
+                        queue_submit_time,
+                        queue_submit_count,
+                        count,
+                        overhead_buf[vm_idx as usize],
+                        uuid,
+                    ))
+                    .unwrap();
+            } else {
+                send_chan2
+                    .lock()
+                    .unwrap()
+                    .blocking_send((
+                        resp_buf,
+                        resp_buf_len,
+                        on_device_time,
+                        queue_submit_time,
+                        queue_submit_count,
+                        count,
+                        overhead_buf[vm_idx as usize],
+                        uuid,
+                    ))
+                    .unwrap();
+            }
         }
 
         sender
