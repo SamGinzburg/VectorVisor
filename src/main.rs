@@ -973,7 +973,7 @@ fn main() {
 
         let mut vm_sender_vec = vec![];
         let mut server_recv_vec = vec![];
-        for _ in 0..num_vms.clone() {
+        for _ in 0..num_threads {
             let (async_sender1, async_recv1): (
                 tokio::sync::mpsc::Sender<VmRecvType>,
                 tokio::sync::mpsc::Receiver<VmRecvType>,

@@ -14,6 +14,9 @@ use wasmtime::*;
 use rmp_serde::encode;
 use std::fs::File;
 use std::io::Write;
+use core::task::Poll;
+use std::time::Duration;
+use std::{thread, time};
 
 #[derive(Serialize, Debug)]
 struct Profiling {
@@ -51,6 +54,7 @@ impl WasmtimeRunner {
     ) -> Result<(), Box<dyn Error>> {
         let profiling_count = Arc::new(Mutex::<i64>::new(0));
 
+        let curr_id = Arc::new(Mutex::<u32>::new(0));
         let curr_time = Arc::new(Mutex::<i64>::new(0));
 
         let mut config = Config::new();
@@ -61,12 +65,15 @@ impl WasmtimeRunner {
         let wasi = WasiCtxBuilder::new().inherit_stdio().build();
         let mut store = Store::new(&engine, wasi);
 
+        let curr_id_invoke = curr_id.clone();
+        let curr_id_resp = curr_id.clone();
         let curr_time_invoke = curr_time.clone();
         let curr_time_response = curr_time.clone();
 
         let current_uuid = Arc::new(Mutex::new(String::from("")));
         let curr_uuid_invoke = current_uuid.clone();
         let curr_uuid_response = current_uuid.clone();
+        let waker = futures::task::noop_waker();
 
         // serverless_invoke
         let serverless_invoke = Func::wrap(
@@ -76,16 +83,29 @@ impl WasmtimeRunner {
                     Some(Extern::Memory(mem)) => Ok(mem),
                     _ => Err(Trap::new("failed to find host memory")),
                 };
-                let (chan, _) = self.vm_recv.get(self.vm_idx).unwrap();
-                let (msg, _, uuid) = chan.lock().unwrap().blocking_recv().unwrap();
-                *curr_uuid_invoke.lock().unwrap() = uuid;
 
-                /*
-                // Parse JSON
-                let incoming_json_obj: Value = serde_json::from_slice(&msg).unwrap();
-                // Serialize parsed json
-                let serialized_json = serde_cbor::ser::to_vec_packed(&incoming_json_obj).unwrap();
-                */
+                // poll for incoming reqs...
+                let mut cx = std::task::Context::from_waker(&waker);
+                let (msg, uuid) = loop {
+                    let (chan1, chan2) = self.vm_recv.get(self.vm_idx).unwrap();
+                    match chan1.lock().unwrap().poll_recv(&mut cx) {
+                        Poll::Ready(Some((msg, _, uuid))) => {
+                            *curr_id_invoke.lock().unwrap() = 0;
+                            break (msg, uuid);
+                        },
+                        _ => (),
+                    }
+                    match chan2.lock().unwrap().poll_recv(&mut cx) {
+                        Poll::Ready(Some((msg, _, uuid))) => {
+                            *curr_id_invoke.lock().unwrap() = 1;
+                            break (msg, uuid);
+                        },
+                        _ => (),
+                    }
+                    std::thread::sleep(time::Duration::from_millis(5));
+                };
+
+                *curr_uuid_invoke.lock().unwrap() = uuid;
 
                 // copy the input to the VM
                 match mem {
@@ -151,7 +171,13 @@ impl WasmtimeRunner {
                 // copy the output json
                 match mem {
                     Ok(memory) => {
-                        let (chan, _) = self.vm_sender.get(self.vm_idx).unwrap();
+                        let chan = if *curr_id_resp.lock().unwrap() == 0 {
+                            let (a, _) = self.vm_sender.get(self.vm_idx).unwrap();
+                            a
+                        } else {
+                            let (_, b) = self.vm_sender.get(self.vm_idx).unwrap();
+                            b
+                        };
                         let arr = memory.data(&caller);
 
                         // Debug memory usage of functions
