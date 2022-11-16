@@ -1361,21 +1361,24 @@ impl OpenCLRunner {
             )
             .unwrap()
         };
-        let ds_result = unsafe {
-            ocl::core::enqueue_write_buffer(
-                &queue,
-                &data_segment_buffer,
-                true,
-                0,
-                &data_segment,
-                None::<Event>,
-                None::<&mut Event>,
-            )
-        };
 
-        match ds_result {
-            Err(e) => panic!("Failed to write data_segment to GPU memory, Error: {}", e),
-            _ => (),
+        if data_segment.len() > 0 {
+            let ds_result = unsafe {
+                ocl::core::enqueue_write_buffer(
+                    &queue,
+                    &data_segment_buffer,
+                    true,
+                    0,
+                    &data_segment,
+                    None::<Event>,
+                    None::<&mut Event>,
+                )
+            };
+
+            match ds_result {
+                Err(e) => panic!("Failed to write data_segment to GPU memory, Error: {}", e),
+                _ => (),
+            }
         }
 
         /*

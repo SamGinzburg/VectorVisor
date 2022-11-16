@@ -105,6 +105,13 @@ fn main() {
             .multiple(false)
             .number_of_values(1)
             .takes_value(true))
+        .arg(Arg::with_name("patch")
+            .long("patch")
+            .help("Some GPU vendors (e.g., AMD) never implemented all available OpenCL math ops, this flag emulates those functions in software")
+            .default_value("false")
+            .multiple(false)
+            .number_of_values(1)
+            .takes_value(true))
         .arg(Arg::with_name("unsafewrite")
             .short("uw")
             .long("uw")
@@ -368,6 +375,7 @@ fn main() {
     let num_vm_groups = value_t!(matches.value_of("vmgroups"), u32).unwrap_or_else(|e| e.exit());
     let is_gpu = value_t!(matches.value_of("isgpu"), bool).unwrap_or_else(|e| e.exit());
     let is_nvidia_gpu = value_t!(matches.value_of("nvidia"), bool).unwrap_or_else(|e| e.exit());
+    let patch_missing_builtins = value_t!(matches.value_of("patch"), bool).unwrap_or_else(|e| e.exit());
     let print_return = value_t!(matches.value_of("printreturn"), bool).unwrap_or_else(|e| e.exit());
     let debug_call_print =
         value_t!(matches.value_of("debugcallprint"), bool).unwrap_or_else(|e| e.exit());
@@ -456,6 +464,7 @@ fn main() {
             is_gpu,
             false,
             is_nvidia_gpu,
+            patch_missing_builtins,
             volatile,
             unsafewrite,
         );
@@ -536,6 +545,7 @@ fn main() {
                     is_gpu,
                     false,
                     is_nvidia_gpu,
+                    patch_missing_builtins,
                     volatile,
                     unsafewrite,
                 );
@@ -602,6 +612,7 @@ fn main() {
                     is_gpu,
                     false,
                     is_nvidia_gpu,
+                    patch_missing_builtins,
                     volatile,
                     unsafewrite,
                 );
@@ -671,6 +682,7 @@ fn main() {
                     is_gpu,
                     false,
                     is_nvidia_gpu,
+                    patch_missing_builtins,
                     volatile,
                     unsafewrite,
                 );
@@ -738,6 +750,7 @@ fn main() {
                     is_gpu,
                     false,
                     is_nvidia_gpu,
+                    patch_missing_builtins,
                     volatile,
                     unsafewrite,
                 );

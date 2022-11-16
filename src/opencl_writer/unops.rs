@@ -24,23 +24,31 @@ pub fn emit_i64_clz(
 }
 
 pub fn emit_i32_ctz(
-    _writer: &opencl_writer::OpenCLCWriter,
+    writer: &opencl_writer::OpenCLCWriter,
     stack_ctx: &mut StackCtx,
     _debug: bool,
 ) -> String {
     let reg = stack_ctx.vstack_peak(StackType::i32, 0);
 
-    format!("\t{} = ctz({});\n", reg, reg)
+    if writer.patch_missing_builtins {
+        format!("\t{} = 32 - (clz({} & -x) + 1);\n", reg, reg)
+    } else {
+        format!("\t{} = ctz({});\n", reg, reg)
+    }
 }
 
 pub fn emit_i64_ctz(
-    _writer: &opencl_writer::OpenCLCWriter,
+    writer: &opencl_writer::OpenCLCWriter,
     stack_ctx: &mut StackCtx,
     _debug: bool,
 ) -> String {
     let reg = stack_ctx.vstack_peak(StackType::i64, 0);
 
-    format!("\t{} = ctz({});\n", reg, reg)
+    if writer.patch_missing_builtins {
+        format!("\t{} = 64 - (clz({} & -x) + 1);\n", reg, reg)
+    } else {
+        format!("\t{} = ctz({});\n", reg, reg)
+    }
 }
 
 pub fn emit_i32_popcnt(
