@@ -1610,23 +1610,20 @@ impl OpenCLRunner {
         println!("{:?}", default_entry_point);
         // first, set up the default values for the VMs
         unsafe {
-            // values that need to be set up for M.E.
+            // setup some initial values
+            let sp_result = ocl::core::enqueue_fill_buffer(&queue, &buffers.sp, 0u8, 0, (self.num_vms*8).try_into().unwrap(), None::<Event>, None::<&mut Event>, None);
+            match sp_result {
+                Err(e) => panic!("sp_result, Error: {}", e),
+                _ => (),
+            }
+
+            let stack_frame_result = ocl::core::enqueue_fill_buffer(&queue, &buffers.stack_frames, 0u8, 0, (self.num_vms*per_vm_stack_frames_size).try_into().unwrap(), None::<Event>, None::<&mut Event>, None);
+            match stack_frame_result {
+                Err(e) => panic!("stack_frame_result, Error: {}", e),
+                _ => (),
+            }
+
             for idx in 0..(self.num_vms * mexec as u32) {
-                let sp_result = ocl::core::enqueue_write_buffer(
-                    &queue,
-                    &buffers.sp,
-                    true,
-                    (idx * 8) as usize,
-                    &default_sp,
-                    None::<Event>,
-                    None::<&mut Event>,
-                );
-
-                match sp_result {
-                    Err(e) => panic!("sp_result, Error: {}", e),
-                    _ => (),
-                }
-
                 // set the entry point!
                 let entry_point_result = ocl::core::enqueue_write_buffer(
                     &queue,
@@ -1677,22 +1674,6 @@ impl OpenCLRunner {
             }
 
             for idx in 0..(self.num_vms) {
-                // set the stack frame: stack_frames[sfp - 1] = sp
-                let stack_frame_result = ocl::core::enqueue_write_buffer(
-                    &queue,
-                    &buffers.stack_frames,
-                    true,
-                    (idx * per_vm_stack_frames_size) as usize,
-                    &default_sp,
-                    None::<Event>,
-                    None::<&mut Event>,
-                );
-
-                match stack_frame_result {
-                    Err(e) => panic!("stack_frame_result, Error: {}", e),
-                    _ => (),
-                }
-
                 // set the hcall_size
                 let hcall_size_result = ocl::core::enqueue_write_buffer(
                     &queue,
