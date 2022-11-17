@@ -159,6 +159,16 @@ impl WasmtimeRunner {
                     let prof_bytes = encode::to_vec(&profile).unwrap();
                     let mut file = File::create(format!("{}.profile", input_file)).unwrap();
                     file.write_all(&prof_bytes).unwrap();
+
+                    let global = match caller
+                            .get_export(&format!("slowcalls")) {
+                        Some(Extern::Global(g)) => g,
+                        _ => panic!("Not running with an instrumented binary!"),
+                    };
+                    let slowcalls = global.get(caller.as_context_mut()).unwrap_i32();
+                    let mut file = File::create(format!("{}.slowcalls", input_file)).unwrap();
+                    file.write_all(format!("{}", slowcalls).as_bytes()).unwrap();
+
                     std::process::exit(0);
                 }
                 *count += 1;
