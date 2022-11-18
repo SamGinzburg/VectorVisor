@@ -315,7 +315,7 @@ pub fn emit_args_sizes_get_post(
         emit_write_u32(
             &format!("(ulong)((global char*)heap_u32+(int)({}))", num_args_ptr),
             "(ulong)(heap_u32)",
-            "*(uint*)((global char *)hypercall_buffer+(hcall_size*warp_idx))",
+            "*(global uint*)((global char *)hypercall_buffer+(hcall_size*warp_idx))",
             "warp_idx"
         )
     );
@@ -325,7 +325,7 @@ pub fn emit_args_sizes_get_post(
         emit_write_u32(
             &format!("(ulong)((global char*)heap_u32+(int)({}))", arg_sizes_ptr),
             "(ulong)(heap_u32)",
-            "*(uint*)((global char *)hypercall_buffer+(hcall_size*warp_idx)+4)",
+            "*(global uint*)((global char *)hypercall_buffer+(hcall_size*warp_idx)+4)",
             "warp_idx"
         )
     );
