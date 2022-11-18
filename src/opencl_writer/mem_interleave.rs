@@ -2131,7 +2131,7 @@ pub fn generate_read_write_calls(
     // We check the alignment to see if we get lucky though
     result += &format!("\n{}\n",
         "void ___private_memcpy_gpu2cpu(ulong src, ulong mem_start_src, ulong dst, ulong mem_start_dst, ulong buf_len_bytes, uint warp_id, uint read_idx, uint thread_idx, local ulong2 *scratch_space) {");
-    result += &format!("\t{}\n", "char *dst_tmp = (char*)(dst);");
+    result += &format!("\t{}\n", "global char *dst_tmp = (global char*)(dst);");
 
     match interleave {
         0 => {
@@ -2164,7 +2164,7 @@ pub fn generate_read_write_calls(
             result += &format!("\t{}\n", "}");
         }
         4 | 8 => {
-            result += &format!("\t{}\n", "uint *dst_tmp_uint = (uint*)(dst);");
+            result += &format!("\t{}\n", "global uint *dst_tmp_uint = (global uint*)(dst);");
             result += &format!("\t{}\n", "uint counter = 0;");
             result += &format!(
                 "\t{}\n",
@@ -2183,11 +2183,11 @@ pub fn generate_read_write_calls(
 
             result += &format!("\t\t{}\n", "}");
             result += &format!("\t{}\n", "}");
-            result += &format!("\t{}\n", "dst_tmp = (uchar*)(dst_tmp_uint);");
+            result += &format!("\t{}\n", "dst_tmp = (global uchar*)(dst_tmp_uint);");
             result += &format!("\t{}\n", "for (; counter < buf_len_bytes; counter++) {");
             result += &format!(
                 "\t\t{} = {};\n",
-                "*dst_tmp++",
+                "*(global uchar*)dst_tmp++",
                 &emit_read_u8("(ulong)(src+counter)", "(ulong)(mem_start_src)", "warp_id")
             );
             result += &format!("\t{}\n", "}");
