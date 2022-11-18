@@ -2201,8 +2201,8 @@ pub fn generate_read_write_calls(
     // dst is always 8-aligned, so we just have to check buf_len_bytes
     result += &format!("\n{}\n",
         "void ___private_memcpy_cpu2gpu(ulong src, ulong mem_start_src, ulong dst, ulong mem_start_dst, ulong buf_len_bytes, uint warp_id, uint read_idx, uint thread_idx, local ulong2 *scratch_space) {");
-    result += &format!("\t{}\n", "ulong *src_tmp = (ulong*)(src);");
-    result += &format!("\t{}\n", "uint counter = 0;");
+    result += &format!("\t{}\n", "global ulong *src_tmp = (global ulong*)(src);");
+    result += &format!("\t{}\n", "ulong counter = 0;");
     result += &format!("\t{}\n", "if (buf_len_bytes > 8 && IS_ALIGNED_POW2((ulong)dst, 8) && IS_ALIGNED_POW2((ulong)src, 8)) {");
     result += &format!(
         "\t\t{}\n",
@@ -2221,7 +2221,7 @@ pub fn generate_read_write_calls(
 
     result += &format!("\t\t{}\n", "}");
     result += &format!("\t{}\n", "}");
-    result += &format!("\t{}\n", "uchar *src_tmp_remaining = (uchar*)(src_tmp);");
+    result += &format!("\t{}\n", "global uchar *src_tmp_remaining = (global uchar*)(src_tmp);");
     // finish the remaining bytes
     result += &format!("\t{}\n", "for (; counter < buf_len_bytes; counter++) {");
 
