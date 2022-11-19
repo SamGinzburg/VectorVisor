@@ -149,16 +149,26 @@ impl BatchSubmitServer {
         let req_start;
         // Acquire both locks...
         let sender = if chan_id % 2 == 0 {
-            tx.lock().await
+            tx
         } else {
-            tx2.lock().await
+            tx2
         };
-        let mut recv = actual_recv.lock().await;
+        let sender = match sender.try_lock() {
+            Ok(lock) => lock,
+            Err(_) => return Err(warp::reject::custom(NoVmAvailable)),
+        };
+
+        let mut recv = match actual_recv.try_lock() {
+            Ok(lock) => lock,
+            Err(_) => return Err(warp::reject::custom(NoVmAvailable)),
+        };
 
         // clear all previous requests...
         while true {
             match recv.try_recv() {
-                Ok(_) => (),
+                Ok(_) => {
+                    // no-op
+                },
                 _ => {
                     // The queue is clear, we can continue
                     break;
@@ -172,7 +182,8 @@ impl BatchSubmitServer {
             .await
             .unwrap();
 
-        while let Some((
+       match recv.recv().await {
+           Some((
                 resp,
                 len,
                 on_dev_time,
@@ -181,8 +192,7 @@ impl BatchSubmitServer {
                 num_unique_fns,
                 overhead_time_ns,
                 uuid,
-            )) = recv.recv().await
-            {
+            )) => {
                 if uuid == req_id {
                     let req_end = std::time::Instant::now();
                     return Ok(BatchSubmitServer::create_response(
@@ -197,9 +207,46 @@ impl BatchSubmitServer {
                         compile_time,
                     ));
                 }
-            }
+           }
+           _ => (),
+       }
 
-        Err(warp::reject::custom(LostRequest))
+       // If a client disconnected there can sometimes be a response 
+       // in the channel belonging to a different request.
+       // To deal with this check the channel one more time.
+
+       match recv.recv().await {
+           Some((
+                resp,
+                len,
+                on_dev_time,
+                queue_submit_time,
+                num_queue_submits,
+                num_unique_fns,
+                overhead_time_ns,
+                uuid,
+            )) => {
+                if uuid == req_id {
+                    let req_end = std::time::Instant::now();
+                    return Ok(BatchSubmitServer::create_response(
+                        resp,
+                        on_dev_time,
+                        queue_submit_time,
+                        num_queue_submits,
+                        num_unique_fns,
+                        (req_start - req_queue).as_nanos(),
+                        (req_end - req_queue).as_nanos(),
+                        overhead_time_ns,
+                        compile_time,
+                    ));
+                }
+           }
+           _ => (),
+       }
+
+       // If there were more than 2 mismatched uuid's in the queue, we just return an error.
+        panic!("This line in batch server should not be reached");
+        //Err(warp::reject::custom(LostRequest))
 
         //panic!("This line in batch server should not be reached")
     }

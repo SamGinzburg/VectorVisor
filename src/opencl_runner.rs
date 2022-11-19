@@ -1493,13 +1493,14 @@ impl OpenCLRunner {
                     if recv_reqs < avail_vm_count {
                         for vm_idx in &vm_id_vec {
                             let worker_vm_idx = *vm_id_mapping.get(vm_idx).unwrap() as usize;
+                            let wasi_context = &mut worker_vms[worker_vm_idx];
                             // Try to poll the first channel
-                            if !is_empty_vm.contains(&worker_vm_idx) {
+                            if !is_empty_vm.contains(&worker_vm_idx) && wasi_context.input_msg_len == 0 {
                                 let (vm_recv_copy1, _) = &vm_recv_copy[*vm_idx as usize];
+                                //let wasi_context = &mut worker_vms[worker_vm_idx];
                                 match vm_recv_copy1.lock().unwrap().poll_recv(&mut cx)
                                 {
                                     Poll::Ready(Some((msg, _, uuid))) => {
-                                        let wasi_context = &mut worker_vms[worker_vm_idx];
                                         // Queue the input in the VM
                                         let buffer = async_buffer.clone();
                                         let deref_buf =
@@ -1513,12 +1514,11 @@ impl OpenCLRunner {
                                 }
                             }
                             // Poll the second channel
-                            if !is_empty_vm.contains(&worker_vm_idx) {
+                            if !is_empty_vm.contains(&worker_vm_idx) && wasi_context.input_msg_len == 0 {
                                 let (_, vm_recv_copy2) = &vm_recv_copy[*vm_idx as usize];
                                 match vm_recv_copy2.lock().unwrap().poll_recv(&mut cx)
                                 {
                                     Poll::Ready(Some((msg, _, uuid))) => {
-                                        let wasi_context = &mut worker_vms[worker_vm_idx];
                                         // Queue the input in the VM
                                         let buffer = async_buffer.clone();
                                         let deref_buf =

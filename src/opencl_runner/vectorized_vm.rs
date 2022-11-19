@@ -262,6 +262,8 @@ impl VectorizedVM {
         //self.ready_for_input.store(false, Ordering::Relaxed);
         self.input_msg_len = msg.len();
         self.uuid_queue.push_back((uuid, chan_id));
+        // We should never have more than 2 requests queued up
+        assert!(self.uuid_queue.len() <= 2, "{:?}, no_resp: {}, len: {}", self.uuid_queue, self.no_resp, self.input_msg_len);
     }
 
     /*
