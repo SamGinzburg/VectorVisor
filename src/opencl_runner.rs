@@ -334,6 +334,7 @@ impl OpenCLRunner {
                         hypercall_buffer_read_buffer,
                         hypercall_input_buffer,
                         hcall_size.try_into().unwrap(),
+                        call_stack_size,
                         &context,
                         print_return,
                         vm_sender,
@@ -358,6 +359,7 @@ impl OpenCLRunner {
                     hypercall_buffer_read_buffer,
                     hypercall_input_buffer,
                     hcall_size.try_into().unwrap(),
+                    call_stack_size,
                     &context,
                     print_return,
                     vm_sender,
@@ -1148,6 +1150,7 @@ impl OpenCLRunner {
         hypercall_buffer_read_buffer: &'static mut [u8],
         hypercall_input_buffer: &'static mut [u8],
         hypercall_buffer_size: u32,
+        call_stack_size: u32,
         ctx: &ocl::core::Context,
         print_return: bool,
         vm_sender: Arc<Vec<(Mutex<Sender<VmSenderType>>, Mutex<Sender<VmSenderType>>)>>,
@@ -1613,13 +1616,31 @@ impl OpenCLRunner {
             // setup some initial values
             let sp_result = ocl::core::enqueue_fill_buffer(&queue, &buffers.sp, 0u8, 0, (self.num_vms*8).try_into().unwrap(), None::<Event>, None::<&mut Event>, None);
             match sp_result {
-                Err(e) => panic!("sp_result, Error: {}", e),
+                Err(e) => panic!("failed to fill sp, Error: {}", e),
                 _ => (),
             }
 
             let stack_frame_result = ocl::core::enqueue_fill_buffer(&queue, &buffers.stack_frames, 0u8, 0, (self.num_vms*per_vm_stack_frames_size).try_into().unwrap(), None::<Event>, None::<&mut Event>, None);
             match stack_frame_result {
-                Err(e) => panic!("stack_frame_result, Error: {}", e),
+                Err(e) => panic!("failed to fill stack frames, Error: {}", e),
+                _ => (),
+            }
+
+            let cs_result = ocl::core::enqueue_fill_buffer(&queue, &buffers.call_stack, 0u8, 0, (self.num_vms*call_stack_size).try_into().unwrap(), None::<Event>, None::<&mut Event>, None);
+            match cs_result {
+                Err(e) => panic!("failed to fill call stack, Error: {}", e),
+                _ => (),
+            }
+
+            let crs_result = ocl::core::enqueue_fill_buffer(&queue, &buffers.call_return_stack, 0u8, 0, (self.num_vms*call_stack_size).try_into().unwrap(), None::<Event>, None::<&mut Event>, None);
+            match crs_result {
+                Err(e) => panic!("failed to fill call return stack, Error: {}", e),
+                _ => (),
+            }
+
+            let is_calling_result = ocl::core::enqueue_fill_buffer(&queue, &buffers.is_calling, 0u8, 0, (self.num_vms).try_into().unwrap(), None::<Event>, None::<&mut Event>, None);
+            match is_calling_result {
+                Err(e) => panic!("failed to fill is_calling, Error: {}", e),
                 _ => (),
             }
 
