@@ -12,12 +12,11 @@
 # 5 = vmcount (T4)
 # 6 = vmcount (A10G)
 function cachebin() {
-  #cargo run --release -- -i $1-opt-profile.wasm --heap=$2 --stack=$3 --hcallsize=$4 --vmcount=$6 --partition=false --maxdup=0 --jt=true --interleave=4 --uw=true &> /vv/$1-opt-profile.log
-  cargo run --release -- -i $1-opt-profile.wasm --heap=$2 --stack=$3 --hcallsize=$4 --vmcount=$6 --partition=false --maxdup=0 --jt=true --interleave=4 --uw=true &> /vv/$1-opt-4-profile.log
+  cargo run --release -- -i $1-opt-profile.wasm --heap=$2 --stack=$3 --hcallsize=$4 --vmcount=$6 --partition=false --maxdup=0 --jt=true --interleave=4 --uw=true &> /vv/$1-opt-profile.log
+  cargo run --release -- -i $1-opt-profile.wasm --heap=$2 --stack=$3 --hcallsize=$4 --vmcount=$6 --partition=false --maxdup=0 --jt=true --interleave=8 --uw=true &> /vv/$1-opt-4-profile.log
 }
 
 cachebin "rust-pdfwriter" "4194304" "131072" "409600" "3072" "4608"
-exit
 cachebin "pbkdf2" "3145728" "262144" "131072" "4096" "6144"
 cachebin "imagehash" "4194304" "131072" "262144" "3072" "4608"
 cachebin "imagehash-modified" "4194304" "131072" "262144" "3072" "4608"
