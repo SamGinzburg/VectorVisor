@@ -95,7 +95,7 @@ fn emit_write_u16_body(
                     );
                     // now write the upper byte
                     result += &format!("\t{}\n",
-                                        "fast_write_u8((ulong)(((char*)addr)+NUM_THREADS), mem_start, (value >> 8) & 0xFF, warp_id);");
+                                        "fast_write_u8((ulong)(((ulong)addr)+NUM_THREADS), mem_start, (value >> 8) & 0xFF, warp_id);");
                 }
             };
         }
@@ -1150,7 +1150,7 @@ fn emit_read_u64_body(
                     result += &format!("\t{}\n", "temp = temp << 8;");
                     result += &format!(
                         "\t{}\n",
-                        "temp += fast_read_u8((ulong)(((char*)addr)), mem_start, warp_id);"
+                        "temp += fast_read_u8((ulong)(((ulong)addr)), mem_start, warp_id);"
                     );
                 }
             }
