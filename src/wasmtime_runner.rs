@@ -166,8 +166,15 @@ impl WasmtimeRunner {
                         _ => panic!("Not running with an instrumented binary!"),
                     };
                     let slowcalls = global.get(caller.as_context_mut()).unwrap_i32();
+                    let global = match caller
+                            .get_export(&format!("indirect")) {
+                        Some(Extern::Global(g)) => g,
+                        _ => panic!("Not running with an instrumented binary!"),
+                    };
+                    let indirect = global.get(caller.as_context_mut()).unwrap_i32();
+
                     let mut file = File::create(format!("{}.slowcalls", input_file)).unwrap();
-                    file.write_all(format!("{}", slowcalls).as_bytes()).unwrap();
+                    file.write_all(format!("slowcalls: {}\nindirect: {}\n", slowcalls, indirect).as_bytes()).unwrap();
 
                     std::process::exit(0);
                 }
