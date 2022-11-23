@@ -1311,6 +1311,15 @@ impl OpenCLRunner {
             )
             .unwrap()
         };
+
+        unsafe {
+            let hcall_zero_result = ocl::core::enqueue_fill_buffer(&queue, &hypercall_buffer, 0u8, 0, (self.num_vms*hypercall_buffer_size).try_into().unwrap(), None::<Event>, None::<&mut Event>, None);
+            match hcall_zero_result {
+                Err(e) => panic!("failed to fill hcall buf, Error: {}", e),
+                _ => (),
+            }
+        }
+
         let mut hcall_write_map: ocl::core::MemMap<u8> = unsafe {
             ocl::core::enqueue_map_buffer(
                 &queue,
