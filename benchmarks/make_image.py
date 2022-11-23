@@ -158,7 +158,7 @@ def run_profile_generic(bench_name, params=""):
     cd /vv/VectorVisor/benchmarks/{name}/
 
     /usr/local/go/bin/go run /vv/VectorVisor/benchmarks/{name}/run_*.go {addr} 8000 {target_rps} 1 {duration} {params}
-    """.format(addr=gpu_instance[0].private_dns_name, target_rps=256, duration=120, name=bench_name, params=params)
+    """.format(addr=gpu_instance[0].private_dns_name, target_rps=256, duration=300, name=bench_name, params=params)
     command_id = run_command(run_invoker, "run invoker for gpu", gpu_instance[0].id)
 
     time.sleep(20)
@@ -187,7 +187,7 @@ def run_profile_generic(bench_name, params=""):
 
     cd /vv/VectorVisor/benchmarks/
     vv-profiler --input /vv/VectorVisor/benchmarks/{name}-opt-4.wasm --output /vv/VectorVisor/benchmarks/{name}-opt-profile.wasm --profile=/vv/VectorVisor/benchmarks/{name}-opt-instrument.wasm.profile
-    wasm-opt -O3 -g /vv/VectorVisor/benchmarks/{name}-opt-profile.wasm -o /vv/VectorVisor/benchmarks/{name}-opt-profile.wasm
+    wasm-opt -O1 -g /vv/VectorVisor/benchmarks/{name}-opt-profile.wasm -o /vv/VectorVisor/benchmarks/{name}-opt-profile.wasm
     cp /vv/VectorVisor/benchmarks/{name}-opt-profile.wasm /vv/VectorVisor/benchmarks/{name}-opt-4-profile.wasm
     cp /vv/VectorVisor/benchmarks/{name}-opt-profile.wasm /vv/VectorVisor/benchmarks/{name}-opt-8-profile.wasm
     """.format(addr=gpu_instance[0].private_dns_name, target_rps=vmcount, duration=60, hashes=256, name=bench_name)
@@ -307,6 +307,15 @@ time.sleep(120)
 # 3) Use the generated profile to emit an optimized WASM binary
 
 run_profile_generic("rust-pdfwriter")
+run_profile_generic("average", params="20")
+run_profile_generic("imageblur")
+run_profile_generic("imageblur-bmp")
+run_profile_generic("imagehash")
+run_profile_generic("imagehash-modified")
+run_profile_generic("json-compression", params="/vv/VectorVisor/benchmarks/json-compression/smaller_tweets.txt 2000")
+run_profile_generic("scrypt", params="256")
+run_profile_generic("pbkdf2")
+run_profile_generic("nlp-count-vectorizer", params="/vv/VectorVisor/benchmarks/nlp-count-vectorizer/smaller_tweets.txt 500")
 
 block_until_done = """#!/bin/bash
 sudo su
