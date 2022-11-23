@@ -61,7 +61,6 @@ impl Serverless {
             })
             .unwrap();
 
-        // reset msg len for the next request
         vm_ctx.input_msg_len = 0;
     }
 
@@ -77,7 +76,9 @@ impl Serverless {
         let vm_idx = vm_ctx.vm_id;
         hcall_buf = &hcall_buf
             [(vm_idx * hcall_buf_size) as usize..((vm_idx + 1) * hcall_buf_size) as usize];
-        if !vm_ctx.no_resp {
+        let msg_len = LittleEndian::read_u32(&hcall_buf[0..4]);
+        //dbg!(&msg_len);
+        if msg_len > 0 && !vm_ctx.no_resp {
             let (send_chan1, send_chan2) = (vm_ctx.vm_sender).get(vm_idx as usize).unwrap();
             // the first 4 bytes are the length as a u32, the remainder is the buffer containing the json
 

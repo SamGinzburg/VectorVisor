@@ -1176,8 +1176,15 @@ impl OpenCLRunner {
                 kernels.insert(key, ocl::core::create_kernel(&value, "wasm_entry").unwrap());
             }
         }
+        unsafe {
+            let stack_result = ocl::core::enqueue_fill_buffer(&queue, &buffers.sp, 0u8, 0, (self.num_vms*8).try_into().unwrap(), None::<Event>, None::<&mut Event>, None);
+            match stack_result {
+                Err(e) => panic!("failed to fill hcall_retval_result, Error: {}", e),
+                _ => (),
+            }
+        }
 
-        // Create DMA mappings...
+        // Create mappings...
         let mut stack_map: ocl::core::MemMap<u64> = unsafe {
             ocl::core::enqueue_map_buffer(
                 &queue,
@@ -1195,6 +1202,14 @@ impl OpenCLRunner {
         let mut stack_pointer_temp: &mut [u64] =
             unsafe { stack_map.as_slice_mut(self.num_vms as usize * mexec) };
         //let mut stack_pointer_temp: &mut [u64] = &mut vec![0u64; self.num_vms as usize * mexec];
+
+        unsafe {
+            let overhead_tracker_result = ocl::core::enqueue_fill_buffer(&queue, &buffers.overhead_tracker, 0u8, 0, (self.num_vms*8).try_into().unwrap(), None::<Event>, None::<&mut Event>, None);
+            match overhead_tracker_result {
+                Err(e) => panic!("failed to fill overhead_tracker_result, Error: {}", e),
+                _ => (),
+            }
+        }
 
         let mut overhead_tracker_map: ocl::core::MemMap<u64> = unsafe {
             ocl::core::enqueue_map_buffer(
@@ -1215,6 +1230,14 @@ impl OpenCLRunner {
         //let mut overhead_tracker: &'static mut [u64] =
         //    Box::leak(vec![0u64; self.num_vms as usize].into_boxed_slice());
 
+        unsafe {
+            let entry_result = ocl::core::enqueue_fill_buffer(&queue, &buffers.entry, 0u8, 0, (self.num_vms*4).try_into().unwrap(), None::<Event>, None::<&mut Event>, None);
+            match entry_result {
+                Err(e) => panic!("failed to fill entry_result, Error: {}", e),
+                _ => (),
+            }
+        }
+
         let mut entry_map: ocl::core::MemMap<u32> = unsafe {
             ocl::core::enqueue_map_buffer(
                 &queue,
@@ -1222,15 +1245,24 @@ impl OpenCLRunner {
                 true,
                 ocl::core::MapFlags::READ | ocl::core::MapFlags::WRITE,
                 0,
-                self.num_vms as usize * mexec,
+                (self.num_vms) as usize * mexec,
                 None::<Event>,
                 None::<&mut Event>,
             )
             .unwrap()
         };
         let mut entry_point_temp: &mut [u32] =
-            unsafe { entry_map.as_slice_mut(self.num_vms as usize * mexec) };
+            unsafe { entry_map.as_slice_mut((self.num_vms) as usize * mexec) };
+        entry_point_temp.fill(0);
         //let mut entry_point_temp = vec![0u32; self.num_vms as usize * mexec];
+
+        unsafe {
+            let hcall_num_result = ocl::core::enqueue_fill_buffer(&queue, &buffers.hypercall_num, 0u8, 0, (self.num_vms*4).try_into().unwrap(), None::<Event>, None::<&mut Event>, None);
+            match hcall_num_result {
+                Err(e) => panic!("failed to fill hcall_num_result, Error: {}", e),
+                _ => (),
+            }
+        }
 
         let mut hcall_num_map: ocl::core::MemMap<i32> = unsafe {
             ocl::core::enqueue_map_buffer(
@@ -1248,7 +1280,7 @@ impl OpenCLRunner {
 
         let mut hypercall_num_temp: &mut [i32] =
             unsafe { hcall_num_map.as_slice_mut(self.num_vms as usize * mexec) };
-        //let mut hypercall_num_temp = vec![0i32; self.num_vms as usize * mexec];
+        let mut hypercall_num_temp = vec![0i32; self.num_vms as usize * mexec];
 
         // Allocate buffer to return values
         let hcall_retval_buffer = unsafe {
@@ -1260,6 +1292,15 @@ impl OpenCLRunner {
             )
             .unwrap()
         };
+
+        unsafe {
+            let hcall_retval_result = ocl::core::enqueue_fill_buffer(&queue, &hcall_retval_buffer, 0u8, 0, (self.num_vms*4).try_into().unwrap(), None::<Event>, None::<&mut Event>, None);
+            match hcall_retval_result {
+                Err(e) => panic!("failed to fill hcall_retval_result, Error: {}", e),
+                _ => (),
+            }
+        }
+
         let mut hcall_retval_map: ocl::core::MemMap<i32> = unsafe {
             ocl::core::enqueue_map_buffer(
                 &queue,
@@ -1276,7 +1317,7 @@ impl OpenCLRunner {
 
         let mut hypercall_retval_temp: &mut [i32] =
             unsafe { hcall_retval_map.as_slice_mut(self.num_vms as usize * mexec) };
-        //let mut hypercall_retval_temp = vec![0i32; self.num_vms as usize];
+        let mut hypercall_retval_temp = vec![0i32; self.num_vms as usize];
 
         let mut entry_point_exit_flag;
         let vm_slice: Vec<u32> = std::ops::Range {
@@ -1594,6 +1635,7 @@ impl OpenCLRunner {
                                 block_on_inputs = true;
                                 recv_reqs = 0;
                                 ellapsed_time = 0;
+                                // data is flushed to the VMs now, so we can resume req buffering
                                 is_empty_vm.clear();
                             }
                             _ => (),
@@ -1654,6 +1696,7 @@ impl OpenCLRunner {
             }
 
             for idx in 0..(self.num_vms * mexec as u32) {
+                entry_point_temp[idx as usize] = self.entry_point;
                 // set the entry point!
                 let entry_point_result = ocl::core::enqueue_write_buffer(
                     &queue,
@@ -1879,6 +1922,7 @@ impl OpenCLRunner {
             write_entry_partition_reentry = false;
             unsafe {
                 num_queue_submits += 1;
+                ocl::core::flush(&queue).unwrap();
                 ocl::core::finish(&queue).unwrap();
                 ocl::core::enqueue_kernel(
                     &queue,
@@ -2147,6 +2191,7 @@ impl OpenCLRunner {
                     barrier += 1;
                 }
             }
+
             // read the hypercall_buffer
             let start_hcall_dispatch = std::time::Instant::now();
             unsafe {
@@ -2355,7 +2400,7 @@ impl OpenCLRunner {
                     ocl::core::enqueue_write_buffer(
                         &queue,
                         &hypercall_buffer,
-                        false,
+                        true,
                         0,
                         &hcall_write_buf,
                         None::<Event>,
