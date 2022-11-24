@@ -1201,6 +1201,7 @@ impl OpenCLRunner {
 
         let mut stack_pointer_temp: &mut [u64] =
             unsafe { stack_map.as_slice_mut(self.num_vms as usize * mexec) };
+        stack_pointer_temp.fill(0u64);
         //let mut stack_pointer_temp: &mut [u64] = &mut vec![0u64; self.num_vms as usize * mexec];
 
         unsafe {
@@ -1227,6 +1228,7 @@ impl OpenCLRunner {
 
         let mut overhead_tracker: &mut [u64] =
             unsafe { overhead_tracker_map.as_slice_mut(self.num_vms as usize * mexec) };
+        overhead_tracker.fill(0u64);
         //let mut overhead_tracker: &'static mut [u64] =
         //    Box::leak(vec![0u64; self.num_vms as usize].into_boxed_slice());
 
@@ -1253,7 +1255,7 @@ impl OpenCLRunner {
         };
         let mut entry_point_temp: &mut [u32] =
             unsafe { entry_map.as_slice_mut((self.num_vms) as usize * mexec) };
-        entry_point_temp.fill(0);
+        entry_point_temp.fill(0u32);
         //let mut entry_point_temp = vec![0u32; self.num_vms as usize * mexec];
 
         unsafe {
@@ -1280,7 +1282,8 @@ impl OpenCLRunner {
 
         let mut hypercall_num_temp: &mut [i32] =
             unsafe { hcall_num_map.as_slice_mut(self.num_vms as usize * mexec) };
-        let mut hypercall_num_temp = vec![0i32; self.num_vms as usize * mexec];
+        hypercall_num_temp.fill(-2);
+        //let mut hypercall_num_temp = vec![0i32; self.num_vms as usize * mexec];
 
         // Allocate buffer to return values
         let hcall_retval_buffer = unsafe {
@@ -1317,7 +1320,7 @@ impl OpenCLRunner {
 
         let mut hypercall_retval_temp: &mut [i32] =
             unsafe { hcall_retval_map.as_slice_mut(self.num_vms as usize * mexec) };
-        let mut hypercall_retval_temp = vec![0i32; self.num_vms as usize];
+        //let mut hypercall_retval_temp = vec![0i32; self.num_vms as usize];
 
         let mut entry_point_exit_flag;
         let vm_slice: Vec<u32> = std::ops::Range {
@@ -1533,7 +1536,7 @@ impl OpenCLRunner {
                 let sleep_time = time::Duration::from_millis(poll_freq);
                 let invoke_blocker_rx = invoke_blocker;
                 let mut is_empty_vm: HashSet<usize> = HashSet::new();
-
+                let mut finalize_buffer = false;
                 loop {
                     thread::sleep(sleep_time);
 
@@ -1543,7 +1546,7 @@ impl OpenCLRunner {
                     // We will only poll if we know we have open slots in our group of VMs
                     // for each VM that we have, check if we have a request waiting
 
-                    if recv_reqs < avail_vm_count {
+                    if recv_reqs < avail_vm_count && !finalize_buffer {
                         for vm_idx in &vm_id_vec {
                             let worker_vm_idx = *vm_id_mapping.get(vm_idx).unwrap() as usize;
                             let wasi_context = &mut worker_vms[worker_vm_idx];
@@ -1604,11 +1607,16 @@ impl OpenCLRunner {
                             }
                         };
                     }
+                    
                     if (recv_reqs == avail_vm_count && block_on_inputs)
                         || (ellapsed_time >= buffer_timeout)
                     {
                         block_on_inputs = false;
+                        // When we reach this point, we don't want to write to the async buffer
+                        // until after we flush
+                        finalize_buffer = true;
                     }
+
                     // If serverless invoke, block until no vms available
                     // else, we just dispatch
 
@@ -1636,12 +1644,13 @@ impl OpenCLRunner {
                                 recv_reqs = 0;
                                 ellapsed_time = 0;
                                 // data is flushed to the VMs now, so we can resume req buffering
-                                is_empty_vm.clear();
+                                is_empty_vm.clear();    
+                                finalize_buffer = false;
                             }
                             _ => (),
                         }
                     }
-                }
+                } // end loop
             });
         }
 
@@ -2117,7 +2126,7 @@ impl OpenCLRunner {
                         ocl::core::enqueue_write_buffer(
                             &queue,
                             &buffers.entry,
-                            false,
+                            true,
                             0,
                             &mut entry_point_temp,
                             None::<Event>,
@@ -2204,7 +2213,7 @@ impl OpenCLRunner {
                     ocl::core::enqueue_read_buffer(
                         &queue,
                         &hypercall_buffer,
-                        false,
+                        true,
                         0,
                         buf,
                         None::<Event>,
@@ -2215,7 +2224,7 @@ impl OpenCLRunner {
                 ocl::core::enqueue_read_buffer(
                     &queue,
                     &buffers.sp,
-                    false,
+                    true,
                     0,
                     &mut stack_pointer_temp,
                     None::<Event>,
@@ -2301,9 +2310,10 @@ impl OpenCLRunner {
                     }
                     WasiSyscalls::ServerlessInvoke => {
                         // no-ops for serverless invoke calls that are still blocked
-                        if !non_serverless_invoke_call_found {
-                            number_hcalls_blocking += 1;
-                        }
+                        //if !non_serverless_invoke_call_found {
+                        number_hcalls_blocking += 1;
+                        //}
+                        // Set to 0, unless we have an actual input
                     }
                     WasiSyscalls::VectorVisorBarrier => {
                         // No-op!
@@ -2326,20 +2336,15 @@ impl OpenCLRunner {
                 // we want to special case proc_exit to exit the VM
                 match result.get_type() {
                     WasiSyscalls::ProcExit => {
-                        for m in 0..mexec {
-                            entry_point_temp[result.get_vm_id() as usize * mexec + m] =
-                                ((-1) as i32) as u32
-                        }
+                        entry_point_temp[result.get_vm_id() as usize] =
+                            ((-1) as i32) as u32;
                     }
                     WasiSyscalls::ServerlessInvoke => is_serverless_invoke = true,
                     WasiSyscalls::ServerlessResponse => (),
                     _ => (),
                 }
                 // after all of the hypercalls are finished, we should update all of the stack pointers
-                for m in 0..mexec {
-                    hypercall_num_temp[result.get_vm_id() as usize * mexec + m] = -1;
-                }
-
+                hypercall_num_temp[result.get_vm_id() as usize] = -1;
                 hypercall_retval_temp[result.get_vm_id() as usize] = result.get_result();
             }
 
@@ -2369,6 +2374,7 @@ impl OpenCLRunner {
             }
 
             // wait until *sp is read
+            ocl::core::flush(&queue).unwrap();
             ocl::core::finish(&queue).unwrap();
 
             // now set the entry_point of exited procs to -1 if sp == 0
@@ -2396,7 +2402,7 @@ impl OpenCLRunner {
                     };
 
                     hcall_write_buf.copy_from_slice(hcall_buf);
-
+                    println!("wrote hcall buf");
                     ocl::core::enqueue_write_buffer(
                         &queue,
                         &hypercall_buffer,
@@ -2417,7 +2423,7 @@ impl OpenCLRunner {
                     ocl::core::enqueue_write_buffer(
                         &queue,
                         &buffers.entry,
-                        false,
+                        true,
                         0,
                         &mut entry_point_temp,
                         None::<Event>,
@@ -2429,7 +2435,7 @@ impl OpenCLRunner {
                 ocl::core::enqueue_write_buffer(
                     &queue,
                     &buffers.hypercall_num,
-                    false,
+                    true,
                     0,
                     &mut hypercall_num_temp,
                     None::<Event>,
@@ -2439,7 +2445,7 @@ impl OpenCLRunner {
                 ocl::core::enqueue_write_buffer(
                     &queue,
                     &hcall_retval_buffer,
-                    false,
+                    true,
                     0,
                     &mut hypercall_retval_temp,
                     None::<Event>,

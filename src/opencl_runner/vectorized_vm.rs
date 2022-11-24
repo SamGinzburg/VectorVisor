@@ -260,6 +260,7 @@ impl VectorizedVM {
         assert!(msg.len() <= hcall_buf_size.try_into().unwrap(), "Input > hcall buf size");
         vm_hcall_buf[0..msg.len()].copy_from_slice(&msg);
         //self.ready_for_input.store(false, Ordering::Relaxed);
+        assert!(self.input_msg_len == 0);
         self.input_msg_len = msg.len();
         self.uuid_queue.push_back((uuid, chan_id));
         // We should never have more than 2 requests queued up

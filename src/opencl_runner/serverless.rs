@@ -29,6 +29,16 @@ impl Serverless {
         // If other non-invoke calls need to be dispatched, perform a no-op and return.
         // This call will be executed later when ready
         if hypercall.non_serverless_invoke_call_found {
+            vm_ctx.no_resp = true;
+            sender
+            .send({
+                HyperCallResult::new(
+                    0,
+                    hypercall.vm_id,
+                    WasiSyscalls::ServerlessInvoke,
+                )
+            })
+            .unwrap();
             return;
         }
 
@@ -51,11 +61,12 @@ impl Serverless {
         }
 
         let vm_idx = vm_ctx.vm_id;
+        assert!(vm_idx == hypercall.vm_id);
         sender
             .send({
                 HyperCallResult::new(
                     vm_ctx.input_msg_len.try_into().unwrap(),
-                    vm_idx,
+                    hypercall.vm_id,
                     WasiSyscalls::ServerlessInvoke,
                 )
             })
@@ -79,6 +90,7 @@ impl Serverless {
         let msg_len = LittleEndian::read_u32(&hcall_buf[0..4]);
         //dbg!(&msg_len);
         if msg_len > 0 && !vm_ctx.no_resp {
+            vm_ctx.no_resp = true;
             let (send_chan1, send_chan2) = (vm_ctx.vm_sender).get(vm_idx as usize).unwrap();
             // the first 4 bytes are the length as a u32, the remainder is the buffer containing the json
 
@@ -135,8 +147,9 @@ impl Serverless {
             }
         }
 
+        assert!(vm_idx == hypercall.vm_id);
         sender
-            .send({ HyperCallResult::new(0, vm_idx, WasiSyscalls::ServerlessResponse) })
+            .send({ HyperCallResult::new(0, hypercall.vm_id, WasiSyscalls::ServerlessResponse) })
             .unwrap();
 
         // Perform async replies, no need to block in the critical path
