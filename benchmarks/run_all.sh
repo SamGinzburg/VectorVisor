@@ -7,7 +7,7 @@ mkdir -p $dir_name
 echo "Starting interleave=4 benchmarks..."
 TOTAL_START_TIME=$(date +%s)
 STARTTIME=$(date +%s)
-python3 run_benchmarks_aws.py --gpu=t4 --cpu=amd --interleave=8 --dir=$t4_dir_4 --skip-membench True --ami=$1 & 
+python3 run_benchmarks_aws.py --gpu=t4 --cpu=amd --interleave=8 --dir=$t4_dir_4 --skip-membench True --ami=$1 --run-profile True & 
 #python3 run_benchmarks_aws.py --gpu=a10g --cpu=intel --interleave=4 --dir=$a10g_dir_4 --skip-membench True --ami=$1 &
 for job in `jobs -p`; do wait ${job}; done
 ENDTIME=$(date +%s)

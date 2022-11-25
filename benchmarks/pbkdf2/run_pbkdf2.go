@@ -205,7 +205,7 @@ func main() {
 
 	reqs := make([][]byte, NUM_PARAMS)
 	for i := 0; i < NUM_PARAMS; i++ {
-		p := RandBatch(10)
+		p := RandBatch(1)
 		request_body, _ := msgpack.Marshal(p)
 		reqs[i] = request_body
 	}

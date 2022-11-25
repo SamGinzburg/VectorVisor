@@ -2310,10 +2310,9 @@ impl OpenCLRunner {
                     }
                     WasiSyscalls::ServerlessInvoke => {
                         // no-ops for serverless invoke calls that are still blocked
-                        //if !non_serverless_invoke_call_found {
-                        number_hcalls_blocking += 1;
-                        //}
-                        // Set to 0, unless we have an actual input
+                        if !non_serverless_invoke_call_found {
+                            number_hcalls_blocking += 1;
+                        }
                     }
                     WasiSyscalls::VectorVisorBarrier => {
                         // No-op!
@@ -2402,7 +2401,6 @@ impl OpenCLRunner {
                     };
 
                     hcall_write_buf.copy_from_slice(hcall_buf);
-                    println!("wrote hcall buf");
                     ocl::core::enqueue_write_buffer(
                         &queue,
                         &hypercall_buffer,
