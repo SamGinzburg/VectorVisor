@@ -64,7 +64,9 @@ userdata_aws_linux = """#cloud-config
      - wget https://repo.radeon.com/rocm/rocm.gpg.key
      - sudo rpm --import rocm.gpg.key
      - sudo yum install rocm-opencl* -y
-     - /opt/rocm*/bin/clinfo
+     - sudo yum install opencl-headers -y
+     - cp -R /opt/rocm/lib/* /lib64/
+     - /opt/rocm/bin/clinfo
      - wget https://golang.org/dl/go1.17.1.linux-amd64.tar.gz
      - rm -rf /usr/local/go && tar -C /usr/local -xzf go1.17.1.linux-amd64.tar.gz
      - sudo curl https://sh.rustup.rs -sSf | sh -s -- -y
