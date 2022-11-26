@@ -1,0 +1,335 @@
+import boto3
+import time
+import os
+from datetime import date, datetime
+import re
+import argparse
+
+#parser = argparse.ArgumentParser(description='run benchmarks')
+#parser.add_argument("--gpu", required=True)
+
+#args = vars(parser.parse_args())
+
+gpu = "amd" #args['gpu']
+
+print ("gpu: ", gpu)
+
+run_a10g = False
+
+# Benchmark constants
+# target rps is really just the number of concurrent invokers
+# this affects the *possible* max RPS and bandwidth/mem/cpu consumption of the invoker
+vmcount=3072
+target_rps = 3072
+target_rps_cpu = 1024
+TIMEOUT_MINUTES = 60 * 12
+#local_group_size = 999999
+is_pretty = "true"
+fastreply = "true"
+CFLAGS="-cl-nv-verbose"
+OPT_LEVEL="-O1 -g"
+WASM_SNIP_ARGS="--snip-rust-panicking-code"
+WASM_SNIP_CUSTOM="rust_oom __rg_oom"
+maxfuncs = 50
+maxloc = 2000000
+#maxfuncs = 999
+#maxloc = 20000000
+benchmark_duration = 600
+SLEEP_TIME=120
+NUM_REPEAT=1
+interleave=4
+
+if run_a10g:
+    maxdemospace = 0
+    local_group_size = 16
+else:
+    maxdemospace = 0
+    local_group_size = 64
+
+region = "us-east-1"
+ec2 = boto3.resource('ec2', region_name=region)
+ec2_client = boto3.client('ec2', region_name=region)
+
+userdata_aws_linunx = """#cloud-config
+    runcmd:
+     - whoami
+     - sudo su
+     - sudo whoami
+     - export HOME=/root
+     - mkdir -p /vv/
+     - cd /vv/
+     - sudo amazon-linux-extras install epel -y
+     - sudo yum install -y git htop gcc curl
+     - sudo yum install -y ocl*
+     - sudo yum install -y opencl*
+     - clinfo
+     - wget https://golang.org/dl/go1.17.1.linux-amd64.tar.gz
+     - rm -rf /usr/local/go && tar -C /usr/local -xzf go1.17.1.linux-amd64.tar.gz
+     - sudo curl https://sh.rustup.rs -sSf | sh -s -- -y
+     - . $HOME/.cargo/env
+     - sudo ~/.cargo/bin/rustup target add wasm32-wasi
+     - git clone https://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:x-oauth-basic@github.com/SamGinzburg/VectorVisor.git
+     - wget https://github.com/WebAssembly/binaryen/releases/download/version_109/binaryen-version_109-x86_64-linux.tar.gz
+     - tar -xzvf binaryen-version_109-x86_64-linux.tar.gz
+     - cargo install --git https://github.com/SamGinzburg/wasm-snip.git
+     - cd /vv/VectorVisor/
+     - sudo ~/.cargo/bin/cargo build --release
+     - cd benchmarks/
+     - mkdir -p ~/.nv/ComputeCache/
+     - export PATH=/vv/binaryen-version_109/bin:$PATH
+     - sudo ~/.cargo/bin/cargo install --git https://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:x-oauth-basic@github.com/SamGinzburg/vv-pgo-instrument.git
+""".format(opt=OPT_LEVEL, snip_args=WASM_SNIP_ARGS, snip_custom=WASM_SNIP_CUSTOM)
+
+def run_command(command, command_name, instance_id):
+    while True:
+        try:
+            response = ssm_client.send_command(
+                    InstanceIds=[instance_id],
+                    DocumentName="AWS-RunShellScript",
+                    Parameters={'commands': [command, ], 'executionTimeout': [str(60*TIMEOUT_MINUTES)]})
+            print ("Command response: {resp}".format(resp=response))
+            break
+        except Exception as err:
+            print ("Failed to send {command_name} command, with error: {e}".format(command_name=command_name, e=err))
+            time.sleep(10)
+
+    command_id = response['Command']['CommandId']
+
+    print ("running SSM command ID to run {command_name}: {id}".format(command_name=command_name, id=command_id))
+    return command_id
+
+def block_on_command(command_id, instance_id):
+    while True:
+        output = ssm_client.get_command_invocation(
+            CommandId=command_id,
+            InstanceId=str(instance_id),
+            )
+        if output['Status'] == 'InProgress':
+            print ("Command is still running...")
+            time.sleep(10)
+        else:
+            print ("Command has completed with status: " + str(output['Status']))
+            return output
+
+def run_profile_generic(bench_name, params=""):
+    run_command_wasmtime = """#!/bin/bash
+    sudo su
+    ulimit -n 65536
+    x=$(cloud-init status)
+    until [ "$x" == "status: done" ]; do
+    sleep 10
+    x=$(cloud-init status)
+    done
+    
+    export PATH=/vv/binaryen-version_109/bin:$PATH
+    export PATH=~/.cargo/bin:$PATH
+
+    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/{name}-opt-instrument.wasm --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=1310720 --partition=true --serverless=true --vmcount=4096 --wasmtime=true --profile=true &
+    """.format(interleave=interleave, name=bench_name)
+
+    run_command(run_command_wasmtime, "rustpdfwriter_cpu", gpu_instance[0].id)
+
+    # now run the invoker(s) for pbkdf2
+    run_invoker = """#!/bin/bash
+    sudo su
+    ulimit -n 65536
+    mkdir -p ~/gocache/
+    mkdir -p ~/gopath/
+    mkdir -p ~/xdg/
+    export GOCACHE=~/gocache/
+    export GOPATH=~/gopath/
+    export XDG_CACHE_HOME=~/xdg/
+    export PATH=/vv/binaryen-version_109/bin:$PATH
+    export PATH=~/.cargo/bin:$PATH
+
+    x=$(cloud-init status)
+    until [ "$x" == "status: done" ]; do
+    sleep 10
+    x=$(cloud-init status)
+    done
+
+    cd /vv/VectorVisor/benchmarks/{name}/
+
+    /usr/local/go/bin/go run /vv/VectorVisor/benchmarks/{name}/run_*.go {addr} 8000 {target_rps} 1 {duration} {params}
+    """.format(addr=gpu_instance[0].private_dns_name, target_rps=256, duration=300, name=bench_name, params=params)
+    command_id = run_command(run_invoker, "run invoker for gpu", gpu_instance[0].id)
+
+    time.sleep(20)
+
+    # Block until benchmark is complete
+    output = block_on_command(command_id, gpu_instance[0].id)
+    print (output)
+
+    run_invoker = """#!/bin/bash
+    sudo su
+    ulimit -n 65536
+    mkdir -p ~/gocache/
+    mkdir -p ~/gopath/
+    mkdir -p ~/xdg/
+    export GOCACHE=~/gocache/
+    export GOPATH=~/gopath/
+    export XDG_CACHE_HOME=~/xdg/
+    export PATH=/vv/binaryen-version_109/bin:$PATH
+    export PATH=~/.cargo/bin:$PATH
+
+    x=$(cloud-init status)
+    until [ "$x" == "status: done" ]; do
+    sleep 10
+    x=$(cloud-init status)
+    done
+
+    cd /vv/VectorVisor/benchmarks/
+    vv-profiler --input /vv/VectorVisor/benchmarks/{name}-opt-4.wasm --output /vv/VectorVisor/benchmarks/{name}-opt-profile.wasm --profile=/vv/VectorVisor/benchmarks/{name}-opt-instrument.wasm.profile
+    wasm-opt -O1 -g /vv/VectorVisor/benchmarks/{name}-opt-profile.wasm -o /vv/VectorVisor/benchmarks/{name}-opt-profile.wasm
+    cp /vv/VectorVisor/benchmarks/{name}-opt-profile.wasm /vv/VectorVisor/benchmarks/{name}-opt-4-profile.wasm
+    cp /vv/VectorVisor/benchmarks/{name}-opt-profile.wasm /vv/VectorVisor/benchmarks/{name}-opt-8-profile.wasm
+    """.format(addr=gpu_instance[0].private_dns_name, target_rps=vmcount, duration=60, hashes=256, name=bench_name)
+    command_id = run_command(run_invoker, "run invoker for gpu", gpu_instance[0].id)
+
+    time.sleep(20)
+    output = block_on_command(command_id, gpu_instance[0].id)
+    print (output)
+
+    # Block until benchmark is complete
+
+    time.sleep(SLEEP_TIME)
+
+"""
+Create VMs for the test
+1 GPU VM, 1 CPU VM, and 1 VM for issuing requests
+
+g4dn.xlarge  => 1 T4, 16 GiB memory,  4 vCPU, $0.526 / hr
+g4dn.2xlarge => 1 T4, 32 GiB memory, 8 vCPU, $0.752 / hr
+g4dn.4xlarge => 1 T4, 64 GiB memory, 16 vCPU, $1.204 / hr
+p3.2xlarge   => 1 V100, 16 GiB memory, 8 vCPU, $3.06 / hr
+g5.xlarge    => 1 A10G, 24GiB memory, 4 vCPU, $1.006 / hr
+g4ad.xlarge  => 1 v520, 8 GiB memory, 4 vCPUm $0.378 / hr
+only support us-east-1 for now...
+"""
+
+gpu_ami = 'ami-045f269fab48ba318'
+
+if run_a10g:
+    gpuinstance = "g5.2xlarge"
+else:
+    gpuinstance = "g4dn.2xlarge"
+
+
+gpu_instance = ec2.create_instances(ImageId=gpu_ami,
+                                InstanceType=gpuinstance,
+                                MinCount=1,
+                                MaxCount=1,
+                                UserData=userdata_ubuntu,
+                                IamInstanceProfile={
+                                    'Arn': 'arn:aws:iam::573062721377:instance-profile/ec2-ssm',
+                                    #'Name': "ec2-ssm"
+                                })
+
+
+print ("Started: " + str(gpu_instance) + " with id: " + str(gpu_instance[0].id))
+
+instance_id_list = [gpu_instance[0].id]
+print ("Instance id list: ", instance_id_list)
+
+print ("now waiting...")
+gpu_instance[0].wait_until_running()
+print ("Instances are now running")
+
+gpu_instance[0].load()
+
+print("GPU instance private addr: ", gpu_instance[0].private_dns_name)
+
+# Wait until initialization is complete
+while True:
+    resp = ec2_client.describe_instance_status(InstanceIds=instance_id_list)
+    done_waiting = True
+    for status in resp['InstanceStatuses']:
+        if status['InstanceStatus']['Status'] != 'ok':
+            done_waiting = False
+    if done_waiting:
+        break
+    else:
+        print ("Still waiting on allocated VMs to finish waiting...")
+        time.sleep(10)
+
+ssm_client = boto3.client('ssm', region_name=region)
+
+block_until_done = """#!/bin/bash
+sudo su
+ulimit -n 65536
+x=$(cloud-init status)
+until [ "$x" == "status: done" ]; do
+sleep 10
+x=$(cloud-init status)
+done
+
+export CUDA_CACHE_MAXSIZE=4294967296
+export CUDA_CACHE_PATH=~/.nv/ComputeCache/
+export PATH=~/.cargo/bin:$PATH
+export PATH=/vv/binaryen-version_109/bin:$PATH
+cd /vv/VectorVisor/benchmarks/
+./{gpu}_save_cached_bin.sh
+""".format(gpu=gpu)
+
+command_id = run_command(block_until_done, "precompile GPU binaries", gpu_instance[0].id)
+time.sleep(20)
+
+# Block until benchmark is complete
+output = block_on_command(command_id, gpu_instance[0].id)
+print (output)
+
+time.sleep(120)
+
+# Now generate the profiling data
+# For each benchmark we need to:
+# 1) Generate an instrumented binary
+# 2) Run VV-wasm with the instrumented binary w/some workload
+# 3) Use the generated profile to emit an optimized WASM binary
+
+run_profile_generic("rust-pdfwriter")
+run_profile_generic("average", params="20")
+run_profile_generic("imageblur")
+run_profile_generic("imageblur-bmp")
+run_profile_generic("imagehash")
+run_profile_generic("imagehash-modified")
+run_profile_generic("json-compression", params="/vv/VectorVisor/benchmarks/json-compression/smaller_tweets.txt 2000")
+run_profile_generic("scrypt", params="256")
+run_profile_generic("pbkdf2")
+run_profile_generic("nlp-count-vectorizer", params="/vv/VectorVisor/benchmarks/nlp-count-vectorizer/smaller_tweets.txt 500")
+
+block_until_done = """#!/bin/bash
+sudo su
+ulimit -n 65536
+x=$(cloud-init status)
+until [ "$x" == "status: done" ]; do
+sleep 10
+x=$(cloud-init status)
+done
+
+export CUDA_CACHE_MAXSIZE=4294967296
+export CUDA_CACHE_PATH=~/.nv/ComputeCache/
+export PATH=~/.cargo/bin:$PATH
+export PATH=/vv/binaryen-version_109/bin:$PATH
+
+cd /vv/VectorVisor/benchmarks/
+./{gpu}_compile_opt.sh
+""".format(gpu=gpu)
+
+command_id = run_command(block_until_done, "precompile GPU binaries", gpu_instance[0].id)
+time.sleep(20)
+
+# Block until benchmark is complete
+output = block_on_command(command_id, gpu_instance[0].id)
+print (output)
+
+time.sleep(120)
+
+# now build the AMI
+image = ec2_client.create_image(InstanceId=gpu_instance[0].id, NoReboot=True, Name="vectorvisor-bench-image-{gpu}".format(gpu=gpu))
+print ("Finished image creation!")
+print (image)
+
+time.sleep(120)
+
+# clean up all instances at end
+ec2.instances.filter(InstanceIds = instance_id_list).terminate()
