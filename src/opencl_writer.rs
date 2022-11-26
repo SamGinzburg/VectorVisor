@@ -2920,45 +2920,52 @@ __attribute__((always_inline)) void {}(global uint   *stack_u32,
         )
         .unwrap();
 
+        let volatile = if emit_volatile_reads_writes {
+            "volatile"
+        } else {
+            ""
+        };
+
         if interleave == 4 {
             write!(
                 output,
                 r#"
 #define read_u32_fast(offset, base) \
-    *(global uint*)(((global uchar*)((offset/4)*(NUM_THREADS*4) + base)))
+    *(global {} uint*)(((global uchar*)((offset/4)*(NUM_THREADS*4) + base)))
 
 #define read_u32_aligned(addr, mem_start, warp_id, read_idx, thread_idx, scratch_space) \
-    *(global uint*)(((global uchar*)(((addr-mem_start)/4)*(NUM_THREADS*4) + (warp_id*4) + mem_start)))
+    *(global {} uint*)(((global uchar*)(((addr-mem_start)/4)*(NUM_THREADS*4) + (warp_id*4) + mem_start)))
 
 #define read_u16_aligned(addr, mem_start, warp_id, read_idx, thread_idx, scratch_space) \
-    *(global ushort*)(((global uchar*)(((addr-mem_start)/4)*(NUM_THREADS*4) + (warp_id*4) + mem_start)) + GET_POW2_OFFSET((addr-mem_start), 4))
+    *(global {} ushort*)(((global uchar*)(((addr-mem_start)/4)*(NUM_THREADS*4) + (warp_id*4) + mem_start)) + GET_POW2_OFFSET((addr-mem_start), 4))
 
 #define write_u32_aligned(addr, mem_start, value, warp_id, read_idx, thread_idx, scratch_space) \
-    *(global uint*)(((global uchar*)(((addr-mem_start)/4)*(NUM_THREADS*4) + (warp_id*4) + mem_start))) = (uint)value
+    *(global {} uint*)(((global uchar*)(((addr-mem_start)/4)*(NUM_THREADS*4) + (warp_id*4) + mem_start))) = (uint)value
 
 #define write_u32_fast(offset, base, value) \
-    *(global uint*)(((global uchar*)(((offset)/4)*(NUM_THREADS*4) + base))) = (uint)value
+    *(global {} uint*)(((global uchar*)(((offset)/4)*(NUM_THREADS*4) + base))) = (uint)value
 
 #define write_u16_aligned(addr, mem_start, value, warp_id, read_idx, thread_idx, scratch_space) \
-    *(global ushort*)(((global uchar*)(((addr-mem_start)/4)*(NUM_THREADS*4) + (warp_id*4) + mem_start)) + GET_POW2_OFFSET((addr-mem_start), 4)) = (short)value
+    *(global {} ushort*)(((global uchar*)(((addr-mem_start)/4)*(NUM_THREADS*4) + (warp_id*4) + mem_start)) + GET_POW2_OFFSET((addr-mem_start), 4)) = (short)value
 "#,
-            );
+            volatile, volatile, volatile, volatile, volatile, volatile);
         } else if interleave == 8 {
             write!(
                 output,
                 r#"
 #define read_u64_fast(offset, base) \
-    *(global ulong*)(((global uchar*)((offset/8)*(NUM_THREADS*8) + base)))
+    *(global {} ulong*)(((global uchar*)((offset/8)*(NUM_THREADS*8) + base)))
 
 #define write_u64_fast(offset, base, value) \
-    *(global ulong*)(((global uchar*)(((offset)/8)*(NUM_THREADS*8) + base))) = (ulong)value
+    *(global {} ulong*)(((global uchar*)(((offset)/8)*(NUM_THREADS*8) + base))) = (ulong)value
 
 #define read_u32_fast(offset, base) \
-    *(global uint*)(((global uchar*)((offset/8)*(NUM_THREADS*8) + base + GET_POW2_OFFSET((offset), 8))))
+    *(global {} uint*)(((global uchar*)((offset/8)*(NUM_THREADS*8) + base + GET_POW2_OFFSET((offset), 8))))
 
 #define write_u32_fast(offset, base, value) \
-    *(global uint*)(((global uchar*)(((offset)/8)*(NUM_THREADS*8) + base + GET_POW2_OFFSET((offset), 8)))) = (uint)value
+    *(global {} uint*)(((global uchar*)(((offset)/8)*(NUM_THREADS*8) + base + GET_POW2_OFFSET((offset), 8)))) = (uint)value
 "#,
+volatile, volatile, volatile, volatile,
             );
         }
 
