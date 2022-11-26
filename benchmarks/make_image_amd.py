@@ -50,7 +50,7 @@ region = "us-east-1"
 ec2 = boto3.resource('ec2', region_name=region)
 ec2_client = boto3.client('ec2', region_name=region)
 
-userdata_aws_linunx = """#cloud-config
+userdata_aws_linux = """#cloud-config
     runcmd:
      - whoami
      - sudo su
@@ -60,9 +60,11 @@ userdata_aws_linunx = """#cloud-config
      - cd /vv/
      - sudo amazon-linux-extras install epel -y
      - sudo yum install -y git htop gcc curl
-     - sudo yum install -y ocl*
-     - sudo yum install -y opencl*
-     - clinfo
+     - sudo yum-config-manager --add-repo https://repo.radeon.com/rocm/yum/rpm
+     - wget https://repo.radeon.com/rocm/rocm.gpg.key
+     - sudo rpm --import rocm.gpg.key
+     - sudo yum install rocm-opencl* -y
+     - /opt/rocm*/bin/clinfo
      - wget https://golang.org/dl/go1.17.1.linux-amd64.tar.gz
      - rm -rf /usr/local/go && tar -C /usr/local -xzf go1.17.1.linux-amd64.tar.gz
      - sudo curl https://sh.rustup.rs -sSf | sh -s -- -y
@@ -209,17 +211,15 @@ only support us-east-1 for now...
 
 gpu_ami = 'ami-045f269fab48ba318'
 
-if run_a10g:
-    gpuinstance = "g5.2xlarge"
-else:
-    gpuinstance = "g4dn.2xlarge"
+gpuinstance = "g4ad.xlarge"
 
 
 gpu_instance = ec2.create_instances(ImageId=gpu_ami,
                                 InstanceType=gpuinstance,
                                 MinCount=1,
                                 MaxCount=1,
-                                UserData=userdata_ubuntu,
+                                UserData=userdata_aws_linux,
+                                BlockDeviceMappings=[{"DeviceName": "/dev/xvda", "Ebs" : { "VolumeSize" : 100 }}],
                                 IamInstanceProfile={
                                     'Arn': 'arn:aws:iam::573062721377:instance-profile/ec2-ssm',
                                     #'Name': "ec2-ssm"
