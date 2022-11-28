@@ -13,12 +13,15 @@ parser.add_argument("--membench", required=False)
 parser.add_argument("--breakdown", required=False)
 parser.add_argument("--dir", required=False)
 parser.add_argument("--skip-membench", required=False)
+parser.add_argument("--skip-cpu", required=False)
 parser.add_argument("--run-profile", required=False)
 parser.add_argument("--ami", required=True)
+parser.add_argument("--cpuami", required=True)
 
 args = vars(parser.parse_args())
 
 ami = args['ami']
+cpuami = args['cpuami']
 gpu = args['gpu']
 cpu = args['cpu']
 interleave = args['interleave']
@@ -26,9 +29,14 @@ membench = args['membench']
 breakdown = args['breakdown']
 outdir = args['dir']
 skip_membench = args['skip_membench']
+skip_cpu = args['skip_cpu']
 run_profile = args['run_profile']
 
+if skip_cpu == None:
+    skip_cpu = False
+
 print ("ami: ", ami)
+print ("cpuami: ", cpuami)
 print ("gpu: ", gpu)
 print ("cpu: ", cpu)
 print ("interleave: ", interleave)
@@ -81,16 +89,19 @@ maxfuncs = 50
 maxloc = 2000000
 #maxfuncs = 999
 #maxloc = 20000000
-benchmark_duration = 600
+benchmark_duration = 300
 SLEEP_TIME=120
 NUM_REPEAT=1
 
-if run_a10g:
+if gpu == "a10g":
     maxdemospace = 0
     local_group_size = 16
-else:
+elif gpu == "t4":
     maxdemospace = 0
     local_group_size = 64
+elif gpu == "amd":
+    maxdemospace = 0
+    local_group_size = 999999
 
 today = datetime.now()
 
@@ -181,12 +192,15 @@ def cleanup():
 def run_scrypt_bench():
     # Now we can set up the next benchmark (scrypt)
 
-    if run_a10g:
+    if gpu == "a10g":
         vmcount = 6144
         prefix = "a10g_"
-    else:
+    elif gpu == "t4":
         vmcount = 4096
         prefix = ""
+    elif gpu == "amd":
+        vmcount = 2048
+        prefix = "" 
 
     run_scrypt_command_x86 = """#!/bin/bash
     sudo su
@@ -213,7 +227,8 @@ def run_scrypt_bench():
     /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/scrypt-opt-{interleave}.wasm --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=131072 --partition=true --serverless=true --vmcount=4096 --wasmtime=true --fastreply={fastreply} &> /vv/scrypt.log &
     """.format(fastreply=fastreply, interleave=interleave)
 
-    run_command(run_scrypt_command_wasmtime, "scrypt_cpu", cpu_bench_instance[0].id)
+    if not skip_cpu:
+        run_command(run_scrypt_command_wasmtime, "scrypt_cpu", cpu_bench_instance[0].id)
 
     run_scrypt_command = """#!/bin/bash
     sudo su
@@ -240,7 +255,6 @@ def run_scrypt_bench():
     if not run_latency_breakdown:
         vmcount=vmcount*2
 
-    # now run the invoker(s) for pbkdf2
     run_invoker = """#!/bin/bash
     sudo su
     ulimit -n 65536
@@ -276,6 +290,8 @@ def run_scrypt_bench():
 
         time.sleep(SLEEP_TIME)
 
+    if skip_cpu:
+        return
 
     run_invoker_cpu = """#!/bin/bash
     sudo su
@@ -335,11 +351,14 @@ def run_scrypt_bench():
 
 def run_pbkdf2_bench():
     # Now we can set up the next benchmark (pbkdf2)
-    if run_a10g:
+    if gpu == "a10g":
         vmcount = 6144
         prefix = "a10g_"
-    else:
+    elif gpu == "t4":
         vmcount = 4096
+        prefix = ""
+    elif gpu == "amd":
+        vmcount = 2048
         prefix = ""
 
     run_pbkdf2_command_x86 = """#!/bin/bash
@@ -367,7 +386,8 @@ def run_pbkdf2_bench():
     /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/pbkdf2-opt-{interleave}.wasm --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=131072 --partition=true --serverless=true --vmcount=4096 --wasmtime=true --fastreply={fastreply} &> /vv/pbkdf2.log &
     """.format(fastreply=fastreply, interleave=interleave)
 
-    run_command(run_pbkdf2_command_wasmtime, "pbkdf2_cpu", cpu_bench_instance[0].id)
+    if not skip_cpu:
+        run_command(run_pbkdf2_command_wasmtime, "pbkdf2_cpu", cpu_bench_instance[0].id)
 
     run_pbkdf2_command = """#!/bin/bash
     sudo su
@@ -430,6 +450,8 @@ def run_pbkdf2_bench():
             text_file.write(str(output))
         time.sleep(SLEEP_TIME)
 
+    if skip_cpu:
+        return
 
     run_invoker_cpu = """#!/bin/bash
     sudo su
@@ -490,11 +512,14 @@ def run_pbkdf2_bench():
     cleanup()
 
 def run_lz4_bench():
-    if run_a10g:
+    if gpu == "a10g":
         vmcount = 4608
         prefix = "a10g_"
-    else:
+    elif gpu == "t4":
         vmcount = 3072
+        prefix = ""
+    elif gpu == "amd":
+        vmcount = 1536
         prefix = ""
 
     run_json_lz4_command_x86 = """#!/bin/bash
@@ -529,7 +554,8 @@ def run_lz4_bench():
     /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/json-compression-opt-{interleave}{run_profile}.wasm --ip=0.0.0.0 --heap=4194304 --stack=131072 --hcallsize=524288 --partition=false --serverless=true --vmcount=4096 --wasmtime=true --fastreply={fastreply} &> /vv/json-compression.log &
     """.format(fastreply=fastreply, interleave=interleave, run_profile=run_profile)
 
-    run_command(run_json_lz4_command_wasmtime, "run_json_lz4_command_wasmtime", cpu_bench_instance[0].id)
+    if not skip_cpu:
+        run_command(run_json_lz4_command_wasmtime, "run_json_lz4_command_wasmtime", cpu_bench_instance[0].id)
 
     run_json_lz4_command = """#!/bin/bash
     sudo su
@@ -592,6 +618,8 @@ def run_lz4_bench():
             text_file.write(str(output))
         time.sleep(SLEEP_TIME)
 
+    if skip_cpu:
+        return
 
     run_invoker_wasmtime = """#!/bin/bash
     sudo su
@@ -646,11 +674,14 @@ def run_lz4_bench():
             text_file.write(str(output))
 
 def run_genpdf_bench():
-    if run_a10g:
+    if gpu == "a10g":
         vmcount = 4608
         prefix="a10g_"
-    else:
+    elif gpu == "t4":
         vmcount = 3072
+        prefix=""
+    elif gpu == "amd":
+        vmcount = 1536
         prefix=""
 
     run_genpdf_command_x86 = """#!/bin/bash
@@ -678,7 +709,8 @@ def run_genpdf_bench():
     /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/rust-pdfwriter-opt-{interleave}.wasm --ip=0.0.0.0 --heap=4194304 --stack=131072 --hcallsize=131072 --partition=false --serverless=true --vmcount={vmcount} --wasmtime=true --fastreply={fastreply} &> /vv/rust-pdfwriter.log &
     """.format(fastreply=fastreply, interleave=interleave, vmcount=vmcount)
 
-    run_command(run_genpdf_command_wasmtime, "run_genpdf_command_wasmtime", cpu_bench_instance[0].id)
+    if not skip_cpu:
+        run_command(run_genpdf_command_wasmtime, "run_genpdf_command_wasmtime", cpu_bench_instance[0].id)
 
     run_genpdf_command = """#!/bin/bash
     sudo su
@@ -696,7 +728,7 @@ def run_genpdf_bench():
 
     cd /vv/VectorVisor/benchmarks/
 
-    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/{prefix}rust-pdfwriter-opt-{interleave}{run_profile}.wasm.bin --ip=0.0.0.0 --heap=4194304 --stack=131072 --hcallsize=409600 --partition=false --serverless=true --vmcount={vmcount} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --rt=100 --lgroup={lgroup} &> /vv/rust-pdfwriter.log &
+    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/{prefix}rust-pdfwriter-opt-{interleave}{run_profile}.wasm.bin --ip=0.0.0.0 --heap=4194304 --stack=131072 --hcallsize=131072 --partition=false --serverless=true --vmcount={vmcount} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --rt=100 --lgroup={lgroup} &> /vv/rust-pdfwriter.log &
     """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, \
                maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount, prefix=prefix, run_profile=run_profile)
 
@@ -740,6 +772,8 @@ def run_genpdf_bench():
             text_file.write(str(output))
         time.sleep(SLEEP_TIME)
 
+    if skip_cpu:
+        return
 
     run_invoker_wasmtime = """#!/bin/bash
     sudo su
@@ -792,11 +826,14 @@ def run_genpdf_bench():
 
 
 def run_average_bench():
-    if run_a10g:
+    if gpu == "a10g":
         vmcount = 5120
         prefix = "a10g_"
-    else:
+    elif gpu == "t4":
         vmcount = 4096
+        prefix = ""
+    elif gpu == "amd":
+        vmcount = 2048
         prefix = ""
 
     run_average_command_x86 = """#!/bin/bash
@@ -824,7 +861,8 @@ def run_average_bench():
     /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/average-opt-{interleave}.wasm --ip=0.0.0.0 --heap=3145728 --stack=131072 --hcallsize=262144 --partition=true --serverless=true --vmcount=4096 --wasmtime=true --fastreply={fastreply} &> /vv/average.log &
     """.format(fastreply=fastreply, interleave=interleave)
 
-    run_command(run_average_command_wasmtime, "run_average_command_wasmtime", cpu_bench_instance[0].id)
+    if not skip_cpu:
+        run_command(run_average_command_wasmtime, "run_average_command_wasmtime", cpu_bench_instance[0].id)
 
     run_average_command = """#!/bin/bash
     sudo su
@@ -886,6 +924,8 @@ def run_average_bench():
             text_file.write(str(output))
         time.sleep(SLEEP_TIME)
 
+    if skip_cpu:
+        return
 
     run_invoker_wasmtime = """#!/bin/bash
     sudo su
@@ -937,11 +977,14 @@ def run_average_bench():
 
 
 def run_image_hash_bench(run_modified = False):
-    if run_a10g:
+    if gpu == "a10g":
         vmcount = 4096
         prefix = "a10g_"
-    else:
+    elif gpu == "t4":
         vmcount = 3072
+        prefix = ""
+    elif gpu == "amd":
+        vmcount = 1536
         prefix = ""
     
     imagehash_path = "/vv/VectorVisor/benchmarks/{prefix}imagehash".format(prefix=prefix)
@@ -973,7 +1016,8 @@ def run_image_hash_bench(run_modified = False):
     /vv/VectorVisor/target/release/vectorvisor --input {imagehash_path}-opt-{interleave}.wasm --ip=0.0.0.0 --heap=4194304 --stack=131072 --hcallsize=294912 --partition=true --serverless=true --vmcount=3072 --wasmtime=true --fastreply={fastreply} &> /vv/imagehash.log &
     """.format(fastreply=fastreply, imagehash_path=imagehash_path, interleave=interleave)
 
-    run_command(run_image_command_wasmtime, "run_imagehash_command_wasmtime", cpu_bench_instance[0].id)
+    if not skip_cpu:
+        run_command(run_image_command_wasmtime, "run_imagehash_command_wasmtime", cpu_bench_instance[0].id)
 
     run_image_command = """#!/bin/bash
     sudo su
@@ -1041,6 +1085,8 @@ def run_image_hash_bench(run_modified = False):
 
         time.sleep(SLEEP_TIME)
 
+    if skip_cpu:
+        return
 
     run_command(run_image_command_wasmtime, "run_imagehash_command_x86", cpu_bench_instance[0].id)
 
@@ -1162,11 +1208,14 @@ def run_image_hash_bench(run_modified = False):
     cleanup()
 
 def run_image_blur_bench(run_bmp = False):
-    if run_a10g:
+    if gpu == "a10g":
         vmcount = 4096
         prefix = "a10g_"
-    else:
+    elif gpu == "t4":
         vmcount = 3072
+        prefix = ""
+    elif gpu == "amd":
+        vmcount = 1536
         prefix = ""
 
     if not run_bmp:
@@ -1201,7 +1250,8 @@ def run_image_blur_bench(run_bmp = False):
     /vv/VectorVisor/target/release/vectorvisor --input {bin_path} --ip=0.0.0.0 --heap=4194304 --stack=262144 --hcallsize=409600 --partition=true --serverless=true --vmcount=3072 --wasmtime=true --fastreply={fastreply} &> /vv/imageblur.log &
     """.format(fastreply=fastreply, bin_path=bin_path)
 
-    run_command(run_image_command_wasmtime, "run_imageblur_command_wasmtime", cpu_bench_instance[0].id)
+    if not skip_cpu:
+        run_command(run_image_command_wasmtime, "run_imageblur_command_wasmtime", cpu_bench_instance[0].id)
 
     run_image_command = """#!/bin/bash
     sudo su
@@ -1259,6 +1309,9 @@ def run_image_blur_bench(run_bmp = False):
             with open(temp_dir+"gpu_bench_imageblur_bmp_{idx}.txt".format(idx=idx), "w") as text_file:
                 text_file.write(str(output))
         time.sleep(SLEEP_TIME)
+
+    if skip_cpu:
+        return
 
     run_invoker_wasmtime = """#!/bin/bash
     sudo su
@@ -1377,11 +1430,14 @@ def run_image_blur_bench(run_bmp = False):
     cleanup()
 
 def run_nlp_count_bench():
-    if run_a10g:
+    if gpu == "a10g":
         vmcount = 4608
         prefix = "a10g_"
-    else:
+    elif gpu == "t4":
         vmcount = 3072
+        prefix = ""
+    elif gpu == "amd":
+        vmcount = 1536
         prefix = ""
 
     run_nlp_command_x86 = """#!/bin/bash
@@ -1409,7 +1465,8 @@ def run_nlp_count_bench():
     /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/nlp-count-vectorizer-opt-{interleave}.wasm --ip=0.0.0.0 --heap=4194304 --stack=131072 --hcallsize=524288 --partition=true --serverless=true --vmcount=4096 --wasmtime=true --fastreply={fastreply} &> /vv/nlp-count-vectorizer.log &
     """.format(fastreply=fastreply, interleave=interleave)
 
-    run_command(run_nlp_command_wasmtime, "run_nlp_command_wasmtime", cpu_bench_instance[0].id)
+    if not skip_cpu:
+        run_command(run_nlp_command_wasmtime, "run_nlp_command_wasmtime", cpu_bench_instance[0].id)
 
     run_nlp_command = """#!/bin/bash
     sudo su
@@ -1469,6 +1526,8 @@ def run_nlp_count_bench():
             text_file.write(str(output))
         time.sleep(SLEEP_TIME)
 
+    if skip_cpu:
+        return
 
     run_invoker_wasmtime = """#!/bin/bash
     sudo su
@@ -1524,10 +1583,12 @@ def run_nlp_count_bench():
 
 
 def run_membench(membench_interleave=4):
-    if run_a10g:
+    if gpu == "a10g":
         vmcount = 6144
-    else:
+    elif gpu == "t4":
         vmcount = 4096
+    elif gpu == "amd":
+        vmcount = 2048
 
     run_membench_command = """#!/bin/bash
     sudo su
@@ -1650,17 +1711,20 @@ us-east-2 AMI: ami-01463836f7041cd10
 us-east-1 AMI: ami-094c089c38ed069f2 
 """
 
-if region == "us-east-1":
-    #gpu_ami = 'ami-09a83b91fc98e860f'
-    #gpu_ami = 'ami-02e8976fea9b1f568'
-    gpu_ami = ami
-elif region == "us-east-2":
-    gpu_ami = 'ami-01463836f7041cd10'
+gpu_ami = ami
 
-if run_a10g:
+if gpu == "a10g":
     gpuinstance = "g5.xlarge"
-else:
+elif gpu == "t4":
     gpuinstance = "g4dn.xlarge"
+elif gpu == "amd":
+    gpuinstance = "g4ad.xlarge"
+else:
+    print ("Err, did not select valid GPU for testing")
+
+Placement={
+    'AvailabilityZone': 'us-east-1b',
+}
 
 
 gpu_instance = ec2.create_instances(ImageId=gpu_ami,
@@ -1668,9 +1732,6 @@ gpu_instance = ec2.create_instances(ImageId=gpu_ami,
                                 MinCount=1,
                                 MaxCount=1,
                                 UserData=userdata_ubuntu,
-                                Placement={
-                                    'AvailabilityZone': 'us-east-1f',
-                                },
                                 IamInstanceProfile={
                                     'Arn': 'arn:aws:iam::573062721377:instance-profile/ec2-ssm',
                                     #'Name': "ec2-ssm"
@@ -1686,7 +1747,7 @@ us-east-1 AMI: ami-083654bd07b5da81d
 
 if region == "us-east-1":
     #cpu_ami = 'ami-09a83b91fc98e860f'
-    cpu_ami = ami
+    cpu_ami = cpuami
 elif region == "us-east-2":
     cpu_ami = 'ami-028dbc12531690cf4'
 
@@ -1700,9 +1761,6 @@ cpu_bench_instance = ec2.create_instances(ImageId=cpu_ami,
                                 MinCount=1,
                                 MaxCount=1,
                                 UserData=userdata_ubuntu,
-                                Placement={
-                                    'AvailabilityZone': 'us-east-1f',
-                                },
                                 IamInstanceProfile={
                                     'Arn': 'arn:aws:iam::573062721377:instance-profile/ec2-ssm',
                                     #'Name': "ec2-ssm"
@@ -1716,9 +1774,6 @@ invoker_instance = ec2.create_instances(ImageId=cpu_ami,
                                 MinCount=1,
                                 MaxCount=1,
                                 UserData=userdata_ubuntu,
-                                Placement={
-                                    'AvailabilityZone': 'us-east-1f',
-                                },
                                 IamInstanceProfile={
                                     'Arn': 'arn:aws:iam::573062721377:instance-profile/ec2-ssm',
                                     #'Name': "ec2-ssm"
@@ -1778,6 +1833,14 @@ if run_only_membench and skip_membench is None:
     ec2.instances.filter(InstanceIds = instance_id_list).terminate()
     exit()
 
+run_nlp_count_bench()
+
+cleanup()
+
+run_scrypt_bench()
+
+cleanup()
+
 # run image hash bench
 """
 run_image_hash_bench(run_modified = False)
@@ -1816,16 +1879,18 @@ cleanup()
 run_image_blur_bench(run_bmp = False)
 
 cleanup()
-"""
 
 run_genpdf_bench()
 
 cleanup()
+"""
 
+"""
 # run pbkdf2 bench
 run_pbkdf2_bench()
 
 cleanup()
+"""
 
 # clean up all instances at end
 ec2.instances.filter(InstanceIds = instance_id_list).terminate()
