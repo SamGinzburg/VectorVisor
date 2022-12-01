@@ -1,0 +1,10 @@
+rust-pdfwriter	0
+average	0
+imageblur	0
+imageblur-bmp	0
+imagehash	0
+imagehash-modified	0
+json-compression	0
+scrypt	0
+pbkdf2	0
+nlp-count-vectorizer	0

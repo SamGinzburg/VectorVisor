@@ -1,0 +1,10 @@
+rust-pdfwriter	211656
+average	1
+imageblur	322807
+imageblur-bmp	2
+imagehash	282607
+imagehash-modified	1
+json-compression	1
+scrypt	1
+pbkdf2	5228
+nlp-count-vectorizer	1
