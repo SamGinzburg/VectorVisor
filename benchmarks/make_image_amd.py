@@ -213,7 +213,7 @@ only support us-east-1 for now...
 
 gpu_ami = 'ami-045f269fab48ba318'
 
-gpuinstance = "g4ad.xlarge"
+gpuinstance = "g4ad.2xlarge"
 
 
 gpu_instance = ec2.create_instances(ImageId=gpu_ami,

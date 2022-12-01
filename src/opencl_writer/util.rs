@@ -17,7 +17,7 @@ pub fn format_fn_name(fn_name: &str) -> String {
     new_name = fn_name.to_string();
     //new_name = demangle_name;
     //new_name = HASH_STRIP.replace(&demangle_name, "").to_string();
-    new_name
+    new_name = new_name
         .replace(".", "")
         .replace("<", "_")
         .replace(">", "_")
@@ -27,6 +27,8 @@ pub fn format_fn_name(fn_name: &str) -> String {
         .replace("::", "cc")
         .replace(":", "c")
         .replace("*", "s")
+        .replace("%", "p")
+        .replace("~", "t")
         .replace("/", "fs")
         .replace("\\", "bs")
         .replace(" ", "_")
@@ -36,6 +38,11 @@ pub fn format_fn_name(fn_name: &str) -> String {
         .replace(")", "")
         .replace("[", "")
         .replace("]", "")
+        .replace("=", "eq")
+        .replace("|", "_")
+        .replace("@", "at")
         .replace("#", "h")
-        .replace("-", "_")
+        .replace("-", "_");
+    // this is needed since some compilers emit just numbers for fnames
+    format!("func_{}", new_name)
 }

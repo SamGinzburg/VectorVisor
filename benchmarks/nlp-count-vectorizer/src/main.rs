@@ -1,6 +1,6 @@
 use vtext::tokenize::{VTextTokenizerParams,Tokenizer};
 use wasm_serverless_invoke::wasm_handler::WasmHandler;
-use wasm_serverless_invoke::wasm_handler::SerializationFormat::MsgPack;
+use wasm_serverless_invoke::wasm_handler::SerializationFormat::Json;
 use serde::{Deserialize, Serialize};
 use stop_words;
 use std::collections::HashSet;
@@ -71,5 +71,5 @@ fn tokenize_inputs(event: FuncInput) -> FuncResponse {
 
 fn main() {
     let handler = WasmHandler::new(&tokenize_inputs);
-    handler.run_with_format(1024*512, MsgPack);
+    handler.run_with_format(1024*512, Json);
 }

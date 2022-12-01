@@ -5,6 +5,7 @@ import (
 	"bytes"
 	b64 "encoding/base64"
 	"encoding/csv"
+    json "encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -13,12 +14,10 @@ import (
 	"os"
 	"strconv"
 	"time"
-
-	msgpack "github.com/vmihailenco/msgpack/v5"
 )
 
 type payload struct {
-	Text []string `msgpack:"tweets"`
+	Text []string `json:"tweets"`
 }
 
 type Message struct {
@@ -233,7 +232,7 @@ func main() {
 	reqs := make([][]byte, NUM_PARAMS)
 	for i := 0; i < NUM_PARAMS; i++ {
 		p := payload{Text: GetTweetVec(input_size, tweets)}
-		request_body, _ := msgpack.Marshal(p)
+		request_body, _ := json.Marshal(p)
 		reqs[i] = request_body
 	}
 

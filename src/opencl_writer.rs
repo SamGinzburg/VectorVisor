@@ -2118,6 +2118,17 @@ impl<'a> OpenCLCWriter<'_> {
                             )
                         );
                     }
+                    Instruction::I64Const(val) => {
+                        ret_str += &format!(
+                            "\t{};\n",
+                            &emit_write_u64(
+                                &format!("(ulong)((global char*)globals_buffer+{})", offset * 4),
+                                "(ulong)(globals_buffer)",
+                                &val.to_string(),
+                                "warp_idx"
+                            )
+                        );
+                    }
                     _ => panic!("Unknown constant in emit_global_init"),
                 },
                 _ => panic!("GlobalKind inlineimport not implemented"),
