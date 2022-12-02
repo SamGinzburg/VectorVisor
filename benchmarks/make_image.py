@@ -118,7 +118,10 @@ def block_on_command(command_id, instance_id):
             print ("Command has completed with status: " + str(output['Status']))
             return output
 
-def run_profile_generic(bench_name, params=""):
+def run_profile_generic(bench_name, params="", testdir=""):
+    if testdir=="":
+        testdir = bench_name
+
     run_command_wasmtime = """#!/bin/bash
     sudo su
     ulimit -n 65536
@@ -158,7 +161,7 @@ def run_profile_generic(bench_name, params=""):
     cd /vv/VectorVisor/benchmarks/{name}/
 
     /usr/local/go/bin/go run /vv/VectorVisor/benchmarks/{name}/run_*.go {addr} 8000 {target_rps} 1 {duration} {params}
-    """.format(addr=gpu_instance[0].private_dns_name, target_rps=256, duration=300, name=bench_name, params=params)
+    """.format(addr=gpu_instance[0].private_dns_name, target_rps=256, duration=300, name=testdir, params=params)
     command_id = run_command(run_invoker, "run invoker for gpu", gpu_instance[0].id)
 
     time.sleep(20)
@@ -306,6 +309,7 @@ time.sleep(120)
 # 2) Run VV-wasm with the instrumented binary w/some workload
 # 3) Use the generated profile to emit an optimized WASM binary
 
+"""
 run_profile_generic("rust-pdfwriter")
 run_profile_generic("average", params="20")
 run_profile_generic("imageblur")
@@ -315,9 +319,11 @@ run_profile_generic("imagehash-modified")
 run_profile_generic("json-compression", params="/vv/VectorVisor/benchmarks/json-compression/smaller_tweets.txt 2000")
 run_profile_generic("scrypt", params="256")
 run_profile_generic("pbkdf2")
+"""
 run_profile_generic("nlp-count-vectorizer", params="/vv/VectorVisor/benchmarks/nlp-count-vectorizer/smaller_tweets.txt 500")
 run_profile_generic("nlp-assemblyscript", params="/vv/VectorVisor/benchmarks/nlp-count-vectorizer/smaller_tweets.txt 500")
-run_profile_generic("nlp-go", params="/vv/VectorVisor/benchmarks/nlp-count-vectorizer/smaller_tweets.txt 500")
+# pass in custom test dir, go projects can't include multiple  
+run_profile_generic("nlp-go", testdir="nlp-count-vectorizer", params="/vv/VectorVisor/benchmarks/nlp-count-vectorizer/smaller_tweets.txt 500")
 
 block_until_done = """#!/bin/bash
 sudo su
