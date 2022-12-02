@@ -1,0 +1,23 @@
+{
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": "./build/release.js",
+      "types": "./build/release.d.ts"
+    }
+  },
+  "scripts": {
+    "asbuild:debug": "asc assembly/index.ts --target debug --use abort=assembly/index/abort --exportStart",
+    "asbuild:release": "asc assembly/index.ts --target release --use abort=assembly/index/abort --exportStart",
+    "asbuild": "npm run asbuild:debug && npm run asbuild:release",
+    "test": "node tests",
+    "start": "npx serve ."
+  },
+  "devDependencies": {
+    "assemblyscript": "^0.24.1"
+  },
+  "dependencies": {
+    "as-wasi": "^0.5.1",
+    "assemblyscript-json": "^1.1.0"
+  }
+}

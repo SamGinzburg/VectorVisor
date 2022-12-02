@@ -1,0 +1,6 @@
+{
+  "extends": "../../../emsdk/emsdk/node/14.18.2_64bit/lib/node_modules/assemblyscript/std/assembly.json",
+  "include": [
+    "./**/*.ts"
+  ]
+}
