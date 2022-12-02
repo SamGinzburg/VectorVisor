@@ -298,6 +298,8 @@ run_profile_generic("json-compression", params="/vv/VectorVisor/benchmarks/json-
 run_profile_generic("scrypt", params="256")
 run_profile_generic("pbkdf2")
 run_profile_generic("nlp-count-vectorizer", params="/vv/VectorVisor/benchmarks/nlp-count-vectorizer/smaller_tweets.txt 500")
+run_profile_generic("nlp-assemblyscript", params="/vv/VectorVisor/benchmarks/nlp-count-vectorizer/smaller_tweets.txt 500")
+run_profile_generic("nlp-go", params="/vv/VectorVisor/benchmarks/nlp-count-vectorizer/smaller_tweets.txt 500")
 
 block_until_done = """#!/bin/bash
 sudo su
