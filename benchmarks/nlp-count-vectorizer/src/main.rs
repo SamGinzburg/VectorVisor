@@ -1,5 +1,6 @@
 use vtext::tokenize::{VTextTokenizerParams,Tokenizer};
 use wasm_serverless_invoke::wasm_handler::WasmHandler;
+use wasm_serverless_invoke::wasm_handler::vectorvisor_barrier;
 use wasm_serverless_invoke::wasm_handler::SerializationFormat::Json;
 use serde::{Deserialize, Serialize};
 use stop_words;
@@ -7,7 +8,7 @@ use std::collections::HashSet;
 use lazy_static::lazy_static;
 
 lazy_static! {
-    //static ref WORD_SET: HashSet<String> = stop_words::get(stop_words::LANGUAGE::English).into_iter().collect(); 
+    static ref WORD_SET: HashSet<String> = stop_words::get(stop_words::LANGUAGE::English).into_iter().collect(); 
 }
 
 #[derive(Debug, Deserialize)]
@@ -59,12 +60,23 @@ fn tokenize(inputs: Vec<String>, tok: &dyn Tokenizer) -> Vec<Vec<String>> {
 
 #[inline(never)]
 fn tokenize_inputs(event: FuncInput) -> FuncResponse {
+
+    unsafe { vectorvisor_barrier() };
+
     let tok = VTextTokenizerParams::default().lang("en").build().unwrap();
     let mut tweets = tokenize(event.tweets, &tok);
-    //let word_set: HashSet<String> = WORD_SET.clone();
+
+    unsafe { vectorvisor_barrier() };
+
+    let word_set: HashSet<String> = WORD_SET.clone();
     
-    //remove_stop_words(&mut tweets, word_set);
+    remove_stop_words(&mut tweets, word_set);
+
+    unsafe { vectorvisor_barrier() };
+
     let hashtags = extract_hashtags(&tweets);
+
+    unsafe { vectorvisor_barrier() };
 
     FuncResponse { tokenized: tweets, hashtags: hashtags }
 }

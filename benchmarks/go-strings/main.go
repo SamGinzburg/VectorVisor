@@ -65,12 +65,16 @@ func main() {
         }
         var input Payload;
         json.Unmarshal(input_buf[0:in_size], &input); 
+    
+        C.vectorvisor_barrier();
 
         // First tokenize each tweet []string --> [][]string
         var tokenized = make([][]string, 0)
         for _, e := range input.Tweets {
             tokenized = append(tokenized, strings.Split(e, " "))
         }
+
+        C.vectorvisor_barrier();
 
         // Now process each tweet, extracting stop words 
         tokenized = Map(tokenized, func(tweet []string) []string {
@@ -81,6 +85,8 @@ func main() {
                 return true
             })
         })
+
+        C.vectorvisor_barrier();
 
         // Get the hashtags
         var tags = make([][]string, 0)
@@ -93,6 +99,8 @@ func main() {
             }
             tags = append(tags, tweetTags)
         }
+
+        C.vectorvisor_barrier();
 
         var response Response;
         response.Tokenized = tokenized;
