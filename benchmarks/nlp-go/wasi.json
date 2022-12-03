@@ -8,7 +8,7 @@
 	"linker":        "wasm-ld",
 	"libc":          "wasi-libc",
 	"scheduler":     "none",
-	"default-stack-size": 1048576,
+	"default-stack-size": 16384,
 	"cflags": [
 		"-mnontrapping-fptoint",
 		"-msign-ext"
@@ -18,7 +18,7 @@
 		"--no-demangle",
         "--gc-sections",
         "--print-gc-sections",
-        "--initial-memory=4194304"
+        "--initial-memory=3145728"
 	],
 	"emulator":      "wasmtime {}",
 	"wasm-abi":      "generic"

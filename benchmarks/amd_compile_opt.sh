@@ -30,9 +30,9 @@ cachebin "imageblur-bmp" "4194304" "262144" "409600" "1536" "4608"
 cachebin "json-compression" "4194304" "131072" "524288" "1536" "4608"
 cachebin "scrypt" "3145728" "262144" "131072" "2048" "6144"
 cachebin "average" "3145728" "131072" "262144" "2048" "5120"
-cachebin "nlp-count-vectorizer" "4194304" "131072" "524288" "1536" "4608"
-nlpscript "nlp-assemblyscript" "4194304" "131072" "524288" "1536" "4608" "false"
-nlpscript "nlp-go" "4194304" "131072" "524288" "1536" "4608" "true"
+cachebin "nlp-count-vectorizer" "3145728" "131072" "8192" "2048" "4608"
+nlpscript "nlp-assemblyscript" "3145728" "131072" "8192" "2048" "4608" "false"
+nlpscript "nlp-go" "3145728" "131072" "8192" "2048" "4608" "true"
 #cachebin "genpdf" "3145728" "131072" "262144" "4096" "5120"
 
 # Save the generated *.bin files

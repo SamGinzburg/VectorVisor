@@ -24,14 +24,14 @@ function main(input: JSON.Obj): Uint8Array | null {
     let tweets: JSON.Arr | null = input.getArr("tweets");
     if (tweets != null) {
 
-        vectorvisor_barrier();
+        //vectorvisor_barrier();
 
         let strTweets: string[] = tweets._arr.map<string>((val: JSON.Value): string => val.toString());
 
         // Split each tweet (tokenize)
         let tokenize: string[][] = strTweets.map<string[]>((val: string): string[] => val.split(" "));
 
-        vectorvisor_barrier();
+        //vectorvisor_barrier();
 
         // Remove empty values and stop words
         let filtered: string[][] = tokenize.map<string[]>((arr: string[]): string[] =>
@@ -43,7 +43,7 @@ function main(input: JSON.Obj): Uint8Array | null {
                                                }
                                            }));
 
-        vectorvisor_barrier();
+        //vectorvisor_barrier();
 
         // Get the array of hashtags for each tweet
         let hashtags: string[][] = filtered.map<string[]>((tweet: string[]): string[] => 
@@ -55,7 +55,7 @@ function main(input: JSON.Obj): Uint8Array | null {
                                           }
                                       }));
 
-        vectorvisor_barrier();
+        //vectorvisor_barrier();
 
         let encoder = new JSONEncoder();
         encoder.pushArray("tokenized");

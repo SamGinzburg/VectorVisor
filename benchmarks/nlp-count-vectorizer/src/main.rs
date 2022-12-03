@@ -61,22 +61,22 @@ fn tokenize(inputs: Vec<String>, tok: &dyn Tokenizer) -> Vec<Vec<String>> {
 #[inline(never)]
 fn tokenize_inputs(event: FuncInput) -> FuncResponse {
 
-    unsafe { vectorvisor_barrier() };
+    //unsafe { vectorvisor_barrier() };
 
     let tok = VTextTokenizerParams::default().lang("en").build().unwrap();
     let mut tweets = tokenize(event.tweets, &tok);
 
-    unsafe { vectorvisor_barrier() };
+    //unsafe { vectorvisor_barrier() };
 
     let word_set: HashSet<String> = WORD_SET.clone();
     
     remove_stop_words(&mut tweets, word_set);
 
-    unsafe { vectorvisor_barrier() };
+    //unsafe { vectorvisor_barrier() };
 
     let hashtags = extract_hashtags(&tweets);
 
-    unsafe { vectorvisor_barrier() };
+    //unsafe { vectorvisor_barrier() };
 
     FuncResponse { tokenized: tweets, hashtags: hashtags }
 }

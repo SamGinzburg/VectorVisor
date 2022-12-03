@@ -53,10 +53,10 @@ func main() {
         stopwordSet[word] = true
     }
 
-    input_buf := make([]byte, 1024*512)
+    input_buf := make([]byte, 1024*450)
 
 	for {
-		in_size := C.serverless_invoke((*C.char)(unsafe.Pointer(&input_buf[0])), 1024*512)
+		in_size := C.serverless_invoke((*C.char)(unsafe.Pointer(&input_buf[0])), 1024*450)
         // if in_size == 0, there is no input
         if in_size == 0 {
             fakeaddr := uintptr(0x0)
@@ -65,8 +65,8 @@ func main() {
         }
         var input Payload;
         json.Unmarshal(input_buf[0:in_size], &input); 
-    
-        C.vectorvisor_barrier();
+
+        //C.vectorvisor_barrier();
 
         // First tokenize each tweet []string --> [][]string
         var tokenized = make([][]string, 0)
@@ -74,7 +74,7 @@ func main() {
             tokenized = append(tokenized, strings.Split(e, " "))
         }
 
-        C.vectorvisor_barrier();
+        //C.vectorvisor_barrier();
 
         // Now process each tweet, extracting stop words 
         tokenized = Map(tokenized, func(tweet []string) []string {
@@ -86,7 +86,7 @@ func main() {
             })
         })
 
-        C.vectorvisor_barrier();
+        //C.vectorvisor_barrier();
 
         // Get the hashtags
         var tags = make([][]string, 0)
@@ -100,7 +100,7 @@ func main() {
             tags = append(tags, tweetTags)
         }
 
-        C.vectorvisor_barrier();
+        //C.vectorvisor_barrier();
 
         var response Response;
         response.Tokenized = tokenized;

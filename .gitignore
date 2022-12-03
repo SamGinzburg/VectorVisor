@@ -34,3 +34,4 @@ benchmarks/*/target/*
 *.out
 *.partbin
 *.bc
+*/node_modules/*

@@ -89,7 +89,7 @@ maxfuncs = 50
 maxloc = 2000000
 #maxfuncs = 999
 #maxloc = 20000000
-benchmark_duration = 300
+benchmark_duration = 600
 SLEEP_TIME=120
 NUM_REPEAT=1
 
@@ -1429,16 +1429,26 @@ def run_image_blur_bench(run_bmp = False):
 
     cleanup()
 
-def run_nlp_count_bench():
+def run_nlp_count_bench(lang):
     if gpu == "a10g":
-        vmcount = 4608
+        vmcount = 6144
         prefix = "a10g_"
     elif gpu == "t4":
-        vmcount = 3072
+        vmcount = 4096
         prefix = ""
     elif gpu == "amd":
-        vmcount = 1536
+        vmcount = 2048
         prefix = ""
+
+    if lang == "rust":
+        path = "nlp-count-vectorizer"
+    elif lang == "go":
+        path = "nlp-go"
+    elif lang == "assemblyscript":
+        path = "nlp-assemblyscript"
+
+    print ("Running lang: ", lang)
+    print ("path: ", path)
 
     run_nlp_command_x86 = """#!/bin/bash
     sudo su
@@ -1462,8 +1472,8 @@ def run_nlp_count_bench():
     x=$(cloud-init status)
     done
 
-    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/nlp-count-vectorizer-opt-{interleave}.wasm --ip=0.0.0.0 --heap=4194304 --stack=131072 --hcallsize=524288 --partition=true --serverless=true --vmcount=4096 --wasmtime=true --fastreply={fastreply} &> /vv/nlp-count-vectorizer.log &
-    """.format(fastreply=fastreply, interleave=interleave)
+    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/{path}-opt-{interleave}.wasm --ip=0.0.0.0 --heap=4194304 --stack=131072 --hcallsize=524288 --partition=true --serverless=true --vmcount=4096 --wasmtime=true --fastreply={fastreply} &> /vv/nlp-count-vectorizer.log &
+    """.format(fastreply=fastreply, interleave=interleave, path=path)
 
     if not skip_cpu:
         run_command(run_nlp_command_wasmtime, "run_nlp_command_wasmtime", cpu_bench_instance[0].id)
@@ -1484,8 +1494,8 @@ def run_nlp_count_bench():
 
     cd /vv/VectorVisor/benchmarks/
 
-    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/{prefix}nlp-count-vectorizer-opt-{interleave}{run_profile}.wasm.bin --ip=0.0.0.0 --heap=4194304 --stack=131072 --hcallsize=524288 --partition=false --serverless=true --vmcount={vmcount} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --lgroup={lgroup} &> /vv/nlp-count-vectorizer.log &
-    """.format(lgroup=local_group_size, prefix=prefix, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount, run_profile=run_profile)
+    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/{prefix}{path}-opt-{interleave}{run_profile}.wasm.bin --ip=0.0.0.0 --heap=4194304 --stack=131072 --hcallsize=8192 --partition=false --serverless=true --vmcount={vmcount} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --lgroup={lgroup} &> /vv/nlp-count-vectorizer.log &
+    """.format(lgroup=1, prefix=prefix, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount, run_profile=run_profile, path=path)
 
     run_command(run_nlp_command, "run_nlp_command", gpu_instance[0].id)
 
@@ -1510,7 +1520,7 @@ def run_nlp_count_bench():
     cd /vv/VectorVisor/benchmarks/nlp-count-vectorizer/
 
     /usr/local/go/bin/go run /vv/VectorVisor/benchmarks/nlp-count-vectorizer/run_nlp.go {addr} 8000 {target_rps} 1 {duration} /vv/VectorVisor/benchmarks/nlp-count-vectorizer/smaller_tweets.txt {input_size}
-    """.format(addr=gpu_instance[0].private_dns_name, input_size=500, target_rps=vmcount, duration=benchmark_duration)
+    """.format(addr=gpu_instance[0].private_dns_name, input_size=50, target_rps=vmcount, duration=benchmark_duration)
 
     for idx in range(NUM_REPEAT):
         command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
@@ -1522,7 +1532,7 @@ def run_nlp_count_bench():
         print (output)
 
         # save output
-        with open(temp_dir+"gpu_bench_nlp.txt".format(idx=idx), "w") as text_file:
+        with open(temp_dir+"gpu_bench_{path}_{idx}.txt".format(idx=idx, path=path), "w") as text_file:
             text_file.write(str(output))
         time.sleep(SLEEP_TIME)
 
@@ -1548,7 +1558,7 @@ def run_nlp_count_bench():
     cd /vv/VectorVisor/benchmarks/nlp-count-vectorizer/
 
     /usr/local/go/bin/go run /vv/VectorVisor/benchmarks/nlp-count-vectorizer/run_nlp.go {addr} 8000 {target_rps} 1 {duration} /vv/VectorVisor/benchmarks/nlp-count-vectorizer/smaller_tweets.txt {input_size}
-    """.format(addr=cpu_bench_instance[0].private_dns_name, input_size=500, target_rps=target_rps_cpu, duration=benchmark_duration)
+    """.format(addr=cpu_bench_instance[0].private_dns_name, input_size=50, target_rps=target_rps_cpu, duration=benchmark_duration)
     
     for idx in range(NUM_REPEAT):
         command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
@@ -1559,7 +1569,7 @@ def run_nlp_count_bench():
         output = block_on_command(command_id, invoker_instance[0].id)
         print (output)
         # save output
-        with open(temp_dir+"cpu_bench_nlp_{idx}.txt".format(idx=idx), "w") as text_file:
+        with open(temp_dir+"cpu_bench_{path}_{idx}.txt".format(idx=idx, path=path), "w") as text_file:
             text_file.write(str(output))
         time.sleep(SLEEP_TIME)
 
@@ -1833,13 +1843,18 @@ if run_only_membench and skip_membench is None:
     ec2.instances.filter(InstanceIds = instance_id_list).terminate()
     exit()
 
-run_nlp_count_bench()
+run_nlp_count_bench("rust")
 
 cleanup()
 
-run_scrypt_bench()
+run_nlp_count_bench("go")
 
 cleanup()
+
+run_nlp_count_bench("assemblyscript")
+
+cleanup()
+
 
 # run image hash bench
 """
@@ -1862,7 +1877,7 @@ run_lz4_bench()
 cleanup()
 
 # run NLP bench
-run_nlp_count_bench()
+run_nlp_count_bench("rust")
 
 cleanup()
 

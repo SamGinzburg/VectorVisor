@@ -14,7 +14,6 @@
  (type $f64_=>_i32 (func_subtype (param f64) (result i32) func))
  (type $i64_=>_i32 (func_subtype (param i64) (result i32) func))
  (import "wasi_snapshot_preview1" "fd_write" (func $~lib/@assemblyscript/wasi-shim/assembly/bindings/wasi_snapshot_preview1/fd_write (param i32 i32 i32 i32) (result i32)))
- (import "env" "vectorvisor_barrier" (func $assembly/env/vectorvisor_barrier))
  (import "env" "serverless_invoke" (func $assembly/env/serverless_invoke (param i32 i32) (result i32)))
  (import "env" "serverless_response" (func $assembly/env/serverless_response (param i32 i32)))
  (global $~argumentsLength (mut i32) (i32.const 0))
@@ -12451,7 +12450,6 @@
    i32.store $0 offset=4
    local.get $0
    if
-    call $assembly/env/vectorvisor_barrier
     global.get $~lib/memory/__stack_pointer
     local.tee $3
     local.get $0
@@ -12476,7 +12474,6 @@
     call $~lib/array/Array<~lib/string/String>#map<~lib/array/Array<~lib/string/String>>
     local.tee $0
     i32.store $0 offset=16
-    call $assembly/env/vectorvisor_barrier
     global.get $~lib/memory/__stack_pointer
     i32.const 56368
     i32.store $0
@@ -12486,7 +12483,6 @@
     call $~lib/array/Array<~lib/string/String>#map<~lib/array/Array<~lib/string/String>>
     local.tee $3
     i32.store $0 offset=20
-    call $assembly/env/vectorvisor_barrier
     global.get $~lib/memory/__stack_pointer
     i32.const 56464
     i32.store $0
@@ -12496,7 +12492,6 @@
     call $~lib/array/Array<~lib/string/String>#map<~lib/array/Array<~lib/string/String>>
     local.tee $4
     i32.store $0 offset=24
-    call $assembly/env/vectorvisor_barrier
     global.get $~lib/memory/__stack_pointer
     local.set $0
     global.get $~lib/memory/__stack_pointer

@@ -27,7 +27,6 @@
  (type $i32_=>_i64 (func_subtype (param i32) (result i64) func))
  (type $i32_i64_=>_i32 (func_subtype (param i32 i64) (result i32) func))
  (import "wasi_snapshot_preview1" "fd_write" (func $~lib/@assemblyscript/wasi-shim/assembly/bindings/wasi_snapshot_preview1/fd_write (param i32 i32 i32 i32) (result i32)))
- (import "env" "vectorvisor_barrier" (func $assembly/env/vectorvisor_barrier))
  (import "env" "serverless_invoke" (func $assembly/env/serverless_invoke (param i32 i32) (result i32)))
  (import "env" "serverless_response" (func $assembly/env/serverless_response (param i32 i32)))
  (global $~lib/as-wasi/assembly/as-wasi/Time.NANOSECOND (mut i32) (i32.const 1))
@@ -12964,7 +12963,6 @@
   i32.const 0
   i32.ne
   if
-   call $assembly/env/vectorvisor_barrier
    global.get $~lib/memory/__stack_pointer
    local.get $tweets
    call $~lib/assemblyscript-json/assembly/JSON/Arr#get:_arr
@@ -12993,7 +12991,6 @@
    call $~lib/array/Array<~lib/string/String>#map<~lib/array/Array<~lib/string/String>>
    local.tee $tokenize
    i32.store $0 offset=16
-   call $assembly/env/vectorvisor_barrier
    global.get $~lib/memory/__stack_pointer
    local.get $tokenize
    i32.const 55344
@@ -13005,7 +13002,6 @@
    call $~lib/array/Array<~lib/array/Array<~lib/string/String>>#map<~lib/array/Array<~lib/string/String>>
    local.tee $filtered
    i32.store $0 offset=20
-   call $assembly/env/vectorvisor_barrier
    global.get $~lib/memory/__stack_pointer
    local.get $filtered
    i32.const 55440
@@ -13017,7 +13013,6 @@
    call $~lib/array/Array<~lib/array/Array<~lib/string/String>>#map<~lib/array/Array<~lib/string/String>>
    local.tee $hashtags
    i32.store $0 offset=24
-   call $assembly/env/vectorvisor_barrier
    global.get $~lib/memory/__stack_pointer
    i32.const 0
    call $~lib/assemblyscript-json/assembly/encoder/JSONEncoder#constructor
