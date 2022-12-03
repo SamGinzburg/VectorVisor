@@ -16,6 +16,11 @@ function cachebin() {
   cargo run --release -- -i $1-opt-8-profile.wasm --heap=$2 --stack=$3 --hcallsize=$4 --vmcount=$5 --partition=false --maxdup=0 --jt=true --interleave=8 --uw=true &> /vv/$1-opt-8-profile.log
 }
 
+function nlpscript() {
+  cargo run --release -- -i $1-opt-4-profile.wasm --heap=$2 --stack=$3 --hcallsize=$4 --vmcount=$5 --partition=false --maxdup=0 --jt=true --interleave=4 --uw=true --pinput=$7 &> /vv/$1-opt-4-profile.log
+  cargo run --release -- -i $1-opt-8-profile.wasm --heap=$2 --stack=$3 --hcallsize=$4 --vmcount=$5 --partition=false --maxdup=0 --jt=true --interleave=8 --uw=true --pinput=$7 &> /vv/$1-opt-8-profile.log
+}
+
 cachebin "rust-pdfwriter" "4194304" "131072" "409600" "3072" "4608"
 cachebin "pbkdf2" "3145728" "262144" "131072" "4096" "6144"
 cachebin "imagehash" "4194304" "131072" "262144" "3072" "4608"
@@ -26,8 +31,8 @@ cachebin "json-compression" "4194304" "131072" "524288" "3072" "4608"
 cachebin "scrypt" "3145728" "262144" "131072" "4096" "6144"
 cachebin "average" "3145728" "131072" "262144" "4096" "5120"
 cachebin "nlp-count-vectorizer" "4194304" "131072" "524288" "3072" "4608"
-cachebin "nlp-assemblyscript" "4194304" "131072" "524288" "3072" "4608"
-cachebin "nlp-go" "4194304" "131072" "524288" "3072" "4608"
+nlpscript "nlp-assemblyscript" "4194304" "131072" "524288" "3072" "4608" "false"
+nlpscript "nlp-go" "4194304" "131072" "524288" "3072" "4608" "true"
 #cachebin "genpdf" "3145728" "131072" "262144" "4096" "5120"
 
 # Save the generated *.bin files
