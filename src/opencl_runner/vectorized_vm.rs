@@ -206,13 +206,13 @@ impl VectorizedVM {
         let wasi_ctx = WasiCtxBuilder::new()
             //.inherit_args()
             //.unwrap()
-            .inherit_stdio()
-            .inherit_env()
-            .unwrap()
+            //.inherit_stdio()
+            //.inherit_env()
+            //.unwrap()
             // preopen whatever the current directory is
             // TODO: pass this via CLI somehow
-            .preopened_dir(opendir, Path::new("."))
-            .unwrap()
+            //.preopened_dir(opendir, Path::new("."))
+            //.unwrap()
             .build();
 
         let engine = Engine::default();

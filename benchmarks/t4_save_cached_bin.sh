@@ -28,11 +28,11 @@ function cachebin() {
 }
 
 function nlp-script() {
-  cp ${1}/release-opt.wasm ${1}.wasm
-  cp ${1}.wasm ${1}-opt-4.wasm
-  cp ${1}.wasm ${1}-opt-8.wasm
+  cp ${1}/release-opt.wasm ${1}-opt.wasm
+  cp ${1}-opt.wasm ${1}-opt-4.wasm
+  cp ${1}-opt.wasm ${1}-opt-8.wasm
   # generate an instrumented binary as well
-  vv-profiler --input ${1}.wasm --output ${1}-opt-instrument.wasm
+  vv-profiler --input ${1}-opt.wasm --output ${1}-opt-instrument.wasm
   cargo run --release -- -i $1-opt-4.wasm --heap=$2 --stack=$3 --hcallsize=$4 --vmcount=$5 --partition=false --maxdup=0 --jt=true --interleave=4 --uw=true --pinput=$7 &> /vv/$1-opt-4.log
   cargo run --release -- -i $1-opt-8.wasm --heap=$2 --stack=$3 --hcallsize=$4 --vmcount=$5 --partition=false --maxdup=0 --jt=true --interleave=8 --uw=true --pinput=$7 &> /vv/$1-opt-8.log
 }
