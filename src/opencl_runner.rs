@@ -6,6 +6,8 @@ pub mod vectorized_vm;
 mod wasi_fd;
 mod wasi_time;
 
+use thread_priority::*;
+
 use vectorized_vm::HyperCall;
 use vectorized_vm::HyperCallResult;
 use vectorized_vm::VectorizedVM;
@@ -1158,6 +1160,12 @@ impl OpenCLRunner {
         req_timeout: u32,
         data_segment: Vec<u8>,
     ) -> VMMRuntimeStatus {
+        let thread_prio_status = set_current_thread_priority(ThreadPriority::Max).is_ok();
+        println!("Thread priority set to MAX: {}", thread_prio_status);
+        if !thread_prio_status {
+            println!("Failed to set thread priority, try running as root");
+        }
+
         let mut kernels: HashMap<u32, ocl::core::Kernel> = HashMap::new();
         let buffers = match &self.buffers {
             Some(b) => b,
@@ -1331,10 +1339,6 @@ impl OpenCLRunner {
         //let mut hypercall_sender = vec![];
         let overhead_tracker_buffer: Arc<UnsafeCellWrapper<u64>> =
             unsafe { Arc::new(UnsafeCellWrapper::new(overhead_tracker)) };
-        let hcall_read_buffer: Arc<UnsafeCellWrapper<u8>> =
-            unsafe { Arc::new(UnsafeCellWrapper::new(hypercall_buffer_read_buffer)) };
-        let hcall_async_buffer: Arc<Mutex<UnsafeCellWrapper<u8>>> =
-            unsafe { Arc::new(Mutex::new(UnsafeCellWrapper::new(hypercall_input_buffer))) };
 
         let mut total_gpu_execution_time: u64 = 0;
         let mut queue_submit_delta: u64 = 0;
@@ -1386,7 +1390,7 @@ impl OpenCLRunner {
                 &queue,
                 &hypercall_buffer,
                 true,
-                ocl::core::MapFlags::READ,
+                ocl::core::MapFlags::READ | ocl::core::MapFlags::WRITE,
                 0,
                 (hypercall_buffer_size * self.num_vms) as usize,
                 None::<Event>,
@@ -1394,11 +1398,16 @@ impl OpenCLRunner {
             )
             .unwrap()
         };
+
+        // We can write directly into mapped memory here...
         let hcall_read_buffer: Arc<UnsafeCellWrapper<u8>> = unsafe {
             Arc::new(UnsafeCellWrapper::new(
                 hcall_read_map.as_slice_mut((hypercall_buffer_size * self.num_vms) as usize),
             ))
         };
+
+        let hcall_async_buffer: Arc<Mutex<UnsafeCellWrapper<u8>>> =
+            unsafe { Arc::new(Mutex::new(UnsafeCellWrapper::new(hcall_write_buf))) };
 
         /*
          * Allocate the data_segment buffer
@@ -2400,13 +2409,13 @@ impl OpenCLRunner {
                         &*hcall_read_buffer.buf.get()
                     };
 
-                    hcall_write_buf.copy_from_slice(hcall_buf);
+                    //hcall_write_buf.copy_from_slice(hcall_buf);
                     ocl::core::enqueue_write_buffer(
                         &queue,
                         &hypercall_buffer,
                         true,
                         0,
-                        &hcall_write_buf,
+                        &hcall_buf,
                         None::<Event>,
                         None::<&mut Event>,
                     )

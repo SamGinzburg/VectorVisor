@@ -70,6 +70,12 @@ impl Serverless {
         hypercall: &mut HyperCall,
         sender: &Sender<HyperCallResult>,
     ) -> () {
+        // This is safe to do here because VectorizedVM *always* exists for a static lifetime
+        // *and* we explicitly leaked the needed structures earlier.
+        let vm_ctx: &'static mut VectorizedVM = unsafe {
+            std::mem::transmute::<&mut VectorizedVM, &'static mut VectorizedVM>(vm_ctx)
+        };
+
         let mut hcall_buf: &'static [u8] = unsafe { *hypercall.hypercall_buffer.buf.get() };
         let mut overhead_buf: &'static [u64] = unsafe { *hypercall.overhead_tracker.buf.get() };
 
@@ -87,12 +93,6 @@ impl Serverless {
             let msg_len = LittleEndian::read_u32(&hcall_buf[0..4]);
             let resp_buf_len: usize = msg_len.try_into().unwrap();
 
-            let mut resp_buf = vec![0u8; resp_buf_len.try_into().unwrap()];
-            //let resp_buf = bytes::Bytes::from(&hcall_buf[4..4 + resp_buf_len]);
-            // copy the data from the hcall_buffer
-            resp_buf[0..resp_buf_len].copy_from_slice(&hcall_buf[4..4+resp_buf_len]);
-            let resp_buf = bytes::Bytes::from(resp_buf);
-
             // calculate on device time and queue submit times
             let on_device_time = hypercall.timestamp_counter - *vm_ctx.timestamp_counter;
             let queue_submit_time = hypercall.queue_submit_delta - *vm_ctx.queue_submit_counter;
@@ -105,6 +105,9 @@ impl Serverless {
             }
             let (uuid, chan_id) = vm_ctx.uuid_queue.pop_front().unwrap();
             if chan_id == 0 {
+                // Copy to async buf
+                vm_ctx.async_buffer1[0..resp_buf_len].copy_from_slice(&hcall_buf[4..4 + resp_buf_len]);
+                let resp_buf = bytes::Bytes::from_static(vm_ctx.async_buffer1);
                 send_chan1
                     .lock()
                     .unwrap()
@@ -120,6 +123,8 @@ impl Serverless {
                     ))
                     .unwrap();
             } else {
+                vm_ctx.async_buffer2[0..resp_buf_len].copy_from_slice(&hcall_buf[4..4 + resp_buf_len]);
+                let resp_buf = bytes::Bytes::from_static(vm_ctx.async_buffer2);
                 send_chan2
                     .lock()
                     .unwrap()

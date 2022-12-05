@@ -224,8 +224,8 @@ def run_scrypt_bench():
     x=$(cloud-init status)
     done
 
-    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/scrypt-opt-{interleave}.wasm --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=131072 --partition=true --serverless=true --vmcount=4096 --wasmtime=true --fastreply={fastreply} &> /vv/scrypt.log &
-    """.format(fastreply=fastreply, interleave=interleave)
+    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/scrypt-opt-{interleave}{run_profile}.wasm --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=131072 --partition=true --serverless=true --vmcount=4096 --wasmtime=true --fastreply={fastreply} &> /vv/scrypt.log &
+    """.format(fastreply=fastreply, interleave=interleave, run_profile=run_profile)
 
     if not skip_cpu:
         run_command(run_scrypt_command_wasmtime, "scrypt_cpu", cpu_bench_instance[0].id)
@@ -383,8 +383,8 @@ def run_pbkdf2_bench():
     x=$(cloud-init status)
     done
 
-    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/pbkdf2-opt-{interleave}.wasm --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=131072 --partition=true --serverless=true --vmcount=4096 --wasmtime=true --fastreply={fastreply} &> /vv/pbkdf2.log &
-    """.format(fastreply=fastreply, interleave=interleave)
+    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/pbkdf2-opt-{interleave}{run_profile}.wasm --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=131072 --partition=true --serverless=true --vmcount=4096 --wasmtime=true --fastreply={fastreply} &> /vv/pbkdf2.log &
+    """.format(fastreply=fastreply, interleave=interleave, run_profile=run_profile)
 
     if not skip_cpu:
         run_command(run_pbkdf2_command_wasmtime, "pbkdf2_cpu", cpu_bench_instance[0].id)
@@ -706,8 +706,8 @@ def run_genpdf_bench():
     x=$(cloud-init status)
     done
 
-    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/rust-pdfwriter-opt-{interleave}.wasm --ip=0.0.0.0 --heap=4194304 --stack=131072 --hcallsize=131072 --partition=false --serverless=true --vmcount={vmcount} --wasmtime=true --fastreply={fastreply} &> /vv/rust-pdfwriter.log &
-    """.format(fastreply=fastreply, interleave=interleave, vmcount=vmcount)
+    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/rust-pdfwriter-opt-{interleave}{run_profile}.wasm --ip=0.0.0.0 --heap=4194304 --stack=131072 --hcallsize=131072 --partition=false --serverless=true --vmcount={vmcount} --wasmtime=true --fastreply={fastreply} &> /vv/rust-pdfwriter.log &
+    """.format(fastreply=fastreply, interleave=interleave, vmcount=vmcount, run_profile=run_profile)
 
     if not skip_cpu:
         run_command(run_genpdf_command_wasmtime, "run_genpdf_command_wasmtime", cpu_bench_instance[0].id)
@@ -858,8 +858,8 @@ def run_average_bench():
     x=$(cloud-init status)
     done
 
-    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/average-opt-{interleave}.wasm --ip=0.0.0.0 --heap=3145728 --stack=131072 --hcallsize=262144 --partition=true --serverless=true --vmcount=4096 --wasmtime=true --fastreply={fastreply} &> /vv/average.log &
-    """.format(fastreply=fastreply, interleave=interleave)
+    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/average-opt-{interleave}{run_profile}.wasm --ip=0.0.0.0 --heap=3145728 --stack=131072 --hcallsize=262144 --partition=true --serverless=true --vmcount=4096 --wasmtime=true --fastreply={fastreply} &> /vv/average.log &
+    """.format(fastreply=fastreply, interleave=interleave, run_profile=run_profile)
 
     if not skip_cpu:
         run_command(run_average_command_wasmtime, "run_average_command_wasmtime", cpu_bench_instance[0].id)
@@ -1013,8 +1013,8 @@ def run_image_hash_bench(run_modified = False):
     x=$(cloud-init status)
     done
 
-    /vv/VectorVisor/target/release/vectorvisor --input {imagehash_path}-opt-{interleave}.wasm --ip=0.0.0.0 --heap=4194304 --stack=131072 --hcallsize=294912 --partition=true --serverless=true --vmcount=3072 --wasmtime=true --fastreply={fastreply} &> /vv/imagehash.log &
-    """.format(fastreply=fastreply, imagehash_path=imagehash_path, interleave=interleave)
+    /vv/VectorVisor/target/release/vectorvisor --input {imagehash_path}-opt-{interleave}{run_profile}.wasm --ip=0.0.0.0 --heap=4194304 --stack=131072 --hcallsize=294912 --partition=true --serverless=true --vmcount=3072 --wasmtime=true --fastreply={fastreply} &> /vv/imagehash.log &
+    """.format(fastreply=fastreply, imagehash_path=imagehash_path, interleave=interleave, run_profile=run_profile)
 
     if not skip_cpu:
         run_command(run_image_command_wasmtime, "run_imagehash_command_wasmtime", cpu_bench_instance[0].id)
@@ -1447,8 +1447,8 @@ def run_nlp_count_bench(lang):
     elif lang == "assemblyscript":
         path = "nlp-assemblyscript"
 
-    print ("Running lang: ", lang)
-    print ("path: ", path)
+    print ("Running nlp lang: ", lang)
+    print ("nlp path: ", path)
 
     run_nlp_command_x86 = """#!/bin/bash
     sudo su
@@ -1472,8 +1472,8 @@ def run_nlp_count_bench(lang):
     x=$(cloud-init status)
     done
 
-    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/{path}-opt-{interleave}.wasm --ip=0.0.0.0 --heap=4194304 --stack=131072 --hcallsize=524288 --partition=true --serverless=true --vmcount=4096 --wasmtime=true --fastreply={fastreply} &> /vv/nlp-count-vectorizer.log &
-    """.format(fastreply=fastreply, interleave=interleave, path=path)
+    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/{path}-opt-{interleave}{run_profile}.wasm --ip=0.0.0.0 --heap=3145728 --stack=131072 --hcallsize=8192 --partition=true --serverless=true --vmcount=4096 --wasmtime=true --fastreply={fastreply} &> /vv/nlp-count-vectorizer.log &
+    """.format(fastreply=fastreply, interleave=interleave, path=path, run_profile=run_profile)
 
     if not skip_cpu:
         run_command(run_nlp_command_wasmtime, "run_nlp_command_wasmtime", cpu_bench_instance[0].id)
@@ -1494,7 +1494,7 @@ def run_nlp_count_bench(lang):
 
     cd /vv/VectorVisor/benchmarks/
 
-    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/{prefix}{path}-opt-{interleave}{run_profile}.wasm.bin --ip=0.0.0.0 --heap=4194304 --stack=131072 --hcallsize=8192 --partition=false --serverless=true --vmcount={vmcount} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --lgroup={lgroup} &> /vv/nlp-count-vectorizer.log &
+    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/{prefix}{path}-opt-{interleave}{run_profile}.wasm.bin --ip=0.0.0.0 --heap=3145728 --stack=131072 --hcallsize=8192 --partition=false --rt=0 --serverless=true --vmcount={vmcount} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --lgroup={lgroup} &> /vv/nlp-count-vectorizer.log &
     """.format(lgroup=1, prefix=prefix, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount, run_profile=run_profile, path=path)
 
     run_command(run_nlp_command, "run_nlp_command", gpu_instance[0].id)
@@ -1520,7 +1520,7 @@ def run_nlp_count_bench(lang):
     cd /vv/VectorVisor/benchmarks/nlp-count-vectorizer/
 
     /usr/local/go/bin/go run /vv/VectorVisor/benchmarks/nlp-count-vectorizer/run_nlp.go {addr} 8000 {target_rps} 1 {duration} /vv/VectorVisor/benchmarks/nlp-count-vectorizer/smaller_tweets.txt {input_size}
-    """.format(addr=gpu_instance[0].private_dns_name, input_size=50, target_rps=vmcount, duration=benchmark_duration)
+    """.format(addr=gpu_instance[0].private_dns_name, input_size=25, target_rps=vmcount, duration=benchmark_duration)
 
     for idx in range(NUM_REPEAT):
         command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
@@ -1558,7 +1558,7 @@ def run_nlp_count_bench(lang):
     cd /vv/VectorVisor/benchmarks/nlp-count-vectorizer/
 
     /usr/local/go/bin/go run /vv/VectorVisor/benchmarks/nlp-count-vectorizer/run_nlp.go {addr} 8000 {target_rps} 1 {duration} /vv/VectorVisor/benchmarks/nlp-count-vectorizer/smaller_tweets.txt {input_size}
-    """.format(addr=cpu_bench_instance[0].private_dns_name, input_size=50, target_rps=target_rps_cpu, duration=benchmark_duration)
+    """.format(addr=cpu_bench_instance[0].private_dns_name, input_size=25, target_rps=target_rps_cpu, duration=benchmark_duration)
     
     for idx in range(NUM_REPEAT):
         command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
@@ -1697,6 +1697,39 @@ def run_membench(membench_interleave=4):
         # save output
         with open(temp_dir+"gpu_membench64_unroll_{interleave}.txt".format(interleave=membench_interleave), "a") as text_file:
             text_file.write(str(output)+"\n")
+
+
+def run_syscall_bench(hcall_sizes, membench_interleave=4):
+    if gpu == "a10g":
+        vmcount = 6144
+    elif gpu == "t4":
+        vmcount = 4096
+    elif gpu == "amd":
+        vmcount = 2048
+
+    for hcall_size in hcall_sizes:
+        print ("Running bench for hcall_size: ", hcall_size)
+        run_syscall_command = """#!/bin/bash
+        sudo su
+        ulimit -n 65536
+        x=$(cloud-init status)
+        until [ "$x" == "status: done" ]; do
+        sleep 10
+        x=$(cloud-init status)
+        done
+
+        /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/syscallbench/serverless.wat --ip=0.0.0.0 --heap=3145728 --stack=1024 --hcallsize={hcall} --partition=false --serverless=true --vmcount={vmcount} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} --lgroup={lgroup} &> syscall.log
+        """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=membench_interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount, hcall=hcall_size)
+        run_command(run_syscall_command, "run_syscall", gpu_instance[0].id)
+
+        # Now run the invoker..
+
+
+        # save the result...
+
+        cleanup()
+        time.sleep(30)
+
 
 
 """
@@ -1843,15 +1876,15 @@ if run_only_membench and skip_membench is None:
     ec2.instances.filter(InstanceIds = instance_id_list).terminate()
     exit()
 
-run_nlp_count_bench("rust")
-
-cleanup()
-
 run_nlp_count_bench("go")
 
 cleanup()
 
 run_nlp_count_bench("assemblyscript")
+
+cleanup()
+
+run_nlp_count_bench("rust")
 
 cleanup()
 

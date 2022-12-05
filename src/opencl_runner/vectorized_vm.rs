@@ -188,6 +188,8 @@ pub struct VectorizedVM {
     pub input_msg_len: usize,
     pub no_resp: bool,
     pub uuid_queue: VecDeque<(String, u32)>,
+    pub async_buffer1: &'static mut [u8],
+    pub async_buffer2: &'static mut [u8]
 }
 
 impl VectorizedVM {
@@ -206,7 +208,7 @@ impl VectorizedVM {
         let wasi_ctx = WasiCtxBuilder::new()
             //.inherit_args()
             //.unwrap()
-            //.inherit_stdio()
+            .inherit_stdio()
             //.inherit_env()
             //.unwrap()
             // preopen whatever the current directory is
@@ -227,6 +229,13 @@ impl VectorizedVM {
         let memory_ty = MemoryType::new(num_vm_pages, None);
         let memory = Memory::new(&mut store, memory_ty).unwrap();
         //let raw_mem: &mut [u8] = memory.data_mut(&mut store);
+
+        // Allocate the reply buffers to avoid allocs on the hot path
+        let async_buffer1: &'static mut [u8] =
+                Box::leak(vec![0u8; hcall_buf_size as usize].into_boxed_slice());
+
+        let async_buffer2: &'static mut [u8] =
+                Box::leak(vec![0u8; hcall_buf_size as usize].into_boxed_slice());
 
         VectorizedVM {
             ctx: wasi_ctx,
@@ -250,6 +259,8 @@ impl VectorizedVM {
             input_msg_len: 0,
             no_resp: true,
             uuid_queue: VecDeque::new(),
+            async_buffer1: async_buffer1,
+            async_buffer2: async_buffer2,
         }
     }
 
