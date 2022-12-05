@@ -35,10 +35,20 @@ NVIDIA | Linux | RTX 3080 Ti | ✅
 NVIDIA | Linux | T4 | ✅
 NVIDIA | Linux | A10G | ✅
 NVIDIA | Linux | V100 | ✅
+AMD (ROCm/HSA OpenCL) | Linux | AMD Radeon Pro V520 | ⚠️
 Intel  | macOS | Iris Pro | ⚠️
-AMD  | Linux | AMD Radeon Pro V520 | ❌
 
-Intel devices feature limited support, but fail for programs more complex than our smoke tests (compilation failures, possibly due to compiler bugs in the Intel OpenCL C compiler). AMD devices (ROCm OpenCL) compile successfully but crash at runtime (likely due to bugs in ROCm).
+Intel devices feature limited support, but fail for programs more complex than our smoke tests (compilation failures, possibly due to compiler bugs in the Intel OpenCL C compiler). AMD devices (ROCm/HSA OpenCL) run (but sometimes crash). Generally, NVIDIA GPUs obtain the best performance, although newer Intel/AMD dedicated GPUs have not been tested. 
+
+All non-nvidia targets should be run with the following flags:
+```
+--nvidia=false
+```
+
+AMD targets need to be run with:
+```
+--patch=true
+```
 
 ## Configuring VectorVisor
 

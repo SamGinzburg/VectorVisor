@@ -46,14 +46,19 @@ fn extract_hashtags(tweets: &Vec<Vec<String>>) -> Vec<Vec<String>> {
 }
 
 #[inline(never)]
-fn tokenize(inputs: Vec<String>, tok: &dyn Tokenizer) -> Vec<Vec<String>> {
+fn tokenize(inputs: Vec<String>) -> Vec<Vec<String>> {
+//fn tokenize(inputs: Vec<String>, tok: &dyn Tokenizer) -> Vec<Vec<String>> {
     let mut results = vec![];
     for tweet in inputs {
+        /*
         let mut str_vec: Vec<String> = vec![];
         for token in tok.tokenize(&tweet) {
             str_vec.push(token.to_string());
         }
         results.push(str_vec);
+        */
+        // Copy what 
+        results.push(tweet.split(' ').map(|x| x.to_string()).collect::<Vec<String>>());
     }
     results
 }
@@ -63,8 +68,9 @@ fn tokenize_inputs(event: FuncInput) -> FuncResponse {
 
     //unsafe { vectorvisor_barrier() };
 
-    let tok = VTextTokenizerParams::default().lang("en").build().unwrap();
-    let mut tweets = tokenize(event.tweets, &tok);
+    //let tok = VTextTokenizerParams::default().lang("en").build().unwrap();
+    //let mut tweets = tokenize(event.tweets, &tok);
+    let mut tweets = tokenize(event.tweets);
 
     //unsafe { vectorvisor_barrier() };
 
