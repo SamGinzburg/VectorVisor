@@ -309,7 +309,6 @@ time.sleep(120)
 # 2) Run VV-wasm with the instrumented binary w/some workload
 # 3) Use the generated profile to emit an optimized WASM binary
 
-"""
 run_profile_generic("rust-pdfwriter")
 run_profile_generic("average", params="20")
 run_profile_generic("imageblur")
@@ -319,7 +318,6 @@ run_profile_generic("imagehash-modified")
 run_profile_generic("json-compression", params="/vv/VectorVisor/benchmarks/json-compression/smaller_tweets.txt 2000")
 run_profile_generic("scrypt", params="256")
 run_profile_generic("pbkdf2")
-"""
 run_profile_generic("nlp-count-vectorizer", params="/vv/VectorVisor/benchmarks/nlp-count-vectorizer/smaller_tweets.txt 500")
 run_profile_generic("nlp-assemblyscript", params="/vv/VectorVisor/benchmarks/nlp-count-vectorizer/smaller_tweets.txt 500")
 # pass in custom test dir, go projects can't include multiple  
