@@ -116,6 +116,17 @@ pub fn emit_fd_write_helpers(_writer: &opencl_writer::OpenCLCWriter, _debug: boo
         )
     );
 
+    // bounds checking, here we just compare ptr values since it is easier...
+    result += &format!(r#"
+    if (({} + next_buffer_start + 16 + buf_len) > {}) {{
+        {}
+    }}
+"#,
+    "(global char*)hypercall_buffer+(hcall_size*warp_idx)",
+    "(global uint*)((global char*)hypercall_buffer+(hcall_size*warp_idx)+hcall_size)",
+    &emit_trap(TrapCode::TrapOutOfBounds, true)
+    );
+
     // write the iovec to the hypercall_buffer
 
     result += &format!("\t*({}) = next_buffer_start;\n",
@@ -123,6 +134,7 @@ pub fn emit_fd_write_helpers(_writer: &opencl_writer::OpenCLCWriter, _debug: boo
 
     result += &format!("\t*({}) = buf_len;\n",
                        "(global uint*)((global char*)hypercall_buffer+(hcall_size*warp_idx)+iovec_hypercall_offset+4)");
+
 
     result += &format!("\t___private_memcpy_gpu2cpu((ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), warp_idx, read_idx, thread_idx, scratch_space);\n",
                        &format!("(global char *)heap_u32+buf_ptr"),
@@ -272,6 +284,16 @@ pub fn emit_fd_prestat_dir_name_post(
         )
     );
     */
+
+    // bounds checking
+    ret_str += &format!(r#"
+    if ({} + 4 > hcall_size) {{
+        {}
+    }}
+"#,
+    str_len,
+    &emit_trap(TrapCode::TrapOutOfBounds, true)
+    );
 
     ret_str += &format!("\t___private_memcpy_cpu2gpu((ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), warp_idx, read_idx, thread_idx, scratch_space);\n",
                         "(ulong)((global char *)hypercall_buffer+(hcall_size*warp_idx)+4)", //dst, first 4 bytes are the len
@@ -717,6 +739,17 @@ pub fn emit_environ_get_post(
     //ret_str += &format!("\t\tprintf(\"environ ptr %d\\n\", {});\n", environ_ptr_buf);
     //ret_str += &format!("\t\tprintf(\"string buf %d\\n\", {});\n", string_buf);
 
+    // bounds checking
+    ret_str += &format!(r#"
+    if ((({}*4) + {} + 8) > hcall_size) {{
+        {}
+    }}
+"#,
+    env_count,
+    str_buf_len,
+    &emit_trap(TrapCode::TrapOutOfBounds, true)
+    );
+
     // Remap the ptrs from the host VM to the GPU VM
     ret_str += &format!(
         "\tfor (uint count = 0; count < {}; count++) {{\n",
@@ -766,26 +799,45 @@ pub fn emit_args_get_post(
     let arg_count =
         format!("*((global uint*)((global char*)hypercall_buffer+(hcall_size*warp_idx)))");
 
+    let string_data =
+        format!("(ulong)((global char *)hypercall_buffer+(hcall_size*warp_idx)+8+({}*4))", arg_count);
+     
+    let ptr_len =
+        "*((global uint*)((global char*)hypercall_buffer+(hcall_size*warp_idx)))";
+
+     let string_len =
+        "*((global uint*)((global char*)hypercall_buffer+(hcall_size*warp_idx)+4))";
+
     let _size_string_buf = stack_ctx.vstack_pop(StackType::i32);
     let size_ptr_buf = stack_ctx.vstack_pop(StackType::i32);
     let result_register = stack_ctx.vstack_alloc(StackType::i32);
 
-    // copy over the buffer of pointers
+    // If ptr_buf_len + string_len > hcall size
+    ret_str += &format!(r#"
+    if (({} + {}) > hcall_size) {{
+        {}
+    }}
+"#,
+    ptr_len,
+    string_len,
+    &emit_trap(TrapCode::TrapOutOfBounds, true)
+    );
 
+    // copy over the buffer of pointers
     ret_str += &format!("\t___private_memcpy_cpu2gpu((ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), warp_idx, read_idx, thread_idx, scratch_space);\n",
                         "(ulong)((global char *)hypercall_buffer+(hcall_size*warp_idx)+8)",
                         "hypercall_buffer", // mem_start_dst
                         &format!("(global char *)heap_u32+{}", size_ptr_buf),
                         "heap_u32", // mem_start_src
-                        &"*((global uint*)((global char*)hypercall_buffer+(hcall_size*warp_idx)))");
+                        &ptr_len);
 
     // copy the string data
     ret_str += &format!("\t___private_memcpy_cpu2gpu((ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), warp_idx, read_idx, thread_idx, scratch_space);\n",
-                        &format!("(ulong)((global char *)hypercall_buffer+(hcall_size*warp_idx)+8+({}*4))", arg_count),
+                        string_data,
                         "hypercall_buffer", // mem_start_dst
                         &format!("(global char *)heap_u32+{}", size_ptr_buf),
                         "heap_u32", // mem_start_src
-                        &"*((global uint*)((global char*)hypercall_buffer+(hcall_size*warp_idx)+4))");
+                        &string_len);
 
     // now return the error code
     ret_str += &format!("\t{} = {};\n", result_register, "hcall_ret_val");
@@ -844,6 +896,16 @@ pub fn emit_serverless_invoke_post(
     //ret_str += &format!("\tprintf(\"json_buf_len: %p\\n\", {});\n", json_buf_len);
     //ret_str += &format!("\tprintf(\"hcall_ret_val: %p\\n\", {});\n", "hcall_ret_val");
 
+    // If hcall_ret_val > hcall size
+    ret_str += &format!(r#"
+    if (hcall_ret_val > hcall_size) {{
+        {}
+    }}
+"#,
+    &emit_trap(TrapCode::TrapOutOfBounds, true)
+    );
+
+
     // we need to copy the data stored in the hcall buffer, to the json_buf_ptr
     // specifically, we need to de-interleave the data, so the CPU sees the data `normally`
     //ret_str += &format!("\t{{\n");
@@ -873,6 +935,16 @@ pub fn emit_serverless_response_pre(
 
     let json_buf_len = stack_ctx.vstack_peak(StackType::i32, 0);
     let json_buf_ptr = stack_ctx.vstack_peak(StackType::i32, 1);
+
+    // If our (response len + 4) > hcall size
+    ret_str += &format!(r#"
+    if (({} + 4) > hcall_size) {{
+        {}
+    }}
+"#,
+    json_buf_len,
+    &emit_trap(TrapCode::TrapOutOfBounds, true)
+    );
 
     // copy the buffer to the hcall buf so we can return it back via our middleware setup
     ret_str += &format!("\t___private_memcpy_gpu2cpu((ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), warp_idx, read_idx, thread_idx, scratch_space);\n",
@@ -1230,6 +1302,16 @@ pub fn emit_random_get_post(
     let random_buf_len = stack_ctx.vstack_pop(StackType::i32);
     let random_buf_ptr = stack_ctx.vstack_pop(StackType::i32);
     let result_register = stack_ctx.vstack_alloc(StackType::i32);
+
+    // If random_buf_len > hcall size
+    ret_str += &format!(r#"
+    if ({} > hcall_size) {{
+        {}
+    }}
+"#,
+    random_buf_len,
+    &emit_trap(TrapCode::TrapOutOfBounds, true)
+    );
 
     // Copy the random bytes back from the hcall_buf to the heap
     ret_str += &format!("\t___private_memcpy_cpu2gpu((ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), warp_idx, read_idx, thread_idx, scratch_space);\n",
