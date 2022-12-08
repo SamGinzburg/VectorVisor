@@ -40,12 +40,12 @@ function nlp-script() {
   cargo run --release -- -i $1-opt-8.wasm --heap=$2 --stack=$3 --hcallsize=$4 --vmcount=$6 --partition=false --maxdup=0 --jt=true --interleave=8 --uw=true --pinput=$7 &> /vv/$1-opt-8.log
 }
 
-cachebin "rust-pdfwriter" "4194304" "131072" "409600" "3072" "4608"
-cachebin "pbkdf2" "3145728" "262144" "131072" "4096" "6144"
 cachebin "imagehash" "4194304" "131072" "262144" "3072" "4608"
 cachebin "imagehash-modified" "4194304" "131072" "262144" "3072" "4608"
 cachebin "imageblur" "4194304" "262144" "409600" "3072" "4608"
 cachebin "imageblur-bmp" "4194304" "262144" "409600" "3072" "4608"
+cachebin "rust-pdfwriter" "4194304" "131072" "409600" "3072" "4608"
+cachebin "pbkdf2" "3145728" "262144" "131072" "4096" "6144"
 cachebin "json-compression" "4194304" "131072" "524288" "3072" "4608"
 cachebin "scrypt" "3145728" "262144" "131072" "4096" "6144"
 cachebin "average" "3145728" "131072" "262144" "4096" "5120"
