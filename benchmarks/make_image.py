@@ -119,6 +119,7 @@ def block_on_command(command_id, instance_id):
             return output
 
 def run_profile_generic(bench_name, params="", testdir=""):
+    print ("Running: ", bench_name)
     if testdir=="":
         testdir = bench_name
 
@@ -228,7 +229,8 @@ us-east-1 AMI: ami-094c089c38ed069f2
 
 if region == "us-east-1":
     #gpu_ami = 'ami-09a83b91fc98e860f'
-    gpu_ami = 'ami-02e8976fea9b1f568'
+    #gpu_ami = 'ami-02e8976fea9b1f568'
+    gpu_ami = 'ami-0b13950be17f7d1b5'
 elif region == "us-east-2":
     gpu_ami = 'ami-01463836f7041cd10'
 
