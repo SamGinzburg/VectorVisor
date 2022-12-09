@@ -194,7 +194,7 @@ def run_scrypt_bench():
 
     if gpu == "a10g":
         vmcount = 6144
-        prefix = "a10g_"
+        prefix = ""
     elif gpu == "t4":
         vmcount = 4096
         prefix = ""
@@ -353,7 +353,7 @@ def run_pbkdf2_bench():
     # Now we can set up the next benchmark (pbkdf2)
     if gpu == "a10g":
         vmcount = 6144
-        prefix = "a10g_"
+        prefix = ""
     elif gpu == "t4":
         vmcount = 4096
         prefix = ""
@@ -514,7 +514,7 @@ def run_pbkdf2_bench():
 def run_lz4_bench():
     if gpu == "a10g":
         vmcount = 4608
-        prefix = "a10g_"
+        prefix = ""
     elif gpu == "t4":
         vmcount = 3072
         prefix = ""
@@ -676,7 +676,7 @@ def run_lz4_bench():
 def run_genpdf_bench():
     if gpu == "a10g":
         vmcount = 4608
-        prefix="a10g_"
+        prefix=""
     elif gpu == "t4":
         vmcount = 3072
         prefix=""
@@ -828,7 +828,7 @@ def run_genpdf_bench():
 def run_average_bench():
     if gpu == "a10g":
         vmcount = 5120
-        prefix = "a10g_"
+        prefix = ""
     elif gpu == "t4":
         vmcount = 4096
         prefix = ""
@@ -979,7 +979,7 @@ def run_average_bench():
 def run_image_hash_bench(run_modified = False):
     if gpu == "a10g":
         vmcount = 4096
-        prefix = "a10g_"
+        prefix = ""
     elif gpu == "t4":
         vmcount = 3072
         prefix = ""
@@ -1210,7 +1210,7 @@ def run_image_hash_bench(run_modified = False):
 def run_image_blur_bench(run_bmp = False):
     if gpu == "a10g":
         vmcount = 4096
-        prefix = "a10g_"
+        prefix = ""
     elif gpu == "t4":
         vmcount = 3072
         prefix = ""
@@ -1432,7 +1432,7 @@ def run_image_blur_bench(run_bmp = False):
 def run_nlp_count_bench(lang):
     if gpu == "a10g":
         vmcount = 6144
-        prefix = "a10g_"
+        prefix = ""
     elif gpu == "t4":
         vmcount = 4096
         prefix = ""
@@ -1702,10 +1702,13 @@ def run_membench(membench_interleave=4):
 def run_syscall_bench(hcall_sizes, membench_interleave=4):
     if gpu == "a10g":
         vmcount = 6144
+        nvidia = "true"
     elif gpu == "t4":
         vmcount = 4096
+        nvidia = "true"
     elif gpu == "amd":
         vmcount = 2048
+        nvidia = "false"
 
     for hcall_size in hcall_sizes:
         print ("Running bench for hcall_size: ", hcall_size)
@@ -1718,17 +1721,49 @@ def run_syscall_bench(hcall_sizes, membench_interleave=4):
         x=$(cloud-init status)
         done
 
-        /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/syscallbench/serverless.wat --ip=0.0.0.0 --heap=3145728 --stack=1024 --hcallsize={hcall} --partition=false --serverless=true --vmcount={vmcount} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} --lgroup={lgroup} &> syscall.log
-        """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=membench_interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount, hcall=hcall_size)
+        /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/syscallbench/serverless.wat --ip=0.0.0.0 --heap=3145728 --stack=1024 --hcallsize={hcall} --partition=false --serverless=true --vmcount={vmcount} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} --lgroup={lgroup} --rt=25 --nvidia={nv}&> syscall.log
+        """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=membench_interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount, hcall=hcall_size+4, nv=nvidia)
         run_command(run_syscall_command, "run_syscall", gpu_instance[0].id)
 
         # Now run the invoker..
+        run_invoker = """#!/bin/bash
+        sudo su
+        ulimit -n 65536
+        mkdir -p ~/gocache/
+        mkdir -p ~/gopath/
+        mkdir -p ~/xdg/
+        export GOCACHE=~/gocache/
+        export GOPATH=~/gopath/
+        export XDG_CACHE_HOME=~/xdg/
 
+        x=$(cloud-init status)
+        until [ "$x" == "status: done" ]; do
+        sleep 10
+        x=$(cloud-init status)
+        done
+
+        cd /vv/VectorVisor/benchmarks/syscallbench/
+
+        /usr/local/go/bin/go run /vv/VectorVisor/benchmarks/syscallbench/run_syscalls.go {addr} 8000 {target_rps} 1 {duration} {input_size}
+        """.format(addr=gpu_instance[0].private_dns_name, input_size=int(hcall_size/1024), target_rps=vmcount, duration=60)
 
         # save the result...
+        command_id = run_command(run_invoker, "run invoker", invoker_instance[0].id)
+
+        time.sleep(10)
+
+        # Block until benchmark is complete
+        output = block_on_command(command_id, invoker_instance[0].id)
+        print (output)
+        # save output
+        with open(temp_dir+"gpu_syscallbench_{}.txt".format(hcall_size), "w") as text_file:
+            text_file.write(str(output))
+
+        time.sleep(10)
 
         cleanup()
-        time.sleep(30)
+
+        time.sleep(10)
 
 
 
@@ -1860,6 +1895,11 @@ while True:
 ssm_client = boto3.client('ssm', region_name=region)
 
 if skip_membench is None:
+    vals = [2**x for x in range(12,19)]
+    run_syscall_bench(vals) # 4096 --> 256KiB
+
+    cleanup()
+
     run_membench(membench_interleave=1)
 
     cleanup()
@@ -1890,7 +1930,6 @@ cleanup()
 
 
 # run image hash bench
-"""
 run_image_hash_bench(run_modified = False)
 
 cleanup()
@@ -1906,11 +1945,6 @@ cleanup()
 
 # run lz4 bench
 run_lz4_bench()
-
-cleanup()
-
-# run NLP bench
-run_nlp_count_bench("rust")
 
 cleanup()
 
@@ -1931,14 +1965,11 @@ cleanup()
 run_genpdf_bench()
 
 cleanup()
-"""
 
-"""
 # run pbkdf2 bench
 run_pbkdf2_bench()
 
 cleanup()
-"""
 
 # clean up all instances at end
 ec2.instances.filter(InstanceIds = instance_id_list).terminate()
