@@ -24,8 +24,7 @@ function cachebin() {
   cp ${1}-opt.wasm a10g_${1}-opt.wasm
   cp ${1}-opt.wasm a10g_${1}-opt-4.wasm
   cp ${1}-opt.wasm a10g_${1}-opt-8.wasm
-  vv-profiler --input a10g_${1}-opt-4.wasm --output ${1}-opt-instrument.wasm
-  vv-profiler --input a10g_${1}-opt-8.wasm --output ${1}-opt-instrument.wasm
+  vv-profiler --input ${1}-opt.wasm --output ${1}-opt-instrument.wasm
   cargo run --release -- -i a10g_$1-opt-4.wasm --heap=$2 --stack=$3 --hcallsize=$4 --vmcount=$6 --partition=false --maxdup=0 --jt=true --interleave=4 --uw=true
   cargo run --release -- -i a10g_$1-opt-8.wasm --heap=$2 --stack=$3 --hcallsize=$4 --vmcount=$6 --partition=false --maxdup=0 --jt=true --interleave=8 --uw=true
 }
