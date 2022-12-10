@@ -235,9 +235,8 @@ elif region == "us-east-2":
     gpu_ami = 'ami-01463836f7041cd10'
 
 if run_a10g:
-    #gpuinstance = "g5.2xlarge"
-    gpuinstance = "g4dn.2xlarge"
-    # compile using 
+    gpuinstance = "g5.2xlarge"
+    #gpuinstance = "g4dn.2xlarge"
 else:
     gpuinstance = "g4dn.2xlarge"
 
