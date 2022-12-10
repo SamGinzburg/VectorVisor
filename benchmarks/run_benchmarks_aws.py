@@ -513,7 +513,7 @@ def run_pbkdf2_bench():
 
 def run_lz4_bench():
     if gpu == "a10g":
-        vmcount = 4608
+        vmcount = 4096
         prefix = ""
     elif gpu == "t4":
         vmcount = 3072
@@ -675,7 +675,7 @@ def run_lz4_bench():
 
 def run_genpdf_bench():
     if gpu == "a10g":
-        vmcount = 4608
+        vmcount = 4096
         prefix=""
     elif gpu == "t4":
         vmcount = 3072
@@ -1916,19 +1916,6 @@ if run_only_membench and skip_membench is None:
     ec2.instances.filter(InstanceIds = instance_id_list).terminate()
     exit()
 
-run_nlp_count_bench("go")
-
-cleanup()
-
-run_nlp_count_bench("assemblyscript")
-
-cleanup()
-
-run_nlp_count_bench("rust")
-
-cleanup()
-
-
 # run image hash bench
 run_image_hash_bench(run_modified = False)
 
@@ -1963,6 +1950,18 @@ run_image_blur_bench(run_bmp = False)
 cleanup()
 
 run_genpdf_bench()
+
+cleanup()
+
+run_nlp_count_bench("go")
+
+cleanup()
+
+run_nlp_count_bench("assemblyscript")
+
+cleanup()
+
+run_nlp_count_bench("rust")
 
 cleanup()
 
