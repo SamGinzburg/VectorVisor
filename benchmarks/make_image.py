@@ -71,6 +71,7 @@ userdata_ubuntu = """#cloud-config
      - sudo apt install -y curl
      - sudo apt install -y clinfo
      - sudo apt install -y nvidia-driver-525*
+     - sudo apt install -y opencl-dev
      - wget https://golang.org/dl/go1.17.1.linux-amd64.tar.gz
      - rm -rf /usr/local/go && tar -C /usr/local -xzf go1.17.1.linux-amd64.tar.gz
      - sudo curl https://sh.rustup.rs -sSf | sh -s -- -y
