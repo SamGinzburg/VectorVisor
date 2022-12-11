@@ -220,11 +220,15 @@ impl VectorizedVM {
         let engine = Engine::default();
         let mut store = Store::new(&engine, 0u8);
 
+        /*
         let num_vm_pages = if hcall_buf_size >= (1024 * 64) {
             hcall_buf_size / (1024 * 64)
         } else {
             1
         };
+        */
+        // switch to dynamically increasing VM memory when needed to save memory
+        let num_vm_pages = 1;
 
         let memory_ty = MemoryType::new(num_vm_pages, None);
         let memory = Memory::new(&mut store, memory_ty).unwrap();

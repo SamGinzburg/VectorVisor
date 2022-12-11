@@ -75,7 +75,6 @@ impl WasmtimeRunner {
         let curr_uuid_response = current_uuid.clone();
         let waker = futures::task::noop_waker();
 
-        // serverless_invoke
         let serverless_invoke = Func::wrap(
             &mut store,
             move |mut caller: Caller<'_, WasiCtx>, buf_ptr: u32, _buf_len: u32| -> u32 {
@@ -128,7 +127,6 @@ impl WasmtimeRunner {
             },
         );
 
-        // serverless_invoke
         let serverless_response = Func::wrap(
             &mut store,
             move |mut caller: Caller<'_, _>, buf_ptr: u32, buf_len: u32| -> () {

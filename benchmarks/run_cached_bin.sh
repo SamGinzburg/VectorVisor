@@ -41,7 +41,8 @@ function comp_only() {
   cargo run --release -- -i $1-opt-4.wasm --heap=$2 --stack=$3 --hcallsize=$4 --vmcount=$5 --partition=false --maxdup=0 --interleave==4 --serverless=true --rt=0 --uw=true --lgroup=1 --pinput=true
 }
 
-runbin "average" "3145728" "131072" "409600" "2048" "5120"
+#runbin "average" "3145728" "131072" "409600" "2048" "5120"
+wasm "average" "3145728" "131072" "409600" "2048" "5120"
 #wasm "imageblur-bmp" "3145728" "131072" "262144" "2048" "5120"
 #comp "imageblur-bmp" "3145728" "131072" "262144" "2048" "5120"
 #comp "average" "3145728" "131072" "262144" "2048" "5120"
