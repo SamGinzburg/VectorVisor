@@ -300,11 +300,6 @@ impl OpenCLRunner {
             // These values really do last for the entire program, so it is fine to make them static
             let final_runner = Box::leak(Box::new(new_runner));
             let leaked_command_queue: &'static CommandQueue = Box::leak(Box::new(command_queue));
-            // We use two hcall buffers on the host-side, once for generic hcalls, the other for buffering inputs to decrease function latency
-            let hypercall_buffer_read_buffer: &'static mut [u8] =
-                Box::leak(vec![0u8; hcall_size * num_vms as usize].into_boxed_slice());
-            let hypercall_input_buffer: &'static mut [u8] =
-                Box::leak(vec![0u8; hcall_size * num_vms as usize].into_boxed_slice());
 
             // decide which vector runner to use based off the compiled program enum...
             let status = match program {
@@ -333,8 +328,6 @@ impl OpenCLRunner {
                         kernel_partition_mapping,
                         kernel_part_debug,
                         &leaked_command_queue,
-                        hypercall_buffer_read_buffer,
-                        hypercall_input_buffer,
                         hcall_size.try_into().unwrap(),
                         call_stack_size,
                         &context,
@@ -358,8 +351,6 @@ impl OpenCLRunner {
                     kernel_partition_mapping,
                     kernel_part_debug,
                     &leaked_command_queue,
-                    hypercall_buffer_read_buffer,
-                    hypercall_input_buffer,
                     hcall_size.try_into().unwrap(),
                     call_stack_size,
                     &context,
@@ -1149,8 +1140,6 @@ impl OpenCLRunner {
         kernel_partition_mappings: HashMap<u32, u32>,
         kernel_part_debug: HashMap<u32, Vec<String>>,
         queue: &'static CommandQueue,
-        hypercall_buffer_read_buffer: &'static mut [u8],
-        hypercall_input_buffer: &'static mut [u8],
         hypercall_buffer_size: u32,
         call_stack_size: u32,
         ctx: &ocl::core::Context,

@@ -10,7 +10,7 @@
 # 5 = vmcount (T4)
 # 6 = vmcount (A10G)
 function runbin() {
-  cargo run --release -- -i $1-opt-4.wasm.partbin --heap=$2 --stack=$3 --hcallsize=$4 --vmcount=$5 --partition=false --maxdup=0 --interleave=8 --uw=true --serverless=true --rt=100 --lgroup=64
+  cargo run --release -- -i $1-opt-4.wasm.bin --heap=$2 --stack=$3 --hcallsize=$4 --vmcount=$5 --partition=false --maxdup=0 --interleave=8 --uw=true --serverless=true --rt=100 --lgroup=64
 }
 
 function runwasm() {
@@ -41,6 +41,10 @@ function comp_only() {
   cargo run --release -- -i $1-opt-4.wasm --heap=$2 --stack=$3 --hcallsize=$4 --vmcount=$5 --partition=false --maxdup=0 --interleave==4 --serverless=true --rt=0 --uw=true --lgroup=1 --pinput=true
 }
 
+runbin "average" "3145728" "131072" "409600" "2048" "5120"
+#wasm "imageblur-bmp" "3145728" "131072" "262144" "2048" "5120"
+#comp "imageblur-bmp" "3145728" "131072" "262144" "2048" "5120"
+#comp "average" "3145728" "131072" "262144" "2048" "5120"
 #comp "imagehash" "4194304" "131072" "262144" "2048" "2048"
 #comp "nlp-count-vectorizer" "4194304" "131072" "524288" "2048" "4608"
 #runbin "captcha" "4194304" "131072" "409600" "2048" "2048"
@@ -52,7 +56,7 @@ function comp_only() {
 #comp "average" "3145728" "131072" "262144" "2048" "2048"
 #comp "hello_go" "4194304" "131072" "409600" "2048" "2048"
 #runbin "rust-pdfwriter" "4194304" "131072" "524288" "2048" "2048"
-comp "rust-pdfwriter" "4194304" "131072" "524288" "2048" "2048"
+#comp "rust-pdfwriter" "4194304" "131072" "524288" "2048" "2048"
 #comp_only "rust-pdfwriter" "4194304" "131072" "409600" "2048" "2048"
 #runwasm "rust-pdfwriter" "4194304" "131072" "409600" "2048" "2048"
 #wasm "rust-pdfwriter" "4194304" "131072" "409600" "2048" "2048"
