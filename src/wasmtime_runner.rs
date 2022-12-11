@@ -113,6 +113,7 @@ impl WasmtimeRunner {
                         let arr = memory.data_mut(&mut caller);
                         let start = buf_ptr as usize;
                         let end = (buf_ptr as usize) + msg.len();
+                        dbg!(&msg.len());
                         arr[start..end].copy_from_slice(&msg);
                     }
                     Err(e) => {
@@ -198,10 +199,10 @@ impl WasmtimeRunner {
                         let arr = memory.data(&caller);
 
                         // Debug memory usage of functions
-                        //println!("wasmtime vm memory len: {:?}", &arr.len());
+                        println!("wasmtime vm memory len: {:?}", &arr.len());
 
                         let resp_buf_len: usize = buf_len.try_into().unwrap();
-                        //dbg!(&resp_buf_len);
+                        dbg!(&resp_buf_len);
                         let mut resp_buf = vec![0u8; resp_buf_len];
                         let main_mem_start = buf_ptr.try_into().unwrap();
 

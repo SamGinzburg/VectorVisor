@@ -10,7 +10,7 @@
 # 5 = vmcount (T4)
 # 6 = vmcount (A10G)
 function runbin() {
-  cargo run --release -- -i $1-opt-4.wasm.bin --heap=$2 --stack=$3 --hcallsize=$4 --vmcount=$5 --partition=false --maxdup=0 --interleave=8 --uw=true --serverless=true --rt=100 --lgroup=64
+  cargo run --release -- -i $1-opt-4.wasm.partbin --heap=$2 --stack=$3 --hcallsize=$4 --vmcount=$5 --partition=false --maxdup=0 --interleave=8 --uw=true --serverless=true --rt=100 --lgroup=64
 }
 
 function runwasm() {
@@ -34,13 +34,14 @@ function comp() {
   cp ${1}-opt.wasm a10g_${1}-opt.wasm
   cp ${1}-opt.wasm a10g_${1}-opt-4.wasm
   cp ${1}-opt.wasm a10g_${1}-opt-8.wasm
-  cargo run --release -- -i $1-opt-4.wasm --heap=$2 --stack=$3 --hcallsize=$4 --vmcount=$5 --partition=false --maxdup=0 --interleave=4 --serverless=true --rt=200 --uw=true
+  cargo run --release -- -i $1-opt-4.wasm --heap=$2 --stack=$3 --hcallsize=$4 --vmcount=$5 --partition=false --maxdup=0 --interleave=4 --serverless=true --rt=0 --uw=true
 }
 
 function comp_only() {
-  cargo run --release -- -i $1-opt-4.wasm --heap=$2 --stack=$3 --hcallsize=$4 --vmcount=$5 --partition=false --maxdup=0 --interleave=8 --serverless=true --rt=200 --uw=true --lgroup=32
+  cargo run --release -- -i $1-opt-4.wasm --heap=$2 --stack=$3 --hcallsize=$4 --vmcount=$5 --partition=false --maxdup=0 --interleave==4 --serverless=true --rt=0 --uw=true --lgroup=1 --pinput=true
 }
 
+#comp "imagehash" "4194304" "131072" "262144" "2048" "2048"
 #comp "nlp-count-vectorizer" "4194304" "131072" "524288" "2048" "4608"
 #runbin "captcha" "4194304" "131072" "409600" "2048" "2048"
 #comp "captcha" "4194304" "131072" "409600" "2048" "2048"
@@ -55,10 +56,13 @@ comp "rust-pdfwriter" "4194304" "131072" "524288" "2048" "2048"
 #comp_only "rust-pdfwriter" "4194304" "131072" "409600" "2048" "2048"
 #runwasm "rust-pdfwriter" "4194304" "131072" "409600" "2048" "2048"
 #wasm "rust-pdfwriter" "4194304" "131072" "409600" "2048" "2048"
-#runwasm "test" "125194304" "131072" "409600" "2048" "2048"
-#wasm "test" "419430400" "131072" "409600" "2048" "2048"
+#runwasm "test" "3145728" "131072" "409600" "2048" "2048"
+#wasm "test" "4194304" "131072" "409600" "2048" "2048"
 #runbin "test" "4194304" "131072" "524288" "2048" "2048"
 #comp_only "test" "4194304" "262144" "524288" "2048" "2048"
+#runbin "test" "3145728" "131072" "256000" "3072" "2048"
+#comp_only "test" "3145728" "131072" "16384" "2048" "2048"
+#wasm "test" "3145728" "131072" "8192" "2048" "2048"
 exit
 runbin "pbkdf2" "3145728" "262144" "131072" "4096" "6144"
 runbin "imagehash" "4194304" "131072" "262144" "3072" "4608"

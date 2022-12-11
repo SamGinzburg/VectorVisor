@@ -12,8 +12,8 @@
 # 5 = vmcount (T4)
 # 6 = vmcount (A10G)
 function cachebin() {
-  cargo run --release -- -i $1-opt-profile.wasm --heap=$2 --stack=$3 --hcallsize=$4 --vmcount=$6 --partition=false --maxdup=0 --jt=true --interleave=4 --uw=true &> /vv/$1-opt-profile.log
-  cargo run --release -- -i $1-opt-profile.wasm --heap=$2 --stack=$3 --hcallsize=$4 --vmcount=$6 --partition=false --maxdup=0 --jt=true --interleave=8 --uw=true &> /vv/$1-opt-4-profile.log
+  cargo run --release -- -i $1-opt-4-profile.wasm --heap=$2 --stack=$3 --hcallsize=$4 --vmcount=$6 --partition=false --maxdup=0 --jt=true --interleave=4 --uw=true &> /vv/$1-opt-profile.log
+  cargo run --release -- -i $1-opt-8-profile.wasm --heap=$2 --stack=$3 --hcallsize=$4 --vmcount=$6 --partition=false --maxdup=0 --jt=true --interleave=8 --uw=true &> /vv/$1-opt-4-profile.log
 }
 
 function nlpscript() {
