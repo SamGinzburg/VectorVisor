@@ -1714,7 +1714,7 @@ pub fn emit_memcpy(
             "(ulong)(heap_u32)",
             &format!("({})", dst),
             "(ulong)(heap_u32)",
-            "heap_base",
+            "(ulong)heap_base",
             &n_bytes,
             "warp_idx",
         )
@@ -1737,7 +1737,7 @@ pub fn emit_memfill(
             &format!("({})", dst),
             "(ulong)(heap_u32)",
             &val,
-            "heap_base",
+            "(ulong)heap_base",
             &n_bytes,
             "warp_idx",
         )
