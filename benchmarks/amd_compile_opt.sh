@@ -17,8 +17,8 @@ function cachebin() {
 }
 
 function nlpscript() {
-  cargo run --release -- -i $1-opt-4-profile.wasm --heap=$2 --stack=$3 --hcallsize=$4 --vmcount=$5 --partition=false --maxdup=0 --jt=true --interleave=4 --uw=true --pinput=$7 &> /vv/$1-opt-4-profile.log
-  cargo run --release -- -i $1-opt-8-profile.wasm --heap=$2 --stack=$3 --hcallsize=$4 --vmcount=$5 --partition=false --maxdup=0 --jt=true --interleave=8 --uw=true --pinput=$7 &> /vv/$1-opt-8-profile.log
+  cargo run --release -- -i $1-opt-4-profile.wasm --heap=$2 --stack=$3 --hcallsize=$4 --vmcount=$5 --partition=false --maxdup=0 --jt=true --interleave=4 --uw=true --pinput=$7 --nvidia=false --patch=true &> /vv/$1-opt-4-profile.log
+  cargo run --release -- -i $1-opt-8-profile.wasm --heap=$2 --stack=$3 --hcallsize=$4 --vmcount=$5 --partition=false --maxdup=0 --jt=true --interleave=8 --uw=true --pinput=$7 --nvidia=false --patch=true &> /vv/$1-opt-8-profile.log
 }
 
 cachebin "rust-pdfwriter" "4194304" "131072" "409600" "1536" "4608"

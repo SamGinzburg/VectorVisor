@@ -186,7 +186,7 @@ def run_profile_generic(bench_name, params="", testdir=""):
 
     cd /vv/VectorVisor/benchmarks/
     vv-profiler --input /vv/VectorVisor/benchmarks/{name}-opt-4.wasm --output /vv/VectorVisor/benchmarks/{name}-opt-profile.wasm --profile=/vv/VectorVisor/benchmarks/{name}-opt-instrument.wasm.profile
-    wasm-opt -all -O3 -g /vv/VectorVisor/benchmarks/{name}-opt-profile.wasm -o /vv/VectorVisor/benchmarks/{name}-opt-profile.wasm
+    wasm-opt -all -O1 -g /vv/VectorVisor/benchmarks/{name}-opt-profile.wasm -o /vv/VectorVisor/benchmarks/{name}-opt-profile.wasm
     cp /vv/VectorVisor/benchmarks/{name}-opt-profile.wasm /vv/VectorVisor/benchmarks/{name}-opt-4-profile.wasm
     cp /vv/VectorVisor/benchmarks/{name}-opt-profile.wasm /vv/VectorVisor/benchmarks/{name}-opt-8-profile.wasm
     """.format(addr=gpu_instance[0].private_dns_name, target_rps=vmcount, duration=60, hashes=256, name=bench_name)
