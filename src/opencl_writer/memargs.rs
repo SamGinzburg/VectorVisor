@@ -1711,9 +1711,9 @@ pub fn emit_memcpy(
         "\t{}\n",
         emit_intra_vm_memcpy(
             &format!("({})", src),
-            "(global char*)(heap_u32)",
+            "(ulong)(heap_u32)",
             &format!("({})", dst),
-            "(global char*)(heap_u32)",
+            "(ulong)(heap_u32)",
             "heap_base",
             &n_bytes,
             "warp_idx",
@@ -1735,7 +1735,7 @@ pub fn emit_memfill(
         "\t{}\n",
         emit_intra_vm_memfill(
             &format!("({})", dst),
-            "(global char*)(heap_u32)",
+            "(ulong)(heap_u32)",
             &val,
             "heap_base",
             &n_bytes,
