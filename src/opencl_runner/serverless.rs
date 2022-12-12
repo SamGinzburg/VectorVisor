@@ -86,6 +86,10 @@ impl Serverless {
         let msg_len = LittleEndian::read_u32(&hcall_buf[0..4]);
         //dbg!(&msg_len);
         if msg_len > 0 && !vm_ctx.no_resp {
+            let mut overhead = overhead_buf[vm_idx as usize];
+            overhead -= vm_ctx.overhead_counter;
+            vm_ctx.overhead_counter = overhead_buf[vm_idx as usize];
+
             vm_ctx.no_resp = true;
             let (send_chan1, send_chan2) = (vm_ctx.vm_sender).get(vm_idx as usize).unwrap();
             // the first 4 bytes are the length as a u32, the remainder is the buffer containing the json
@@ -118,7 +122,7 @@ impl Serverless {
                         queue_submit_time,
                         queue_submit_count,
                         count,
-                        overhead_buf[vm_idx as usize],
+                        overhead,
                         uuid,
                     ))
                     .unwrap();
@@ -135,7 +139,7 @@ impl Serverless {
                         queue_submit_time,
                         queue_submit_count,
                         count,
-                        overhead_buf[vm_idx as usize],
+                        overhead,
                         uuid,
                     ))
                     .unwrap();
