@@ -1186,24 +1186,32 @@ impl OpenCLRunner {
         }
 
         // Create mappings...
-        let mut stack_map: ocl::core::MemMap<u64> = unsafe {
-            ocl::core::enqueue_map_buffer(
-                &queue,
-                &buffers.sp,
-                true,
-                ocl::core::MapFlags::READ,
-                0,
-                self.num_vms as usize * mexec,
-                None::<Event>,
-                None::<&mut Event>,
-            )
-            .unwrap()
-        };
+        let mut stack_pointer_temp: &mut [u64] = if is_nvidia {
+            let mut stack_map: ocl::core::MemMap<u64> = unsafe {
+                ocl::core::enqueue_map_buffer(
+                    &queue,
+                    &buffers.sp,
+                    true,
+                    ocl::core::MapFlags::READ,
+                    0,
+                    self.num_vms as usize * mexec,
+                    None::<Event>,
+                    None::<&mut Event>,
+                )
+                .unwrap()
+            };
 
-        let mut stack_pointer_temp: &mut [u64] =
-            unsafe { stack_map.as_slice_mut(self.num_vms as usize * mexec) };
-        stack_pointer_temp.fill(0u64);
-        //let mut stack_pointer_temp: &mut [u64] = &mut vec![0u64; self.num_vms as usize * mexec];
+            let mut stack_pointer_temp: &mut [u64] =
+                unsafe { stack_map.as_slice_mut(self.num_vms as usize * mexec) };
+            stack_pointer_temp.fill(0u64);
+
+            stack_pointer_temp
+        } else {
+            let mut stack_pointer_temp: &'static mut [u64] =
+                Box::leak(vec![0u64; (self.num_vms as usize * mexec) as usize].into_boxed_slice());
+            stack_pointer_temp.fill(0u64);
+            stack_pointer_temp
+        };
 
         unsafe {
             let overhead_tracker_result = ocl::core::enqueue_fill_buffer(&queue, &buffers.overhead_tracker, 0u8, 0, (self.num_vms*8).try_into().unwrap(), None::<Event>, None::<&mut Event>, None);
@@ -1213,25 +1221,30 @@ impl OpenCLRunner {
             }
         }
 
-        let mut overhead_tracker_map: ocl::core::MemMap<u64> = unsafe {
-            ocl::core::enqueue_map_buffer(
-                &queue,
-                &buffers.overhead_tracker,
-                true,
-                ocl::core::MapFlags::READ,
-                0,
-                self.num_vms as usize * mexec,
-                None::<Event>,
-                None::<&mut Event>,
-            )
-            .unwrap()
+        let overhead_tracker = if is_nvidia {
+            let mut overhead_tracker_map: ocl::core::MemMap<u64> = unsafe {
+                ocl::core::enqueue_map_buffer(
+                    &queue,
+                    &buffers.overhead_tracker,
+                    true,
+                    ocl::core::MapFlags::READ,
+                    0,
+                    self.num_vms as usize * mexec,
+                    None::<Event>,
+                    None::<&mut Event>,
+                )
+                .unwrap()
+            };
+            let mut overhead_tracker: &mut [u64] =
+                unsafe { overhead_tracker_map.as_slice_mut(self.num_vms as usize * mexec) };
+            overhead_tracker.fill(0u64);
+            overhead_tracker
+        } else {
+            let mut overhead_tracker: &'static mut [u64] =
+                Box::leak(vec![0u64; self.num_vms as usize].into_boxed_slice());
+            overhead_tracker.fill(0u64);
+            overhead_tracker
         };
-
-        let mut overhead_tracker: &mut [u64] =
-            unsafe { overhead_tracker_map.as_slice_mut(self.num_vms as usize * mexec) };
-        overhead_tracker.fill(0u64);
-        //let mut overhead_tracker: &'static mut [u64] =
-        //    Box::leak(vec![0u64; self.num_vms as usize].into_boxed_slice());
 
         unsafe {
             let entry_result = ocl::core::enqueue_fill_buffer(&queue, &buffers.entry, 0u8, 0, (self.num_vms*4).try_into().unwrap(), None::<Event>, None::<&mut Event>, None);
@@ -1241,23 +1254,30 @@ impl OpenCLRunner {
             }
         }
 
-        let mut entry_map: ocl::core::MemMap<u32> = unsafe {
-            ocl::core::enqueue_map_buffer(
-                &queue,
-                &buffers.entry,
-                true,
-                ocl::core::MapFlags::READ | ocl::core::MapFlags::WRITE,
-                0,
-                (self.num_vms) as usize * mexec,
-                None::<Event>,
-                None::<&mut Event>,
-            )
-            .unwrap()
+        let mut entry_point_temp = if is_nvidia {
+            let mut entry_map: ocl::core::MemMap<u32> = unsafe {
+                ocl::core::enqueue_map_buffer(
+                    &queue,
+                    &buffers.entry,
+                    true,
+                    ocl::core::MapFlags::READ | ocl::core::MapFlags::WRITE,
+                    0,
+                    (self.num_vms) as usize * mexec,
+                    None::<Event>,
+                    None::<&mut Event>,
+                )
+                .unwrap()
+            };
+            let mut entry_point_temp: &mut [u32] =
+                unsafe { entry_map.as_slice_mut((self.num_vms) as usize * mexec) };
+            entry_point_temp.fill(0u32);
+            entry_point_temp
+        } else {
+            let mut entry_point_temp: &'static mut [u32] =
+                Box::leak(vec![0u32; self.num_vms as usize].into_boxed_slice());
+            entry_point_temp.fill(0u32);
+            entry_point_temp
         };
-        let mut entry_point_temp: &mut [u32] =
-            unsafe { entry_map.as_slice_mut((self.num_vms) as usize * mexec) };
-        entry_point_temp.fill(0u32);
-        //let mut entry_point_temp = vec![0u32; self.num_vms as usize * mexec];
 
         unsafe {
             let hcall_num_result = ocl::core::enqueue_fill_buffer(&queue, &buffers.hypercall_num, 0u8, 0, (self.num_vms*4).try_into().unwrap(), None::<Event>, None::<&mut Event>, None);
@@ -1267,24 +1287,31 @@ impl OpenCLRunner {
             }
         }
 
-        let mut hcall_num_map: ocl::core::MemMap<i32> = unsafe {
-            ocl::core::enqueue_map_buffer(
-                &queue,
-                &buffers.hypercall_num,
-                true,
-                ocl::core::MapFlags::READ | ocl::core::MapFlags::WRITE,
-                0,
-                self.num_vms as usize * mexec,
-                None::<Event>,
-                None::<&mut Event>,
-            )
-            .unwrap()
-        };
+        let mut hypercall_num_temp = if is_nvidia {
+            let mut hcall_num_map: ocl::core::MemMap<i32> = unsafe {
+                ocl::core::enqueue_map_buffer(
+                    &queue,
+                    &buffers.hypercall_num,
+                    true,
+                    ocl::core::MapFlags::READ | ocl::core::MapFlags::WRITE,
+                    0,
+                    self.num_vms as usize * mexec,
+                    None::<Event>,
+                    None::<&mut Event>,
+                )
+                .unwrap()
+            };
 
-        let mut hypercall_num_temp: &mut [i32] =
-            unsafe { hcall_num_map.as_slice_mut(self.num_vms as usize * mexec) };
-        hypercall_num_temp.fill(-2);
-        //let mut hypercall_num_temp = vec![0i32; self.num_vms as usize * mexec];
+            let mut hypercall_num_temp: &mut [i32] =
+                unsafe { hcall_num_map.as_slice_mut(self.num_vms as usize * mexec) };
+            hypercall_num_temp.fill(-2);
+            hypercall_num_temp
+        } else {
+            let mut hypercall_num_temp: &'static mut [i32] =
+                Box::leak(vec![0i32; self.num_vms as usize].into_boxed_slice());
+            hypercall_num_temp.fill(-2);
+            hypercall_num_temp
+        };
 
         // Allocate buffer to return values
         let hcall_retval_buffer = unsafe {
@@ -1305,23 +1332,30 @@ impl OpenCLRunner {
             }
         }
 
-        let mut hcall_retval_map: ocl::core::MemMap<i32> = unsafe {
-            ocl::core::enqueue_map_buffer(
-                &queue,
-                &hcall_retval_buffer,
-                true,
-                ocl::core::MapFlags::WRITE_INVALIDATE_REGION,
-                0,
-                self.num_vms as usize * mexec,
-                None::<Event>,
-                None::<&mut Event>,
-            )
-            .unwrap()
-        };
+        let mut hypercall_retval_temp = if is_nvidia {
+            let mut hcall_retval_map: ocl::core::MemMap<i32> = unsafe {
+                ocl::core::enqueue_map_buffer(
+                    &queue,
+                    &hcall_retval_buffer,
+                    true,
+                    ocl::core::MapFlags::WRITE_INVALIDATE_REGION,
+                    0,
+                    self.num_vms as usize * mexec,
+                    None::<Event>,
+                    None::<&mut Event>,
+                )
+                .unwrap()
+            };
 
-        let mut hypercall_retval_temp: &mut [i32] =
-            unsafe { hcall_retval_map.as_slice_mut(self.num_vms as usize * mexec) };
-        //let mut hypercall_retval_temp = vec![0i32; self.num_vms as usize];
+            let mut hypercall_retval_temp: &mut [i32] =
+                unsafe { hcall_retval_map.as_slice_mut(self.num_vms as usize * mexec) };
+            hypercall_retval_temp
+        } else {
+            let mut hypercall_retval_temp: &'static mut [i32] =
+                Box::leak(vec![0i32; self.num_vms as usize].into_boxed_slice());
+            hypercall_retval_temp.fill(0);
+            hypercall_retval_temp
+        };
 
         let mut entry_point_exit_flag;
         let vm_slice: Vec<u32> = std::ops::Range {
