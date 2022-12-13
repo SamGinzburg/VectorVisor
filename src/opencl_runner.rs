@@ -1364,39 +1364,46 @@ impl OpenCLRunner {
         /*
          * AMD vs. NVIDIA semantics:
          *
-         * On NVIDIA GPUs, mapped memory translates into an *allocated buffer*
-         * w/pinned memory for fast transfer. So calling map on the same buffer
-         * twice doesn't result in aliasing.
+         * On NVIDIA GPUs pinned memory only needs to be mapped once to function correctly:
+         * NVIDIA: https://www.nvidia.com/content/cudazone/CUDABrowser/downloads/papers/NVIDIA_OpenCL_BestPracticesGuide.pdf
          *
+         * On AMD GPUs, pinned memory is handled differently than NVIDIA:
+         *   https://developer.amd.com/wordpress/media/2013/12/AMD_OpenCL_Programming_Optimization_Guide2.pdf
          *
-         * On AMD GPUs, mapping the same buffer twice results in aliasing---preventing our double
-         * buffering scheme from working.
-         * To bypass this, we map the write (async, buffered inputs) map to ensure fast transfers,
-         * while the read map (misc. syscalls, responses), uses a separate host-side buffer. 
+         * The key difference is that NVIDIA only requires a single map, while on AMD
+         * unmap operations are required to persist data back to the GPU. map/unmap is cheaper on
+         * AMD as a result.
          *
+         * hcallbuf is already allocated as pinned memory, so we can instead call map/unmap
+         * when we need to read/write.
          */
-
-        let mut hcall_write_map: ocl::core::MemMap<u8> = unsafe {
-            ocl::core::enqueue_map_buffer(
-                &queue,
-                &hypercall_buffer,
-                true,
-                ocl::core::MapFlags::WRITE_INVALIDATE_REGION,
-                0,
-                (hypercall_buffer_size * self.num_vms) as usize,
-                None::<Event>,
-                None::<&mut Event>,
-            )
-            .unwrap()
+        let hcall_async_buffer: Arc<Mutex<UnsafeCellWrapper<u8>>> = if is_nvidia {
+            let mut hcall_write_map: ocl::core::MemMap<u8> = unsafe {
+                ocl::core::enqueue_map_buffer(
+                    &queue,
+                    &hypercall_buffer,
+                    true,
+                    ocl::core::MapFlags::WRITE_INVALIDATE_REGION,
+                    0,
+                    (hypercall_buffer_size * self.num_vms) as usize,
+                    None::<Event>,
+                    None::<&mut Event>,
+                )
+                .unwrap()
+            };
+            let mut hcall_write_buf: &mut [u8] = unsafe {
+                hcall_write_map.as_slice_mut((hypercall_buffer_size * self.num_vms) as usize)
+            };
+            hcall_write_buf.fill(0);
+            unsafe { Arc::new(Mutex::new(UnsafeCellWrapper::new(hcall_write_buf))) }
+        } else {
+            let mut hcall_write_buf: &'static mut [u8] =
+                Box::leak(vec![0u8; (hypercall_buffer_size * self.num_vms) as usize].into_boxed_slice());
+            hcall_write_buf.fill(0);
+            unsafe { Arc::new(Mutex::new(UnsafeCellWrapper::new(hcall_write_buf))) }
         };
-        let mut hcall_write_buf: &mut [u8] = unsafe {
-            hcall_write_map.as_slice_mut((hypercall_buffer_size * self.num_vms) as usize)
-        };
-        hcall_write_buf.fill(0);
-        let hcall_async_buffer: Arc<Mutex<UnsafeCellWrapper<u8>>> =
-            unsafe { Arc::new(Mutex::new(UnsafeCellWrapper::new(hcall_write_buf))) };
 
-        let mut hcall_read_buffer = if is_nvidia {
+        let mut hcall_read_buffer: Arc<UnsafeCellWrapper<u8>> = if is_nvidia {
             let mut hcall_read_map: ocl::core::MemMap<u8> = unsafe {
                 ocl::core::enqueue_map_buffer(
                     &queue,
@@ -2422,16 +2429,45 @@ impl OpenCLRunner {
                     };
 
                     //hcall_write_buf.copy_from_slice(hcall_buf);
-                    ocl::core::enqueue_write_buffer(
-                        &queue,
-                        &hypercall_buffer,
-                        true,
-                        0,
-                        &hcall_buf,
-                        None::<Event>,
-                        None::<&mut Event>,
-                    )
-                    .unwrap();
+                    if is_nvidia {
+                        ocl::core::enqueue_write_buffer(
+                            &queue,
+                            &hypercall_buffer,
+                            true,
+                            0,
+                            &hcall_buf,
+                            None::<Event>,
+                            None::<&mut Event>,
+                        )
+                        .unwrap();
+                    } else {
+                        // On AMD, we map the pinned buffer, do a memcpy, and unpin
+                        let mut hcall_write_map: ocl::core::MemMap<u8> = unsafe {
+                        ocl::core::enqueue_map_buffer(
+                            &queue,
+                            &hypercall_buffer,
+                            true,
+                            ocl::core::MapFlags::WRITE_INVALIDATE_REGION,
+                            0,
+                            (hypercall_buffer_size * self.num_vms) as usize,
+                            None::<Event>,
+                            None::<&mut Event>,
+                        )
+                        .unwrap()
+                        };
+                        let mut hcall_write_buf: &mut [u8] = unsafe {
+                            hcall_write_map.as_slice_mut((hypercall_buffer_size * self.num_vms) as usize)
+                        };
+                        hcall_write_buf.copy_from_slice(&hcall_buf);
+                        ocl::core::enqueue_unmap_mem_object(
+                            &queue,
+                            &hypercall_buffer,
+                            &hcall_write_map,
+                            None::<Event>,
+                            None::<&mut Event>,
+                        )
+                        .unwrap()
+                    }
 
                     if is_serverless_invoke && !non_serverless_invoke_call_found {
                         invoke_complete.broadcast(true);
