@@ -271,6 +271,7 @@ impl OpenCLRunner {
         _compile_flags: String,
         _link_flags: String,
         print_return: bool,
+        is_nvidia: bool,
     ) -> JoinHandle<()> {
         let num_vms = self.num_vms.clone();
 
@@ -336,6 +337,7 @@ impl OpenCLRunner {
                         vm_recv,
                         req_timeout,
                         data_segment,
+                        is_nvidia,
                     )
                 }
                 ProgramType::Partitioned(
@@ -359,6 +361,7 @@ impl OpenCLRunner {
                     vm_recv,
                     req_timeout,
                     data_segment,
+                    is_nvidia
                 ),
             };
 
@@ -1148,6 +1151,7 @@ impl OpenCLRunner {
         vm_recv: Arc<Vec<(Mutex<Receiver<VmRecvType>>, Mutex<Receiver<VmRecvType>>)>>,
         req_timeout: u32,
         data_segment: Vec<u8>,
+        is_nvidia: bool,
     ) -> VMMRuntimeStatus {
         let thread_prio_status = set_current_thread_priority(ThreadPriority::Max).is_ok();
         println!("Thread priority set to MAX: {}", thread_prio_status);
@@ -1357,6 +1361,21 @@ impl OpenCLRunner {
             }
         }
 
+        /*
+         * AMD vs. NVIDIA semantics:
+         *
+         * On NVIDIA GPUs, mapped memory translates into an *allocated buffer*
+         * w/pinned memory for fast transfer. So calling map on the same buffer
+         * twice doesn't result in aliasing.
+         *
+         *
+         * On AMD GPUs, mapping the same buffer twice results in aliasing---preventing our double
+         * buffering scheme from working.
+         * To bypass this, we map the write (async, buffered inputs) map to ensure fast transfers,
+         * while the read map (misc. syscalls, responses), uses a separate host-side buffer. 
+         *
+         */
+
         let mut hcall_write_map: ocl::core::MemMap<u8> = unsafe {
             ocl::core::enqueue_map_buffer(
                 &queue,
@@ -1373,30 +1392,34 @@ impl OpenCLRunner {
         let mut hcall_write_buf: &mut [u8] = unsafe {
             hcall_write_map.as_slice_mut((hypercall_buffer_size * self.num_vms) as usize)
         };
-
-        let mut hcall_read_map: ocl::core::MemMap<u8> = unsafe {
-            ocl::core::enqueue_map_buffer(
-                &queue,
-                &hypercall_buffer,
-                true,
-                ocl::core::MapFlags::READ | ocl::core::MapFlags::WRITE,
-                0,
-                (hypercall_buffer_size * self.num_vms) as usize,
-                None::<Event>,
-                None::<&mut Event>,
-            )
-            .unwrap()
-        };
-
-        // We can write directly into mapped memory here...
-        let hcall_read_buffer: Arc<UnsafeCellWrapper<u8>> = unsafe {
-            Arc::new(UnsafeCellWrapper::new(
-                hcall_read_map.as_slice_mut((hypercall_buffer_size * self.num_vms) as usize),
-            ))
-        };
-
+        hcall_write_buf.fill(0);
         let hcall_async_buffer: Arc<Mutex<UnsafeCellWrapper<u8>>> =
             unsafe { Arc::new(Mutex::new(UnsafeCellWrapper::new(hcall_write_buf))) };
+
+        let mut hcall_read_buffer = if is_nvidia {
+            let mut hcall_read_map: ocl::core::MemMap<u8> = unsafe {
+                ocl::core::enqueue_map_buffer(
+                    &queue,
+                    &hypercall_buffer,
+                    true,
+                    ocl::core::MapFlags::READ | ocl::core::MapFlags::WRITE,
+                    0,
+                    (hypercall_buffer_size * self.num_vms) as usize,
+                    None::<Event>,
+                    None::<&mut Event>,
+                )
+                .unwrap()
+            };
+            unsafe {
+                let read_map = hcall_read_map.as_slice_mut((hypercall_buffer_size * self.num_vms) as usize);
+                read_map.fill(0);
+                Arc::new(UnsafeCellWrapper::new(read_map))
+            }
+        } else {
+            let mut read_map: &'static mut [u8] =
+                Box::leak(vec![0u8; (hypercall_buffer_size * self.num_vms) as usize].into_boxed_slice());
+                unsafe { Arc::new(UnsafeCellWrapper::new(read_map)) }
+        };
 
         /*
          * Allocate the data_segment buffer

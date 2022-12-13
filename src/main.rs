@@ -967,6 +967,7 @@ fn main() {
                     compile_args.clone(),
                     link_args.clone(),
                     print_return,
+                    is_nvidia_gpu,
                 )
             })
             .for_each(|handler| {
