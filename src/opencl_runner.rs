@@ -2238,16 +2238,42 @@ impl OpenCLRunner {
                 // We don't need to read previous buffer values for serverless invoke or
                 // vectorvisor_barrier calls.
                 if (invoke + barrier) != self.num_vms {
-                    ocl::core::enqueue_read_buffer(
-                        &queue,
-                        &hypercall_buffer,
-                        true,
-                        0,
-                        buf,
-                        None::<Event>,
-                        None::<&mut Event>,
-                    )
-                    .unwrap();
+                    if is_nvidia {
+                        ocl::core::enqueue_read_buffer(
+                            &queue,
+                            &hypercall_buffer,
+                            true,
+                            0,
+                            buf,
+                            None::<Event>,
+                            None::<&mut Event>,
+                        )
+                        .unwrap();
+                    } else {
+                        let mut read_map = ocl::core::enqueue_map_buffer(
+                            &queue,
+                            &hypercall_buffer,
+                            true,
+                            ocl::core::MapFlags::READ,
+                            0,
+                            (hypercall_buffer_size * self.num_vms) as usize,
+                            None::<Event>,
+                            None::<&mut Event>,
+                        )
+                        .unwrap();
+                        let mut read_buf_slice: &mut [u8] = unsafe {
+                            read_map.as_slice_mut((hypercall_buffer_size * self.num_vms) as usize)
+                        };
+                        buf.copy_from_slice(&read_buf_slice);
+                        ocl::core::enqueue_unmap_mem_object(
+                            &queue,
+                            &hypercall_buffer,
+                            &read_map,
+                            None::<Event>,
+                            None::<&mut Event>,
+                        )
+                        .unwrap();
+                    }
                 }
                 ocl::core::enqueue_read_buffer(
                     &queue,
