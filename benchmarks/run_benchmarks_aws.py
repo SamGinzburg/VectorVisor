@@ -95,7 +95,7 @@ NUM_REPEAT=1
 
 if gpu == "a10g":
     maxdemospace = 0
-    local_group_size = 16
+    local_group_size = 64
     nvflag = "true"
 elif gpu == "t4":
     maxdemospace = 0
@@ -103,7 +103,7 @@ elif gpu == "t4":
     nvflag = "true"
 elif gpu == "amd":
     maxdemospace = 0
-    local_group_size = 999999
+    local_group_size = 64
     nvflag = "false"
 
 today = datetime.now()
@@ -576,7 +576,7 @@ def run_lz4_bench():
 
     cd /vv/VectorVisor/benchmarks/
 
-    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/{prefix}json-compression-opt-{interleave}{run_profile}.wasm.bin --ip=0.0.0.0 --heap=4194304 --stack=131072 --hcallsize=362144 --partition=false --serverless=true --vmcount={vmcount} --vmgroups=1 --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --rt=200 --lgroup={lgroup} --nvidia={nv} &> /vv/json-compression.log &
+    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/{prefix}json-compression-opt-{interleave}{run_profile}.wasm.bin --ip=0.0.0.0 --heap=4194304 --stack=131072 --hcallsize=204800 --partition=false --serverless=true --vmcount={vmcount} --vmgroups=1 --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --rt=200 --lgroup={lgroup} --nvidia={nv} &> /vv/json-compression.log &
     """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, \
                maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount, prefix=prefix, run_profile=run_profile, nv=nvflag)
 
@@ -991,8 +991,10 @@ def run_image_hash_bench(run_modified = False):
         prefix = ""
     
     imagehash_path = "/vv/VectorVisor/benchmarks/{prefix}imagehash".format(prefix=prefix)
+    hcallsize = "65536"
     if run_modified:
         imagehash_path = "/vv/VectorVisor/benchmarks/{prefix}imagehash-modified".format(prefix=prefix)
+        hcallsize = "266240"
 
     run_image_command_x86 = """#!/bin/bash
     sudo su
@@ -1038,8 +1040,8 @@ def run_image_hash_bench(run_modified = False):
 
     cd /vv/VectorVisor/benchmarks/
 
-    /vv/VectorVisor/target/release/vectorvisor --input {imagehash_path}-opt-{interleave}{run_profile}.wasm.bin --ip=0.0.0.0 --heap=4194304 --stack=131072 --hcallsize=294912 --partition=false --serverless=true --vmcount={vmcount} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --rt=200 --lgroup={lgroup} --nvidia={nv} &> /vv/imagehash.log &
-    """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, imagehash_path=imagehash_path, maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount, prefix=prefix, run_profile=run_profile, nv=nvflag)
+    /vv/VectorVisor/target/release/vectorvisor --input {imagehash_path}-opt-{interleave}{run_profile}.wasm.bin --ip=0.0.0.0 --heap=4194304 --stack=131072 --hcallsize={hc} --partition=false --serverless=true --vmcount={vmcount} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --rt=200 --lgroup={lgroup} --nvidia={nv} &> /vv/imagehash.log &
+    """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, imagehash_path=imagehash_path, maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount, prefix=prefix, run_profile=run_profile, nv=nvflag, hc=hcallsize)
 
     run_command(run_image_command, "run_imagehash_gpu_command", gpu_instance[0].id)
 
@@ -1224,9 +1226,11 @@ def run_image_blur_bench(run_bmp = False):
     if not run_bmp:
         bin_path = "/vv/VectorVisor/benchmarks/{prefix}imageblur-opt-{interleave}{run_profile}.wasm".format(interleave=interleave, prefix=prefix, run_profile=run_profile)
         exe_path = "/vv/VectorVisor/benchmarks/imageblur/"
+        hcallsize = "65536"
     else:
         bin_path = "/vv/VectorVisor/benchmarks/{prefix}imageblur-bmp-opt-{interleave}{run_profile}.wasm".format(interleave=interleave, prefix=prefix, run_profile=run_profile)
         exe_path = "/vv/VectorVisor/benchmarks/imageblur-bmp/"
+        hcallsize = "225280"
 
     run_image_command_x86 = """#!/bin/bash
     sudo su
@@ -1270,8 +1274,8 @@ def run_image_blur_bench(run_bmp = False):
     export PATH=~/.cargo/bin:$PATH
     export PATH=/vv/binaryen-version_109/bin:$PATH
 
-    /vv/VectorVisor/target/release/vectorvisor --input {bin_path}.bin --ip=0.0.0.0 --heap=4194304 --stack=262144 --hcallsize=225280 --partition=false --serverless=true --vmcount={vmcount} --vmgroups=1 --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --lgroup={lgroup} --nvidia={nv} &> /vv/imageblur.log &
-    """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, bin_path=bin_path, maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount, nv=nvflag)
+    /vv/VectorVisor/target/release/vectorvisor --input {bin_path}.bin --ip=0.0.0.0 --heap=4194304 --stack=262144 --hcallsize={hc} --partition=false --serverless=true --vmcount={vmcount} --vmgroups=1 --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --lgroup={lgroup} --nvidia={nv} &> /vv/imageblur.log &
+    """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, bin_path=bin_path, maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount, nv=nvflag, hc=hcallsize)
 
     run_command(run_image_command, "run_imageblur_gpu_command", gpu_instance[0].id)
 
@@ -1926,7 +1930,6 @@ if run_only_membench and skip_membench is None:
     ec2.instances.filter(InstanceIds = instance_id_list).terminate()
     exit()
 
-# Some benchmarks don't run on AMD
 if gpu != "amd":
     run_genpdf_bench()
     cleanup()
@@ -1963,22 +1966,16 @@ run_average_bench()
 
 cleanup()
 
-run_nlp_count_bench("go")
-
-cleanup()
-
-run_nlp_count_bench("assemblyscript")
-
-cleanup()
-
-run_nlp_count_bench("rust")
-
-cleanup()
-
-# run pbkdf2 bench
-run_pbkdf2_bench()
-
-cleanup()
+if gpu != "amd":
+    run_nlp_count_bench("go")
+    cleanup()
+    run_nlp_count_bench("assemblyscript")
+    cleanup()
+    run_nlp_count_bench("rust")
+    cleanup()
+    # run pbkdf2 bench
+    run_pbkdf2_bench()
+    cleanup()
 
 # clean up all instances at end
 ec2.instances.filter(InstanceIds = instance_id_list).terminate()
