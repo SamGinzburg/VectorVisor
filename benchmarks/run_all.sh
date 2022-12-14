@@ -1,40 +1,138 @@
+# param 1 --> AMD AMI
+# param 2 --> T4 AMI
+# param 3 --> A10G AMI
+# e.g., ./run_all.sh AMD T4 A10G
+
 dir_name=$(printf '%(%Y-%m-%d-%H:%M:%S)T\n' -1)
+amd_membench="$dir_name/amd_membench/"
+t4_membench="$dir_name/t4_membench/"
+a10g_membench="$dir_name/a10g_membench/"
 t4_dir_4="$dir_name/t4_amd_4/"
-a10g_dir_4="$dir_name/a10g_intel_4/"
 t4_dir_8="$dir_name/t4_amd_8/"
+t4_dir_4_profile="$dir_name/t4_amd_4_profile/"
+t4_dir_8_profile="$dir_name/t4_amd_8_profile/"
+a10g_dir_4="$dir_name/a10g_intel_4/"
 a10g_dir_8="$dir_name/a10g_intel_8/"
-v520_dir_4="$dir_name/v520_4/"
-v520_dir_8="$dir_name/v520_8/"
+a10g_dir_4_profile="$dir_name/a10g_intel_4_profile/"
+a10g_dir_8_profile="$dir_name/a10g_intel_8_profile/"
+v520_dir_4_profile="$dir_name/v520_4_profile/"
+v520_dir_8_profile="$dir_name/v520_8_profile/"
+v520_dir_4_breakdown="$dir_name/v520_4_breakdown/"
+v520_dir_8_breakdown="$dir_name/v520_8_breakdown/"
 mkdir -p $dir_name
 
 # Run AMD benchmarks...
+# both profiled, 4,8 interleaves
 echo "Starting AMD v520 benchmarks..."
 TOTAL_START_TIME=$(date +%s)
 STARTTIME=$(date +%s)
-#python3 run_benchmarks_aws.py --gpu=amd --cpu=amd --interleave=8 --dir=$v520_dir_4 --skip-cpu True --ami=$1 --cpuami=$2 --run-profile True & 
-#python3 run_benchmarks_aws.py --gpu=amd --cpu=amd --interleave=8 --dir=$v520_dir_4 --skip-membench True --skip-cpu True --ami=$1 --cpuami=$2 --run-profile True & 
+python3 run_benchmarks_aws.py --gpu=amd --cpu=amd --interleave=4 --dir=$v520_dir_4_profile --skip-cpu True --ami=$1 --cpuami=$2 --run-profile True --skip-membench=True & 
+python3 run_benchmarks_aws.py --gpu=amd --cpu=intel --interleave=8 --dir=$v520_dir_8_profile --skip-cpu True --ami=$1 --cpuami=$2 --run-profile True --skip-membench=True & 
 for job in `jobs -p`; do wait ${job}; done
 ENDTIME=$(date +%s)
-echo "$(($ENDTIME - $STARTTIME)) seconds ellapsed while running interleave=4 benchmarks"
+echo "$(($ENDTIME - $STARTTIME)) seconds ellapsed while running AMD benchmarks"
 sleep 60
 
-echo "Starting profile interleave=4 benchmarks..."
+# run breakdown...
+echo "Starting AMD v520 breakdown benchmarks..."
 TOTAL_START_TIME=$(date +%s)
 STARTTIME=$(date +%s)
-#python3 run_benchmarks_aws.py --gpu=t4 --cpu=amd --interleave=4 --dir=$t4_dir_4 --ami=$1 --cpuami=$1 --run-profile True --skip-cpu True --skip-membench True & 
-python3 run_benchmarks_aws.py --gpu=a10g --cpu=intel --interleave=4 --dir=$a10g_dir_4 --skip-membench True --ami=$1 --skip-cpu True --cpuami=$1 &
+python3 run_benchmarks_aws.py --gpu=amd --cpu=amd --interleave=4 --dir=$v520_dir_4_breakdown --skip-cpu True --ami=$1 --cpuami=$2 --run-profile True --breakdown=True --skip-membench=True & 
+python3 run_benchmarks_aws.py --gpu=amd --cpu=intel --interleave=8 --dir=$v520_dir_8_breakdown --skip-cpu True --ami=$1 --cpuami=$2 --run-profile True --breakdown=True --skip-membench=True & 
 for job in `jobs -p`; do wait ${job}; done
 ENDTIME=$(date +%s)
-echo "$(($ENDTIME - $STARTTIME)) seconds ellapsed while running interleave=4 benchmarks"
+echo "$(($ENDTIME - $STARTTIME)) seconds ellapsed while running AMD breakdown benchmarks"
 sleep 60
 
-
-echo "Starting interleave=8 benchmarks..."
+# Run T4 benchmarks...
+# Run both w/CPU benchmarks, 4,8 interleaves
+echo "Starting T4 benchmarks w/CPU..."
+TOTAL_START_TIME=$(date +%s)
 STARTTIME=$(date +%s)
-#python3 run_benchmarks_aws.py --gpu=t4 --cpu=amd --interleave=8 --dir=$t4_dir_8 --skip-membench True & 
-#python3 run_benchmarks_aws.py --gpu=a10g --cpu=intel --interleave=8 --dir=$a10g_dir_8 --skip-membench True &
+python3 run_benchmarks_aws.py --gpu=t4 --cpu=amd --interleave=4 --dir=$t4_dir_4 --ami=$2 --cpuami=$2 --skip-membench=True & 
+python3 run_benchmarks_aws.py --gpu=t4 --cpu=intel --interleave=8 --dir=$t4_dir_8 --ami=$2 --cpuami=$2 --skip-membench=True & 
 for job in `jobs -p`; do wait ${job}; done
 ENDTIME=$(date +%s)
-echo "$(($ENDTIME - $STARTTIME)) seconds ellapsed while running interleave=8 benchmarks"
+echo "$(($ENDTIME - $STARTTIME)) seconds ellapsed while running t4+CPU benchmarks"
+sleep 60
+
+# Run T4 profiled benchmarks...
+echo "Starting T4 profile benchmarks..."
+STARTTIME=$(date +%s)
+python3 run_benchmarks_aws.py --gpu=t4 --cpu=amd --interleave=4 --dir=$t4_dir_4_profile --ami=$2 --cpuami=$2 --skip-cpu True --skip-membench True --run-profile True & 
+python3 run_benchmarks_aws.py --gpu=t4 --cpu=intel --interleave=8 --dir=$t4_dir_8_profile --ami=$2 --cpuami=$2 --skip-cpu True --skip-membench True --run-profile True & 
+for job in `jobs -p`; do wait ${job}; done
+ENDTIME=$(date +%s)
+echo "$(($ENDTIME - $STARTTIME)) seconds ellapsed while running t4 profile benchmarks"
+sleep 60
+
+echo "Starting T4 benchmarks breakdown w/CPU..."
+TOTAL_START_TIME=$(date +%s)
+STARTTIME=$(date +%s)
+python3 run_benchmarks_aws.py --gpu=t4 --cpu=amd --interleave=4 --dir=$t4_dir_4_breakdown --ami=$2 --cpuami=$2 --skip-cpu True --skip-membench True --breakdown=True & 
+python3 run_benchmarks_aws.py --gpu=t4 --cpu=intel --interleave=8 --dir=$t4_dir_8_breakdown --ami=$2 --cpuami=$2 --skip-cpu True --skip-membench True --breakdown=True & 
+for job in `jobs -p`; do wait ${job}; done
+ENDTIME=$(date +%s)
+echo "$(($ENDTIME - $STARTTIME)) seconds ellapsed while running T4 breakdown benchmarks"
+sleep 60
+
+echo "Starting A10G benchmarks..."
+STARTTIME=$(date +%s)
+python3 run_benchmarks_aws.py --gpu=a10g --cpu=amd --interleave=4 --dir=$a10g_dir_4 --ami=$3 --cpuami=$3 --skip-cpu True --skip-membench True & 
+python3 run_benchmarks_aws.py --gpu=a10g --cpu=intel --interleave=8 --dir=$a10g_dir_8 --ami=$3 --cpuami=$3 --skip-cpu True --skip-membench True & 
+for job in `jobs -p`; do wait ${job}; done
+ENDTIME=$(date +%s)
+echo "$(($ENDTIME - $STARTTIME)) seconds ellapsed while running a10g benchmarks"
+sleep 60
+
+echo "Starting A10G profile benchmarks..."
+STARTTIME=$(date +%s)
+python3 run_benchmarks_aws.py --gpu=a10g --cpu=amd --interleave=4 --dir=$a10g_dir_4_profile --ami=$3 --cpuami=$3 --skip-cpu True --skip-membench True --run-profile True & 
+python3 run_benchmarks_aws.py --gpu=a10g --cpu=intel --interleave=8 --dir=$a10g_dir_8_profile --ami=$3 --cpuami=$3 --skip-cpu True --skip-membench True --run-profile True & 
+for job in `jobs -p`; do wait ${job}; done
+ENDTIME=$(date +%s)
+echo "$(($ENDTIME - $STARTTIME)) seconds ellapsed while running a10g profile benchmarks"
+sleep 60
+
+echo "Starting A10G breakdown benchmarks..."
+STARTTIME=$(date +%s)
+python3 run_benchmarks_aws.py --gpu=a10g --cpu=amd --interleave=4 --dir=$a10g_dir_4_breakdown --ami=$3 --cpuami=$3 --skip-cpu True --skip-membench True --breakdown=True & 
+python3 run_benchmarks_aws.py --gpu=a10g --cpu=intel --interleave=8 --dir=$a10g_dir_8_breakdown --ami=$3 --cpuami=$3 --skip-cpu True --skip-membench True --breakdown=True & 
+for job in `jobs -p`; do wait ${job}; done
+ENDTIME=$(date +%s)
+echo "$(($ENDTIME - $STARTTIME)) seconds ellapsed while running a10g breakdown benchmarks"
+
+# Now finish things off with the membench runs...
+
+# AMD membench
+echo "Starting AMD v520 membench..."
+TOTAL_START_TIME=$(date +%s)
+STARTTIME=$(date +%s)
+python3 run_benchmarks_aws.py --gpu=amd --cpu=amd --interleave=4 --dir=$amd_membench --skip-cpu True --ami=$1 --cpuami=$2 --membench=True & 
+for job in `jobs -p`; do wait ${job}; done
+ENDTIME=$(date +%s)
+echo "$(($ENDTIME - $STARTTIME)) seconds ellapsed while running AMD membench"
+sleep 60
+
+# T4 membench
+echo "Starting T4 membench..."
+TOTAL_START_TIME=$(date +%s)
+STARTTIME=$(date +%s)
+python3 run_benchmarks_aws.py --gpu=t4 --cpu=amd --interleave=4 --dir=$t4_membench --ami=$2 --cpuami=$2 --skip-cpu True --membench=True & 
+for job in `jobs -p`; do wait ${job}; done
+ENDTIME=$(date +%s)
+echo "$(($ENDTIME - $STARTTIME)) seconds ellapsed while running T4 membench"
+sleep 60
+
+#A10G membench
+echo "Starting A10G membench..."
+TOTAL_START_TIME=$(date +%s)
+STARTTIME=$(date +%s)
+python3 run_benchmarks_aws.py --gpu=a10g --cpu=amd --interleave=4 --dir=$a10g_membench --ami=$3 --cpuami=$3 --skip-cpu True --membench=True & 
+for job in `jobs -p`; do wait ${job}; done
+ENDTIME=$(date +%s)
+echo "$(($ENDTIME - $STARTTIME)) seconds ellapsed while running A10G membench"
+sleep 60
+
 echo "Finished all benchmarks!"
 echo "$(($ENDTIME - $TOTAL_START_TIME)) seconds ellapsed"
