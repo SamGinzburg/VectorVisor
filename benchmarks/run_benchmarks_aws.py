@@ -576,7 +576,7 @@ def run_lz4_bench():
 
     cd /vv/VectorVisor/benchmarks/
 
-    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/{prefix}json-compression-opt-{interleave}{run_profile}.wasm.bin --ip=0.0.0.0 --heap=4194304 --stack=131072 --hcallsize=204800 --partition=false --serverless=true --vmcount={vmcount} --vmgroups=1 --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --rt=200 --lgroup={lgroup} --nvidia={nv} &> /vv/json-compression.log &
+    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/{prefix}json-compression-opt-{interleave}{run_profile}.wasm.bin --ip=0.0.0.0 --heap=4194304 --stack=131072 --hcallsize=204800 --partition=false --serverless=true --vmcount={vmcount} --vmgroups=1 --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --rt=100 --lgroup={lgroup} --nvidia={nv} &> /vv/json-compression.log &
     """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, \
                maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount, prefix=prefix, run_profile=run_profile, nv=nvflag)
 
@@ -731,7 +731,7 @@ def run_genpdf_bench():
 
     cd /vv/VectorVisor/benchmarks/
 
-    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/{prefix}rust-pdfwriter-opt-{interleave}{run_profile}.wasm.bin --ip=0.0.0.0 --heap=4194304 --stack=131072 --hcallsize=131072 --partition=false --serverless=true --vmcount={vmcount} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --rt=100 --lgroup={lgroup} --nvidia={nv} &> /vv/rust-pdfwriter.log &
+    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/{prefix}rust-pdfwriter-opt-{interleave}{run_profile}.wasm.bin --ip=0.0.0.0 --heap=4194304 --stack=131072 --hcallsize=131072 --partition=false --serverless=true --vmcount={vmcount} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --rt=200 --lgroup={lgroup} --nvidia={nv} &> /vv/rust-pdfwriter.log &
     """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, \
                maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount, prefix=prefix, run_profile=run_profile, nv=nvflag)
 
@@ -1040,7 +1040,7 @@ def run_image_hash_bench(run_modified = False):
 
     cd /vv/VectorVisor/benchmarks/
 
-    /vv/VectorVisor/target/release/vectorvisor --input {imagehash_path}-opt-{interleave}{run_profile}.wasm.bin --ip=0.0.0.0 --heap=4194304 --stack=131072 --hcallsize={hc} --partition=false --serverless=true --vmcount={vmcount} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --rt=200 --lgroup={lgroup} --nvidia={nv} &> /vv/imagehash.log &
+    /vv/VectorVisor/target/release/vectorvisor --input {imagehash_path}-opt-{interleave}{run_profile}.wasm.bin --ip=0.0.0.0 --heap=4194304 --stack=131072 --hcallsize={hc} --partition=false --serverless=true --vmcount={vmcount} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --rt=100 --lgroup={lgroup} --nvidia={nv} &> /vv/imagehash.log &
     """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, imagehash_path=imagehash_path, maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount, prefix=prefix, run_profile=run_profile, nv=nvflag, hc=hcallsize)
 
     run_command(run_image_command, "run_imagehash_gpu_command", gpu_instance[0].id)
@@ -1716,6 +1716,33 @@ def run_membench(membench_interleave=4):
             text_file.write(str(output)+"\n")
 
 
+    # Run optimized memcpy
+    run_membench_command = """#!/bin/bash
+    sudo su
+    ulimit -n 65536
+    x=$(cloud-init status)
+    until [ "$x" == "status: done" ]; do
+    sleep 10
+    x=$(cloud-init status)
+    done
+
+    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/examples/mem/bulkmemloop.wat --ip=0.0.0.0 --heap=3145728 --stack=1024 --hcallsize=1024 --partition=false --serverless=true --volatile=true --vmcount={vmcount} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} --lgroup={lgroup} --nvidia={nv} &> test.log && tail -n 30 test.log
+    """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=membench_interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount, nv=nvflag)
+
+    for idx in range(50):
+        command_id = run_command(run_membench_command, "run_membench64_unroll", gpu_instance[0].id)
+        time.sleep(3)
+        # Block until benchmark is complete
+        output = block_on_command(command_id, gpu_instance[0].id)['StandardOutputContent']
+        output = output.replace("\'", "\"")
+        output = float(re.search(r'kernel_exec_time:\s(.*?)\n', output).group(1)) 
+        print (output)
+        # save output
+        with open(temp_dir+"gpu_bulkmem_{interleave}.txt".format(interleave=membench_interleave), "a") as text_file:
+            text_file.write(str(output)+"\n")
+
+
+
 def run_syscall_bench(hcall_sizes, membench_interleave=4):
     if gpu == "a10g":
         vmcount = 6144
@@ -1818,12 +1845,12 @@ Placement={
     'AvailabilityZone': 'us-east-1b',
 }
 
-
 gpu_instance = ec2.create_instances(ImageId=gpu_ami,
                                 InstanceType=gpuinstance,
                                 MinCount=1,
                                 MaxCount=1,
                                 UserData=userdata_ubuntu,
+                                Placement=Placement,
                                 IamInstanceProfile={
                                     'Arn': 'arn:aws:iam::573062721377:instance-profile/ec2-ssm',
                                     #'Name': "ec2-ssm"
@@ -1848,11 +1875,13 @@ if run_amd:
 else:
     cpu_vm = "c5.xlarge"
 
+
 cpu_bench_instance = ec2.create_instances(ImageId=cpu_ami,
                                 InstanceType=cpu_vm,
                                 MinCount=1,
                                 MaxCount=1,
                                 UserData=userdata_ubuntu,
+                                Placement=Placement,
                                 IamInstanceProfile={
                                     'Arn': 'arn:aws:iam::573062721377:instance-profile/ec2-ssm',
                                     #'Name': "ec2-ssm"
@@ -1866,6 +1895,7 @@ invoker_instance = ec2.create_instances(ImageId=cpu_ami,
                                 MinCount=1,
                                 MaxCount=1,
                                 UserData=userdata_ubuntu,
+                                Placement=Placement,
                                 IamInstanceProfile={
                                     'Arn': 'arn:aws:iam::573062721377:instance-profile/ec2-ssm',
                                     #'Name': "ec2-ssm"
