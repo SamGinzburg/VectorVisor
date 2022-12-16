@@ -1783,6 +1783,10 @@ pub fn generate_bulkmem(fill: bool, interleave: u32) -> String {
             1 => {
                 // alignments don't matter for the 1 byte interleave ("everything" is aligned)
                 result += &format!(
+                "\t\t{}\n",
+                "if (buf_len_bytes >= 128) {"
+                );
+                result += &format!(
                     "\t\t\t{}\n",
                     "for (; buf_len_bytes >= 128; buf_len_bytes -= 128) {"
                 );
