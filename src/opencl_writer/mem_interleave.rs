@@ -1880,10 +1880,17 @@ pub fn generate_read_write_calls(
             result += &format!("\t{}\n", "*((global uchar*)addr) = value;");
         }
         1 => {
-            result += &format!(
-                "\t{}\n",
-                "*((global uchar*)((addr-mem_start)*(NUM_THREADS) + warp_id + mem_start)) = value;"
-            )
+            if volatile {
+               result += &format!(
+                    "\t{}\n",
+                    "*((global volatile uchar*)((addr-mem_start)*(NUM_THREADS) + warp_id + mem_start)) = value;"
+                )
+            } else {
+                result += &format!(
+                    "\t{}\n",
+                    "*((global uchar*)((addr-mem_start)*(NUM_THREADS) + warp_id + mem_start)) = value;"
+                )
+            }
         }
         4 | 8 => {
             // determine which cell to read
@@ -1896,7 +1903,11 @@ pub fn generate_read_write_calls(
                     interleave
                 )
             );
-            result += &format!("\t{}\n", "*(global uchar*)(write_addr) = value;")
+            if volatile {
+                result += &format!("\t{}\n", "*(global volatile uchar*)(write_addr) = value;")
+            } else {
+                result += &format!("\t{}\n", "*(global uchar*)(write_addr) = value;")
+            }
         }
         _ => panic!("Unsupported read/write interleave"),
     }
@@ -2005,10 +2016,17 @@ pub fn generate_read_write_calls(
             result += &format!("\t{}", "return *((global uchar*)addr);");
         }
         1 => {
-            result += &format!(
-                "\t{}",
-                "return *((global uchar*)((addr-mem_start)*NUM_THREADS + warp_id + mem_start));"
-            );
+            if volatile {
+                result += &format!(
+                    "\t{}",
+                    "return *((global volatile uchar*)((addr-mem_start)*NUM_THREADS + warp_id + mem_start));"
+                );
+            } else {
+                result += &format!(
+                    "\t{}",
+                    "return *((global uchar*)((addr-mem_start)*NUM_THREADS + warp_id + mem_start));"
+                );
+            }
         }
         4 | 8 => {
             let read = format!("global uchar *read_addr = ((global uchar*)(((addr-mem_start)/{})*(NUM_THREADS*{}) + (warp_id*{}) + mem_start));", interleave, interleave, interleave);
@@ -2020,7 +2038,11 @@ pub fn generate_read_write_calls(
                     interleave
                 )
             );
-            result += &format!("\t{}\n", "return *(read_addr);")
+            if volatile {
+                result += &format!("\t{}\n", "return *(global volatile uchar*)(read_addr);")
+            } else {
+                result += &format!("\t{}\n", "return *(read_addr);")
+            }
         }
         _ => panic!("Unsupported read/write interleave"),
     }
