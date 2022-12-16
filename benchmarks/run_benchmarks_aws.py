@@ -1635,6 +1635,8 @@ def run_membench(membench_interleave=4):
         # Block until benchmark is complete
         output = block_on_command(command_id, gpu_instance[0].id)['StandardOutputContent']
         output = output.replace("\'", "\"")
+        print ("Output:")
+        print (output)
         output = float(re.search(r'kernel_exec_time:\s(.*?)\n', output).group(1))
         print (output)
         # save output
