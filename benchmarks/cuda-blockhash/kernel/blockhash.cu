@@ -3,8 +3,9 @@
 extern "C" __global__ void blockhash(unsigned char *input_img, unsigned int *blocks, const unsigned int block_width, const unsigned int block_height, const unsigned int bits) {
 
     // x, y pixel values
-    const unsigned int x = blockIdx.x;
-    const unsigned int y = threadIdx.y;
+    const unsigned int x = threadIdx.x + blockIdx.x * blockDim.x;
+    const unsigned int y = threadIdx.y + blockIdx.y * blockDim.y;
+
     // bits == the number of blocks to divide by horizontally/vertically
     // If img dims are 256x256 with a block size of 8, then bits==32
 

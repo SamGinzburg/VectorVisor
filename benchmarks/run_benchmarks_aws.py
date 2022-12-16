@@ -605,7 +605,7 @@ def run_lz4_bench():
     cd /vv/VectorVisor/benchmarks/json-compression-lz4/
 
     /usr/local/go/bin/go run /vv/VectorVisor/benchmarks/json-compression-lz4/run_lz4.go {addr} 8000 {target_rps} 1 {duration} /vv/VectorVisor/benchmarks/json-compression/smaller_tweets.txt {input_size}
-    """.format(addr=gpu_instance[0].private_dns_name, input_size=2000, target_rps=vmcount, duration=benchmark_duration)
+    """.format(addr=gpu_instance[0].private_dns_name, input_size=1000, target_rps=vmcount, duration=benchmark_duration)
 
     for idx in range(NUM_REPEAT):
         command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
@@ -643,7 +643,7 @@ def run_lz4_bench():
     cd /vv/VectorVisor/benchmarks/json-compression-lz4/
 
     /usr/local/go/bin/go run /vv/VectorVisor/benchmarks/json-compression-lz4/run_lz4.go {addr} 8000 {target_rps} 1 {duration} /vv/VectorVisor/benchmarks/json-compression-lz4/smaller_tweets.txt {input_size}
-    """.format(addr=cpu_bench_instance[0].private_dns_name, input_size=2000, target_rps=target_rps_cpu, duration=benchmark_duration)
+    """.format(addr=cpu_bench_instance[0].private_dns_name, input_size=1000, target_rps=target_rps_cpu, duration=benchmark_duration)
 
     for idx in range(NUM_REPEAT):
         command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
@@ -1962,6 +1962,7 @@ if run_only_membench and skip_membench is None:
     ec2.instances.filter(InstanceIds = instance_id_list).terminate()
     exit()
 
+"""
 if gpu != "amd":
     run_genpdf_bench()
     cleanup()
@@ -1987,6 +1988,7 @@ cleanup()
 run_scrypt_bench()
 
 cleanup()
+"""
 
 # run lz4 bench
 run_lz4_bench()

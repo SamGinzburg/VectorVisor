@@ -278,7 +278,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 // First we perform blockhash preprocessing
                 // To do this, we blur the same image twice (different params) and subtract the difference
                 unsafe {
-                    launch!(module.blur_and_sub<<<(256,1,1), (256, 1, 1), 0, stream>>>(
+                    launch!(module.blur_and_sub<<<(16,16,1), (16, 16, 1), 0, stream>>>(
                         x.as_device_ptr(),
                         y.as_device_ptr(),
                         result.as_device_ptr(),
@@ -293,7 +293,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     )).unwrap();
 
                     // Compute the blockhash
-                    launch!(module_blockhash.blockhash<<<256, 256, 0, stream>>>(
+                    launch!(module_blockhash.blockhash<<<(16,16,1), (16,16,1), 0, stream>>>(
                         result.as_device_ptr(),
                         result_blocks.as_device_ptr(),
                         bits, bits,

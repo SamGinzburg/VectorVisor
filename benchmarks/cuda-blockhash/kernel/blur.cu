@@ -1,9 +1,6 @@
 extern "C" __global__ void blur_and_sub(const unsigned char *input, const unsigned char *input2, unsigned char *output, unsigned char *output2, const unsigned int width, const unsigned int height, const float *kernel_20, const float *kernel_10, const unsigned int kernelWidth_20, const unsigned int kernelWidth_10) {
-
-    //const unsigned int col = threadIdx.x + blockIdx.x * blockDim.x;
-    //const unsigned int row = threadIdx.y + blockIdx.y * blockDim.y;
-    const unsigned int row = blockIdx.x;
-    const unsigned int col = threadIdx.x;
+    const unsigned int col = threadIdx.x + blockIdx.x * blockDim.x;
+    const unsigned int row = threadIdx.y + blockIdx.y * blockDim.y;
 
     //printf("col: %d\n", col);
     //printf("row: %d\n", row);

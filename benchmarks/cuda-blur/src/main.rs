@@ -247,7 +247,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
                 unsafe {
                     // Launch the `sum` function with one block containing one thread on the given stream.
-                    launch!(module.blur<<<256, 256, 0, stream>>>(
+                    launch!(module.blur<<<(16, 16, 1), (16, 16, 1), 0, stream>>>(
                         x.as_device_ptr(),
                         result.as_device_ptr(),
                         256,
