@@ -17,6 +17,7 @@ parser.add_argument("--skip-cpu", required=False)
 parser.add_argument("--run-profile", required=False)
 parser.add_argument("--ami", required=True)
 parser.add_argument("--cpuami", required=True)
+parser.add_argument("--double", required=True)
 
 args = vars(parser.parse_args())
 
@@ -31,6 +32,7 @@ outdir = args['dir']
 skip_membench = args['skip_membench']
 skip_cpu = args['skip_cpu']
 run_profile = args['run_profile']
+double = args['double']
 
 if skip_cpu == None:
     skip_cpu = False
@@ -45,6 +47,7 @@ print ("run latency breakdown: ", breakdown)
 print ("dir: ", outdir)
 print ("skip-membench: ", skip_membench)
 print ("run-profile: ", run_profile)
+print ("double: ", double)
 
 if run_profile:
     run_profile = "-profile"
@@ -71,6 +74,10 @@ if membench:
 else:
     run_only_membench = False
 
+if double == "True":
+    double = True
+else:
+    double = False
 
 # Benchmark constants
 # target rps is really just the number of concurrent invokers
@@ -185,8 +192,7 @@ def cleanup():
     terminate_gpu = """#!/bin/bash
     sudo su
     curl -X GET {addr}:8000/terminate
-    curl -X GET {addr_cpu}:8000/terminate
-    """.format(addr=gpu_instance[0].private_dns_name, addr_cpu=cpu_bench_instance[0].private_dns_name)
+    """.format(addr=gpu_instance[0].private_dns_name)
     command_id = run_command(terminate_gpu, "run invoker for gpu", invoker_instance[0].id)
     time.sleep(10)
     output = block_on_command(command_id, invoker_instance[0].id)
@@ -605,7 +611,7 @@ def run_lz4_bench():
     cd /vv/VectorVisor/benchmarks/json-compression-lz4/
 
     /usr/local/go/bin/go run /vv/VectorVisor/benchmarks/json-compression-lz4/run_lz4.go {addr} 8000 {target_rps} 1 {duration} /vv/VectorVisor/benchmarks/json-compression/smaller_tweets.txt {input_size}
-    """.format(addr=gpu_instance[0].private_dns_name, input_size=1000, target_rps=vmcount, duration=benchmark_duration)
+    """.format(addr=gpu_instance[0].private_dns_name, input_size=2000, target_rps=vmcount, duration=benchmark_duration)
 
     for idx in range(NUM_REPEAT):
         command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
@@ -643,7 +649,7 @@ def run_lz4_bench():
     cd /vv/VectorVisor/benchmarks/json-compression-lz4/
 
     /usr/local/go/bin/go run /vv/VectorVisor/benchmarks/json-compression-lz4/run_lz4.go {addr} 8000 {target_rps} 1 {duration} /vv/VectorVisor/benchmarks/json-compression-lz4/smaller_tweets.txt {input_size}
-    """.format(addr=cpu_bench_instance[0].private_dns_name, input_size=1000, target_rps=target_rps_cpu, duration=benchmark_duration)
+    """.format(addr=cpu_bench_instance[0].private_dns_name, input_size=2000, target_rps=target_rps_cpu, duration=benchmark_duration)
 
     for idx in range(NUM_REPEAT):
         command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
@@ -1021,9 +1027,6 @@ def run_image_hash_bench(run_modified = False):
     /vv/VectorVisor/target/release/vectorvisor --input {imagehash_path}-opt-{interleave}{run_profile}.wasm --ip=0.0.0.0 --heap=4194304 --stack=131072 --hcallsize=294912 --partition=true --serverless=true --vmcount=3072 --wasmtime=true --fastreply={fastreply} &> /vv/imagehash.log &
     """.format(fastreply=fastreply, imagehash_path=imagehash_path, interleave=interleave, run_profile=run_profile)
 
-    if not skip_cpu:
-        run_command(run_image_command_wasmtime, "run_imagehash_command_wasmtime", cpu_bench_instance[0].id)
-
     run_image_command = """#!/bin/bash
     sudo su
     ulimit -n 65536
@@ -1042,8 +1045,6 @@ def run_image_hash_bench(run_modified = False):
 
     /vv/VectorVisor/target/release/vectorvisor --input {imagehash_path}-opt-{interleave}{run_profile}.wasm.bin --ip=0.0.0.0 --heap=4194304 --stack=131072 --hcallsize={hc} --partition=false --serverless=true --vmcount={vmcount} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --rt=100 --lgroup={lgroup} --nvidia={nv} &> /vv/imagehash.log &
     """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, imagehash_path=imagehash_path, maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount, prefix=prefix, run_profile=run_profile, nv=nvflag, hc=hcallsize)
-
-    run_command(run_image_command, "run_imagehash_gpu_command", gpu_instance[0].id)
 
     # Now set up the invoker
 
@@ -1070,91 +1071,6 @@ def run_image_hash_bench(run_modified = False):
 
     /usr/local/go/bin/go run run_image_hash.go {addr} 8000 {target_rps} 1 {duration}
     """.format(addr=gpu_instance[0].private_dns_name, input_size=1000, target_rps=vmcount, imagehash_path=imagehash_path, duration=benchmark_duration)
-
-    for idx in range(NUM_REPEAT):
-        command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
-
-        time.sleep(20)
-
-        # Block until benchmark is complete
-        output = block_on_command(command_id, invoker_instance[0].id)
-        print (output)
-
-        # save output
-        if run_modified:
-            with open(temp_dir+"gpu_bench_imagehash_modified_{idx}.txt".format(idx=idx), "w") as text_file:
-                text_file.write(str(output))
-        else:
-            with open(temp_dir+"gpu_bench_imagehash_{idx}.txt".format(idx=idx), "w") as text_file:
-                text_file.write(str(output))
-
-        time.sleep(SLEEP_TIME)
-
-    if skip_cpu:
-        return
-
-    run_command(run_image_command_wasmtime, "run_imagehash_command_x86", cpu_bench_instance[0].id)
-
-    run_invoker_wasmtime = """#!/bin/bash
-    sudo su
-    ulimit -n 65536
-    mkdir -p ~/gocache/
-    mkdir -p ~/gopath/
-    mkdir -p ~/xdg/
-    export GOCACHE=~/gocache/
-    export GOPATH=~/gopath/
-    export XDG_CACHE_HOME=~/xdg/
-
-    x=$(cloud-init status)
-    until [ "$x" == "status: done" ]; do
-    sleep 10
-    x=$(cloud-init status)
-    done
-
-    cd {imagehash_path}/
-
-    /usr/local/go/bin/go run run_image_hash.go {addr} 8000 {target_rps} 1 {duration}
-    """.format(addr=cpu_bench_instance[0].private_dns_name, input_size=1000, target_rps=target_rps_cpu, imagehash_path=imagehash_path, duration=benchmark_duration)
-    for idx in range(NUM_REPEAT):
-        command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
-
-        time.sleep(20)
-
-        # Block until benchmark is complete
-        output = block_on_command(command_id, invoker_instance[0].id)
-        print (output)
-        # save output
-        if run_modified:
-            with open(temp_dir+"cpu_bench_imagehash_modified_{idx}.txt".format(idx=idx), "w") as text_file:
-                text_file.write(str(output))
-        else:
-            with open(temp_dir+"cpu_bench_imagehash_{idx}.txt".format(idx=idx), "w") as text_file:
-                text_file.write(str(output))
-
-        time.sleep(SLEEP_TIME)
-
-
-    cleanup()
-
-    for idx in range(NUM_REPEAT):
-        run_command(run_image_command_x86, "run_imagehash_command_x86", cpu_bench_instance[0].id)
-
-        command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
-
-        time.sleep(20)
-
-        # Block until benchmark is complete
-        output = block_on_command(command_id, invoker_instance[0].id)
-        print (output)
-        # save output
-        if run_modified:
-            with open(temp_dir+"cpu_x86_bench_imagehash_modified_{idx}.txt".format(idx=idx), "w") as text_file:
-                text_file.write(str(output))
-        else:
-            with open(temp_dir+"cpu_x86_bench_imagehash_{idx}.txt".format(idx=idx), "w") as text_file:
-                text_file.write(str(output))
-
-        time.sleep(SLEEP_TIME)
 
     if run_modified:
         run_cuda_command = """#!/bin/bash
@@ -1257,8 +1173,6 @@ def run_image_blur_bench(run_bmp = False):
     /vv/VectorVisor/target/release/vectorvisor --input {bin_path} --ip=0.0.0.0 --heap=4194304 --stack=262144 --hcallsize=225280 --partition=true --serverless=true --vmcount=3072 --wasmtime=true --fastreply={fastreply} &> /vv/imageblur.log &
     """.format(fastreply=fastreply, bin_path=bin_path)
 
-    if not skip_cpu:
-        run_command(run_image_command_wasmtime, "run_imageblur_command_wasmtime", cpu_bench_instance[0].id)
 
     run_image_command = """#!/bin/bash
     sudo su
@@ -1276,8 +1190,6 @@ def run_image_blur_bench(run_bmp = False):
 
     /vv/VectorVisor/target/release/vectorvisor --input {bin_path}.bin --ip=0.0.0.0 --heap=4194304 --stack=262144 --hcallsize={hc} --partition=false --serverless=true --vmcount={vmcount} --vmgroups=1 --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --lgroup={lgroup} --nvidia={nv} &> /vv/imageblur.log &
     """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, bin_path=bin_path, maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount, nv=nvflag, hc=hcallsize)
-
-    run_command(run_image_command, "run_imageblur_gpu_command", gpu_instance[0].id)
 
     # Now set up the invoker
     if not run_latency_breakdown:
@@ -1304,86 +1216,6 @@ def run_image_blur_bench(run_bmp = False):
     /usr/local/go/bin/go run run_image_blur.go {addr} 8000 {target_rps} 1 {duration}
     """.format(addr=gpu_instance[0].private_dns_name, input_size=1000, target_rps=vmcount, exe_path=exe_path, duration=benchmark_duration)
 
-    for idx in range(NUM_REPEAT):
-        command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
-
-        time.sleep(20)
-
-        # Block until benchmark is complete
-        output = block_on_command(command_id, invoker_instance[0].id)
-        print (output)
-
-        # save output
-        if not run_bmp:
-            with open(temp_dir+"gpu_bench_imageblur_{idx}.txt".format(idx=idx), "w") as text_file:
-                text_file.write(str(output))
-        else:
-            with open(temp_dir+"gpu_bench_imageblur_bmp_{idx}.txt".format(idx=idx), "w") as text_file:
-                text_file.write(str(output))
-        time.sleep(SLEEP_TIME)
-
-    if skip_cpu:
-        return
-
-    run_invoker_wasmtime = """#!/bin/bash
-    sudo su
-    ulimit -n 65536
-    mkdir -p ~/gocache/
-    mkdir -p ~/gopath/
-    mkdir -p ~/xdg/
-    export GOCACHE=~/gocache/
-    export GOPATH=~/gopath/
-    export XDG_CACHE_HOME=~/xdg/
-
-    x=$(cloud-init status)
-    until [ "$x" == "status: done" ]; do
-    sleep 10
-    x=$(cloud-init status)
-    done
-
-    cd {exe_path}
-
-    /usr/local/go/bin/go run run_image_blur.go {addr} 8000 {target_rps} 1 {duration}
-    """.format(addr=cpu_bench_instance[0].private_dns_name, input_size=1000, target_rps=target_rps_cpu, exe_path=exe_path, duration=benchmark_duration)
-    
-    for idx in range(NUM_REPEAT):
-        command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
-
-        time.sleep(20)
-
-        # Block until benchmark is complete
-        output = block_on_command(command_id, invoker_instance[0].id)
-        print (output)
-        # save output
-        if not run_bmp:
-            with open(temp_dir+"cpu_bench_imageblur_{idx}.txt".format(idx=idx), "w") as text_file:
-                text_file.write(str(output))
-        else:
-            with open(temp_dir+"cpu_bench_imageblur_bmp_{idx}.txt".format(idx=idx), "w") as text_file:
-                text_file.write(str(output))
-        time.sleep(SLEEP_TIME)
-
-
-    cleanup()
-    for idx in range(NUM_REPEAT):
-        run_command(run_image_command_x86, "run_imageblur_command_x86", cpu_bench_instance[0].id)
-
-        command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
-
-        time.sleep(20)
-
-        # Block until benchmark is complete
-        output = block_on_command(command_id, invoker_instance[0].id)
-        print (output)
-        # save output
-        if not run_bmp:
-            with open(temp_dir+"cpu_x86_bench_imageblur_{idx}.txt".format(idx=idx), "w") as text_file:
-                text_file.write(str(output))
-        else:
-            with open(temp_dir+"cpu_x86_bench_imageblur_bmp_{idx}.txt".format(idx=idx), "w") as text_file:
-                text_file.write(str(output))
-        time.sleep(SLEEP_TIME)
-    cleanup()
 
     if run_bmp:
         run_cuda_command = """#!/bin/bash
@@ -1834,12 +1666,14 @@ us-east-1 AMI: ami-094c089c38ed069f2
 
 gpu_ami = ami
 
-if gpu == "a10g":
+if gpu == "a10g" and double == True:
+    gpuinstance = "g5.2xlarge"
+elif gpu == "t4" and double == True:
+    gpuinstance = "g4dn.2xlarge"
+elif gpu == "a10g":
     gpuinstance = "g5.xlarge"
 elif gpu == "t4":
     gpuinstance = "g4dn.xlarge"
-elif gpu == "amd":
-    gpuinstance = "g4ad.xlarge"
 else:
     print ("Err, did not select valid GPU for testing")
 
@@ -1878,18 +1712,6 @@ else:
     cpu_vm = "c5.xlarge"
 
 
-cpu_bench_instance = ec2.create_instances(ImageId=cpu_ami,
-                                InstanceType=cpu_vm,
-                                MinCount=1,
-                                MaxCount=1,
-                                UserData=userdata_ubuntu,
-                                Placement=Placement,
-                                IamInstanceProfile={
-                                    'Arn': 'arn:aws:iam::573062721377:instance-profile/ec2-ssm',
-                                    #'Name': "ec2-ssm"
-                                })
-
-
 # t2.2xlarge = 8 vCPUs, $0.37/hr
 # c5.4xlarge = 16 vCPUs, $0.68/hr
 invoker_instance = ec2.create_instances(ImageId=cpu_ami,
@@ -1905,24 +1727,20 @@ invoker_instance = ec2.create_instances(ImageId=cpu_ami,
 
 print ("Started: " + str(invoker_instance) + " with id: " + str(invoker_instance[0].id))
 print ("Started: " + str(gpu_instance) + " with id: " + str(gpu_instance[0].id))
-print ("Started: " + str(cpu_bench_instance) + " with id: " + str(cpu_bench_instance[0].id))
 
-instance_id_list = [invoker_instance[0].id, gpu_instance[0].id, cpu_bench_instance[0].id]
+instance_id_list = [invoker_instance[0].id, gpu_instance[0].id]
 print ("Instance id list: ", instance_id_list)
 
 print ("now waiting...")
 invoker_instance[0].wait_until_running()
 gpu_instance[0].wait_until_running()
-cpu_bench_instance[0].wait_until_running()
 print ("Instances are now running")
 
 invoker_instance[0].load()
 gpu_instance[0].load()
-cpu_bench_instance[0].load()
 
 print("CPU instance private addr: ", invoker_instance[0].private_dns_name)
 print("GPU instance private addr: ", gpu_instance[0].private_dns_name)
-print("CPU bench instance private addr: ", cpu_bench_instance[0].private_dns_name)
 
 
 # Wait until initialization is complete
@@ -1940,74 +1758,17 @@ while True:
 
 ssm_client = boto3.client('ssm', region_name=region)
 
-if skip_membench is None:
-    vals = [2**x for x in range(12,19)]
-    run_syscall_bench(vals) # 4096 --> 256KiB
-
-    cleanup()
-
-    run_membench(membench_interleave=1)
-
-    cleanup()
-
-    run_membench(membench_interleave=4)
-
-    cleanup()
-
-    run_membench(membench_interleave=8)
-
-    cleanup()
-
 if run_only_membench and skip_membench is None:
     ec2.instances.filter(InstanceIds = instance_id_list).terminate()
     exit()
 
-if gpu != "amd":
-    run_genpdf_bench()
-    cleanup()
-
-run_image_blur_bench(run_bmp = False)
-
-cleanup()
-
 run_image_blur_bench(run_bmp = True)
-
-cleanup()
-
-# run image hash bench
-run_image_hash_bench(run_modified = False)
 
 cleanup()
 
 run_image_hash_bench(run_modified = True)
 
 cleanup()
-
-# run scrypt bench
-run_scrypt_bench()
-
-cleanup()
-
-# run lz4 bench
-run_lz4_bench()
-
-cleanup()
-
-# run average bench
-run_average_bench()
-
-cleanup()
-
-if gpu != "amd":
-    run_nlp_count_bench("go")
-    cleanup()
-    run_nlp_count_bench("assemblyscript")
-    cleanup()
-    run_nlp_count_bench("rust")
-    cleanup()
-    # run pbkdf2 bench
-    run_pbkdf2_bench()
-    cleanup()
 
 # clean up all instances at end
 ec2.instances.filter(InstanceIds = instance_id_list).terminate()

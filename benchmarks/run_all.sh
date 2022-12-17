@@ -7,10 +7,14 @@ dir_name=$(printf '%(%Y-%m-%d-%H:%M:%S)T\n' -1)
 amd_membench="$dir_name/amd_membench/"
 t4_membench="$dir_name/t4_membench/"
 a10g_membench="$dir_name/a10g_membench/"
+t4_cuda="$dir_name/t4_cuda/"
+t4_cuda_2x="$dir_name/t4_cuda_2x/"
 t4_dir_4="$dir_name/t4_amd_4/"
 t4_dir_8="$dir_name/t4_amd_8/"
 t4_dir_4_profile="$dir_name/t4_amd_4_profile/"
 t4_dir_8_profile="$dir_name/t4_amd_8_profile/"
+a10g_cuda="$dir_name/a10g_cuda/"
+a10g_cuda_2x="$dir_name/a10g_cuda_2x/"
 a10g_dir_4="$dir_name/a10g_intel_4/"
 a10g_dir_8="$dir_name/a10g_intel_8/"
 a10g_dir_4_profile="$dir_name/a10g_intel_4_profile/"
@@ -132,6 +136,24 @@ python3 run_benchmarks_aws.py --gpu=a10g --cpu=amd --interleave=4 --dir=$a10g_me
 for job in `jobs -p`; do wait ${job}; done
 ENDTIME=$(date +%s)
 echo "$(($ENDTIME - $STARTTIME)) seconds ellapsed while running A10G membench"
+sleep 60
+
+echo "Starting T4 CUDA benchmarks..."
+STARTTIME=$(date +%s)
+python3 run_cuda.py --gpu=t4 --cpu=amd --double=True --interleave=8 --dir=$t4_cuda_2x --ami=$2 --cpuami=$2 --skip-membench True --skip-cpu True --run-profile True & 
+python3 run_cuda.py --gpu=t4 --cpu=amd --double=False --interleave=8 --dir=$t4_cuda --ami=$2 --cpuami=$2 --skip-membench True --skip-cpu True --run-profile True & 
+for job in `jobs -p`; do wait ${job}; done
+ENDTIME=$(date +%s)
+echo "$(($ENDTIME - $STARTTIME)) seconds ellapsed while running t4 profile benchmarks"
+sleep 60
+
+echo "Starting A10G CUDA benchmarks..."
+STARTTIME=$(date +%s)
+python3 run_cuda.py --gpu=a10g --cpu=amd --double=True --interleave=8 --dir=$a10g_cuda_2x --ami=$2 --cpuami=$2 --skip-membench True --skip-cpu True --run-profile True & 
+python3 run_cuda.py --gpu=a10g --cpu=amd --double=False --interleave=8 --dir=$a10g_cuda --ami=$2 --cpuami=$2 --skip-membench True --skip-cpu True --run-profile True & 
+for job in `jobs -p`; do wait ${job}; done
+ENDTIME=$(date +%s)
+echo "$(($ENDTIME - $STARTTIME)) seconds ellapsed while running t4 profile benchmarks"
 sleep 60
 
 echo "Finished all benchmarks!"
