@@ -105,6 +105,7 @@ python3 run_benchmarks_aws.py --gpu=a10g --cpu=intel --interleave=8 --dir=$a10g_
 for job in `jobs -p`; do wait ${job}; done
 ENDTIME=$(date +%s)
 echo "$(($ENDTIME - $STARTTIME)) seconds ellapsed while running a10g breakdown benchmarks"
+sleep 60
 
 # Now finish things off with the membench runs...
 
@@ -149,8 +150,8 @@ sleep 60
 
 echo "Starting A10G CUDA benchmarks..."
 STARTTIME=$(date +%s)
-python3 run_cuda.py --gpu=a10g --cpu=amd --double=True --interleave=8 --dir=$a10g_cuda_2x --ami=$2 --cpuami=$2 --skip-membench True --skip-cpu True --run-profile True & 
-python3 run_cuda.py --gpu=a10g --cpu=amd --double=False --interleave=8 --dir=$a10g_cuda --ami=$2 --cpuami=$2 --skip-membench True --skip-cpu True --run-profile True & 
+python3 run_cuda.py --gpu=a10g --cpu=amd --double=True --interleave=8 --dir=$a10g_cuda_2x --ami=$3 --cpuami=$3 --skip-membench True --skip-cpu True --run-profile True & 
+python3 run_cuda.py --gpu=a10g --cpu=amd --double=False --interleave=8 --dir=$a10g_cuda --ami=$3 --cpuami=$3 --skip-membench True --skip-cpu True --run-profile True & 
 for job in `jobs -p`; do wait ${job}; done
 ENDTIME=$(date +%s)
 echo "$(($ENDTIME - $STARTTIME)) seconds ellapsed while running t4 profile benchmarks"

@@ -128,6 +128,8 @@ if run_only_membench:
      - whoami
      - sudo su
      - sudo whoami
+     - sysctl -w net.ipv4.tcp_max_syn_backlog=65536
+     - sysctl -w net.core.somaxconn=8192
      - export HOME=/root
      - export CUDA_CACHE_MAXSIZE=4294967296
      - export CUDA_CACHE_PATH=~/.nv/ComputeCache/
@@ -141,6 +143,8 @@ else:
      - whoami
      - sudo su
      - sudo whoami
+     - sysctl -w net.ipv4.tcp_max_syn_backlog=65536
+     - sysctl -w net.core.somaxconn=8192
      - export HOME=/root
      - export CUDA_CACHE_MAXSIZE=4294967296
      - export CUDA_CACHE_PATH=~/.nv/ComputeCache/
