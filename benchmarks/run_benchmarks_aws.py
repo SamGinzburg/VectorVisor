@@ -97,14 +97,17 @@ if gpu == "a10g":
     maxdemospace = 0
     local_group_size = 64
     nvflag = "true"
+    somaxconn = "8192"
 elif gpu == "t4":
     maxdemospace = 0
     local_group_size = 64
     nvflag = "true"
+    somaxconn = "8192"
 elif gpu == "amd":
     maxdemospace = 0
     local_group_size = 64
     nvflag = "false"
+    somaxconn = "4096"
 
 today = datetime.now()
 
@@ -122,21 +125,21 @@ region = "us-east-1"
 ec2 = boto3.resource('ec2', region_name=region)
 ec2_client = boto3.client('ec2', region_name=region)
 
-if run_only_membench: 
+if run_only_membench:
     userdata_ubuntu = """#cloud-config
     runcmd:
      - whoami
      - sudo su
      - sudo whoami
      - sysctl -w net.ipv4.tcp_max_syn_backlog=65536
-     - sysctl -w net.core.somaxconn=8192
+     - sysctl -w net.core.somaxconn={somaxconn}
      - export HOME=/root
      - export CUDA_CACHE_MAXSIZE=4294967296
      - export CUDA_CACHE_PATH=~/.nv/ComputeCache/
      - cd /vv/VectorVisor/
      - git pull
      - ~/.cargo/bin/cargo build --release
-""".format(opt=OPT_LEVEL, snip_args=WASM_SNIP_ARGS, snip_custom=WASM_SNIP_CUSTOM)
+""".format(opt=OPT_LEVEL, snip_args=WASM_SNIP_ARGS, snip_custom=WASM_SNIP_CUSTOM, somaxconn=somaxconn)
 else:
     userdata_ubuntu = """#cloud-config
     runcmd:
@@ -144,14 +147,14 @@ else:
      - sudo su
      - sudo whoami
      - sysctl -w net.ipv4.tcp_max_syn_backlog=65536
-     - sysctl -w net.core.somaxconn=8192
+     - sysctl -w net.core.somaxconn={somaxconn}
      - export HOME=/root
      - export CUDA_CACHE_MAXSIZE=4294967296
      - export CUDA_CACHE_PATH=~/.nv/ComputeCache/
      - cd /vv/VectorVisor/
      - git pull
      - ~/.cargo/bin/cargo build --release
-""".format(opt=OPT_LEVEL, snip_args=WASM_SNIP_ARGS, snip_custom=WASM_SNIP_CUSTOM)
+""".format(opt=OPT_LEVEL, snip_args=WASM_SNIP_ARGS, snip_custom=WASM_SNIP_CUSTOM, somaxconn=somaxconn)
 
 def run_command(command, command_name, instance_id):
     while True:
