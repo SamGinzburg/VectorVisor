@@ -24,7 +24,7 @@ v520_dir_8_profile="$dir_name/v520_8_profile/"
 v520_dir_4_breakdown="$dir_name/v520_4_breakdown/"
 v520_dir_8_breakdown="$dir_name/v520_8_breakdown/"
 mkdir -p $dir_name
-
+: '
 # Run AMD benchmarks...
 # both profiled, 4,8 interleaves
 echo "Starting AMD v520 benchmarks..."
@@ -108,7 +108,7 @@ echo "$(($ENDTIME - $STARTTIME)) seconds ellapsed while running a10g breakdown b
 sleep 60
 
 # Now finish things off with the membench runs...
-
+'
 # AMD membench
 echo "Starting AMD v520 membench..."
 TOTAL_START_TIME=$(date +%s)

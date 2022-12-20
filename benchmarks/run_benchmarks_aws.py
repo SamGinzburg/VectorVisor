@@ -1633,7 +1633,7 @@ def run_membench(membench_interleave=4):
     x=$(cloud-init status)
     done
 
-    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/examples/mem/memloop.wat --ip=0.0.0.0 --heap=3145728 --stack=1024 --hcallsize=1024 --partition=false --serverless=true --volatile=true --vmcount={vmcount} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} --lgroup={lgroup} --nvidia={nv} &> test.log && tail -n 30 test.log
+    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/examples/mem/memloop.wat --ip=0.0.0.0 --heap=3145728 --stack=1024 --hcallsize=1024 --partition=false --serverless=true --volatile=true --vmcount={vmcount} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} --lgroup={lgroup} --nvidia={nv} &> test.log && tail -n 30 test.log
     """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=membench_interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount, nv=nvflag)
 
     for idx in range(50):
@@ -1659,7 +1659,7 @@ def run_membench(membench_interleave=4):
     x=$(cloud-init status)
     done
 
-    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/examples/mem/memloop_unroll.wat --ip=0.0.0.0 --heap=3145728 --stack=1024 --hcallsize=1024 --partition=false --serverless=true --volatile=true --vmcount={vmcount} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} --lgroup={lgroup} --nvidia={nv} &> test.log && tail -n 30 test.log
+    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/examples/mem/memloop_unroll.wat --ip=0.0.0.0 --heap=3145728 --stack=1024 --hcallsize=1024 --partition=false --serverless=true --volatile=true --vmcount={vmcount} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} --lgroup={lgroup} --nvidia={nv} &> test.log && tail -n 30 test.log
     """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=membench_interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount, nv=nvflag)
 
     for idx in range(50):
@@ -1684,7 +1684,7 @@ def run_membench(membench_interleave=4):
     x=$(cloud-init status)
     done
 
-    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/examples/mem/memloop64.wat --ip=0.0.0.0 --heap=3145728 --stack=1024 --hcallsize=1024 --partition=false --serverless=true --volatile=true --vmcount={vmcount} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} --lgroup={lgroup} --nvidia={nv} &> test.log && tail -n 30 test.log
+    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/examples/mem/memloop64.wat --ip=0.0.0.0 --heap=3145728 --stack=1024 --hcallsize=1024 --partition=false --serverless=true --volatile=true --vmcount={vmcount} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} --lgroup={lgroup} --nvidia={nv} &> test.log && tail -n 30 test.log
     """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=membench_interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount, nv=nvflag)
 
     for idx in range(50):
@@ -1709,7 +1709,7 @@ def run_membench(membench_interleave=4):
     x=$(cloud-init status)
     done
 
-    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/examples/mem/memloop64_unroll.wat --ip=0.0.0.0 --heap=3145728 --stack=1024 --hcallsize=1024 --partition=false --serverless=true --volatile=true --vmcount={vmcount} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} --lgroup={lgroup} --nvidia={nv} &> test.log && tail -n 30 test.log
+    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/examples/mem/memloop64_unroll.wat --ip=0.0.0.0 --heap=3145728 --stack=1024 --hcallsize=1024 --partition=false --serverless=true --volatile=true --vmcount={vmcount} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} --lgroup={lgroup} --nvidia={nv} &> test.log && tail -n 30 test.log
     """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=membench_interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount, nv=nvflag)
 
     for idx in range(50):
@@ -1735,7 +1735,7 @@ def run_membench(membench_interleave=4):
     x=$(cloud-init status)
     done
 
-    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/examples/mem/bulkmemloop.wat --ip=0.0.0.0 --heap=3145728 --stack=1024 --hcallsize=1024 --partition=false --serverless=true --volatile=true --vmcount={vmcount} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} --lgroup={lgroup} --nvidia={nv} &> test.log && tail -n 30 test.log
+    /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/examples/mem/bulkmemloop.wat --ip=0.0.0.0 --heap=3145728 --stack=1024 --hcallsize=1024 --partition=false --serverless=true --volatile=true --vmcount={vmcount} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} --lgroup={lgroup} --nvidia={nv} &> test.log && tail -n 30 test.log
     """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=membench_interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount, nv=nvflag)
 
     for idx in range(50):
@@ -1771,7 +1771,7 @@ def run_syscall_bench(hcall_sizes, membench_interleave=4):
         x=$(cloud-init status)
         done
 
-        /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/syscallbench/serverless.wat --ip=0.0.0.0 --heap=3145728 --stack=1024 --hcallsize={hcall} --partition=false --serverless=true --vmcount={vmcount} --cflags={cflags} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} --lgroup={lgroup} --rt=25 --nvidia={nv} &> syscall.log
+        /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/syscallbench/serverless.wat --ip=0.0.0.0 --heap=3145728 --stack=1024 --hcallsize={hcall} --partition=false --serverless=true --vmcount={vmcount} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} --lgroup={lgroup} --rt=25 --nvidia={nv} &> /vv/syscall.log
         """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=membench_interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount, hcall=hcall_size+4, nv=nvflag)
         run_command(run_syscall_command, "run_syscall", gpu_instance[0].id)
 
