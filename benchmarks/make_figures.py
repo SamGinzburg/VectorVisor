@@ -12,74 +12,164 @@ plt.grid(c='lightgrey')
 sysname = "VectorVisor"
 
 parser = argparse.ArgumentParser(description='generate graphs')
-parser.add_argument("--input_dir", required=True)
-parser.add_argument("--gpu", required=True)
-parser.add_argument("--cpu", required=True)
-parser.add_argument("--interleave", required=True)
-
+parser.add_argument("--input", required=True)
 args = vars(parser.parse_args())
 
-input_dir = args['input_dir']
+input_dir = args['input']
 print (input_dir)
 
-gpu_type = args['gpu']
-print (gpu_type)
+def parse_file(dir_name, f_name, ret, parse_syscall=False):
+    try:
+        if parse_syscall:
+            temp = ""
+        else:
+            temp = "_0"
+        with open (dir_name+"/{name}{temp}.txt".format(name=f_name, temp=temp), "r") as myfile:
+            try:
+                temp = dict()
+                data = myfile.read().replace("\'", "\"")
+                rps = float(re.search(r'Total\sRPS:\s(.*?)\\n', data).group(1))
+                on_dev_exe_time = float(re.search(r'On\sdevice\sexecution\stime:\s(.*?)\\n', data).group(1))
+                latency = float(re.search(r'Average\srequest\slatency:\s(.*?)\\n', data).group(1))
+                queue_submit_time = float(re.search(r'queue\ssubmit\stime:\s(.*?)\\n', data).group(1))
+                buffer_time = float(re.search(r'Request\sQueue\sTime:\s(.*?)\\n', data).group(1))
+                device_time = float(re.search(r'Device\sTime:\s(.*?)\\n', data).group(1))
+                overhead_time = float(re.search(r'overhead:\s(.*?)\\n', data).group(1))
+                compile_time = float(re.search(r'compile\stime:\s(.*?)\\n', data).group(1))
+                temp['name'] = f_name
+                temp['rps'] = rps
+                temp['on_dev_exe_time'] = on_dev_exe_time
+                temp['latency'] = latency
+                temp['queue_submit_time'] = queue_submit_time
+                temp['buffer_time'] = buffer_time
+                temp['device_time'] = device_time
+                temp['overhead'] = overhead_time
+                temp['compile_time'] = compile_time
+                if parse_syscall:
+                    ret[f_name] = rps
+                else:
+                    ret[f_name] = temp
+            except Exception:
+                #print ("{n} was not parsed properly".format(n=f_name))
+                temp = dict()
+                temp['rps'] = -0.0
+                ret[f_name] = temp
+    except Exception:
+        #print ("{n}.txt does not exist, skipping".format(n=dir_name+"/"+f_name))
+        temp = dict()
+        temp['rps'] = -0.0
+        ret[f_name] = temp
 
-cpu_type = args['cpu']
-print (cpu_type)
+def parse_membench(dir_name, f_name, ret):
+    try:
+        with open (dir_name+"/{name}.txt".format(name=f_name), "r") as myfile:
+            try:
+                data = myfile.read().replace("\'", "\"")
+                data = np.array(list(map(lambda x: np.double(x), filter(lambda x: x != '', data.split("\n")))))
+                ret[f_name] = data
+            except Exception:
+                print ("{n} was not parsed properly".format(n=f_name))
+    except Exception:
+        print ("{n}.txt does not exist, skipping".format(n=dir_name+"/"+f_name))
 
-interleave = args['interleave']
-print (cpu_type)
-
-def parse_membench(f_name):
-    ret = 0.0
-    with open (input_dir+"/{name}.txt".format(name=f_name), "r") as myfile:
-        try:
-            if gpu_type == "t4":
-                data = [2*1024*1024*4096 / float(val) if val != '' else None for val in myfile.read().split("\n")]
-            else:
-                data = [2*1024*1024*6144 / float(val) if val != '' else None for val in myfile.read().split("\n")]
-
-            data = np.array(list(filter(lambda x: x != None, data)))
-            #execution_time = float(re.search(r'kernel_exec_time:\s(.*?)\\n', data).group(1))
-            execution_time = np.average(data)
-            stddev = np.std(data)
-            if gpu_type == "t4":
-                ret = "{:0.2f}".format(execution_time)
-                stddev = "{:0.2f}".format(stddev)
-            else:
-                ret = "{:0.2f}".format(execution_time)
-                stddev = "{:0.2f}".format(stddev)
-        except Exception:
-            print ("{n} was not parsed properly".format(n=f_name))
-    return ret, stddev
-
-
-def parse_file(f_name):
+# parse results
+def parse_dir(dir_name):
     ret = dict()
-    with open (input_dir+"/{name}.txt".format(name=f_name), "r") as myfile:
-        try:
-            data = myfile.read().replace("\'", "\"")
-            rps = float(re.search(r'Total\sRPS:\s(.*?)\\n', data).group(1))
-            on_dev_exe_time = float(re.search(r'On\sdevice\sexecution\stime:\s(.*?)\\n', data).group(1))
-            latency = float(re.search(r'Average\srequest\slatency:\s(.*?)\\n', data).group(1))
-            queue_submit_time = float(re.search(r'queue\ssubmit\stime:\s(.*?)\\n', data).group(1))
-            buffer_time = float(re.search(r'Request\sQueue\sTime:\s(.*?)\\n', data).group(1))
-            device_time = float(re.search(r'Device\sTime:\s(.*?)\\n', data).group(1))
-            overhead_time = float(re.search(r'overhead:\s(.*?)\\n', data).group(1))
-            compile_time = float(re.search(r'compile\stime:\s(.*?)\\n', data).group(1))
-            ret['name'] = f_name
-            ret['rps'] = rps
-            ret['on_dev_exe_time'] = on_dev_exe_time
-            ret['latency'] = latency
-            ret['queue_submit_time'] = queue_submit_time
-            ret['buffer_time'] = buffer_time
-            ret['device_time'] = device_time
-            ret['overhead'] = overhead_time
-            ret['compile_time'] = compile_time
-        except Exception:
-            print ("{n} was not parsed properly".format(n=f_name))
+    ret['gpu'] = dict() 
+    ret['wasm'] = dict()
+    ret['x86'] = dict()
+    ret['cuda'] = dict()
+    ret['membench'] = dict()
+    ret['syscalls'] = dict()
+
+    # scrypt 
+    parse_file(dir_name, "gpu_bench_scrypt", ret['gpu'])
+    parse_file(dir_name, "cpu_bench_scrypt", ret['wasm'])
+    parse_file(dir_name, "cpu_x86_bench_scrypt", ret['x86'])
+
+    # pbkdf2
+    parse_file(dir_name, "gpu_bench_pbkdf2", ret['gpu'])
+    parse_file(dir_name, "cpu_bench_pbkdf2", ret['wasm'])
+    parse_file(dir_name, "cpu_x86_bench_pbkdf2", ret['x86'])
+
+    # imageblur
+    parse_file(dir_name, "gpu_bench_imageblur", ret['gpu'])
+    parse_file(dir_name, "cpu_bench_imageblur", ret['wasm'])
+    parse_file(dir_name, "cpu_x86_bench_imageblur", ret['x86'])
+
+    # imageblur-bmp
+    parse_file(dir_name, "gpu_bench_imageblur_bmp", ret['gpu'])
+    parse_file(dir_name, "cpu_bench_imageblur_bmp", ret['wasm'])
+    parse_file(dir_name, "cpu_x86_bench_imageblur_bmp", ret['x86'])
+    parse_file(dir_name, "gpu_cuda_bench_imageblur_bmp", ret['cuda'])
+
+    # phash
+    parse_file(dir_name, "gpu_bench_imagehash", ret['gpu'])
+    parse_file(dir_name, "cpu_bench_imagehash", ret['wasm'])
+    parse_file(dir_name, "cpu_x86_bench_imagehash", ret['x86'])
+
+    # phash-modified
+    parse_file(dir_name, "gpu_bench_imagehash_modified", ret['gpu'])
+    parse_file(dir_name, "cpu_bench_imagehash_modified", ret['wasm'])
+    parse_file(dir_name, "cpu_x86_bench_imagehash_modified", ret['x86'])
+    parse_file(dir_name, "gpu_cuda_bench_imagehash_bmp", ret['cuda'])
+
+    # genpdf
+    parse_file(dir_name, "gpu_bench_genpdf", ret['gpu'])
+    parse_file(dir_name, "cpu_bench_genpdf", ret['wasm'])
+    parse_file(dir_name, "cpu_x86_bench_genpdf", ret['x86'])
+
+    # histogram
+    parse_file(dir_name, "gpu_bench_average", ret['gpu'])
+    parse_file(dir_name, "cpu_bench_average", ret['wasm'])
+    parse_file(dir_name, "cpu_x86_bench_average", ret['x86'])
+
+    # lz4
+    parse_file(dir_name, "gpu_bench_lz4", ret['gpu'])
+    parse_file(dir_name, "cpu_bench_lz4", ret['wasm'])
+    parse_file(dir_name, "cpu_x86_bench_lz4", ret['x86'])
+
+    # Strings
+    parse_file(dir_name, "gpu_bench_nlp-count-vectorizer", ret['gpu'])
+    parse_file(dir_name, "cpu_bench_nlp-count-vectorizer", ret['wasm'])
+    parse_file(dir_name, "cpu_x86_bench_nlp-count-vectorizer", ret['x86'])
+    parse_file(dir_name, "gpu_bench_nlp-go", ret['gpu'])
+    parse_file(dir_name, "cpu_bench_nlp-go", ret['wasm'])
+    parse_file(dir_name, "cpu_x86_bench_nlp-go", ret['x86'])
+    parse_file(dir_name, "gpu_bench_nlp-assemblyscript", ret['gpu'])
+    parse_file(dir_name, "cpu_bench_nlp-assemblyscript", ret['wasm'])
+    parse_file(dir_name, "cpu_x86_bench_nlp-assemblyscript", ret['x86'])
+
+    # membench...
+    parse_membench(dir_name, "gpu_bulkmem_1", ret['membench'])
+    parse_membench(dir_name, "gpu_bulkmem_4", ret['membench'])
+    parse_membench(dir_name, "gpu_bulkmem_8", ret['membench'])
+
+    parse_membench(dir_name, "gpu_membench_1", ret['membench'])
+    parse_membench(dir_name, "gpu_membench_4", ret['membench'])
+    parse_membench(dir_name, "gpu_membench_8", ret['membench'])
+
+    parse_membench(dir_name, "gpu_membench_unroll_1", ret['membench'])
+    parse_membench(dir_name, "gpu_membench_unroll_4", ret['membench'])
+    parse_membench(dir_name, "gpu_membench_unroll_8", ret['membench'])
+
+    parse_membench(dir_name, "gpu_membench64_1", ret['membench'])
+    parse_membench(dir_name, "gpu_membench64_4", ret['membench'])
+    parse_membench(dir_name, "gpu_membench64_8", ret['membench'])
+
+    parse_membench(dir_name, "gpu_membench64_unroll_1", ret['membench'])
+    parse_membench(dir_name, "gpu_membench64_unroll_4", ret['membench'])
+    parse_membench(dir_name, "gpu_membench64_unroll_8", ret['membench'])
+
+    print (dir_name)
+    print (ret['membench'])
+
+    # syscalls...
+    for call in [2**x for x in range(12,19)]:
+        parse_file(dir_name, "gpu_syscallbench_{size}".format(size=call), ret['syscalls'], parse_syscall=True)
+
     return ret
+
 
 def plot_bars(gpu_latency, cpu_wasm_latency, cpu_x86_latency, figname):
     plt.figure(figsize=(7, 3))
@@ -248,7 +338,7 @@ def latency_throughput(gpu_latency, gpu_throughput, cpu_x86_latency, cpu_x86_thr
 def plot_memory_bandwidth():
     #plt.figure(figsize=(14, 6))
 
-    ind = np.arange(4) * 10
+    ind = np.arange(5) * 10
     width = 2
     spacing = 2.25
     ind2 = ind + spacing
@@ -264,32 +354,95 @@ def plot_memory_bandwidth():
     plt.rc('axes', titlesize=18)
     plt.rc('axes', labelsize=18)
 
-    nvidia_t4_1 = [62.69, 109.23, 101.07, 150.85]
-    nvidia_t4_4 = [66.98, 109.15, 107.43, 179.07]
-    nvidia_t4_8 = [82.75, 101.42, 117.32, 181.07]
+    nvidia_t4_1 = []
+    nvidia_t4_4 = []
+    nvidia_t4_8 = []
+    nvidia_t4_1_std = []
+    nvidia_t4_4_std = []
+    nvidia_t4_8_std = []
 
-    nvidia_t4_1_std = [2.13, 8.45, 5.65, 5.95]
-    nvidia_t4_4_std = [4.72, 12.29, 9.43, 19.80]
-    nvidia_t4_8_std = [7.10, 11.46, 10.08, 19.63]
+    nvidia_a10g_1 = []
+    nvidia_a10g_4 = []
+    nvidia_a10g_8 = []
+    nvidia_a10g_1_std = []
+    nvidia_a10g_4_std = []
+    nvidia_a10g_8_std = []
 
-    nvidia_a10g_1 = [105.74, 187.22, 168.49, 303.99]
-    nvidia_a10g_4 = [125.57, 221.58, 214.62, 384.05]
-    nvidia_a10g_8 = [171.98, 214.72, 230.92, 414.87]
+    v520_1 = []
+    v520_4 = []
+    v520_8 = []
+    v520_1_std = []
+    v520_4_std = []
+    v520_8_std = []
 
-    nvidia_a10g_1_std = [0.13, 0.20, 0.74, 1.60]
-    nvidia_a10g_4_std = [0.06, 0.17, 0.23, 0.74]
-    nvidia_a10g_8_std = [0.08, 0.15, 0.12, 0.44]
+    def add_interleave(device_str, interleave, avg_list, std_list, batch=4096):
+        vals = list(map(lambda x: batch * 1024*1024*2 / x, \
+                        results[device_str]['membench']['gpu_membench_{x}'.format(x=interleave)]))
+        avg = np.average(vals)
+        std = np.std(vals)
 
-    fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(12.75, 5))
+        avg_list.append(avg)
+        std_list.append(std)
+
+        vals = list(map(lambda x: batch * 1024*1024*2 / x, \
+                        results[device_str]['membench']['gpu_membench_unroll_{x}'.format(x=interleave)]))
+        avg = np.average(vals)
+        std = np.std(vals)
+
+        avg_list.append(avg)
+        std_list.append(std)
+
+        vals = list(map(lambda x: batch * 1024*1024*2 / x, \
+                        results[device_str]['membench']['gpu_membench64_{x}'.format(x=interleave)]))
+        avg = np.average(vals)
+        std = np.std(vals)
+
+        avg_list.append(avg)
+        std_list.append(std)
+
+        vals = list(map(lambda x: batch * 1024*1024*2 / x, \
+                        results[device_str]['membench']['gpu_membench64_unroll_{x}'.format(x=interleave)]))
+        avg = np.average(vals)
+        std = np.std(vals)
+
+        avg_list.append(avg)
+        std_list.append(std)
+
+        vals = list(map(lambda x: batch * 1024*1024*2 / x, \
+                        results[device_str]['membench']['gpu_bulkmem_{x}'.format(x=interleave)]))
+        avg = np.average(vals)
+        std = np.std(vals)
+        
+        avg_list.append(avg)
+        std_list.append(std)
+
+
+    add_interleave("t4_membench", 1, nvidia_t4_1, nvidia_t4_1_std)
+    add_interleave("t4_membench", 4, nvidia_t4_4, nvidia_t4_4_std)
+    add_interleave("t4_membench", 8, nvidia_t4_8, nvidia_t4_8_std)
+
+    add_interleave("a10g_membench", 1, nvidia_a10g_1, nvidia_a10g_1_std, batch=6144)
+    add_interleave("a10g_membench", 4, nvidia_a10g_4, nvidia_a10g_4_std, batch=6144)
+    add_interleave("a10g_membench", 8, nvidia_a10g_8, nvidia_a10g_8_std, batch=6144)
+
+    add_interleave("v520_membench", 1, v520_1, v520_1_std, batch=2048)
+    add_interleave("v520_membench", 4, v520_4, v520_4_std, batch=2048)
+    add_interleave("v520_membench", 8, v520_8, v520_8_std, batch=2048)
+
+    fig, axes = plt.subplots(nrows=1, ncols=3, figsize=(16, 5))
+    #fig, axes = plt.subplots(nrows=1, ncols=3, figsize=(12.75, 5))
     fig.tight_layout()
 
     axes[0].set_xticks(ind_ticks)
     axes[1].set_xticks(ind_ticks)
-    axes[0].set_xticklabels(('Membench', 'Membench-Unroll', 'Membench64', 'Membench64-Unroll'), rotation=20)
-    axes[1].set_xticklabels(('Membench', 'Membench-Unroll', 'Membench64', 'Membench64-Unroll'), rotation=20)
-
+    axes[2].set_xticks(ind_ticks)
+    axes[0].set_xticklabels(('Membench', 'Membench-Unroll', 'Membench64', 'Membench64-Unroll', 'Memory.copy'), rotation=20)
+    axes[1].set_xticklabels(('Membench', 'Membench-Unroll', 'Membench64', 'Membench64-Unroll', 'Memory.copy'), rotation=20)
+    axes[2].set_xticklabels(('Membench', 'Membench-Unroll', 'Membench64', 'Membench64-Unroll', 'Memory.copy'), rotation=20)
+    
     axes[0].set_ylim(0, 650)
     axes[1].set_ylim(0, 650)
+    axes[2].set_ylim(0, 650)
 
     """
     axes[0].set_xticklabels(ind_ticks, ('Membench', 'Membench-Unroll', 'Membench64', 'Membench64-Unroll'))
@@ -307,6 +460,7 @@ def plot_memory_bandwidth():
     #axes[1].set_xlabel('Memory Benchmarks')
     axes[0].set_title('NVIDIA T4')
     axes[1].set_title('NVIDIA A10G')
+    axes[2].set_title('AMD v520')
 
     colors = plt.cm.viridis(np.linspace(0, 1, 12))
 
@@ -316,20 +470,35 @@ def plot_memory_bandwidth():
     nvidia_a10g_1 = axes[1].bar(ind, nvidia_a10g_1, width, color=colors[0], yerr=nvidia_a10g_1_std, capsize=6)
     nvidia_a10g_4 = axes[1].bar(ind2, nvidia_a10g_4, width, color=colors[4], yerr=nvidia_a10g_4_std, capsize=6)
     nvidia_a10g_8 = axes[1].bar(ind3, nvidia_a10g_8, width, color=colors[8], yerr=nvidia_a10g_8_std, capsize=6)
+    v520_1 = axes[2].bar(ind, v520_1, width, color=colors[0], yerr=v520_1_std, capsize=6)
+    v520_4 = axes[2].bar(ind2, v520_4, width, color=colors[4], yerr=v520_4_std, capsize=6)
+    v520_8 = axes[2].bar(ind3, v520_8, width, color=colors[8], yerr=v520_8_std, capsize=6)
+
+
     t4_line = axes[0].axhline(y=320, color='b', linestyle='-')
     t4_line_approx = axes[0].axhline(y=220.16, color='black', linestyle='dashed')
 
     a10g_line = axes[1].axhline(y=600, color='b', linestyle='-')
 
+    v520_line = axes[2].axhline(y=512, color='b', linestyle='-')
+
     axes[0].grid(zorder=-50)
     axes[1].grid(zorder=-50)
+    axes[2].grid(zorder=-50)
 
     axes[0].legend((nvidia_t4_1[0], nvidia_t4_4[0], nvidia_t4_8[0], t4_line, t4_line_approx),
                ('Interleave = 1 Byte', 'Interleave = 4 Bytes', 'Interleave = 8 Bytes','Theoretical Max Bandwidth', 'Prev. Measured Max Bandwidth'),
-               loc = "upper left", prop={'size': 18})
+               prop={'size': 18})
+
+    """
     axes[1].legend((nvidia_a10g_1[0], nvidia_a10g_4[0], nvidia_a10g_8[0], a10g_line),
                ('Interleave = 1 Byte', 'Interleave = 4 Bytes', 'Interleave = 8 Bytes','Theoretical Max Bandwidth'),
                loc = "upper left", bbox_to_anchor=(0,0.9), prop={'size': 18})
+
+    axes[2].legend((v520_1[0], v520_4[0], v520_8[0], v520_line),
+               ('Interleave = 1 Byte', 'Interleave = 4 Bytes', 'Interleave = 8 Bytes','Theoretical Max Bandwidth'),
+               prop={'size': 18})
+    """
 
     plt.savefig(input_dir+"/memory_bandwidth.eps", bbox_inches='tight')
     plt.savefig(input_dir+"/memory_bandwidth.png", bbox_inches='tight')
@@ -459,49 +628,170 @@ def plot_roofline(gpu_bench_rps, gpu_on_dev_exe, gpu_e2e, vmcount, is_gpu):
     plt.savefig(input_dir+"/roofline_{dev}.png".format(dev=dev_name), bbox_inches='tight')
     plt.clf()
 
-def dump_table(gpu_rps_vals, x86_rps_vals, wasm_rps_vals, interleave):
-    gpu_str_start = "\small \systemname{} & \small "
-    x86_cpu_str_start = "\small CPU (x86-64) & \small "
-    wasm_cpu_str_start = "\small CPU (x86-64) & \small "
-
-    if gpu_type == "a10g":
-        gpu_str_start += "NVIDIA A10G & \small {interleave} & ".format(interleave=interleave)
+# dump the table...
+def dump_row(system, platform, interleave, data, cpu=False):
+    if system == "vv":
+        temp = "\small \systemname{} & \small "
+    elif system == "x86":
+        temp = "\small CPU (x86-64) & \small "
+    elif system == "wasm":
+        temp = "\small CPU (WASM) & \small "
     else:
-        gpu_str_start += "NVIDIA T4 & \small {interleave} & ".format(interleave=interleave)
+        # CUDA
+        temp = "\small CUDA & \small "
+    
+    if platform == "t4":
+        temp += "NVIDIA T4 & \small {interleave} & ".format(interleave=interleave)
+    elif platform == "a10g":
+        temp += "NVIDIA A10G & \small {interleave} & ".format(interleave=interleave)
+    elif platform == "amd":
+        temp += "AMD v520 & \small {interleave} & ".format(interleave=interleave)
+    elif platform == "intel":
+        temp += "Intel & \small N/A & "
+    elif platform == "amdcpu":
+        temp += "AMD & \small N/A & "
 
-
-    if cpu_type == "intel":
-        x86_cpu_str_start += "Intel & \small N/A & "
-        wasm_cpu_str_start += "Intel & \small N/A & "
+    if cpu:
+        for value in data:
+            if value == -0.00:
+                temp += r"\small N/A & "
+            else:
+                temp += r"\small {:0.2f} & ".format(value)
+        temp = temp[:-2]
+        temp += r" \\"
     else:
-        x86_cpu_str_start += "AMD & \small N/A & "
-        wasm_cpu_str_start += "AMD & \small N/A & "
+        for value in data[:-3]:
+            if value == -0.00:
+                temp += r"\small N/A & "
+            else:
+                temp += r"\small {:0.2f} & ".format(value)
 
-    for value in gpu_rps_vals:
-        if value != gpu_rps_vals[-1]:
-            gpu_str_start += r"\small {:0.2f} & ".format(value)
-        else:
-            gpu_str_start += r"\small {:0.2f} \\".format(value)
+        # the last three items are all "Strings" results
+        temp += r"\small {:0.2f} / {:0.2f} / {:0.2f} \\".format(data[-3], data[-2], data[-1])
+    print (temp)
 
-    for value in x86_rps_vals:
-        if value != x86_rps_vals[-1]:
-            x86_cpu_str_start += r"\small {:0.2f} & ".format(value)
-        else:
-            x86_cpu_str_start += r"\small {:0.2f} \\".format(value)
+def dump_table(results, per_dollar=False):
+    print (list(map(lambda x: x, results['t4_4']['gpu'].keys())))
+    vals = list(map(lambda x: x['rps'], results['t4_4']['gpu'].values()))
+    if per_dollar:
+        vals = np.array(vals) / 0.526
+    dump_row("vv", "t4", 4, vals)
 
-    for value in wasm_rps_vals:
-        if value != wasm_rps_vals[-1]:
-            wasm_cpu_str_start += r"\small {:0.2f} & ".format(value)
-        else:
-            wasm_cpu_str_start += r"\small {:0.2f} \\".format(value)
+    vals = list(map(lambda x: x['rps'], results['t4_8']['gpu'].values()))
+    if per_dollar:
+        vals = np.array(vals) / 0.526
+    dump_row("vv", "t4", 8, vals)
 
-    print ("GPU")
-    print (gpu_str_start)
-    print ("x86")
-    print (x86_cpu_str_start)
-    print ("WASM")
-    print (wasm_cpu_str_start)
+    vals = list(map(lambda x: x['rps'], results['t4_profile_4']['gpu'].values()))
+    if per_dollar:
+        vals = np.array(vals) / 0.526
+    dump_row("vv", "t4", 4, vals)
 
+    vals = list(map(lambda x: x['rps'], results['t4_profile_8']['gpu'].values()))
+    if per_dollar:
+        vals = np.array(vals) / 0.526
+    dump_row("vv", "t4", 8, vals)
+
+    vals = list(map(lambda x: x['rps'], results['a10g_4']['gpu'].values()))
+    if per_dollar:
+        vals = np.array(vals) / 1.006
+    dump_row("vv", "a10g", 4, vals)
+
+    vals = list(map(lambda x: x['rps'], results['a10g_8']['gpu'].values()))
+    if per_dollar:
+        vals = np.array(vals) / 1.006
+    dump_row("vv", "a10g", 8, vals)
+
+    vals = list(map(lambda x: x['rps'], results['a10g_profile_4']['gpu'].values()))
+    if per_dollar:
+        vals = np.array(vals) / 1.006
+    dump_row("vv", "a10g", 4, vals)
+
+    vals = list(map(lambda x: x['rps'], results['a10g_profile_8']['gpu'].values()))
+    if per_dollar:
+        vals = np.array(vals) / 1.006
+    dump_row("vv", "a10g", 8, vals)
+
+    # Dump CPU data
+    vals = list(map(lambda x: x['rps'], results['t4_4']['x86'].values()))
+    if per_dollar:
+        vals = np.array(vals) / 0.154
+    dump_row("x86", "amdcpu", 4, vals, cpu=True)
+
+    vals = list(map(lambda x: x['rps'], results['t4_8']['x86'].values()))
+    if per_dollar:
+        vals = np.array(vals) / 0.17
+    dump_row("x86", "intel", 4, vals, cpu=True)
+
+    vals = list(map(lambda x: x['rps'], results['t4_4']['wasm'].values()))
+    if per_dollar:
+        vals = np.array(vals) / 0.154
+    dump_row("wasm", "amdcpu", 4, vals)
+
+    vals = list(map(lambda x: x['rps'], results['t4_8']['wasm'].values()))
+    if per_dollar:
+        vals = np.array(vals) / 0.17
+    dump_row("wasm", "intel", 4, vals)
+
+
+    vals = list(map(lambda x: x['rps'], results['t4_cuda']['cuda'].values()))
+    print (np.array(vals) / 0.526)
+    """
+    if per_dollar:
+        vals = np.array(vals) / 0.526
+    dump_row("cuda", "t4", 4, vals)
+    """
+
+    vals = list(map(lambda x: x['rps'], results['t4_cuda_2x']['cuda'].values()))
+    print (np.array(vals) / 0.752)
+
+    vals = list(map(lambda x: x['rps'], results['a10g_cuda']['cuda'].values()))
+    print (np.array(vals) / 1.006)
+    """
+    if per_dollar:
+        vals = np.array(vals) / 0.526
+    dump_row("cuda", "t4", 4, vals)
+    """
+
+    vals = list(map(lambda x: x['rps'], results['a10g_cuda_2x']['cuda'].values()))
+    print (np.array(vals) / 1.212)
+
+
+results = dict()
+results['t4_cuda'] = parse_dir(input_dir+"t4_cuda")
+results['t4_cuda_2x'] = parse_dir(input_dir+"t4_cuda_2x")
+results['a10g_cuda'] = parse_dir(input_dir+"a10g_cuda")
+results['a10g_cuda_2x'] = parse_dir(input_dir+"a10g_cuda_2x")
+results['t4_4'] = parse_dir(input_dir+"t4_amd_4")
+results['t4_profile_4'] = parse_dir(input_dir+"t4_amd_4_profile")
+results['t4_breakdown_4'] = parse_dir(input_dir+"t4_amd_4_breakdown")
+results['t4_8'] = parse_dir(input_dir+"t4_amd_8")
+results['t4_profile_8'] = parse_dir(input_dir+"t4_amd_8_profile")
+results['t4_breakdown_8'] = parse_dir(input_dir+"t4_amd_8_breakdown")
+results['t4_membench'] = parse_dir(input_dir+"t4_membench")
+results['a10g_4'] = parse_dir(input_dir+"a10g_intel_4")
+results['a10g_profile_4'] = parse_dir(input_dir+"a10g_intel_4_profile")
+results['a10g_breakdown_4'] = parse_dir(input_dir+"a10g_intel_4_breakdown")
+results['a10g_8'] = parse_dir(input_dir+"a10g_intel_8")
+results['a10g_profile_8'] = parse_dir(input_dir+"a10g_intel_8_profile")
+results['a10g_breakdown_8'] = parse_dir(input_dir+"a10g_intel_8_breakdown")
+results['a10g_membench'] = parse_dir(input_dir+"a10g_membench")
+results['v520_profile_4'] = parse_dir(input_dir+"v520_4_profile")
+results['v520_profile_8'] = parse_dir(input_dir+"v520_8_profile")
+results['v520_breakdown_4'] = parse_dir(input_dir+"v520_4_breakdown")
+results['v520_breakdown_8'] = parse_dir(input_dir+"v520_8_breakdown")
+results['v520_membench'] = parse_dir(input_dir+"amd_membench")
+
+# dump throughput table
+print ("\nThroughput\n\n\n")
+dump_table(results)
+print ("\nThroughput/$\n\n\n")
+dump_table(results, per_dollar=True)
+
+# mem bandwidth figures
+plot_memory_bandwidth()
+
+"""
 # membench
 try:
     interleave1 = [parse_membench("gpu_membench_1"), parse_membench("gpu_membench_unroll_1"),
@@ -546,59 +836,8 @@ try:
 except Exception as e:
     print (e)
     pass
-
-# scrypt
-scrypt_gpu = parse_file("gpu_bench_scrypt")
-scrypt_cpu_wasm = parse_file("cpu_bench_scrypt")
-scrypt_cpu_x86 = parse_file("cpu_x86_bench_scrypt")
-
-# pbkdf2
-pbkdf2_gpu = parse_file("gpu_bench_pbkdf2")
-pbkdf2_cpu_wasm = parse_file("cpu_bench_pbkdf2")
-pbkdf2_cpu_x86 = parse_file("cpu_x86_bench_pbkdf2")
-
-# imageblur
-imageblur_gpu = parse_file("gpu_bench_imageblur")
-imageblur_cpu_wasm = parse_file("cpu_bench_imageblur")
-imageblur_cpu_x86 = parse_file("cpu_x86_bench_imageblur")
-
-# imageblur-bmp
-imageblur_bmp_gpu = parse_file("gpu_bench_imageblur_bmp")
-imageblur_bmp_cpu_wasm = parse_file("cpu_bench_imageblur_bmp")
-imageblur_bmp_cpu_x86 = parse_file("cpu_x86_bench_imageblur_bmp")
-
-# phash
-imagehash_gpu = parse_file("gpu_bench_imagehash")
-imagehash_cpu_wasm = parse_file("cpu_bench_imagehash")
-imagehash_cpu_x86 = parse_file("cpu_x86_bench_imagehash")
-
-# phash-modified
-imagehash_modified_gpu = parse_file("gpu_bench_imagehash_modified")
-imagehash_modified_cpu_wasm = parse_file("cpu_bench_imagehash_modified")
-imagehash_modified_cpu_x86 = parse_file("cpu_x86_bench_imagehash_modified")
-
-# histogram
-histogram_gpu = parse_file("gpu_bench_average")
-histogram_cpu_wasm = parse_file("cpu_bench_average")
-histogram_cpu_x86 = parse_file("cpu_x86_bench_average")
-
-# lz4
-lz4_gpu = parse_file("gpu_bench_lz4")
-lz4_cpu_wasm = parse_file("cpu_bench_lz4")
-lz4_cpu_x86 = parse_file("cpu_x86_bench_lz4")
-
-# Strings
-strings_gpu = parse_file("gpu_bench_nlp")
-strings_cpu_wasm = parse_file("cpu_bench_nlp")
-strings_cpu_x86 = parse_file("cpu_x86_bench_nlp")
-
-
-# genpdf
 """
-genpdf_gpu = parse_file("gpu_bench_genpdf")
-genpdf_cpu_wasm = parse_file("cpu_bench_genpdf")
-genpdf_cpu_x86 = parse_file("cpu_x86_bench_genpdf")
-"""
+
 """
 vmcount = [4096, 4096, 3072, 3072, 3072, 3072, 4096, 3072, 3072, 4096]
 gpu_list = [scrypt_gpu, pbkdf2_gpu, imageblur_gpu, imageblur_bmp_gpu, imagehash_gpu, imagehash_modified_gpu, histogram_gpu, lz4_gpu, strings_gpu, genpdf_gpu]
@@ -606,7 +845,7 @@ cpu_wasm_list = [scrypt_cpu_wasm, pbkdf2_cpu_wasm, imageblur_cpu_wasm, imageblur
 cpu_x86_list = [scrypt_cpu_x86, pbkdf2_cpu_x86, imageblur_cpu_x86, imageblur_bmp_cpu_x86, imagehash_cpu_x86, imagehash_modified_cpu_x86, histogram_cpu_x86, lz4_cpu_x86, strings_cpu_x86, genpdf_cpu_x86]
 """
 
-
+"""
 vmcount = [4096, 4096, 3072, 3072, 3072, 3072, 4096, 3072, 3072]
 gpu_list = [scrypt_gpu, pbkdf2_gpu, imageblur_gpu, imageblur_bmp_gpu, imagehash_gpu, imagehash_modified_gpu, histogram_gpu, lz4_gpu, strings_gpu]
 cpu_wasm_list = [scrypt_cpu_wasm, pbkdf2_cpu_wasm, imageblur_cpu_wasm, imageblur_bmp_cpu_wasm, imagehash_cpu_wasm, imagehash_modified_cpu_wasm, histogram_cpu_wasm, lz4_cpu_wasm, strings_cpu_wasm]
@@ -726,3 +965,4 @@ else:
     cpu_price = 0.154
 
 dump_table(np.array(gpu_rps) / gpu_price, np.array(cpu_x86_rps) / cpu_price, np.array(cpu_wasm_rps) / cpu_price, interleave)
+"""
