@@ -133,6 +133,11 @@ if run_only_membench:
      - sudo whoami
      - sysctl -w net.ipv4.tcp_max_syn_backlog=65536
      - sysctl -w net.core.somaxconn={somaxconn}
+     - sysctl -w net.core.wmem_default=8388608
+     - sysctl -w net.core.rmem_default=8388608
+     - sysctl -w net.ipv4.tcp_rmem="4096 131072 16777216"
+     - sysctl -w net.ipv4.tcp_wmem="4096 131072 16777216"
+     - sysctl -w net.ipv4.tcp_mem="67108864 67108864 67108864"
      - export HOME=/root
      - export CUDA_CACHE_MAXSIZE=4294967296
      - export CUDA_CACHE_PATH=~/.nv/ComputeCache/
@@ -148,6 +153,11 @@ else:
      - sudo whoami
      - sysctl -w net.ipv4.tcp_max_syn_backlog=65536
      - sysctl -w net.core.somaxconn={somaxconn}
+     - sysctl -w net.core.wmem_default=16777216
+     - sysctl -w net.core.rmem_default=16777216
+     - sysctl -w net.ipv4.tcp_rmem="4096 131072 16777216"
+     - sysctl -w net.ipv4.tcp_wmem="4096 131072 16777216"
+     - sysctl -w net.ipv4.tcp_mem="67108864 67108864 67108864"
      - export HOME=/root
      - export CUDA_CACHE_MAXSIZE=4294967296
      - export CUDA_CACHE_PATH=~/.nv/ComputeCache/

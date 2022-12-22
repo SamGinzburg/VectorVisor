@@ -25,7 +25,7 @@ else:
 vmcount=3072
 target_rps = 3072
 target_rps_cpu = 1024
-TIMEOUT_MINUTES = 60 * 12
+TIMEOUT_MINUTES = 60 * 24
 #local_group_size = 999999
 is_pretty = "true"
 fastreply = "true"
@@ -61,6 +61,8 @@ userdata_ubuntu = """#cloud-config
      - export HOME=/root
      - export CUDA_CACHE_MAXSIZE=4294967296
      - export CUDA_CACHE_PATH=~/.nv/ComputeCache/
+     - sysctl -w net.ipv4.tcp_max_syn_backlog=65536
+     - sysctl -w net.core.somaxconn=8192
      - mkdir -p /vv/
      - cd /vv/
      - sudo apt update
