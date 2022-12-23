@@ -551,7 +551,7 @@ def run_lz4_bench():
     x=$(cloud-init status)
     done
 
-    cd /vv/VectorVisor/benchmarks/json-compression-lz4/
+    cd /vv/VectorVisor/benchmarks/json-compression/
     ~/.cargo/bin/cargo run --release --target x86_64-unknown-linux-gnu &> /vv/json-compression.log &
     """.format(fastreply=fastreply)
 
@@ -619,9 +619,9 @@ def run_lz4_bench():
     x=$(cloud-init status)
     done
 
-    cd /vv/VectorVisor/benchmarks/json-compression-lz4/
+    cd /vv/VectorVisor/benchmarks/json-compression/
 
-    /usr/local/go/bin/go run /vv/VectorVisor/benchmarks/json-compression-lz4/run_lz4.go {addr} 8000 {target_rps} 1 {duration} /vv/VectorVisor/benchmarks/json-compression/smaller_tweets.txt {input_size}
+    /usr/local/go/bin/go run /vv/VectorVisor/benchmarks/json-compression/run_lz4.go {addr} 8000 {target_rps} 1 {duration} /vv/VectorVisor/benchmarks/json-compression/smaller_tweets.txt {input_size}
     """.format(addr=gpu_instance[0].private_dns_name, input_size=1000, target_rps=vmcount, duration=benchmark_duration)
 
     for idx in range(NUM_REPEAT):
@@ -657,9 +657,9 @@ def run_lz4_bench():
     x=$(cloud-init status)
     done
 
-    cd /vv/VectorVisor/benchmarks/json-compression-lz4/
+    cd /vv/VectorVisor/benchmarks/json-compression/
 
-    /usr/local/go/bin/go run /vv/VectorVisor/benchmarks/json-compression-lz4/run_lz4.go {addr} 8000 {target_rps} 1 {duration} /vv/VectorVisor/benchmarks/json-compression-lz4/smaller_tweets.txt {input_size}
+    /usr/local/go/bin/go run /vv/VectorVisor/benchmarks/json-compression/run_lz4.go {addr} 8000 {target_rps} 1 {duration} /vv/VectorVisor/benchmarks/json-compression/smaller_tweets.txt {input_size}
     """.format(addr=cpu_bench_instance[0].private_dns_name, input_size=1000, target_rps=target_rps_cpu, duration=benchmark_duration)
 
     for idx in range(NUM_REPEAT):
