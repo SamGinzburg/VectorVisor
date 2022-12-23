@@ -209,46 +209,10 @@ impl BatchSubmitServer {
                 }
            }
            _ => (),
-       }
+        }
 
-       // If a client disconnected there can sometimes be a response 
-       // in the channel belonging to a different request.
-       // To deal with this check the channel one more time.
-
-       match recv.recv().await {
-           Some((
-                resp,
-                len,
-                on_dev_time,
-                queue_submit_time,
-                num_queue_submits,
-                num_unique_fns,
-                overhead_time_ns,
-                uuid,
-            )) => {
-                if uuid == req_id {
-                    let req_end = std::time::Instant::now();
-                    return Ok(BatchSubmitServer::create_response(
-                        resp,
-                        on_dev_time,
-                        queue_submit_time,
-                        num_queue_submits,
-                        num_unique_fns,
-                        (req_start - req_queue).as_nanos(),
-                        (req_end - req_queue).as_nanos(),
-                        overhead_time_ns,
-                        compile_time,
-                    ));
-                }
-           }
-           _ => (),
-       }
-
-       // If there were more than 2 mismatched uuid's in the queue, we just return an error.
-        panic!("This line in batch server should not be reached");
-        //Err(warp::reject::custom(LostRequest))
-
-        //panic!("This line in batch server should not be reached")
+        //  If we got the wrong response
+        Err(warp::reject::custom(LostRequest))
     }
 
     pub fn start_server(
