@@ -115,7 +115,7 @@ sleep 60
 echo "Starting AMD v520 membench..."
 TOTAL_START_TIME=$(date +%s)
 STARTTIME=$(date +%s)
-python3 run_benchmarks_aws.py --gpu=amd --cpu=amd --interleave=4 --dir=$amd_membench --skip-cpu True --ami=$1 --cpuami=$2 --membench=True & 
+python3 run_benchmarks_aws.py --gpu=amd --cpu=amd --interleave=4 --dir=$amd_membench --skip-cpu True --ami=$1 --cpuami=$2 --membench=True
 for job in `jobs -p`; do wait ${job}; done
 ENDTIME=$(date +%s)
 echo "$(($ENDTIME - $STARTTIME)) seconds ellapsed while running AMD membench"
@@ -125,7 +125,7 @@ sleep 60
 echo "Starting T4 membench..."
 TOTAL_START_TIME=$(date +%s)
 STARTTIME=$(date +%s)
-python3 run_benchmarks_aws.py --gpu=t4 --cpu=amd --interleave=4 --dir=$t4_membench --ami=$2 --cpuami=$2 --skip-cpu True --membench=True & 
+python3 run_benchmarks_aws.py --gpu=t4 --cpu=amd --interleave=4 --dir=$t4_membench --ami=$2 --cpuami=$2 --skip-cpu True --membench=True
 for job in `jobs -p`; do wait ${job}; done
 ENDTIME=$(date +%s)
 echo "$(($ENDTIME - $STARTTIME)) seconds ellapsed while running T4 membench"
@@ -135,7 +135,7 @@ sleep 60
 echo "Starting A10G membench..."
 TOTAL_START_TIME=$(date +%s)
 STARTTIME=$(date +%s)
-python3 run_benchmarks_aws.py --gpu=a10g --cpu=amd --interleave=4 --dir=$a10g_membench --ami=$3 --cpuami=$3 --skip-cpu True --membench=True & 
+python3 run_benchmarks_aws.py --gpu=a10g --cpu=amd --interleave=4 --dir=$a10g_membench --ami=$3 --cpuami=$3 --skip-cpu True --membench=True
 for job in `jobs -p`; do wait ${job}; done
 ENDTIME=$(date +%s)
 echo "$(($ENDTIME - $STARTTIME)) seconds ellapsed while running A10G membench"

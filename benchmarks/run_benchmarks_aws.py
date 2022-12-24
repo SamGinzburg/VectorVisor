@@ -77,7 +77,7 @@ else:
 # this affects the *possible* max RPS and bandwidth/mem/cpu consumption of the invoker
 target_rps = 3072
 target_rps_cpu = 1024
-TIMEOUT_MINUTES = 120
+TIMEOUT_MINUTES = 60 * 4
 #local_group_size = 999999
 is_pretty = "true"
 fastreply = "true"
@@ -1647,18 +1647,22 @@ def run_membench(membench_interleave=4):
     """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=membench_interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount, nv=nvflag)
 
     for idx in range(50):
-        command_id = run_command(run_membench_command, "run_membench", gpu_instance[0].id)
-        time.sleep(2)
-        # Block until benchmark is complete
-        output = block_on_command(command_id, gpu_instance[0].id)['StandardOutputContent']
-        output = output.replace("\'", "\"")
-        print ("Output:")
-        print (output)
-        output = float(re.search(r'kernel_exec_time:\s(.*?)\n', output).group(1))
-        print (output)
-        # save output
-        with open(temp_dir+"gpu_membench_{interleave}.txt".format(interleave=membench_interleave), "a") as text_file:
-            text_file.write(str(output) + "\n")
+        try:
+            command_id = run_command(run_membench_command, "run_membench", gpu_instance[0].id)
+            time.sleep(2)
+            # Block until benchmark is complete
+            output = block_on_command(command_id, gpu_instance[0].id)['StandardOutputContent']
+            output = output.replace("\'", "\"")
+            print ("Output:")
+            print (output)
+            output = float(re.search(r'kernel_exec_time:\s(.*?)\n', output).group(1))
+            print (output)
+            # save output
+            with open(temp_dir+"gpu_membench_{interleave}.txt" \
+                    .format(interleave=membench_interleave), "a") as text_file:
+                text_file.write(str(output) + "\n")
+        except Exception:
+            continue
 
     run_membench_command = """#!/bin/bash
     sudo su
@@ -1673,16 +1677,20 @@ def run_membench(membench_interleave=4):
     """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=membench_interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount, nv=nvflag)
 
     for idx in range(50):
-        command_id = run_command(run_membench_command, "run_membench_unroll", gpu_instance[0].id)
-        time.sleep(2)
-        # Block until benchmark is complete
-        output = block_on_command(command_id, gpu_instance[0].id)['StandardOutputContent']
-        output = output.replace("\'", "\"")
-        output = float(re.search(r'kernel_exec_time:\s(.*?)\n', output).group(1))   
-        print (output)
-        # save output
-        with open(temp_dir+"gpu_membench_unroll_{interleave}.txt".format(interleave=membench_interleave), "a") as text_file:
-            text_file.write(str(output) + "\n")
+        try:
+            command_id = run_command(run_membench_command, "run_membench_unroll", gpu_instance[0].id)
+            time.sleep(2)
+            # Block until benchmark is complete
+            output = block_on_command(command_id, gpu_instance[0].id)['StandardOutputContent']
+            output = output.replace("\'", "\"")
+            output = float(re.search(r'kernel_exec_time:\s(.*?)\n', output).group(1))   
+            print (output)
+            # save output
+            with open(temp_dir+"gpu_membench_unroll_{interleave}.txt" \
+                    .format(interleave=membench_interleave), "a") as text_file:
+                text_file.write(str(output) + "\n")
+        except Exception:
+            continue
 
 
     run_membench_command = """#!/bin/bash
@@ -1698,16 +1706,20 @@ def run_membench(membench_interleave=4):
     """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=membench_interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount, nv=nvflag)
 
     for idx in range(50):
-        command_id = run_command(run_membench_command, "run_membench64", gpu_instance[0].id)
-        time.sleep(2)
-        # Block until benchmark is complete
-        output = block_on_command(command_id, gpu_instance[0].id)['StandardOutputContent']
-        output = output.replace("\'", "\"")
-        output = float(re.search(r'kernel_exec_time:\s(.*?)\n', output).group(1))   
-        print (output)
-        # save output
-        with open(temp_dir+"gpu_membench64_{interleave}.txt".format(interleave=membench_interleave), "a") as text_file:
-            text_file.write(str(output) + "\n")
+        try:
+            command_id = run_command(run_membench_command, "run_membench64", gpu_instance[0].id)
+            time.sleep(2)
+            # Block until benchmark is complete
+            output = block_on_command(command_id, gpu_instance[0].id)['StandardOutputContent']
+            output = output.replace("\'", "\"")
+            output = float(re.search(r'kernel_exec_time:\s(.*?)\n', output).group(1))   
+            print (output)
+            # save output
+            with open(temp_dir+"gpu_membench64_{interleave}.txt" \
+                    .format(interleave=membench_interleave), "a") as text_file:
+                text_file.write(str(output) + "\n")
+        except Exception:
+            continue
 
 
     run_membench_command = """#!/bin/bash
@@ -1723,16 +1735,20 @@ def run_membench(membench_interleave=4):
     """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=membench_interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount, nv=nvflag)
 
     for idx in range(50):
-        command_id = run_command(run_membench_command, "run_membench64_unroll", gpu_instance[0].id)
-        time.sleep(3)
-        # Block until benchmark is complete
-        output = block_on_command(command_id, gpu_instance[0].id)['StandardOutputContent']
-        output = output.replace("\'", "\"")
-        output = float(re.search(r'kernel_exec_time:\s(.*?)\n', output).group(1)) 
-        print (output)
-        # save output
-        with open(temp_dir+"gpu_membench64_unroll_{interleave}.txt".format(interleave=membench_interleave), "a") as text_file:
-            text_file.write(str(output)+"\n")
+        try:
+            command_id = run_command(run_membench_command, "run_membench64_unroll", gpu_instance[0].id)
+            time.sleep(3)
+            # Block until benchmark is complete
+            output = block_on_command(command_id, gpu_instance[0].id)['StandardOutputContent']
+            output = output.replace("\'", "\"")
+            output = float(re.search(r'kernel_exec_time:\s(.*?)\n', output).group(1)) 
+            print (output)
+            # save output
+            with open(temp_dir+"gpu_membench64_unroll_{interleave}.txt" \
+                    .format(interleave=membench_interleave), "a") as text_file:
+                text_file.write(str(output)+"\n")
+        except Exception:
+            continue
 
 
     # Run optimized memcpy
@@ -1749,16 +1765,20 @@ def run_membench(membench_interleave=4):
     """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=membench_interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount, nv=nvflag)
 
     for idx in range(50):
-        command_id = run_command(run_membench_command, "run_membench64_unroll", gpu_instance[0].id)
-        time.sleep(3)
-        # Block until benchmark is complete
-        output = block_on_command(command_id, gpu_instance[0].id)['StandardOutputContent']
-        output = output.replace("\'", "\"")
-        output = float(re.search(r'kernel_exec_time:\s(.*?)\n', output).group(1)) 
-        print (output)
-        # save output
-        with open(temp_dir+"gpu_bulkmem_{interleave}.txt".format(interleave=membench_interleave), "a") as text_file:
-            text_file.write(str(output)+"\n")
+        try:
+            command_id = run_command(run_membench_command, "run_membench64_unroll", gpu_instance[0].id)
+            time.sleep(3)
+            # Block until benchmark is complete
+            output = block_on_command(command_id, gpu_instance[0].id)['StandardOutputContent']
+            output = output.replace("\'", "\"")
+            output = float(re.search(r'kernel_exec_time:\s(.*?)\n', output).group(1)) 
+            print (output)
+            # save output
+            with open(temp_dir+"gpu_bulkmem_{interleave}.txt" \
+                    .format(interleave=membench_interleave), "a") as text_file:
+                text_file.write(str(output)+"\n")
+        except Exception:
+            continue
 
 
 
@@ -1805,7 +1825,7 @@ def run_syscall_bench(hcall_sizes, membench_interleave=4):
         cd /vv/VectorVisor/benchmarks/syscallbench/
 
         /usr/local/go/bin/go run /vv/VectorVisor/benchmarks/syscallbench/run_syscalls.go {addr} 8000 {target_rps} 1 {duration} {input_size}
-        """.format(addr=gpu_instance[0].private_dns_name, input_size=int(hcall_size/1024), target_rps=vmcount, duration=60)
+        """.format(addr=gpu_instance[0].private_dns_name, input_size=int(hcall_size/1024), target_rps=vmcount*2, duration=60)
 
         # save the result...
         command_id = run_command(run_invoker, "run invoker", invoker_instance[0].id)
