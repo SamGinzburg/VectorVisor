@@ -1825,7 +1825,7 @@ def run_syscall_bench(hcall_sizes, membench_interleave=4):
         cd /vv/VectorVisor/benchmarks/syscallbench/
 
         /usr/local/go/bin/go run /vv/VectorVisor/benchmarks/syscallbench/run_syscalls.go {addr} 8000 {target_rps} 1 {duration} {input_size}
-        """.format(addr=gpu_instance[0].private_dns_name, input_size=int(hcall_size/1024), target_rps=vmcount*2, duration=60)
+        """.format(addr=gpu_instance[0].private_dns_name, input_size=int(hcall_size/1024), target_rps=vmcount, duration=60)
 
         # save the result...
         command_id = run_command(run_invoker, "run invoker", invoker_instance[0].id)
