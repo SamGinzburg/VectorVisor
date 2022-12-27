@@ -97,17 +97,17 @@ if gpu == "a10g":
     maxdemospace = 0
     local_group_size = 64
     nvflag = "true"
-    somaxconn = "8192"
+    somaxconn = "65535"
 elif gpu == "t4":
     maxdemospace = 0
     local_group_size = 64
     nvflag = "true"
-    somaxconn = "8192"
+    somaxconn = "65535"
 elif gpu == "amd":
     maxdemospace = 0
     local_group_size = 64
     nvflag = "false"
-    somaxconn = "4096"
+    somaxconn = "65535"
 
 today = datetime.now()
 
@@ -131,13 +131,15 @@ if run_only_membench:
      - whoami
      - sudo su
      - sudo whoami
-     - sysctl -w net.ipv4.tcp_max_syn_backlog=65536
+     - sysctl -w net.ipv4.tcp_max_syn_backlog=3240000
+     - sysctl -w net.core.netdev_max_backlog=16384
      - sysctl -w net.core.somaxconn={somaxconn}
-     - sysctl -w net.core.wmem_default=8388608
-     - sysctl -w net.core.rmem_default=8388608
-     - sysctl -w net.ipv4.tcp_rmem="4096 131072 16777216"
-     - sysctl -w net.ipv4.tcp_wmem="4096 131072 16777216"
-     - sysctl -w net.ipv4.tcp_mem="67108864 67108864 67108864"
+     - sysctl -w net.core.wmem_default=67108864
+     - sysctl -w net.core.rmem_default=67108864
+     - sysctl -w net.ipv4.tcp_rmem="4096 131072 67108864"
+     - sysctl -w net.ipv4.tcp_wmem="4096 131072 67108864"
+     - sysctl -w net.ipv4.tcp_mem="268435456 268435456 268435456"
+     - sysctl -p
      - export HOME=/root
      - export CUDA_CACHE_MAXSIZE=4294967296
      - export CUDA_CACHE_PATH=~/.nv/ComputeCache/
@@ -151,13 +153,15 @@ else:
      - whoami
      - sudo su
      - sudo whoami
-     - sysctl -w net.ipv4.tcp_max_syn_backlog=65536
+     - sysctl -w net.ipv4.tcp_max_syn_backlog=3240000
+     - sysctl -w net.core.netdev_max_backlog=16384
      - sysctl -w net.core.somaxconn={somaxconn}
-     - sysctl -w net.core.wmem_default=16777216
-     - sysctl -w net.core.rmem_default=16777216
-     - sysctl -w net.ipv4.tcp_rmem="4096 131072 16777216"
-     - sysctl -w net.ipv4.tcp_wmem="4096 131072 16777216"
-     - sysctl -w net.ipv4.tcp_mem="67108864 67108864 67108864"
+     - sysctl -w net.core.wmem_default=67108864
+     - sysctl -w net.core.rmem_default=67108864
+     - sysctl -w net.ipv4.tcp_rmem="4096 131072 67108864"
+     - sysctl -w net.ipv4.tcp_wmem="4096 131072 67108864"
+     - sysctl -w net.ipv4.tcp_mem="268435456 268435456 268435456"
+     - sysctl -p
      - export HOME=/root
      - export CUDA_CACHE_MAXSIZE=4294967296
      - export CUDA_CACHE_PATH=~/.nv/ComputeCache/
