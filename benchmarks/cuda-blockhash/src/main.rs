@@ -46,7 +46,7 @@ struct FuncResponse {
 }
 
 // send+recv the bytes of the image to/from GPU workers
-pub type VmSenderType = bytes::Bytes;
+pub type VmSenderType = (bytes::Bytes, u64);
 pub type VmRecvType = bytes::Bytes;
 
 fn create_kernel(radius: i32) -> Vec<f32> {
@@ -155,12 +155,12 @@ async fn response(body: bytes::Bytes,
 
     tx.lock().await.send(body.clone()).await.unwrap();
 
-    let resp = rx.lock().await.recv().await.unwrap();
+    let (resp, exe) = rx.lock().await.recv().await.unwrap();
     let req_end = std::time::Instant::now();
  
     return Ok(create_response(
                     resp,
-                    (req_start - req_end).as_nanos().try_into().unwrap(),
+                    exe,
                     0,
                     0,
                     0,
@@ -215,8 +215,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     for idx in 0..num_threads {
         let (sender, recv): (
-            tokio::sync::mpsc::Sender<VmSenderType>,
-            tokio::sync::mpsc::Receiver<VmSenderType>,
+            tokio::sync::mpsc::Sender<VmRecvType>,
+            tokio::sync::mpsc::Receiver<VmRecvType>,
         ) = mpsc::channel(16384);
         server_sender_vec.push(Arc::new(AsyncMutex::new(sender)));
         vm_recv_vec.push(Arc::new(Mutex::new(recv)));
@@ -264,6 +264,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 let now_cpu = Instant::now();
 
                 let bytes = server_recv.lock().unwrap().blocking_recv().unwrap();
+                let req_start = std::time::Instant::now();
                 let input: FuncInput = decode::from_read(&*bytes).unwrap();
                 let mut image = decode(&input.image.as_bytes()).expect(&format!("b64 decode error: {:?}", bytes));
                 let mut decoded_image = load_from_memory_with_format(&image, ImageFormat::Bmp).unwrap().to_rgba8();
@@ -314,7 +315,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 // We can now examine the block values to compute the image hash itself TODO
 
                 let final_resp = encode::to_vec(&FuncResponse { hash: hash  }).unwrap();
-                server_send.lock().unwrap().blocking_send(bytes::Bytes::from(final_resp));
+                let req_end = std::time::Instant::now();
+                let exe = (req_end - req_start).as_nanos();
+                server_send.lock().unwrap().blocking_send((bytes::Bytes::from(final_resp),
+                                                          exe.try_into().unwrap()));
             }
 
             // Return response...
