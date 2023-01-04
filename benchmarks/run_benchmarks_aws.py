@@ -1794,60 +1794,61 @@ def run_syscall_bench(hcall_sizes, membench_interleave=4):
     elif gpu == "amd":
         vmcount = 2048
 
-    for hcall_size in hcall_sizes:
-        print ("Running bench for hcall_size: ", hcall_size)
-        run_syscall_command = """#!/bin/bash
-        sudo su
-        ulimit -n 65536
-        x=$(cloud-init status)
-        until [ "$x" == "status: done" ]; do
-        sleep 10
-        x=$(cloud-init status)
-        done
+    for repeat in range(10):
+        for hcall_size in hcall_sizes:
+            print ("Running bench for hcall_size: ", hcall_size)
+            run_syscall_command = """#!/bin/bash
+            sudo su
+            ulimit -n 65536
+            x=$(cloud-init status)
+            until [ "$x" == "status: done" ]; do
+            sleep 10
+            x=$(cloud-init status)
+            done
 
-        /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/syscallbench/serverless.wat --ip=0.0.0.0 --heap=3145728 --stack=1024 --hcallsize={hcall} --partition=false --serverless=true --vmcount={vmcount} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} --lgroup={lgroup} --rt=25 --nvidia={nv} &> /vv/syscall.log
-        """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=membench_interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount, hcall=hcall_size+4, nv=nvflag)
-        run_command(run_syscall_command, "run_syscall", gpu_instance[0].id)
+            /vv/VectorVisor/target/release/vectorvisor --input /vv/VectorVisor/benchmarks/syscallbench/serverless.wat --ip=0.0.0.0 --heap=3145728 --stack=1024 --hcallsize={hcall} --partition=false --serverless=true --vmcount={vmcount} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --maxdemospace={maxdemo} --lgroup={lgroup} --rt=25 --nvidia={nv} &> /vv/syscall.log
+            """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=membench_interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount, hcall=hcall_size+4, nv=nvflag)
+            run_command(run_syscall_command, "run_syscall", gpu_instance[0].id)
 
-        # Now run the invoker..
-        run_invoker = """#!/bin/bash
-        sudo su
-        ulimit -n 65536
-        mkdir -p ~/gocache/
-        mkdir -p ~/gopath/
-        mkdir -p ~/xdg/
-        export GOCACHE=~/gocache/
-        export GOPATH=~/gopath/
-        export XDG_CACHE_HOME=~/xdg/
+            # Now run the invoker..
+            run_invoker = """#!/bin/bash
+            sudo su
+            ulimit -n 65536
+            mkdir -p ~/gocache/
+            mkdir -p ~/gopath/
+            mkdir -p ~/xdg/
+            export GOCACHE=~/gocache/
+            export GOPATH=~/gopath/
+            export XDG_CACHE_HOME=~/xdg/
 
-        x=$(cloud-init status)
-        until [ "$x" == "status: done" ]; do
-        sleep 10
-        x=$(cloud-init status)
-        done
+            x=$(cloud-init status)
+            until [ "$x" == "status: done" ]; do
+            sleep 10
+            x=$(cloud-init status)
+            done
 
-        cd /vv/VectorVisor/benchmarks/syscallbench/
+            cd /vv/VectorVisor/benchmarks/syscallbench/
 
-        /usr/local/go/bin/go run /vv/VectorVisor/benchmarks/syscallbench/run_syscalls.go {addr} 8000 {target_rps} 1 {duration} {input_size}
-        """.format(addr=gpu_instance[0].private_dns_name, input_size=int(hcall_size/1024), target_rps=vmcount, duration=60)
+            /usr/local/go/bin/go run /vv/VectorVisor/benchmarks/syscallbench/run_syscalls.go {addr} 8000 {target_rps} 1 {duration} {input_size}
+            """.format(addr=gpu_instance[0].private_dns_name, input_size=int(hcall_size/1024), target_rps=vmcount, duration=60)
 
-        # save the result...
-        command_id = run_command(run_invoker, "run invoker", invoker_instance[0].id)
+            # save the result...
+            command_id = run_command(run_invoker, "run invoker", invoker_instance[0].id)
 
-        time.sleep(10)
+            time.sleep(10)
 
-        # Block until benchmark is complete
-        output = block_on_command(command_id, invoker_instance[0].id)
-        print (output)
-        # save output
-        with open(temp_dir+"gpu_syscallbench_{}.txt".format(hcall_size), "w") as text_file:
-            text_file.write(str(output))
+            # Block until benchmark is complete
+            output = block_on_command(command_id, invoker_instance[0].id)
+            print (output)
+            # save output
+            with open(temp_dir+"gpu_syscallbench_{hcall}_{repeat}.txt".format(hcall=hcall_size, repeat=repeat), "w") as text_file:
+                text_file.write(str(output))
 
-        time.sleep(10)
+            time.sleep(10)
 
-        cleanup()
+            cleanup()
 
-        time.sleep(10)
+            time.sleep(10)
 
 
 
