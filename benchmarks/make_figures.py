@@ -18,6 +18,38 @@ args = vars(parser.parse_args())
 input_dir = args['input']
 print (input_dir)
 
+def parse_syscalls(dir_name, f_name, ret, parse_syscall=False):
+    try:
+        dev_time = []
+        for idx in range(10):
+            print (dir_name+"/{name}_{idx}.txt".format(name=f_name, idx=idx))
+            with open (dir_name+"/{name}_{idx}.txt".format(name=f_name, idx=idx), "r") as myfile:
+                data = myfile.read().replace("\'", "\"")
+                rps = float(re.search(r'Total\sRPS:\s(.*?)\\n', data).group(1))
+                on_dev_exe_time = float(re.search(r'On\sdevice\sexecution\stime:\s(.*?)\\n', data).group(1))
+                latency = float(re.search(r'Average\srequest\slatency:\s(.*?)\\n', data).group(1))
+                queue_submit_time = float(re.search(r'queue\ssubmit\stime:\s(.*?)\\n', data).group(1))
+                buffer_time = float(re.search(r'Request\sQueue\sTime:\s(.*?)\\n', data).group(1))
+                device_time = float(re.search(r'Device\sTime:\s(.*?)\\n', data).group(1))
+                dev_time.append(device_time)
+                overhead_time = float(re.search(r'overhead:\s(.*?)\\n', data).group(1))
+                compile_time = float(re.search(r'compile\stime:\s(.*?)\\n', data).group(1))
+        dev_time = np.array(dev_time)
+        ret[f_name] = dict()
+        ret[f_name]['device_time'] = dev_time
+    except Exception as e:
+        print (e)
+        temp = dict()
+        temp['rps'] = -0.0
+        temp['on_dev_exe_time'] = 0
+        temp['latency'] = 0
+        temp['queue_submit_time'] = 0
+        temp['buffer_time'] = 0
+        temp['device_time'] = 0
+        temp['overhead'] = 0
+        temp['compile_time'] = 0
+        ret[f_name] = temp
+
 def parse_file(dir_name, f_name, ret, parse_syscall=False):
     try:
         if parse_syscall:
@@ -178,7 +210,7 @@ def parse_dir(dir_name):
 
     # syscalls...
     for call in [2**x for x in range(12,19)]:
-        parse_file(dir_name, "gpu_syscallbench_{size}".format(size=call), ret['syscalls'], parse_syscall=True)
+        parse_syscalls(dir_name, "gpu_syscallbench_{size}".format(size=call), ret['syscalls'], parse_syscall=True)
 
     return ret
 
@@ -342,21 +374,28 @@ def plot_syscalls():
     a10g = []
     v520 = []
 
-    def add_interleave(device_str, avg_list, batch=4096):
+    t4_std = []
+    a10g_std = []
+    v520_std = []
+
+    def add_interleave(device_str, avg_list, std_list, batch=4096):
         for hcall in [2**x for x in range(12,19)]:
-            device_time = results[device_str]['syscalls']['gpu_syscallbench_{x}'.format(x=hcall)]
-            bandwidth = batch * hcall * 2 / (device_time / 10**3)
-            #bandwidth = (rps * hcall * 2) / 10**6
-            avg_list.append(bandwidth)
+            device_time = results[device_str]['syscalls']['gpu_syscallbench_{x}'.format(x=hcall)]['device_time']
+            bw = []
+            for value in device_time:
+                bandwidth = batch * hcall * 2 / (value / 10**3)
+                bw.append(bandwidth)
+            bw = np.array(bw)
+            avg_list.append(np.average(bw))
+            std_list.append(np.std(bw))
 
+    add_interleave("t4_membench", t4, t4_std)
+    add_interleave("a10g_membench", a10g, a10g_std, batch=6144)
+    add_interleave("v520_membench", v520, v520_std, batch=2048)
 
-    add_interleave("t4_membench", t4)
-    add_interleave("a10g_membench", a10g, batch=6144)
-    add_interleave("v520_membench", v520, batch=2048)
-
-    print (t4)
-    print (a10g)
-    print (v520)
+    print (t4, t4_std)
+    print (a10g, a10g_std)
+    print (v520, v520_std)
 
     fig, axes = plt.subplots(nrows=1, ncols=1, figsize=(16, 5))
     #fig, axes = plt.subplots(nrows=1, ncols=3, figsize=(12.75, 5))
@@ -384,9 +423,9 @@ def plot_syscalls():
 
     colors = plt.cm.viridis(np.linspace(0, 1, 12))
 
-    t4 = plt.bar(ind, t4, width, color=colors[0], hatch='o.', capsize=6, label='T4')
-    a10g = plt.bar(ind2, a10g, width, color=colors[4], hatch='/\\', capsize=6, label='A10G')
-    v520 = plt.bar(ind3, v520, width, color=colors[8], hatch='o', capsize=6, label='v520')
+    t4 = plt.bar(ind, t4, width, yerr=t4_std, color=colors[0], hatch='o.', capsize=6, label='T4')
+    a10g = plt.bar(ind2, a10g, width, yerr=a10g_std, color=colors[4], hatch='/\\', capsize=6, label='A10G')
+    v520 = plt.bar(ind3, v520, width, yerr=v520_std, color=colors[8], hatch='o', capsize=6, label='v520')
 
     plt.grid(zorder=-50)
     plt.legend(prop={'size': 18})
@@ -490,20 +529,22 @@ def plot_memory_bandwidth():
     add_interleave("v520_membench", 4, v520_4, v520_4_std, batch=2048)
     add_interleave("v520_membench", 8, v520_8, v520_8_std, batch=2048)
 
-    fig, axes = plt.subplots(nrows=1, ncols=3, figsize=(16, 5))
+    fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(16, 5))
+    plt.subplots_adjust(wspace=0.025)
+
     #fig, axes = plt.subplots(nrows=1, ncols=3, figsize=(12.75, 5))
     fig.tight_layout()
 
     axes[0].set_xticks(ind_ticks)
     axes[1].set_xticks(ind_ticks)
-    axes[2].set_xticks(ind_ticks)
+    #axes[2].set_xticks(ind_ticks)
     axes[0].set_xticklabels(('4x1', '4x4', '8x1', '8x4', '128+ILP'), rotation=20)
     axes[1].set_xticklabels(('4x1', '4x4', '8x1', '8x4', '128+ILP'), rotation=20)
-    axes[2].set_xticklabels(('4x1', '4x4', '8x1', '8x4', '128+ILP'), rotation=20)
+    #axes[2].set_xticklabels(('4x1', '4x4', '8x1', '8x4', '128+ILP'), rotation=20)
     
     axes[0].set_ylim(0, 650)
     axes[1].set_ylim(0, 650)
-    axes[2].set_ylim(0, 650)
+    #axes[2].set_ylim(0, 650)
 
     """
     axes[0].set_xticklabels(ind_ticks, ('Membench', 'Membench-Unroll', 'Membench64', 'Membench64-Unroll'))
@@ -514,14 +555,18 @@ def plot_memory_bandwidth():
     
     #axes[1].yaxis.set_visible(False)
     #plt.subplots_adjust(wspace=0.05)
-
+    #plt.xlabel('Memcpy Bytes x Unroll Count')
     axes[0].set_ylabel('Memory Bandwidth (GB/s)')
     #axes[0].set_xlabel('Memory Benchmarks')
     #axes[1].set_ylabel('Memory Bandwidth (GB/s)')
     #axes[1].set_xlabel('Memory Benchmarks')
     axes[0].set_title('NVIDIA T4')
     axes[1].set_title('NVIDIA A10G')
-    axes[2].set_title('AMD v520')
+    #axes[1].set_yticks([])
+    axes[1].get_yaxis().set_ticklabels([])
+    plt.subplots_adjust(wspace=0.025)
+
+    #axes[2].set_title('AMD v520')
 
     colors = plt.cm.viridis(np.linspace(0, 1, 12))
 
@@ -531,25 +576,26 @@ def plot_memory_bandwidth():
     nvidia_a10g_1 = axes[1].bar(ind, nvidia_a10g_1, width, color=colors[0], hatch='o.', yerr=nvidia_a10g_1_std, capsize=6)
     nvidia_a10g_4 = axes[1].bar(ind2, nvidia_a10g_4, width, color=colors[4], hatch='/\\', yerr=nvidia_a10g_4_std, capsize=6)
     nvidia_a10g_8 = axes[1].bar(ind3, nvidia_a10g_8, width, color=colors[8], hatch='o', yerr=nvidia_a10g_8_std, capsize=6)
+    """
     v520_1 = axes[2].bar(ind, v520_1, width, color=colors[0], hatch='o.', yerr=v520_1_std, capsize=6)
     v520_4 = axes[2].bar(ind2, v520_4, width, color=colors[4], hatch='/\\', yerr=v520_4_std, capsize=6)
     v520_8 = axes[2].bar(ind3, v520_8, width, color=colors[8], hatch='o', yerr=v520_8_std, capsize=6)
-
+    """
 
     t4_line = axes[0].axhline(y=320, color='b', linestyle='-')
     t4_line_approx = axes[0].axhline(y=220.16, color='black', linestyle='dashed')
 
     a10g_line = axes[1].axhline(y=600, color='b', linestyle='-')
 
-    v520_line = axes[2].axhline(y=512, color='b', linestyle='-')
+    #v520_line = axes[2].axhline(y=512, color='b', linestyle='-')
 
     axes[0].grid(zorder=-50)
     axes[1].grid(zorder=-50)
-    axes[2].grid(zorder=-50)
+    #axes[2].grid(zorder=-50)
 
     axes[0].legend((nvidia_t4_1[0], nvidia_t4_4[0], nvidia_t4_8[0], t4_line, t4_line_approx),
                ('Interleave = 1 Byte', 'Interleave = 4 Bytes', 'Interleave = 8 Bytes','Theoretical Max Bandwidth', 'Prev. Measured Max Bandwidth'),
-               prop={'size': 14})
+               prop={'size': 18})
 
     """
     axes[1].legend((nvidia_a10g_1[0], nvidia_a10g_4[0], nvidia_a10g_8[0], a10g_line),
@@ -568,25 +614,23 @@ def plot_memory_bandwidth():
 
 def plot_breakdowns():
 #    plt.figure(figsize=(16, 6))
-    ind = np.arange(12) * 4
+    ind = np.arange(12) * 16
     # cluster the groups of three together
     # 12 clusters...
-    for x in range(12):
-        ind[x:] += 30
     print (ind)
-    width = 4
-    spacing = 10
+    width = 6
+    spacing = 1.25
     ind2 = ind + spacing
     ind3 = ind2 + spacing
     ind4 = ind3 + spacing
     ind5 = ind4 + spacing
     ind6 = ind5 + spacing
-    ind_ticks = (ind + ind3) /2
+    ind_ticks = ind
     
-    plt.rc('xtick', labelsize=11)
-    plt.rc('ytick', labelsize=11)
-    plt.rc('axes', titlesize=18)
-    plt.rc('axes', labelsize=11)
+    plt.rc('xtick', labelsize=24)
+    plt.rc('ytick', labelsize=24)
+    plt.rc('axes', titlesize=24)
+    plt.rc('axes', labelsize=24)
 
     """
     provide breakdowns
@@ -637,6 +681,7 @@ def plot_breakdowns():
     add_continuations("v520_profile_4", v520_breakdown_cont, v520_breakdown_exe, v520_breakdown_net, v520_breakdown_vmm)
 
 
+    """
     total = np.array(t4_cont) + np.array(t4_exe) + np.array(t4_vmm)+ np.array(t4_net)
     t4_cont /= total
     t4_exe /= total
@@ -654,6 +699,7 @@ def plot_breakdowns():
     v520_breakdown_exe /= total3
     v520_breakdown_vmm /= total3
     v520_breakdown_net /= total3
+    """
 
 
     print (t4_breakdown_exe)
@@ -661,34 +707,24 @@ def plot_breakdowns():
     N = len(t4_cont)
     print (N)
 
-    fig, axes = plt.subplots(nrows=1, ncols=1, figsize=(16, 5))
-    #fig, axes = plt.subplots(nrows=1, ncols=3, figsize=(12.75, 5))
+    fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(24, 5))
     fig.tight_layout()
 
-    labels = ["A10G \n\n{x}".format(x=x) \
-        for x, idx in zip(['Scrypt', 'Pbkdf2', 'Blur-Jpeg', 'Blur-Bmp', 'PHash', 'PHash-Modified',  'Genpdf', 'Histogram', 'LZ4', 'Strings', 'Strings-Go', 'Strings-AScript'], range(15))]
-    final_labels= []
-    for label in labels:
-        final_labels.append("T4 ")
-        final_labels.append(label)
-        final_labels.append(" AMD")
-
-
-    ind_ticks = []
-    for idx in range(len(ind)):
-        ind_ticks.append(ind[idx])
-        ind_ticks.append(ind2[idx])
-        ind_ticks.append(ind3[idx])
-
-
-    ticks = plt.xticks(ind_ticks, final_labels)
+    axes[0].set_xticks(ind_ticks, ['Scrypt', 'Pbkdf2', 'Blur-Jpeg', 'Blur-Bmp', 'PHash', 'PHash-Modified',  'Genpdf', 'Histogram', 'LZ4', 'Strings', 'Strings-Go', 'Strings-AScript'], rotation=40)
+    axes[1].set_xticks(ind_ticks, ['Scrypt', 'Pbkdf2', 'Blur-Jpeg', 'Blur-Bmp', 'PHash', 'PHash-Modified',  'Genpdf', 'Histogram', 'LZ4', 'Strings', 'Strings-Go', 'Strings-AScript'], rotation=40)
 
     #plt.xticks(ind2, ["{}".format(int((2**x) / 1024)) for x in range(12,19)])
     #axes[0].set_ylim(0, 650)
 
-    plt.ylabel('Normalized E2E Latency')
+    axes[0].set_ylabel('E2E Latency (s)')
+    axes[0].set_ylim(0, 60)
+    axes[1].set_ylim(0, 60)
+    axes[1].get_yaxis().set_ticklabels([])
+
     #plt.xlabel('Copy Size (KiB)')
-    plt.title('GPU Latency Breakdown')
+    axes[0].set_title('T4 Latency Breakdown')
+    axes[1].set_title('A10G Latency Breakdown')
+    plt.subplots_adjust(wspace=0.025)
     #plt.yscale('log')
 
     colors = plt.cm.viridis(np.linspace(0, 1, 13))  
@@ -696,47 +732,35 @@ def plot_breakdowns():
     print (t4_exe)
     print (t4_vmm)
 
-    p1 = plt.bar(ind, t4_cont, width, color=colors[0], hatch='.')
+    p1 = axes[0].bar(ind, t4_cont, width, color=colors[0], hatch='.')
 
-    p2 = plt.bar(ind, t4_exe, width, color=colors[4], hatch='/\\',
+    p2 = axes[0].bar(ind, t4_exe, width, color=colors[4], hatch='/\\',
                 bottom=np.asarray(t4_cont))
 
-    p3 = plt.bar(ind, t4_vmm, width, color=colors[8], hatch='o.',
+    p3 = axes[0].bar(ind, t4_vmm, width, color=colors[8], hatch='o.',
                 bottom=np.asarray(t4_exe)+np.asarray(t4_cont))
 
-    p4 = plt.bar(ind, t4_net, width, color='lightgrey', hatch='o',
+    p4 = axes[0].bar(ind, t4_net, width, color='lightgrey', hatch='o',
                 bottom=np.asarray(t4_exe)+np.asarray(t4_cont)+np.asarray(t4_vmm))
 
     # a10g
 
-    p1 = plt.bar(ind2, t4_breakdown_cont, width, color=colors[0], hatch='.')
+    p1 = axes[1].bar(ind, t4_breakdown_cont, width, color=colors[0], hatch='.')
 
 
-    p2 = plt.bar(ind2, t4_breakdown_exe, width, color=colors[4], hatch='/\\',
+    p2 = axes[1].bar(ind, t4_breakdown_exe, width, color=colors[4], hatch='/\\',
                 bottom=np.asarray(t4_breakdown_cont))
  
 
-    p3 = plt.bar(ind2, t4_breakdown_vmm, width, color=colors[8], hatch='o.',
+    p3 = axes[1].bar(ind, t4_breakdown_vmm, width, color=colors[8], hatch='o.',
                 bottom=np.asarray(t4_breakdown_exe)+np.asarray(t4_breakdown_cont))
 
-    p4 = plt.bar(ind2, t4_breakdown_net, width, color='lightgrey', hatch='o',
+    p4 = axes[1].bar(ind, t4_breakdown_net, width, color='lightgrey', hatch='o',
                 bottom=np.asarray(t4_breakdown_exe)+np.asarray(t4_breakdown_cont)+np.asarray(t4_breakdown_vmm))
-
-    # v520
-    p1 = plt.bar(ind3, v520_breakdown_cont, width, color=colors[0], hatch='.')
-
-    p2 = plt.bar(ind3, v520_breakdown_exe, width, color=colors[4], hatch='/\\',
-                bottom=np.asarray(v520_breakdown_cont))
- 
-
-    p3 = plt.bar(ind3, v520_breakdown_vmm, width, color=colors[8], hatch='o.',
-                bottom=np.asarray(v520_breakdown_exe)+np.asarray(v520_breakdown_cont))
-
-    p4 = plt.bar(ind3, v520_breakdown_net, width, color='lightgrey', hatch='o',
-                bottom=np.asarray(v520_breakdown_exe)+np.asarray(v520_breakdown_cont)+np.asarray(v520_breakdown_vmm))
-
-    plt.grid(zorder=-50)
-    plt.legend((p4[0], p3[0], p2[0], p1[0]), ('Network', 'VMM Overhead', 'On Device Execution Time', 'Continuations Overhead'), prop={'size': 11})
+    
+    axes[0].grid(zorder=-50)
+    axes[1].grid(zorder=-50)
+    plt.legend((p4[0], p3[0], p2[0], p1[0]), ('Network', 'VMM Overhead', 'On Device Execution Time', 'Continuations Overhead'), prop={'size': 24})
 
     plt.savefig(input_dir+"/breakdown.eps", bbox_inches='tight')
 
