@@ -295,6 +295,7 @@ def run_scrypt_bench():
     x=$(cloud-init status)
     done
 
+    sleep 1200
     cd /vv/VectorVisor/benchmarks/scrypt/
 
     /usr/local/go/bin/go run /vv/VectorVisor/benchmarks/scrypt/run_scrypt.go {addr} 8000 {target_rps} 1 {duration} {hashes}
@@ -777,6 +778,7 @@ def run_genpdf_bench():
     x=$(cloud-init status)
     done
 
+    sleep 1200
     cd /vv/VectorVisor/benchmarks/rust-pdfwriter/
 
     /usr/local/go/bin/go run /vv/VectorVisor/benchmarks/rust-pdfwriter/run_genpdf.go {addr} 8000 {target_rps} 1 {duration}
@@ -1087,6 +1089,7 @@ def run_image_hash_bench(run_modified = False):
     x=$(cloud-init status)
     done
 
+    sleep 1200
     cd {imagehash_path}/
 
     /usr/local/go/bin/go run run_image_hash.go {addr} 8000 {target_rps} 1 {duration}
@@ -1320,6 +1323,7 @@ def run_image_blur_bench(run_bmp = False):
     x=$(cloud-init status)
     done
 
+    sleep 1200
     cd {exe_path}
 
     /usr/local/go/bin/go run run_image_blur.go {addr} 8000 {target_rps} 1 {duration}

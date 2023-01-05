@@ -8,3 +8,5 @@ json-compression	0
 scrypt	0
 pbkdf2	0
 nlp-count-vectorizer	0
+nlp-assemblyscript	0
+nlp-go	0

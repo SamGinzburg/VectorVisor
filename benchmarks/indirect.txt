@@ -1,10 +1,12 @@
 rust-pdfwriter	211656
 average	1
-imageblur	322807
+imageblur	162007
 imageblur-bmp	2
-imagehash	282607
+imagehash	207031
 imagehash-modified	1
 json-compression	1
 scrypt	1
 pbkdf2	5228
-nlp-count-vectorizer	1
+nlp-count-vectorizer	2
+nlp-assemblyscript	2869093
+nlp-go	820142

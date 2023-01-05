@@ -25,6 +25,13 @@ function cachebin() {
   vv-profiler --input ${1}-opt.wasm --output ${1}-opt-instrument.wasm
 }
 
+function nlp-script() {
+  cp ${1}/release-opt.wasm ${1}-opt.wasm
+  cp ${1}-opt.wasm ${1}-opt-4.wasm
+  cp ${1}-opt.wasm ${1}-opt-8.wasm
+  vv-profiler --input ${1}-opt.wasm --output ${1}-opt-instrument.wasm
+}
+
 cachebin "rust-pdfwriter" "4194304" "131072" "409600" "2048" "4608"
 cachebin "pbkdf2" "3145728" "262144" "131072" "2048" "6144"
 cachebin "imagehash" "4194304" "131072" "262144" "2048" "4608"
@@ -35,6 +42,8 @@ cachebin "json-compression" "4194304" "131072" "524288" "2048" "4608"
 cachebin "scrypt" "3145728" "262144" "131072" "2048" "6144"
 cachebin "average" "3145728" "131072" "262144" "2048" "5120"
 cachebin "nlp-count-vectorizer" "4194304" "131072" "524288" "2048" "4608"
+nlp-script "nlp-assemblyscript" "3145728" "131072" "8192" "4096" "4608" "false"
+nlp-script "nlp-go" "3145728" "131072" "8192" "4096" "4608" "true"
 #cachebin "genpdf" "3145728" "131072" "262144" "4096" "5120"
 
 # Save the generated *.bin files

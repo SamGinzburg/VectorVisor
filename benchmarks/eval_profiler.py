@@ -49,10 +49,12 @@ def run_cmd(cmd, block=False):
     else:
         return ""
 
-def run_profile_generic(bench_name, params=""):
+def run_profile_generic(bench_name, params="", testdir=""):
+    if testdir=="":
+        testdir = bench_name
     run_command_wasmtime = """#!/bin/bash
       
-    vectorvisor --input {name}-opt-instrument.wasm --ip=0.0.0.0 --heap=3145728 --stack=262144 --hcallsize=1310720 --partition=true --serverless=true --vmcount=4096 --wasmtime=true --profile=true
+    vectorvisor --input {name}-opt-instrument.wasm --ip=0.0.0.0 --heap=5145728 --stack=262144 --hcallsize=1310720 --partition=true --serverless=true --vmcount=4096 --wasmtime=true --profile=true
     """.format(interleave=interleave, name=bench_name)
 
     run_cmd(run_command_wasmtime) 
@@ -61,7 +63,7 @@ def run_profile_generic(bench_name, params=""):
     run_invoker = """#!/bin/bash
     cd {name}/
     go run run_*.go {addr} 8000 {target_rps} 1 {duration} {params}
-    """.format(addr="localhost", target_rps=256, duration=300, name=bench_name, params=params)
+    """.format(addr="localhost", target_rps=256, duration=300, name=testdir, params=params)
 
     time.sleep(20)
 
@@ -123,6 +125,10 @@ run_profile_generic("json-compression", params="smaller_tweets.txt 2000")
 run_profile_generic("scrypt", params="256")
 run_profile_generic("pbkdf2")
 run_profile_generic("nlp-count-vectorizer", params="smaller_tweets.txt 500")
+run_profile_generic("nlp-assemblyscript", params="../nlp-count-vectorizer/smaller_tweets.txt 500")
+# pass in custom test dir, go projects can't include multiple  
+run_profile_generic("nlp-go", testdir="nlp-count-vectorizer", params="../nlp-count-vectorizer/smaller_tweets.txt 500")
+
 
 # Collect profiling results
 slowcalls = dict()
@@ -137,6 +143,8 @@ get_profile("json-compression", slowcalls, indirect)
 get_profile("scrypt", slowcalls, indirect)
 get_profile("pbkdf2", slowcalls, indirect)
 get_profile("nlp-count-vectorizer", slowcalls, indirect)
+get_profile("nlp-assemblyscript", slowcalls, indirect)
+get_profile("nlp-go", slowcalls, indirect)
 
 dump_dict(slowcalls, "slowcalls")
 dump_dict(indirect, "indirect")
@@ -152,6 +160,9 @@ run_profile_generic("json-compression", params="smaller_tweets.txt 2000")
 run_profile_generic("scrypt", params="256")
 run_profile_generic("pbkdf2")
 run_profile_generic("nlp-count-vectorizer", params="smaller_tweets.txt 500")
+run_profile_generic("nlp-assemblyscript", params="../nlp-count-vectorizer/smaller_tweets.txt 500")
+# pass in custom test dir, go projects can't include multiple  
+run_profile_generic("nlp-go", testdir="nlp-count-vectorizer", params="../nlp-count-vectorizer/smaller_tweets.txt 500")
 
 slowcalls = dict()
 indirect = dict()
@@ -165,6 +176,8 @@ get_profile("json-compression", slowcalls, indirect)
 get_profile("scrypt", slowcalls, indirect)
 get_profile("pbkdf2", slowcalls, indirect)
 get_profile("nlp-count-vectorizer", slowcalls, indirect)
+get_profile("nlp-assemblyscript", slowcalls, indirect)
+get_profile("nlp-go", slowcalls, indirect)
 
 dump_dict(slowcalls, "slowcalls-opt")
 dump_dict(indirect, "indirect-opt")

@@ -96,9 +96,10 @@ maxfuncs = 50
 maxloc = 2000000
 #maxfuncs = 999
 #maxloc = 20000000
-benchmark_duration = 600
-SLEEP_TIME=120
-NUM_REPEAT=1
+benchmark_duration = 300
+SLEEP_TIME=180
+NUM_REPEAT=2
+somaxconn = "65535"
 
 if gpu == "a10g":
     maxdemospace = 0
@@ -135,26 +136,44 @@ if run_only_membench:
      - whoami
      - sudo su
      - sudo whoami
+     - sysctl -w net.ipv4.tcp_max_syn_backlog=3240000
+     - sysctl -w net.core.netdev_max_backlog=16384
+     - sysctl -w net.core.somaxconn={somaxconn}
+     - sysctl -w net.core.wmem_default=67108864
+     - sysctl -w net.core.rmem_default=67108864
+     - sysctl -w net.ipv4.tcp_rmem="4096 131072 67108864"
+     - sysctl -w net.ipv4.tcp_wmem="4096 131072 67108864"
+     - sysctl -w net.ipv4.tcp_mem="268435456 268435456 268435456"
+     - sysctl -p
      - export HOME=/root
      - export CUDA_CACHE_MAXSIZE=4294967296
      - export CUDA_CACHE_PATH=~/.nv/ComputeCache/
      - cd /vv/VectorVisor/
      - git pull
      - ~/.cargo/bin/cargo build --release
-""".format(opt=OPT_LEVEL, snip_args=WASM_SNIP_ARGS, snip_custom=WASM_SNIP_CUSTOM)
+""".format(opt=OPT_LEVEL, snip_args=WASM_SNIP_ARGS, snip_custom=WASM_SNIP_CUSTOM, somaxconn=somaxconn)
 else:
     userdata_ubuntu = """#cloud-config
     runcmd:
      - whoami
      - sudo su
      - sudo whoami
+     - sysctl -w net.ipv4.tcp_max_syn_backlog=3240000
+     - sysctl -w net.core.netdev_max_backlog=16384
+     - sysctl -w net.core.somaxconn={somaxconn}
+     - sysctl -w net.core.wmem_default=67108864
+     - sysctl -w net.core.rmem_default=67108864
+     - sysctl -w net.ipv4.tcp_rmem="4096 131072 67108864"
+     - sysctl -w net.ipv4.tcp_wmem="4096 131072 67108864"
+     - sysctl -w net.ipv4.tcp_mem="268435456 268435456 268435456"
+     - sysctl -p
      - export HOME=/root
      - export CUDA_CACHE_MAXSIZE=4294967296
      - export CUDA_CACHE_PATH=~/.nv/ComputeCache/
      - cd /vv/VectorVisor/
      - git pull
      - ~/.cargo/bin/cargo build --release
-""".format(opt=OPT_LEVEL, snip_args=WASM_SNIP_ARGS, snip_custom=WASM_SNIP_CUSTOM)
+""".format(opt=OPT_LEVEL, snip_args=WASM_SNIP_ARGS, snip_custom=WASM_SNIP_CUSTOM, somaxconn=somaxconn)
 
 def run_command(command, command_name, instance_id):
     while True:
@@ -1011,6 +1030,7 @@ def run_image_hash_bench(run_modified = False):
     x=$(cloud-init status)
     done
     
+    sleep 600
     cd {imagehash_path}
     ~/.cargo/bin/cargo run --release --target x86_64-unknown-linux-gnu &> /vv/imagehash.log &
     """.format(fastreply=fastreply, imagehash_path=imagehash_path)
@@ -1046,6 +1066,7 @@ def run_image_hash_bench(run_modified = False):
     /vv/VectorVisor/target/release/vectorvisor --input {imagehash_path}-opt-{interleave}{run_profile}.wasm.bin --ip=0.0.0.0 --heap=4194304 --stack=131072 --hcallsize={hc} --partition=false --serverless=true --vmcount={vmcount} --interleave={interleave} --pinput={is_pretty} --fastreply={fastreply} --rt=100 --lgroup={lgroup} --nvidia={nv} &> /vv/imagehash.log &
     """.format(lgroup=local_group_size, cflags=CFLAGS, interleave=interleave, is_pretty=is_pretty, fastreply=fastreply, maxdemo=maxdemospace, imagehash_path=imagehash_path, maxfuncs=maxfuncs, maxloc=maxloc, vmcount=vmcount, prefix=prefix, run_profile=run_profile, nv=nvflag, hc=hcallsize)
 
+    run_command(run_image_command, "run_image_command", gpu_instance[0].id)
     # Now set up the invoker
 
     if not run_latency_breakdown:
@@ -1067,10 +1088,28 @@ def run_image_hash_bench(run_modified = False):
     x=$(cloud-init status)
     done
 
+    sleep 1200
     cd {imagehash_path}/
 
     /usr/local/go/bin/go run run_image_hash.go {addr} 8000 {target_rps} 1 {duration}
     """.format(addr=gpu_instance[0].private_dns_name, input_size=1000, target_rps=vmcount, imagehash_path=imagehash_path, duration=benchmark_duration)
+
+    for idx in range(NUM_REPEAT): 
+        command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
+
+        time.sleep(20)
+
+        # Block until benchmark is complete
+        output = block_on_command(command_id, invoker_instance[0].id)
+        print (output)
+
+        # save output
+        with open(temp_dir+"gpu_bench_imagehash_bmp_{idx}.txt".format(idx=idx), "w") as text_file:
+            text_file.write(str(output))
+        time.sleep(SLEEP_TIME)
+
+    cleanup()
+    time.sleep(SLEEP_TIME)
 
     if run_modified:
         run_cuda_command = """#!/bin/bash
@@ -1211,10 +1250,28 @@ def run_image_blur_bench(run_bmp = False):
     x=$(cloud-init status)
     done
 
+    sleep 1200
     cd {exe_path}
 
     /usr/local/go/bin/go run run_image_blur.go {addr} 8000 {target_rps} 1 {duration}
     """.format(addr=gpu_instance[0].private_dns_name, input_size=1000, target_rps=vmcount, exe_path=exe_path, duration=benchmark_duration)
+
+    run_command(run_image_command, "run_imageblur_gpu_command", gpu_instance[0].id)
+    for idx in range(NUM_REPEAT): 
+        command_id = run_command(run_invoker, "run invoker for gpu", invoker_instance[0].id)
+
+        time.sleep(20)
+
+        # Block until benchmark is complete
+        output = block_on_command(command_id, invoker_instance[0].id)
+        print (output)
+
+        # save output
+        with open(temp_dir+"gpu_bench_imageblur_bmp_{idx}.txt".format(idx=idx), "w") as text_file:
+            text_file.write(str(output))
+        time.sleep(SLEEP_TIME)
+
+    cleanup()
 
 
     if run_bmp:

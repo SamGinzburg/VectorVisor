@@ -13,6 +13,7 @@ t4_dir_4="$dir_name/t4_amd_4/"
 t4_dir_8="$dir_name/t4_amd_8/"
 t4_dir_4_breakdown="$dir_name/t4_amd_4_breakdown/"
 t4_dir_8_breakdown="$dir_name/t4_amd_8_breakdown/"
+t4_dir_4_breakdown_profile="$dir_name/t4_amd_4_breakdown_profile/"
 t4_dir_4_profile="$dir_name/t4_amd_4_profile/"
 t4_dir_8_profile="$dir_name/t4_amd_8_profile/"
 a10g_cuda="$dir_name/a10g_cuda/"
@@ -105,6 +106,16 @@ TOTAL_START_TIME=$(date +%s)
 STARTTIME=$(date +%s)
 python3 run_benchmarks_aws.py --gpu=t4 --cpu=amd --interleave=4 --dir=$t4_dir_4_breakdown --ami=$2 --cpuami=$2 --skip-cpu True --skip-membench True --breakdown=True & 
 python3 run_benchmarks_aws.py --gpu=t4 --cpu=intel --interleave=8 --dir=$t4_dir_8_breakdown --ami=$2 --cpuami=$2 --skip-cpu True --skip-membench True --breakdown=True & 
+for job in `jobs -p`; do wait ${job}; done
+ENDTIME=$(date +%s)
+echo "$(($ENDTIME - $STARTTIME)) seconds ellapsed while running T4 breakdown benchmarks"
+sleep 60
+
+
+echo "Starting T4 profile benchmarks breakdown w/CPU..."
+TOTAL_START_TIME=$(date +%s)
+STARTTIME=$(date +%s)
+python3 run_benchmarks_aws.py --gpu=t4 --cpu=amd --interleave=4 --dir=$t4_dir_4_breakdown_profile --ami=$2 --cpuami=$2 --skip-cpu True --skip-membench True --breakdown=True --run-profile True & 
 for job in `jobs -p`; do wait ${job}; done
 ENDTIME=$(date +%s)
 echo "$(($ENDTIME - $STARTTIME)) seconds ellapsed while running T4 breakdown benchmarks"
