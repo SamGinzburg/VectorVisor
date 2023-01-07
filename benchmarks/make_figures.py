@@ -4,6 +4,8 @@ import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
+from mpl_toolkits.axes_grid1.inset_locator import zoomed_inset_axes
+from mpl_toolkits.axes_grid1.inset_locator import mark_inset
 
 plt.rc('axes', axisbelow=True)
 plt.grid(c='lightgrey')
@@ -365,10 +367,10 @@ def plot_syscalls():
     ind6 = ind5 + spacing
     ind_ticks = (ind + ind3) / 2
     
-    plt.rc('xtick', labelsize=18)
-    plt.rc('ytick', labelsize=18)
-    plt.rc('axes', titlesize=18)
-    plt.rc('axes', labelsize=18)
+    plt.rc('xtick', labelsize=24)
+    plt.rc('ytick', labelsize=24)
+    plt.rc('axes', titlesize=24)
+    plt.rc('axes', labelsize=24)
 
     t4 = []
     a10g = []
@@ -427,8 +429,8 @@ def plot_syscalls():
     a10g = plt.bar(ind2, a10g, width, yerr=a10g_std, color=colors[4], hatch='/\\', capsize=6, label='A10G')
     v520 = plt.bar(ind3, v520, width, yerr=v520_std, color=colors[8], hatch='o', capsize=6, label='v520')
 
-    plt.grid(zorder=-50)
-    plt.legend(prop={'size': 18})
+    plt.grid(zorder=-50, axis='y')
+    plt.legend(prop={'size': 24})
 
     plt.savefig(input_dir+"/syscalls.eps", bbox_inches='tight')
 
@@ -449,10 +451,10 @@ def plot_memory_bandwidth():
 
     ind_ticks = (ind + ind3) / 2
     
-    plt.rc('xtick', labelsize=18)
-    plt.rc('ytick', labelsize=18)
-    plt.rc('axes', titlesize=18)
-    plt.rc('axes', labelsize=18)
+    plt.rc('xtick', labelsize=24)
+    plt.rc('ytick', labelsize=24)
+    plt.rc('axes', titlesize=24)
+    plt.rc('axes', labelsize=24)
 
     nvidia_t4_1 = []
     nvidia_t4_4 = []
@@ -529,6 +531,8 @@ def plot_memory_bandwidth():
     add_interleave("v520_membench", 4, v520_4, v520_4_std, batch=2048)
     add_interleave("v520_membench", 8, v520_8, v520_8_std, batch=2048)
 
+    print ("a10g:", nvidia_a10g_8)
+
     fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(16, 5))
     plt.subplots_adjust(wspace=0.025)
 
@@ -589,8 +593,8 @@ def plot_memory_bandwidth():
 
     #v520_line = axes[2].axhline(y=512, color='b', linestyle='-')
 
-    axes[0].grid(zorder=-50)
-    axes[1].grid(zorder=-50)
+    axes[0].grid(zorder=-50, axis='y')
+    axes[1].grid(zorder=-50, axis='y')
     #axes[2].grid(zorder=-50)
 
     axes[0].legend((nvidia_t4_1[0], nvidia_t4_4[0], nvidia_t4_8[0], t4_line, t4_line_approx),
@@ -618,7 +622,7 @@ def plot_breakdowns():
     # cluster the groups of three together
     # 12 clusters...
     print (ind)
-    width = 6
+    width = 10
     spacing = 1.25
     ind2 = ind + spacing
     ind3 = ind2 + spacing
@@ -627,10 +631,10 @@ def plot_breakdowns():
     ind6 = ind5 + spacing
     ind_ticks = ind
     
-    plt.rc('xtick', labelsize=24)
-    plt.rc('ytick', labelsize=24)
-    plt.rc('axes', titlesize=24)
-    plt.rc('axes', labelsize=24)
+    plt.rc('xtick', labelsize=30)
+    plt.rc('ytick', labelsize=36)
+    plt.rc('axes', titlesize=36)
+    plt.rc('axes', labelsize=36)
 
     """
     provide breakdowns
@@ -679,6 +683,22 @@ def plot_breakdowns():
     add_continuations("t4_4", t4_cont, t4_exe, t4_net, t4_vmm)
     add_continuations("a10g_4", t4_breakdown_cont, t4_breakdown_exe, t4_breakdown_net, t4_breakdown_vmm)
     add_continuations("v520_profile_4", v520_breakdown_cont, v520_breakdown_exe, v520_breakdown_net, v520_breakdown_vmm)
+    print ("t4_vmm,", t4_vmm)
+
+    t4_vmm = np.array(t4_vmm)
+    t4_net = np.array(t4_net)
+    t4_cont = np.array(t4_cont)
+    t4_exe = np.array(t4_exe)
+
+    t4_res = (t4_vmm + t4_net) / (t4_cont+t4_exe+t4_net+t4_vmm)
+    t4_cont_frac = (t4_cont) / (t4_exe+t4_cont)
+
+    print ("t4 vmm+net frac:")
+    for label, idx in zip(['Scrypt', 'Pbkdf2', 'Blur-Jpeg', 'Blur-Bmp', 'PHash', 'PHash-M.',  'Genpdf', 'Histogram', 'LZ4', 'Strings', 'Strings-Go', 'Strings-AScript'], range(12)):
+        print (label, t4_res[idx])
+    print ("t4 cont frac:")
+    for label, idx in zip(['Scrypt', 'Pbkdf2', 'Blur-Jpeg', 'Blur-Bmp', 'PHash', 'PHash-M.',  'Genpdf', 'Histogram', 'LZ4', 'Strings', 'Strings-Go', 'Strings-AScript'], range(12)):
+        print (label, t4_cont_frac[idx], t4_cont[idx])
 
 
     """
@@ -710,8 +730,8 @@ def plot_breakdowns():
     fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(24, 5))
     fig.tight_layout()
 
-    axes[0].set_xticks(ind_ticks, ['Scrypt', 'Pbkdf2', 'Blur-Jpeg', 'Blur-Bmp', 'PHash', 'PHash-Modified',  'Genpdf', 'Histogram', 'LZ4', 'Strings', 'Strings-Go', 'Strings-AScript'], rotation=40)
-    axes[1].set_xticks(ind_ticks, ['Scrypt', 'Pbkdf2', 'Blur-Jpeg', 'Blur-Bmp', 'PHash', 'PHash-Modified',  'Genpdf', 'Histogram', 'LZ4', 'Strings', 'Strings-Go', 'Strings-AScript'], rotation=40)
+    axes[0].set_xticks(ind_ticks, ['Scrypt', 'Pbkdf2', 'Blur-Jpeg', 'Blur-Bmp', 'PHash', 'PHash-M.',  'Genpdf', 'Histogram', 'LZ4', 'Strings', 'Strings-Go', 'Strings-AScript'], rotation=50)
+    axes[1].set_xticks(ind_ticks, ['Scrypt', 'Pbkdf2', 'Blur-Jpeg', 'Blur-Bmp', 'PHash', 'PHash-M.',  'Genpdf', 'Histogram', 'LZ4', 'Strings', 'Strings-Go', 'Strings-AScript'], rotation=50)
 
     #plt.xticks(ind2, ["{}".format(int((2**x) / 1024)) for x in range(12,19)])
     #axes[0].set_ylim(0, 650)
@@ -732,35 +752,66 @@ def plot_breakdowns():
     print (t4_exe)
     print (t4_vmm)
 
-    p1 = axes[0].bar(ind, t4_cont, width, color=colors[0], hatch='.')
+    p1 = axes[0].bar(ind, t4_cont, width, color='blue', hatch='.')
 
-    p2 = axes[0].bar(ind, t4_exe, width, color=colors[4], hatch='/\\',
+    p2 = axes[0].bar(ind, t4_exe, width, color='lightgray', hatch='/\\',
                 bottom=np.asarray(t4_cont))
 
-    p3 = axes[0].bar(ind, t4_vmm, width, color=colors[8], hatch='o.',
+    p3 = axes[0].bar(ind, t4_vmm, width, color='black', hatch='o.',
                 bottom=np.asarray(t4_exe)+np.asarray(t4_cont))
 
-    p4 = axes[0].bar(ind, t4_net, width, color='lightgrey', hatch='o',
+    p4 = axes[0].bar(ind, t4_net, width, color='green', hatch='o',
                 bottom=np.asarray(t4_exe)+np.asarray(t4_cont)+np.asarray(t4_vmm))
+
+    axins = zoomed_inset_axes(axes[0], 1.5, loc=1)
+    mark_inset(axes[0], axins, loc1=2, loc2=4, fc="none", ec="0.5")
+    axins.set_xlim([105,185])
+    axins.set_ylim([0,5])
+    axins.bar(ind, t4_breakdown_cont, width, color='blue', hatch='.')
+    axins.bar(ind, t4_breakdown_exe, width, color='lightgray', hatch='/\\',
+                bottom=np.asarray(t4_breakdown_cont))
+    axins.bar(ind, t4_breakdown_vmm, width, color='black', hatch='o.',
+                bottom=np.asarray(t4_breakdown_exe)+np.asarray(t4_breakdown_cont))
+    axins.bar(ind, t4_breakdown_net, width, color='green', hatch='o',
+                bottom=np.asarray(t4_breakdown_exe)+np.asarray(t4_breakdown_cont)+np.asarray(t4_breakdown_vmm))
+    axins.set_xticks(ind_ticks[7:], ['Histogram', 'LZ4', 'Strings', 'Strings-Go', 'Strings-AScript'], rotation=50, size=24)
+    axins.set_yticks([0, 5], [0, 5], size=24)
 
     # a10g
 
-    p1 = axes[1].bar(ind, t4_breakdown_cont, width, color=colors[0], hatch='.')
+    p1 = axes[1].bar(ind, t4_breakdown_cont, width, color='blue', hatch='.')
 
 
-    p2 = axes[1].bar(ind, t4_breakdown_exe, width, color=colors[4], hatch='/\\',
+    p2 = axes[1].bar(ind, t4_breakdown_exe, width, color='lightgray', hatch='/\\',
                 bottom=np.asarray(t4_breakdown_cont))
  
 
-    p3 = axes[1].bar(ind, t4_breakdown_vmm, width, color=colors[8], hatch='o.',
+    p3 = axes[1].bar(ind, t4_breakdown_vmm, width, color='black', hatch='o.',
                 bottom=np.asarray(t4_breakdown_exe)+np.asarray(t4_breakdown_cont))
 
-    p4 = axes[1].bar(ind, t4_breakdown_net, width, color='lightgrey', hatch='o',
+    p4 = axes[1].bar(ind, t4_breakdown_net, width, color='green', hatch='o',
                 bottom=np.asarray(t4_breakdown_exe)+np.asarray(t4_breakdown_cont)+np.asarray(t4_breakdown_vmm))
     
-    axes[0].grid(zorder=-50)
-    axes[1].grid(zorder=-50)
-    plt.legend((p4[0], p3[0], p2[0], p1[0]), ('Network', 'VMM Overhead', 'On Device Execution Time', 'Continuations Overhead'), prop={'size': 24})
+    # plot subplot for histogram
+    axins = zoomed_inset_axes(axes[1], 1.5, loc=1)
+    mark_inset(axes[1], axins, loc1=2, loc2=4, fc="none", ec="0.5")
+    axins.set_xlim([105,185])
+    axins.set_ylim([0,5])
+    axins.bar(ind, t4_breakdown_cont, width, color='blue', hatch='.')
+    axins.bar(ind, t4_breakdown_exe, width, color='lightgray', hatch='/\\',
+                bottom=np.asarray(t4_breakdown_cont))
+    axins.bar(ind, t4_breakdown_vmm, width, color='black', hatch='o.',
+                bottom=np.asarray(t4_breakdown_exe)+np.asarray(t4_breakdown_cont))
+    axins.bar(ind, t4_breakdown_net, width, color='green', hatch='o',
+                bottom=np.asarray(t4_breakdown_exe)+np.asarray(t4_breakdown_cont)+np.asarray(t4_breakdown_vmm))
+    axins.set_xticks(ind_ticks[7:], ['Histogram', 'LZ4', 'Strings', 'Strings-Go', 'Strings-AScript'], rotation=50, size=20)
+    axins.set_yticks([0, 5], [0, 5], size=20)
+
+    axes[0].grid(zorder=-50, axis='y')
+    axes[1].grid(zorder=-50, axis='y')
+    plt.legend((p4[0], p3[0], p2[0], p1[0]),
+    ('Network', 'VMM Overhead', 'On Device Execution Time', 'Continuations Overhead'),
+    prop={'size': 24}, bbox_to_anchor=(-2.25,1, 3,3), loc="upper center", mode='expand', ncol=4)
 
     plt.savefig(input_dir+"/breakdown.eps", bbox_inches='tight')
 
@@ -1075,3 +1126,56 @@ plot_syscalls()
 
 # plot breakdowns
 plot_breakdowns()
+
+vals = list(map(lambda x: x, results['t4_4']['gpu'].keys()))
+
+m = dict()
+for bench, bench2 in zip(results['t4_4']['gpu'].keys(), results['t4_4']['x86'].keys()):
+    m[bench] = bench2
+
+for bench, res in results['t4_4']['gpu'].items():
+    best_t4 = max(results['t4_4']['gpu'][bench]['rps'] / 0.526, results['t4_8']['gpu'][bench]['rps'] / 0.526)
+    best_t4_2 = max(results['t4_profile_4']['gpu'][bench]['rps'] / 0.526, results['t4_profile_8']['gpu'][bench]['rps'] / 0.526)
+    best_t4 = max(best_t4, best_t4_2)
+
+    best_a10g = max(results['a10g_4']['gpu'][bench]['rps'] / 1.006, results['a10g_8']['gpu'][bench]['rps'] / 1.006)
+    best_a10g_2 = max(results['a10g_profile_4']['gpu'][bench]['rps'] / 1.006, results['a10g_profile_8']['gpu'][bench]['rps'] / 1.006)
+    best_a10g = max(best_a10g, best_a10g_2)
+
+    try:
+        best_intel = max(results['t4_8']['x86'][m[bench]]['rps'] / 0.17, results['t4_8']['x86'][m[bench]]['rps'] / 0.17)
+        best_amd = max(results['t4_4']['x86'][m[bench]]['rps'] / 0.154, results['t4_4']['x86'][m[bench]]['rps'] / 0.154)
+
+        print ("Intel: ", bench, max(best_t4 / best_intel, best_a10g / best_intel))
+        print ("AMD: ", bench, max(best_t4 / best_amd, best_a10g / best_amd))
+    except Exception as e:
+        print (e)
+        pass
+
+m2 = dict()
+for bench, bench2 in zip(results['t4_4']['gpu'].keys(), results['t4_4']['wasm'].keys()):
+    m2[bench] = bench2
+
+print ("throughput results")
+for bench, res in results['t4_4']['gpu'].items():
+    best_t4 = max(results['t4_4']['gpu'][bench]['rps'], results['t4_8']['gpu'][bench]['rps'] )
+    best_t4_2 = max(results['t4_profile_4']['gpu'][bench]['rps'], results['t4_profile_8']['gpu'][bench]['rps'] )
+    best_t4 = max(best_t4, best_t4_2)
+
+    best_a10g = max(results['a10g_4']['gpu'][bench]['rps'], results['a10g_8']['gpu'][bench]['rps'])
+    best_a10g_2 = max(results['a10g_profile_4']['gpu'][bench]['rps'], results['a10g_profile_8']['gpu'][bench]['rps'])
+    best_a10g = max(best_a10g, best_a10g_2)
+
+    try:
+        best_intel = max(results['t4_8']['x86'][m[bench]]['rps'], results['t4_8']['x86'][m[bench]]['rps'])
+        best_amd = max(results['t4_4']['x86'][m[bench]]['rps'], results['t4_4']['x86'][m[bench]]['rps'])
+        best_amd_wasm = max(results['t4_4']['wasm'][m2[bench]]['rps'], results['t4_4']['wasm'][m2[bench]]['rps'])
+        best_amd_exe = min(results['t4_4']['x86'][m[bench]]['on_dev_exe_time'], results['t4_4']['x86'][m[bench]]['on_dev_exe_time'])
+        best_t4_exe = min(results['t4_4']['gpu'][bench]['on_dev_exe_time'], results['t4_8']['gpu'][bench]['on_dev_exe_time'] )
+
+        print ("EXE ratio T4/AMD: ", bench, best_t4_exe / best_amd_exe)
+        #print ("AMD (x86): ", bench, max(best_t4 / best_amd, best_a10g / best_amd))
+        #print ("AMD (WASM): ", bench, max(best_t4 / best_amd_wasm, best_a10g / best_amd_wasm))
+    except Exception as e:
+        print (e)
+        pass
