@@ -1600,7 +1600,7 @@ def run_nlp_count_bench(lang):
     cd /vv/VectorVisor/benchmarks/nlp-count-vectorizer/
 
     /usr/local/go/bin/go run /vv/VectorVisor/benchmarks/nlp-count-vectorizer/run_nlp.go {addr} 8000 {target_rps} 1 {duration} /vv/VectorVisor/benchmarks/nlp-count-vectorizer/smaller_tweets.txt {input_size}
-    """.format(addr=cpu_bench_instance[0].private_dns_name, input_size=25, target_rps=target_rps_cpu, duration=benchmark_duration)
+    """.format(addr=cpu_bench_instance[0].private_dns_name, input_size=25, target_rps=512, duration=benchmark_duration)
     
     for idx in range(NUM_REPEAT):
         command_id = run_command(run_invoker_wasmtime, "run invoker for cpu", invoker_instance[0].id)
@@ -1617,7 +1617,6 @@ def run_nlp_count_bench(lang):
 
 
     cleanup()
-
     for idx in range(NUM_REPEAT):
         run_command(run_nlp_command_x86, "run_nlp_command_x86", cpu_bench_instance[0].id)
         
