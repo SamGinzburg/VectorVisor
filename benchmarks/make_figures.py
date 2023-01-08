@@ -1,10 +1,11 @@
 import argparse
+from distutils.dep_util import newer_pairwise
 import re
 import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
-from mpl_toolkits.axes_grid1.inset_locator import zoomed_inset_axes
+from mpl_toolkits.axes_grid1.inset_locator import zoomed_inset_axes, inset_axes
 from mpl_toolkits.axes_grid1.inset_locator import mark_inset
 
 plt.rc('axes', axisbelow=True)
@@ -366,11 +367,11 @@ def plot_syscalls():
     ind5 = ind4 + spacing
     ind6 = ind5 + spacing
     ind_ticks = (ind + ind3) / 2
-    
-    plt.rc('xtick', labelsize=24)
-    plt.rc('ytick', labelsize=24)
-    plt.rc('axes', titlesize=24)
-    plt.rc('axes', labelsize=24)
+
+    plt.rc('xtick', labelsize=30)
+    plt.rc('ytick', labelsize=36)
+    plt.rc('axes', titlesize=36)
+    plt.rc('axes', labelsize=36)
 
     t4 = []
     a10g = []
@@ -430,7 +431,7 @@ def plot_syscalls():
     v520 = plt.bar(ind3, v520, width, yerr=v520_std, color=colors[8], hatch='o', capsize=6, label='v520')
 
     plt.grid(zorder=-50, axis='y')
-    plt.legend(prop={'size': 24})
+    plt.legend(prop={'size': 36})
 
     plt.savefig(input_dir+"/syscalls.eps", bbox_inches='tight')
 
@@ -438,8 +439,6 @@ def plot_syscalls():
 
 
 def plot_memory_bandwidth():
-    #plt.figure(figsize=(14, 6))
-
     ind = np.arange(5) * 10
     width = 2
     spacing = 2.25
@@ -451,10 +450,10 @@ def plot_memory_bandwidth():
 
     ind_ticks = (ind + ind3) / 2
     
-    plt.rc('xtick', labelsize=24)
-    plt.rc('ytick', labelsize=24)
-    plt.rc('axes', titlesize=24)
-    plt.rc('axes', labelsize=24)
+    plt.rc('xtick', labelsize=30)
+    plt.rc('ytick', labelsize=36)
+    plt.rc('axes', titlesize=36)
+    plt.rc('axes', labelsize=36)
 
     nvidia_t4_1 = []
     nvidia_t4_4 = []
@@ -539,6 +538,8 @@ def plot_memory_bandwidth():
     #fig, axes = plt.subplots(nrows=1, ncols=3, figsize=(12.75, 5))
     fig.tight_layout()
 
+
+    axes[0].set_yticks([0, 200, 400, 600])
     axes[0].set_xticks(ind_ticks)
     axes[1].set_xticks(ind_ticks)
     #axes[2].set_xticks(ind_ticks)
@@ -560,7 +561,7 @@ def plot_memory_bandwidth():
     #axes[1].yaxis.set_visible(False)
     #plt.subplots_adjust(wspace=0.05)
     #plt.xlabel('Memcpy Bytes x Unroll Count')
-    axes[0].set_ylabel('Memory Bandwidth (GB/s)')
+    axes[0].set_ylabel('Memory B.w. (GB/s)')
     #axes[0].set_xlabel('Memory Benchmarks')
     #axes[1].set_ylabel('Memory Bandwidth (GB/s)')
     #axes[1].set_xlabel('Memory Benchmarks')
@@ -597,9 +598,10 @@ def plot_memory_bandwidth():
     axes[1].grid(zorder=-50, axis='y')
     #axes[2].grid(zorder=-50)
 
-    axes[0].legend((nvidia_t4_1[0], nvidia_t4_4[0], nvidia_t4_8[0], t4_line, t4_line_approx),
-               ('Interleave = 1 Byte', 'Interleave = 4 Bytes', 'Interleave = 8 Bytes','Theoretical Max Bandwidth', 'Prev. Measured Max Bandwidth'),
-               prop={'size': 18})
+    axes[0].legend((nvidia_t4_1[0], nvidia_t4_4[0], nvidia_t4_8[0], t4_line_approx,  t4_line),
+               ('Interleave = 1 Byte', 'Interleave = 4 Bytes', 'Interleave = 8 Bytes', 'Theoretical Max B.w.', 'Prev. Measured Max B.w.'),
+               prop={'size': 28}, bbox_to_anchor=(0, -0.4, 2, 2), loc='upper center',
+               ncol=2, mode="expand", borderaxespad=0.)
 
     """
     axes[1].legend((nvidia_a10g_1[0], nvidia_a10g_4[0], nvidia_a10g_8[0], a10g_line),
@@ -658,14 +660,19 @@ def plot_breakdowns():
     v520_breakdown_vmm = []
 
     def add_continuations(device_str, overhead_lst, exe_list, net_lst, vmm_lst, batch=4096):
-        print (results[device_str]['gpu'].values())
         try:
-            overhead = np.array([x['overhead'] for x in results[device_str]['gpu'].values()]) / 10**9
-            exe = np.array([x['on_dev_exe_time'] - x['overhead'] for x in results[device_str]['gpu'].values()]) / 10**9
+            # select best performing result...
+            new_device_str = [device_str+"4" if x['latency'] > y['latency'] else device_str+"8" for x, y in zip(results[device_str+"4"]['gpu'].values(),
+                                                                                                            results[device_str+"8"]['gpu'].values())]
+            new_results = dict()
+            for device in new_device_str:
+                new_results[device_str] = results[device]
+            overhead = np.array([x['overhead'] for x in new_results[device_str]['gpu'].values()]) / 10**9
+            exe = np.array([x['on_dev_exe_time'] - x['overhead'] for x in new_results[device_str]['gpu'].values()]) / 10**9
             # we use 2x as many requests as we have VMs, so device time really represents the sum of two requests on average
             # latency is similarly doubled
-            network = np.array([x['latency'] - (x['device_time']) for x in results[device_str]['gpu'].values()]) / 10**9
-            vmm = np.array([(x['device_time']/2) - x['on_dev_exe_time'] for x in results[device_str]['gpu'].values()]) / 10**9
+            network = np.array([x['latency'] - (x['device_time']) for x in new_results[device_str]['gpu'].values()]) / 10**9
+            vmm = np.array([(x['device_time']/2) - x['on_dev_exe_time'] for x in new_results[device_str]['gpu'].values()]) / 10**9
             np.clip(vmm, 0, 99999999999, out=vmm)
             overhead_lst.extend(overhead)
             exe_list.extend(exe)
@@ -678,12 +685,24 @@ def plot_breakdowns():
             net_lst.append(0)
             vmm_lst.append(0)
 
+    add_continuations("t4_", t4_cont, t4_exe, t4_net, t4_vmm)
+    add_continuations("a10g_", t4_breakdown_cont, t4_breakdown_exe, t4_breakdown_net, t4_breakdown_vmm)
+    #add_continuations("v520_profile_4", v520_breakdown_cont, v520_breakdown_exe, v520_breakdown_net, v520_breakdown_vmm)
+    #print ("t4_vmm,", t4_vmm)
 
+    # swap pbkdf2 and genpdf
+    t4_vmm[6], t4_vmm[1] = t4_vmm[1], t4_vmm[6]
+    t4_cont[6], t4_cont[1] = t4_cont[1], t4_cont[6]
+    t4_exe[6], t4_exe[1] = t4_exe[1], t4_exe[6]
+    t4_net[6], t4_net[1] = t4_net[1], t4_net[6]
 
-    add_continuations("t4_4", t4_cont, t4_exe, t4_net, t4_vmm)
-    add_continuations("a10g_4", t4_breakdown_cont, t4_breakdown_exe, t4_breakdown_net, t4_breakdown_vmm)
-    add_continuations("v520_profile_4", v520_breakdown_cont, v520_breakdown_exe, v520_breakdown_net, v520_breakdown_vmm)
-    print ("t4_vmm,", t4_vmm)
+    t4_breakdown_vmm[6], t4_breakdown_vmm[1] = t4_breakdown_vmm[1], t4_breakdown_vmm[6]
+    t4_breakdown_cont[6], t4_breakdown_cont[1] = t4_breakdown_cont[1], t4_breakdown_cont[6]
+    t4_breakdown_exe[6], t4_breakdown_exe[1] = t4_breakdown_exe[1], t4_breakdown_exe[6]
+    t4_breakdown_net[6], t4_breakdown_net[1] = t4_breakdown_net[1], t4_breakdown_net[6]
+
+    labels = ['Scrypt', 'Pbkdf2', 'Blur-Jpeg', 'Blur-Bmp', 'PHash', 'PHash-M.',  'Genpdf', 'Histogram', 'LZ4', 'Strings', 'Strings-Go', 'Strings-AScript']
+    labels[6], labels[1] = labels[1], labels[6]
 
     t4_vmm = np.array(t4_vmm)
     t4_net = np.array(t4_net)
@@ -694,32 +713,11 @@ def plot_breakdowns():
     t4_cont_frac = (t4_cont) / (t4_exe+t4_cont)
 
     print ("t4 vmm+net frac:")
-    for label, idx in zip(['Scrypt', 'Pbkdf2', 'Blur-Jpeg', 'Blur-Bmp', 'PHash', 'PHash-M.',  'Genpdf', 'Histogram', 'LZ4', 'Strings', 'Strings-Go', 'Strings-AScript'], range(12)):
+    for label, idx in zip(labels, range(12)):
         print (label, t4_res[idx])
     print ("t4 cont frac:")
-    for label, idx in zip(['Scrypt', 'Pbkdf2', 'Blur-Jpeg', 'Blur-Bmp', 'PHash', 'PHash-M.',  'Genpdf', 'Histogram', 'LZ4', 'Strings', 'Strings-Go', 'Strings-AScript'], range(12)):
+    for label, idx in zip(labels, range(12)):
         print (label, t4_cont_frac[idx], t4_cont[idx])
-
-
-    """
-    total = np.array(t4_cont) + np.array(t4_exe) + np.array(t4_vmm)+ np.array(t4_net)
-    t4_cont /= total
-    t4_exe /= total
-    t4_vmm /= total
-    t4_net /= total
-
-    total2 = np.array(t4_breakdown_cont) + np.array(t4_breakdown_exe) + np.array(t4_breakdown_vmm) + np.array(t4_breakdown_net)
-    t4_breakdown_cont /= total2
-    t4_breakdown_exe /= total2
-    t4_breakdown_vmm /= total2
-    t4_breakdown_net /= total2
-
-    total3 = np.array(v520_breakdown_cont) + np.array(v520_breakdown_exe) + np.array(v520_breakdown_vmm) + np.array(v520_breakdown_net)
-    v520_breakdown_cont /= total3
-    v520_breakdown_exe /= total3
-    v520_breakdown_vmm /= total3
-    v520_breakdown_net /= total3
-    """
 
 
     print (t4_breakdown_exe)
@@ -727,18 +725,18 @@ def plot_breakdowns():
     N = len(t4_cont)
     print (N)
 
-    fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(24, 5))
+    fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(16, 5))
     fig.tight_layout()
 
-    axes[0].set_xticks(ind_ticks, ['Scrypt', 'Pbkdf2', 'Blur-Jpeg', 'Blur-Bmp', 'PHash', 'PHash-M.',  'Genpdf', 'Histogram', 'LZ4', 'Strings', 'Strings-Go', 'Strings-AScript'], rotation=50)
-    axes[1].set_xticks(ind_ticks, ['Scrypt', 'Pbkdf2', 'Blur-Jpeg', 'Blur-Bmp', 'PHash', 'PHash-M.',  'Genpdf', 'Histogram', 'LZ4', 'Strings', 'Strings-Go', 'Strings-AScript'], rotation=50)
+    axes[0].set_xticks(ind_ticks, labels, rotation=75)
+    axes[1].set_xticks(ind_ticks, labels, rotation=75)
 
     #plt.xticks(ind2, ["{}".format(int((2**x) / 1024)) for x in range(12,19)])
     #axes[0].set_ylim(0, 650)
 
     axes[0].set_ylabel('E2E Latency (s)')
-    axes[0].set_ylim(0, 60)
-    axes[1].set_ylim(0, 60)
+    axes[0].set_ylim(0, 45)
+    axes[1].set_ylim(0, 45)
     axes[1].get_yaxis().set_ticklabels([])
 
     #plt.xlabel('Copy Size (KiB)')
@@ -763,10 +761,10 @@ def plot_breakdowns():
     p4 = axes[0].bar(ind, t4_net, width, color='green', hatch='o',
                 bottom=np.asarray(t4_exe)+np.asarray(t4_cont)+np.asarray(t4_vmm))
 
-    axins = zoomed_inset_axes(axes[0], 1.5, loc=1)
-    mark_inset(axes[0], axins, loc1=2, loc2=4, fc="none", ec="0.5")
-    axins.set_xlim([105,185])
-    axins.set_ylim([0,5])
+    axins = inset_axes(axes[0], width=3, height=3, loc=1)
+    mark_inset(axes[0], axins, loc1=2, loc2=4, fc="none", ec="black")
+    axins.set_xlim([87.5,185])
+    axins.set_ylim([0,3.075])
     axins.bar(ind, t4_breakdown_cont, width, color='blue', hatch='.')
     axins.bar(ind, t4_breakdown_exe, width, color='lightgray', hatch='/\\',
                 bottom=np.asarray(t4_breakdown_cont))
@@ -774,8 +772,8 @@ def plot_breakdowns():
                 bottom=np.asarray(t4_breakdown_exe)+np.asarray(t4_breakdown_cont))
     axins.bar(ind, t4_breakdown_net, width, color='green', hatch='o',
                 bottom=np.asarray(t4_breakdown_exe)+np.asarray(t4_breakdown_cont)+np.asarray(t4_breakdown_vmm))
-    axins.set_xticks(ind_ticks[7:], ['Histogram', 'LZ4', 'Strings', 'Strings-Go', 'Strings-AScript'], rotation=50, size=24)
-    axins.set_yticks([0, 5], [0, 5], size=24)
+    axins.set_xticks([])
+    axins.set_yticks(np.arange(0, 3.1, 0.5), np.arange(0, 3.1, 0.5), size=24)
 
     # a10g
 
@@ -792,11 +790,11 @@ def plot_breakdowns():
     p4 = axes[1].bar(ind, t4_breakdown_net, width, color='green', hatch='o',
                 bottom=np.asarray(t4_breakdown_exe)+np.asarray(t4_breakdown_cont)+np.asarray(t4_breakdown_vmm))
     
-    # plot subplot for histogram
-    axins = zoomed_inset_axes(axes[1], 1.5, loc=1)
-    mark_inset(axes[1], axins, loc1=2, loc2=4, fc="none", ec="0.5")
-    axins.set_xlim([105,185])
-    axins.set_ylim([0,5])
+    # plot subplot
+    axins = inset_axes(axes[1], width=3, height=3, loc=1)
+    mark_inset(axes[1], axins, loc1=2, loc2=4, fc="none", ec="black")
+    axins.set_xlim([87.5,185])
+    axins.set_ylim([0,3.075])
     axins.bar(ind, t4_breakdown_cont, width, color='blue', hatch='.')
     axins.bar(ind, t4_breakdown_exe, width, color='lightgray', hatch='/\\',
                 bottom=np.asarray(t4_breakdown_cont))
@@ -804,16 +802,18 @@ def plot_breakdowns():
                 bottom=np.asarray(t4_breakdown_exe)+np.asarray(t4_breakdown_cont))
     axins.bar(ind, t4_breakdown_net, width, color='green', hatch='o',
                 bottom=np.asarray(t4_breakdown_exe)+np.asarray(t4_breakdown_cont)+np.asarray(t4_breakdown_vmm))
-    axins.set_xticks(ind_ticks[7:], ['Histogram', 'LZ4', 'Strings', 'Strings-Go', 'Strings-AScript'], rotation=50, size=20)
-    axins.set_yticks([0, 5], [0, 5], size=20)
+    axins.set_xticks([])
+    axins.set_yticks(np.arange(0, 3.1, 0.5), np.arange(0, 3.1, 0.5), size=24)
 
     axes[0].grid(zorder=-50, axis='y')
     axes[1].grid(zorder=-50, axis='y')
     plt.legend((p4[0], p3[0], p2[0], p1[0]),
     ('Network', 'VMM Overhead', 'On Device Execution Time', 'Continuations Overhead'),
-    prop={'size': 24}, bbox_to_anchor=(-2.25,1, 3,3), loc="upper center", mode='expand', ncol=4)
+    prop={'size': 30}, bbox_to_anchor=(-3.3, -2.3, 4, 4), loc='upper center',
+                      ncol=2, mode="expand", borderaxespad=0.)
 
     plt.savefig(input_dir+"/breakdown.eps", bbox_inches='tight')
+    plt.savefig(input_dir+"/breakdown.png", bbox_inches='tight')
 
     plt.clf()
 
@@ -855,7 +855,6 @@ def plot_compile_times():
     plt.grid(zorder=-50)
 
     plt.savefig(input_dir+"/compile_times.eps", bbox_inches='tight')
-    plt.savefig(input_dir+"/compile_times.png", bbox_inches='tight')
 
     plt.clf()
 
