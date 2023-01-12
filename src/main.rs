@@ -975,7 +975,11 @@ fn main() {
             });
     } else {
         // If we are running the wasmtime runtime
-        let num_threads = num_cpus::get();
+        let num_threads = if !profile {
+            num_cpus::get()
+        } else {
+            1
+        };
         let wg = WaitGroup::new();
         let thread_pool = rayon::ThreadPoolBuilder::new()
             .num_threads(num_threads.try_into().unwrap())
