@@ -668,6 +668,7 @@ def plot_breakdowns():
             for device in new_device_str:
                 new_results[device_str] = results[device]
             overhead = np.array([x['overhead'] for x in new_results[device_str]['gpu'].values()]) / 10**9
+            print ("overhead", overhead)
             exe = np.array([x['on_dev_exe_time'] - x['overhead'] for x in new_results[device_str]['gpu'].values()]) / 10**9
             # we use 2x as many requests as we have VMs, so device time really represents the sum of two requests on average
             # latency is similarly doubled
@@ -703,11 +704,12 @@ def plot_breakdowns():
 
     labels = ['Scrypt', 'Pbkdf2', 'Blur-Jpeg', 'Blur-Bmp', 'PHash', 'PHash-M.',  'Genpdf', 'Histogram', 'LZ4', 'Strings', 'Strings-Go', 'Strings-AScript']
     labels[6], labels[1] = labels[1], labels[6]
-
+    
     t4_vmm = np.array(t4_vmm)
     t4_net = np.array(t4_net)
     t4_cont = np.array(t4_cont)
     t4_exe = np.array(t4_exe)
+    print ("e2e: ", t4_exe+t4_net+t4_cont+t4_exe)
 
     t4_res = (t4_vmm + t4_net) / (t4_cont+t4_exe+t4_net+t4_vmm)
     t4_cont_frac = (t4_cont) / (t4_exe+t4_cont)
@@ -718,7 +720,7 @@ def plot_breakdowns():
     print ("t4 cont frac:")
     for label, idx in zip(labels, range(12)):
         print (label, t4_cont_frac[idx], t4_cont[idx])
-
+    print (t4_cont)
 
     print (t4_breakdown_exe)
 
@@ -1170,11 +1172,31 @@ for bench, res in results['t4_4']['gpu'].items():
         best_amd = max(results['t4_4']['x86'][m[bench]]['rps'], results['t4_4']['x86'][m[bench]]['rps'])
         best_amd_wasm = max(results['t4_4']['wasm'][m2[bench]]['rps'], results['t4_4']['wasm'][m2[bench]]['rps'])
         best_amd_exe = min(results['t4_4']['x86'][m[bench]]['on_dev_exe_time'], results['t4_4']['x86'][m[bench]]['on_dev_exe_time'])
+        best_intel_exe = min(results['t4_8']['x86'][m[bench]]['on_dev_exe_time'], results['t4_8']['x86'][m[bench]]['on_dev_exe_time'])
         best_t4_exe = min(results['t4_4']['gpu'][bench]['on_dev_exe_time'], results['t4_8']['gpu'][bench]['on_dev_exe_time'] )
-
+        best_t4_exe_prof = min(results['t4_profile_4']['gpu'][bench]['on_dev_exe_time'], results['t4_profile_8']['gpu'][bench]['on_dev_exe_time'] )
+        best_t4_exe = min(best_t4_exe, best_t4_exe_prof)
         print ("EXE ratio T4/AMD: ", bench, best_t4_exe / best_amd_exe)
+        #print ("EXE ratio T4/Intel: ", bench, best_t4_exe / best_intel_exe)
         #print ("AMD (x86): ", bench, max(best_t4 / best_amd, best_a10g / best_amd))
         #print ("AMD (WASM): ", bench, max(best_t4 / best_amd_wasm, best_a10g / best_amd_wasm))
     except Exception as e:
         print (e)
         pass
+
+# Strings Go/AssemblyScript
+for bench, res in results['t4_4']['gpu'].items():
+    best_t4_4 = np.average(results['t4_4']['gpu'][bench]['rps'])
+    best_t4_8 = np.average(results['t4_8']['gpu'][bench]['rps'])
+    best_t4_4_prof = np.average(results['t4_profile_4']['gpu'][bench]['rps'] )
+    best_t4_8_prof = np.average(results['t4_profile_8']['gpu'][bench]['rps'])
+    best_amd_wasm = max(results['t4_4']['wasm'][m2[bench]]['rps'], results['t4_8']['wasm'][m2[bench]]['rps'])
+    avg = (best_t4_4 + best_t4_8 + best_t4_4_prof + best_t4_8_prof)/4
+    print ("t4", bench, avg)
+
+    best_t4_4 = np.average(results['a10g_4']['gpu'][bench]['rps'])
+    best_t4_8 = np.average(results['a10g_8']['gpu'][bench]['rps'])
+    best_t4_4_prof = np.average(results['a10g_profile_4']['gpu'][bench]['rps'] )
+    best_t4_8_prof = np.average(results['a10g_profile_8']['gpu'][bench]['rps'])
+    avg = np.average((best_t4_4 + best_t4_8 + best_t4_4_prof + best_t4_8_prof)/4)
+    print ("a10g", bench, avg)
