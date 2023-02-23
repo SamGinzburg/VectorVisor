@@ -618,7 +618,7 @@ def plot_memory_bandwidth():
 
     plt.clf()
 
-def plot_breakdowns():
+def plot_breakdowns(results):
 #    plt.figure(figsize=(16, 6))
     ind = np.arange(12) * 16
     # cluster the groups of three together
@@ -662,18 +662,56 @@ def plot_breakdowns():
     def add_continuations(device_str, overhead_lst, exe_list, net_lst, vmm_lst, batch=4096):
         try:
             # select best performing result...
-            new_device_str = [device_str+"4" if x['latency'] > y['latency'] else device_str+"8" for x, y in zip(results[device_str+"4"]['gpu'].values(),
-                                                                                                            results[device_str+"8"]['gpu'].values())]
+            new_device_str = []
+            for bench in ['gpu_bench_scrypt',
+                          'gpu_bench_pbkdf2',
+                          'gpu_bench_imageblur',
+                          'gpu_bench_imageblur_bmp',
+                          'gpu_bench_imagehash',
+                          'gpu_bench_imagehash_modified',
+                          'gpu_bench_genpdf',
+                          'gpu_bench_average',
+                          'gpu_bench_lz4',
+                          'gpu_bench_nlp-count-vectorizer',
+                          'gpu_bench_nlp-go',
+                          'gpu_bench_nlp-assemblyscript']:
+                #print (results[device_str+"4"]['gpu'], bench)
+                x = results[device_str+"4"]['gpu'][bench]
+                y = results[device_str+"8"]['gpu'][bench]
+                if x['rps'] > y['rps']:
+                    new_device_str.append(device_str+"4")
+                else:
+                    new_device_str.append(device_str+"8")
+
+            #new_device_str = [device_str+"4" if x['rps'] >= y['rps'] else device_str+"8" for x, y in zip(results[device_str+"4"]['gpu'].values(),
+            #                                                                                                    results[device_str+"8"]['gpu'].values())]
+            print (new_device_str)
             new_results = dict()
-            for device in new_device_str:
+            benches = ['gpu_bench_scrypt',
+                          'gpu_bench_pbkdf2',
+                          'gpu_bench_imageblur',
+                          'gpu_bench_imageblur_bmp',
+                          'gpu_bench_imagehash',
+                          'gpu_bench_imagehash_modified',
+                          'gpu_bench_genpdf',
+                          'gpu_bench_average',
+                          'gpu_bench_lz4',
+                          'gpu_bench_nlp-count-vectorizer',
+                          'gpu_bench_nlp-go',
+                          'gpu_bench_nlp-assemblyscript']
+            best_performing = []
+            for device, bench in zip(new_device_str, benches):
                 new_results[device_str] = results[device]
-            overhead = np.array([x['overhead'] for x in new_results[device_str]['gpu'].values()]) / 10**9
+                best_performing.append(results[device]['gpu'][bench])
+            print (best_performing)
+
+            overhead = np.array([x['overhead'] for x in best_performing]) / 10**9
             print ("overhead", overhead)
-            exe = np.array([x['on_dev_exe_time'] - x['overhead'] for x in new_results[device_str]['gpu'].values()]) / 10**9
+            exe = np.array([x['on_dev_exe_time'] - x['overhead'] for x in best_performing]) / 10**9
             # we use 2x as many requests as we have VMs, so device time really represents the sum of two requests on average
             # latency is similarly doubled
-            network = np.array([x['latency'] - (x['device_time']) for x in new_results[device_str]['gpu'].values()]) / 10**9
-            vmm = np.array([(x['device_time']/2) - x['on_dev_exe_time'] for x in new_results[device_str]['gpu'].values()]) / 10**9
+            network = np.array([x['latency'] - (x['device_time']) for x in best_performing]) / 10**9
+            vmm = np.array([((x['device_time']) - (x['on_dev_exe_time']*2)) for x in best_performing]) / 10**9
             np.clip(vmm, 0, 99999999999, out=vmm)
             overhead_lst.extend(overhead)
             exe_list.extend(exe)
@@ -702,7 +740,7 @@ def plot_breakdowns():
     t4_breakdown_exe[6], t4_breakdown_exe[1] = t4_breakdown_exe[1], t4_breakdown_exe[6]
     t4_breakdown_net[6], t4_breakdown_net[1] = t4_breakdown_net[1], t4_breakdown_net[6]
 
-    labels = ['Scrypt', 'Pbkdf2', 'Blur-Jpeg', 'Blur-Bmp', 'PHash', 'PHash-M.',  'Genpdf', 'Histogram', 'LZ4', 'Strings', 'Strings-Go', 'Strings-AScript']
+    labels = ['Scrypt', 'Pbkdf2', 'Blur-Jpeg', 'Blur-Bmp', 'PHash', 'PHash-M.', 'Genpdf', 'Histogram', 'LZ4', 'Strings', 'Strings-Go', 'Strings-AScript']
     labels[6], labels[1] = labels[1], labels[6]
     
     t4_vmm = np.array(t4_vmm)
@@ -766,7 +804,7 @@ def plot_breakdowns():
     axins = inset_axes(axes[0], width=3, height=3, loc=1)
     mark_inset(axes[0], axins, loc1=2, loc2=4, fc="none", ec="black")
     axins.set_xlim([87.5,185])
-    axins.set_ylim([0,3.075])
+    axins.set_ylim([0,4.075])
     axins.bar(ind, t4_breakdown_cont, width, color='blue', hatch='.')
     axins.bar(ind, t4_breakdown_exe, width, color='lightgray', hatch='/\\',
                 bottom=np.asarray(t4_breakdown_cont))
@@ -775,7 +813,7 @@ def plot_breakdowns():
     axins.bar(ind, t4_breakdown_net, width, color='green', hatch='o',
                 bottom=np.asarray(t4_breakdown_exe)+np.asarray(t4_breakdown_cont)+np.asarray(t4_breakdown_vmm))
     axins.set_xticks([])
-    axins.set_yticks(np.arange(0, 3.1, 0.5), np.arange(0, 3.1, 0.5), size=24)
+    axins.set_yticks(np.arange(0, 4.1, 0.5), np.arange(0, 4.1, 0.5), size=24)
 
     # a10g
 
@@ -796,7 +834,7 @@ def plot_breakdowns():
     axins = inset_axes(axes[1], width=3, height=3, loc=1)
     mark_inset(axes[1], axins, loc1=2, loc2=4, fc="none", ec="black")
     axins.set_xlim([87.5,185])
-    axins.set_ylim([0,3.075])
+    axins.set_ylim([0,4.075])
     axins.bar(ind, t4_breakdown_cont, width, color='blue', hatch='.')
     axins.bar(ind, t4_breakdown_exe, width, color='lightgray', hatch='/\\',
                 bottom=np.asarray(t4_breakdown_cont))
@@ -805,7 +843,7 @@ def plot_breakdowns():
     axins.bar(ind, t4_breakdown_net, width, color='green', hatch='o',
                 bottom=np.asarray(t4_breakdown_exe)+np.asarray(t4_breakdown_cont)+np.asarray(t4_breakdown_vmm))
     axins.set_xticks([])
-    axins.set_yticks(np.arange(0, 3.1, 0.5), np.arange(0, 3.1, 0.5), size=24)
+    axins.set_yticks(np.arange(0, 4.1, 0.5), np.arange(0, 4.1, 0.5), size=24)
 
     axes[0].grid(zorder=-50, axis='y')
     axes[1].grid(zorder=-50, axis='y')
@@ -1126,7 +1164,7 @@ plot_memory_bandwidth()
 plot_syscalls()
 
 # plot breakdowns
-plot_breakdowns()
+plot_breakdowns(results)
 
 vals = list(map(lambda x: x, results['t4_4']['gpu'].keys()))
 
