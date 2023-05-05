@@ -79,7 +79,7 @@ userdata_ubuntu = """#cloud-config
      - sudo curl https://sh.rustup.rs -sSf | sh -s -- -y
      - . $HOME/.cargo/env
      - sudo ~/.cargo/bin/rustup target add wasm32-wasi
-     - git clone https://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:x-oauth-basic@github.com/SamGinzburg/VectorVisor.git
+     - git clone https://github.com/SamGinzburg/VectorVisor
      - wget https://github.com/WebAssembly/binaryen/releases/download/version_109/binaryen-version_109-x86_64-linux.tar.gz
      - tar -xzvf binaryen-version_109-x86_64-linux.tar.gz
      - cargo install --git https://github.com/SamGinzburg/wasm-snip.git
@@ -88,7 +88,7 @@ userdata_ubuntu = """#cloud-config
      - cd benchmarks/
      - mkdir -p ~/.nv/ComputeCache/
      - export PATH=/vv/binaryen-version_109/bin:$PATH
-     - sudo ~/.cargo/bin/cargo install --git https://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:x-oauth-basic@github.com/SamGinzburg/vv-pgo-instrument.git
+     - sudo ~/.cargo/bin/cargo install --git https://github.com/SamGinzburg/vv-pgo-instrument
 """.format(opt=OPT_LEVEL, snip_args=WASM_SNIP_ARGS, snip_custom=WASM_SNIP_CUSTOM)
 
 def run_command(command, command_name, instance_id):
