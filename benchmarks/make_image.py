@@ -7,12 +7,17 @@ import argparse
 
 parser = argparse.ArgumentParser(description='run benchmarks')
 parser.add_argument("--gpu", required=True)
+parser.add_argument("--awsarn", required=True)
 
 args = vars(parser.parse_args())
 
 gpu = args['gpu']
 
+awsarn = args['awsarn']
+
 print ("gpu: ", gpu)
+print ("running with AWS ARN: ", awsarn)
+
 
 if gpu == "t4":
     run_a10g = False
@@ -251,8 +256,7 @@ gpu_instance = ec2.create_instances(ImageId=gpu_ami,
                                 MaxCount=1,
                                 UserData=userdata_ubuntu,
                                 IamInstanceProfile={
-                                    'Arn': 'arn:aws:iam::573062721377:instance-profile/ec2-ssm',
-                                    #'Name': "ec2-ssm"
+                                    'Arn': awsarn,
                                 })
 
 

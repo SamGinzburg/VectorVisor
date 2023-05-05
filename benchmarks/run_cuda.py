@@ -18,6 +18,7 @@ parser.add_argument("--run-profile", required=False)
 parser.add_argument("--ami", required=True)
 parser.add_argument("--cpuami", required=True)
 parser.add_argument("--double", required=True)
+parser.add_argument("--awsarn", required=True)
 
 args = vars(parser.parse_args())
 
@@ -33,6 +34,9 @@ skip_membench = args['skip_membench']
 skip_cpu = args['skip_cpu']
 run_profile = args['run_profile']
 double = args['double']
+awsarn = args['awsarn']
+
+print ("running with AWS ARN: ", awsarn)
 
 if skip_cpu == None:
     skip_cpu = False
@@ -1745,7 +1749,7 @@ gpu_instance = ec2.create_instances(ImageId=gpu_ami,
                                 UserData=userdata_ubuntu,
                                 Placement=Placement,
                                 IamInstanceProfile={
-                                    'Arn': 'arn:aws:iam::573062721377:instance-profile/ec2-ssm',
+                                    'Arn': awsarn,
                                     #'Name': "ec2-ssm"
                                 })
 
@@ -1778,7 +1782,7 @@ invoker_instance = ec2.create_instances(ImageId=cpu_ami,
                                 UserData=userdata_ubuntu,
                                 Placement=Placement,
                                 IamInstanceProfile={
-                                    'Arn': 'arn:aws:iam::573062721377:instance-profile/ec2-ssm',
+                                    'Arn': awsarn,
                                     #'Name': "ec2-ssm"
                                 })
 

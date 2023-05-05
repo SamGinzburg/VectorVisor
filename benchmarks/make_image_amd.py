@@ -5,14 +5,18 @@ from datetime import date, datetime
 import re
 import argparse
 
-#parser = argparse.ArgumentParser(description='run benchmarks')
+parser = argparse.ArgumentParser(description='run benchmarks')
 #parser.add_argument("--gpu", required=True)
 
 #args = vars(parser.parse_args())
+parser.add_argument("--awsarn", required=True)
+
 
 gpu = "amd" #args['gpu']
+awsarn = args['awsarn']
 
 print ("gpu: ", gpu)
+print ("running with AWS ARN: ", awsarn)
 
 run_a10g = False
 
@@ -225,7 +229,7 @@ gpu_instance = ec2.create_instances(ImageId=gpu_ami,
                                 UserData=userdata_aws_linux,
                                 BlockDeviceMappings=[{"DeviceName": "/dev/xvda", "Ebs" : { "VolumeSize" : 100 }}],
                                 IamInstanceProfile={
-                                    'Arn': 'arn:aws:iam::573062721377:instance-profile/ec2-ssm',
+                                    'Arn': awsarn,
                                     #'Name': "ec2-ssm"
                                 })
 
