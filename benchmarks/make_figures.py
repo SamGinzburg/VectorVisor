@@ -217,74 +217,6 @@ def parse_dir(dir_name):
 
     return ret
 
-
-def plot_bars(gpu_latency, cpu_wasm_latency, cpu_x86_latency, figname):
-    plt.figure(figsize=(7, 3))
-    perf_gpu = np.asarray(gpu_latency)
-    perf_cpu_wasm = np.asarray(cpu_wasm_latency)
-    perf_cpu_x86 = np.asarray(cpu_x86_latency)
-
-    perf_gpu_wasm = perf_gpu / perf_cpu_wasm
-    perf_gpu_x86 = perf_gpu / perf_cpu_x86
-
-    N = len(gpu_latency)
-    ind1 = np.arange(N) * 2
-    ind2 = np.arange(N) * 2 + 0.5
-
-    x_axis = np.arange(N) * 4 + 0.5
-    x_axis.sort(kind='mergesort')
-
-    width = 0.35      # the width of the bars: can also be len(x) sequence
-
-    p1 = plt.bar(ind1, perf_gpu_wasm, width)
-    p2 = plt.bar(ind2, perf_gpu_x86, width)
-    plt.yscale(value='log')
-
-    plt.ylabel('Log Norm Throughput')
-    plt.title('GPU (g4dn.xlarge) vs. CPU Application Throughput (c5.xlarge)')
-    #plt.xticks(x_axis/2, ('Scrypt', 'Pbkdf2', 'Blur-Jpeg', 'Blur-Bmp', 'PHash', 'PHash-Modified', 'Histogram', 'LZ4', 'Strings', 'Genpdf'))
-    plt.xticks(x_axis/2, ('Scrypt', 'Pbkdf2', 'Blur-Jpeg', 'Blur-Bmp', 'PHash', 'PHash-Modified', 'Histogram', 'LZ4', 'Strings'))
-
-    ax = plt.gca()
-    ax.set_yticks([1, 1.5, 2, 3, 5, 10, 20, 25, 50])
-    ax.get_yaxis().set_major_formatter(matplotlib.ticker.FuncFormatter(lambda x, p: "{num}x".format(num=x)))
-
-    # Perf/$ improvement
-
-    if gpu_type == "a10g":
-        gpu_price = 1.006
-    else:
-        gpu_price = 0.526
-
-    if cpu_type == "intel":
-        cpu_price = 0.17
-    else:
-        cpu_price = 0.154
-
-    for idx in range(len(perf_gpu_wasm)):
-      label_x = idx*2
-      label_y = perf_gpu_wasm[idx]
-      ax.annotate('{val:0.2f}'.format(val=(perf_gpu_wasm[idx]) / (gpu_price / cpu_price)), xy=(label_x, label_y), xytext=(label_x, label_y+3),ha='center', weight='bold')
-
-    for idx in range(len(perf_gpu_x86)):
-        label_x = idx*2 + 0.5
-        label_y = perf_gpu_x86[idx]
-        ax.annotate('{val:0.2f}'.format(val=(perf_gpu_x86[idx]) / (gpu_price / cpu_price)), xy=(label_x, label_y), xytext=(label_x, label_y+3),ha='center', weight='bold')
-
-    # breakeven point for performance per dollar
-    # ((x)/y) / (0.526 / 0.17) > 1
-    # T4 -> 3.09412
-    # A10G -> 6.53
-    if gpu_type == "a10g":
-        l1 = plt.axhline(y=6.53, color='r', linestyle='-')
-    else:
-        l1 = plt.axhline(y=3.09, color='r', linestyle='-')
-
-    ax.legend([l1, p1, p2], ['Throughput/$ Breakeven Threshold', '{sys} vs. WebAssembly'.format(sys=sysname), '{sys} vs. x86-64'.format(sys=sysname)])
-    plt.grid()
-    plt.savefig(input_dir+"/{name}.png".format(name=figname))
-    plt.clf()
-
 def latency_breakdown(device_exe_time, buffer_time, vmm_overhead, queue_submit, overhead, net_latency, name, scale=30):
     N = len(device_exe_time)
     plt.figure(figsize=(7, 4))
@@ -1125,6 +1057,143 @@ def dump_table(results, per_dollar=False):
     print ("a10g cuda 2x", np.array(vals))
 
 
+def plot_bars(results, per_dollar=False):
+    plt.rc('xtick', labelsize=10)
+    plt.rc('ytick', labelsize=10)
+    plt.rc('axes', titlesize=10)
+    plt.rc('axes', labelsize=10)
+    plt.xticks(rotation=50)
+    plt.legend()
+    fig, axes = plt.subplots(2, 6, figsize=(9, 3))
+
+    # mapping of index to bench
+    mapping = dict()
+    mapping["Scrypt"] = 0
+    mapping["Pbkdf2"] = 1
+    mapping["Blur-Jpeg"] = 2
+    mapping["Blur-Bmp"] = 3
+    mapping["PHash"] = 4
+    mapping["PHash-Mod"] = 5
+    mapping["Bill-PDF"] = 6
+    mapping["Histogram"] = 7
+    mapping["LZ4"] = 8
+    mapping["Strings-Rust"] = 9
+    mapping["Strings-Go"] = 10
+    mapping["Strings-AScript"] = 11
+
+    # plot scrypt
+    def get_best(bench, device_type, config, per_dollar=False):
+        best_rps = 0
+        try:
+            vals = list(map(lambda x: x['rps'], results['{device}_4'.format(device=device_type)][config].values()))[mapping[bench]]
+            if per_dollar:
+                if config == "gpu" and device_type == "t4":
+                    vals = np.array(vals) / 0.526
+                elif config == "gpu" and device_type == "a10g":
+                    vals = np.array(vals) / 1.006
+                elif config == "gpu" and device_type == "v520":
+                    vals = np.array(vals) / 0.3785
+                elif config == "x86" or config == "wasm":
+                    vals = np.array(vals) / 0.154
+            best_rps = max(best_rps, vals)
+        except:
+            pass
+        try:
+            vals = list(map(lambda x: x['rps'], results['{device}_8'.format(device=device_type)][config].values()))[mapping[bench]]
+            if per_dollar:
+                if config == "gpu" and device_type == "t4":
+                    vals = np.array(vals) / 0.526
+                elif config == "gpu" and device_type == "a10g":
+                    vals = np.array(vals) / 1.006
+                elif config == "gpu" and device_type == "v520":
+                    vals = np.array(vals) / 0.3785
+                elif config == "x86" or config == "wasm":
+                    vals = np.array(vals) / 0.17
+            best_rps = max(best_rps, vals)
+        except:
+            pass
+        try:
+            vals = list(map(lambda x: x['rps'], results['{device}_profile_4'.format(device=device_type)][config].values()))[mapping[bench]]
+            if per_dollar:
+                if config == "gpu" and device_type == "t4":
+                    vals = np.array(vals) / 0.526
+                elif config == "gpu" and device_type == "a10g":
+                    vals = np.array(vals) / 1.006
+                elif config == "gpu" and device_type == "v520":
+                    vals = np.array(vals) / 0.3785
+            best_rps = max(best_rps, vals)
+        except:
+            pass
+        try:
+            vals = list(map(lambda x: x['rps'], results['{device}_profile_8'.format(device=device_type)][config].values()))[mapping[bench]]
+            if per_dollar:
+                if config == "gpu" and device_type == "t4":
+                    vals = np.array(vals) / 0.526
+                elif config == "gpu" and device_type == "a10g":
+                    vals = np.array(vals) / 1.006
+                elif config == "gpu" and device_type == "v520":
+                    vals = np.array(vals) / 0.3785
+            best_rps = max(best_rps, vals)
+        except:
+            pass
+        return best_rps
+
+    row = 0
+    col = 0
+    print ("per-dollar:", per_dollar)
+    for bench in ["Scrypt", "Pbkdf2", "Blur-Jpeg", "Blur-Bmp", "PHash", "PHash-Mod", "Bill-PDF",
+                  "Histogram", "LZ4", "Strings-Rust", "Strings-Go", "Strings-AScript"]:
+        t4_best = get_best(bench, "t4", "gpu", per_dollar=per_dollar)
+        a10g_best = get_best(bench, "a10g", "gpu", per_dollar=per_dollar)
+        amd_best = get_best(bench,  "v520", "gpu", per_dollar=per_dollar)
+        x86_best = get_best(bench, "t4", "x86", per_dollar=per_dollar)
+        wasm_best = get_best(bench, "t4", "wasm", per_dollar=per_dollar)
+
+        if x86_best > 0: 
+            best_vals = np.array([t4_best, a10g_best, amd_best, x86_best, wasm_best]) / x86_best
+        else:
+            # Strings-Go/Strings-AScript
+            # normalize to Strings-Rust x86 instead
+            x86_best = get_best("Strings-Rust", "t4", "x86", per_dollar=per_dollar)
+            print ("rust-strings", x86_best)
+            best_vals = np.array([t4_best, a10g_best, amd_best, 0, wasm_best]) / x86_best
+ 
+        print (bench, best_vals)
+        if per_dollar:
+            axes[row, col].set_ylim(0, 2)
+            axes[row, col].set_yticks([0, 1, 2])
+        else:
+            axes[row, col].set_ylim(0, 12)
+            axes[row, col].set_yticks([1, 5, 10])
+        #axes[row, col].set_xticks(["T4", "A10G", "v520", "x86-64", "WASM"])
+        labels = ["T4", "A10G", "v520", "x86-64", "WASM"]
+        colors = ['blue', 'lightgrey', 'black', 'green', 'orange']
+        hatches = ['.', '/\\', 'o.', 'o', 'x']
+        axes[row, col].bar(labels, best_vals, label=labels, color=colors, hatch=hatches)
+        axes[row, col].set_xticklabels(labels, rotation=50)
+        axes[row, col].set_title(bench)
+        axes[row, col].set_xticks([])
+        handles, labels = axes[row, col].get_legend_handles_labels()
+        #axes[row, col].set_yscale('log')
+        col += 1
+        if col >= 6:
+            col = 0
+            row += 1
+
+    #axes[0, 0].set_ylabel("Normalized Throughput")
+    #axes[1, 0].set_ylabel("Normalized Throughput")
+    fig.supylabel("Normalized Throughput")
+
+    #fig.legend(handles, labels, loc='upper center', ncol=5)
+    fig.legend(handles, labels, loc='upper center', ncol=5, bbox_to_anchor=(0.5, 1.1, 0, 0))
+
+    fig.tight_layout() 
+    if per_dollar:
+        plt.savefig(input_dir+"/barplots_per_dollar.eps", bbox_inches='tight')
+    else:
+        plt.savefig(input_dir+"/barplots.eps", bbox_inches='tight')
+    plt.clf()
+
 results = dict()
 results['t4_cuda'] = parse_dir(input_dir+"t4_cuda")
 results['t4_cuda_2x'] = parse_dir(input_dir+"t4_cuda_2x")
@@ -1165,6 +1234,9 @@ plot_syscalls()
 
 # plot breakdowns
 plot_breakdowns(results)
+
+plot_bars(results, per_dollar=False)
+plot_bars(results, per_dollar=True)
 
 vals = list(map(lambda x: x, results['t4_4']['gpu'].keys()))
 
