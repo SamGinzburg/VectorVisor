@@ -77,11 +77,12 @@ userdata_ubuntu = """#cloud-config
      - sudo apt install -y gcc
      - sudo apt install -y curl
      - sudo apt install -y clinfo
-     - sudo apt install -y nvidia-driver-525*
+     - sudo apt install -y nvidia-driver-525-server
      - sudo apt install -y opencl-dev
      - wget https://golang.org/dl/go1.17.1.linux-amd64.tar.gz
      - rm -rf /usr/local/go && tar -C /usr/local -xzf go1.17.1.linux-amd64.tar.gz
      - sudo curl https://sh.rustup.rs -sSf | sh -s -- -y
+     - sudo ~/.cargo/bin/rustup default 1.65-x86_64-unknown-linux-gnu
      - . $HOME/.cargo/env
      - sudo ~/.cargo/bin/rustup target add wasm32-wasi
      - git clone https://github.com/SamGinzburg/VectorVisor
