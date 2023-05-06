@@ -1,6 +1,6 @@
 # VectorVisor
 
-GPU programming models offer a level of abstraction that is either too low-level (e.g., OpenCL, CUDA) or too high-level (e.g., TensorFlow, Halide), depending on the language. Not all appli- cations fit into either category, resulting in lost opportunities for GPU acceleration.
+GPU programming models offer a level of abstraction that is either too low-level (e.g., OpenCL, CUDA) or too high-level (e.g., TensorFlow, Halide), depending on the language. Not all applications fit into either category, resulting in lost opportunities for GPU acceleration.
 
 VectorVisor is a vectorized binary translator which remedies this issue by taking in existing single-threaded WebAssembly programs and running many copies of them using a GPU. Unlike OpenCL or CUDA programs, we provide support for system calls and a CPU-like flat memory model. While less efficient than manual translation, this approach substantially reduces the barrier to accelerating throughput-oriented workloads using GPUs, ultimately improving the throughput of applications that would otherwise run on CPUs.
 
