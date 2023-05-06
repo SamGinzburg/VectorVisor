@@ -25,7 +25,7 @@ cargo build --release
 
 VectorVisor was built with compatibility in mind, and should *theoretically* run on any GPU supporting OpenCL 1.2. In practice, VectorVisor has been mostly evaluated using NVIDIA GPUs on Linux. No Windows based setups have been evaluated, but before attempting this, ensure that TDR is either disabled or set to a larger timeout value.
 
-Devices with full functionality should be able to run any of our benchmarks or examples. Partial functionality varies by device, but these devices should be able to run short examples at the minimum. All configurations below are evaluated using Ubuntu 18.04 LTS.
+Devices with full functionality should be able to run any of our benchmarks or examples. Partial functionality varies by device, but these devices should be able to run short examples at the minimum. All NVIDIA configurations below are evaluated using Ubuntu 18.04 LTS. The AMD v520 is evaluated using a preconfigured AWS Linux image (see make_image_amd.py in the benchmarks/ directory).
 
 Vendor | Evaluated OS | GPU | Level of Support
 ------------- | ------------- | ------------- | -------------
