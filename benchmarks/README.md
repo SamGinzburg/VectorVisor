@@ -44,7 +44,7 @@ We automate our evaluation using Amazon SSM (Systems Manager), which requires a 
 
 4. Create the role
 
-![Screenshot](ssmconfig/create-role.png)
+![Screenshot](ssmconfig/create-role-button.png)
 
 5. After the role is created, you can select the role from the list of IAM roles on your account, and obtain the Instance profile ARN. This ARN is the one needed as a CLI argument for the scripts that create AWS AMIs and run the benchmarks.
 
