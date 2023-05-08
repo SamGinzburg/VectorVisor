@@ -140,6 +140,7 @@ if run_only_membench:
      - whoami
      - sudo su
      - sudo whoami
+     - rm -rf /swapfile
      - sysctl -w net.ipv4.tcp_max_syn_backlog=3240000
      - sysctl -w net.core.netdev_max_backlog=16384
      - sysctl -w net.core.somaxconn={somaxconn}
@@ -162,6 +163,7 @@ else:
      - whoami
      - sudo su
      - sudo whoami
+     - rm -rf /swapfile
      - sysctl -w net.ipv4.tcp_max_syn_backlog=3240000
      - sysctl -w net.core.netdev_max_backlog=16384
      - sysctl -w net.core.somaxconn={somaxconn}

@@ -68,6 +68,10 @@ userdata_ubuntu = """#cloud-config
      - export CUDA_CACHE_PATH=~/.nv/ComputeCache/
      - sysctl -w net.ipv4.tcp_max_syn_backlog=65536
      - sysctl -w net.core.somaxconn=8192
+     - sudo dd if=/dev/zero of=/swapfile bs=1024 count=8388608
+     - sudo chmod 600 /swapfile
+     - sudo mkswap /swapfile
+     - sudo swapon /swapfile
      - mkdir -p /vv/
      - cd /vv/
      - sudo apt update
@@ -82,8 +86,8 @@ userdata_ubuntu = """#cloud-config
      - wget https://golang.org/dl/go1.17.1.linux-amd64.tar.gz
      - rm -rf /usr/local/go && tar -C /usr/local -xzf go1.17.1.linux-amd64.tar.gz
      - sudo curl https://sh.rustup.rs -sSf | sh -s -- -y
-     - sudo ~/.cargo/bin/rustup default 1.65-x86_64-unknown-linux-gnu
      - . $HOME/.cargo/env
+     - sudo ~/.cargo/bin/rustup default 1.66-x86_64-unknown-linux-gnu 
      - sudo ~/.cargo/bin/rustup target add wasm32-wasi
      - git clone https://github.com/SamGinzburg/VectorVisor
      - wget https://github.com/WebAssembly/binaryen/releases/download/version_109/binaryen-version_109-x86_64-linux.tar.gz
@@ -95,6 +99,7 @@ userdata_ubuntu = """#cloud-config
      - mkdir -p ~/.nv/ComputeCache/
      - export PATH=/vv/binaryen-version_109/bin:$PATH
      - sudo ~/.cargo/bin/cargo install --git https://github.com/SamGinzburg/vv-pgo-instrument
+     - sudo sysctl -w vm.drop_caches=3
 """.format(opt=OPT_LEVEL, snip_args=WASM_SNIP_ARGS, snip_custom=WASM_SNIP_CUSTOM)
 
 def run_command(command, command_name, instance_id):
