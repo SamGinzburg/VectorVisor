@@ -7,10 +7,9 @@ import argparse
 
 parser = argparse.ArgumentParser(description='run benchmarks')
 #parser.add_argument("--gpu", required=True)
-
-#args = vars(parser.parse_args())
 parser.add_argument("--awsarn", required=True)
 
+args = vars(parser.parse_args())
 
 gpu = "amd" #args['gpu']
 awsarn = args['awsarn']
@@ -59,6 +58,7 @@ userdata_aws_linux = """#cloud-config
      - whoami
      - sudo su
      - sudo whoami
+     - sudo echo 1 > /proc/sys/vm/overcommit_memory
      - export HOME=/root
      - mkdir -p /vv/
      - cd /vv/
@@ -74,7 +74,7 @@ userdata_aws_linux = """#cloud-config
      - wget https://golang.org/dl/go1.17.1.linux-amd64.tar.gz
      - rm -rf /usr/local/go && tar -C /usr/local -xzf go1.17.1.linux-amd64.tar.gz
      - sudo curl https://sh.rustup.rs -sSf | sh -s -- -y
-     - sudo ~/.cargo/bin/rustup default 1.65-x86_64-unknown-linux-gnu
+     - sudo ~/.cargo/bin/rustup default 1.66-x86_64-unknown-linux-gnu
      - . $HOME/.cargo/env
      - sudo ~/.cargo/bin/rustup target add wasm32-wasi
      - git clone https://github.com/SamGinzburg/VectorVisor 

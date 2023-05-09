@@ -63,12 +63,20 @@ userdata_ubuntu = """#cloud-config
      - whoami
      - sudo su
      - sudo whoami
+     - rm -rf /usr/local/cuda-11.1
+     - rm -rf /usr/local/cuda-11.2
+     - rm -rf /usr/local/cuda-11.3
+     - rm -rf /usr/local/cuda-11.4
+     - rm -rf /usr/local/cuda-11.5
+     - rm -rf /usr/local/cuda-11.6
+     - rm -rf /usr/local/cuda-11.7
+     - sudo echo 1 > /proc/sys/vm/overcommit_memory
      - export HOME=/root
      - export CUDA_CACHE_MAXSIZE=4294967296
      - export CUDA_CACHE_PATH=~/.nv/ComputeCache/
      - sysctl -w net.ipv4.tcp_max_syn_backlog=65536
      - sysctl -w net.core.somaxconn=8192
-     - sudo dd if=/dev/zero of=/swapfile bs=1024 count=8388608
+     - sudo dd if=/dev/zero of=/swapfile bs=1024 count=33554432
      - sudo chmod 600 /swapfile
      - sudo mkswap /swapfile
      - sudo swapon /swapfile
@@ -264,7 +272,6 @@ gpu_instance = ec2.create_instances(ImageId=gpu_ami,
                                 IamInstanceProfile={
                                     'Arn': awsarn,
                                 })
-
 
 print ("Started: " + str(gpu_instance) + " with id: " + str(gpu_instance[0].id))
 
