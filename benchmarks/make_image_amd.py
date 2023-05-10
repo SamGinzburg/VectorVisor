@@ -64,7 +64,7 @@ userdata_aws_linux = """#cloud-config
      - cd /vv/
      - sudo amazon-linux-extras install epel -y
      - sudo yum install -y git htop gcc curl
-     - sudo yum-config-manager --add-repo https://repo.radeon.com/rocm/yum/rpm
+     - sudo yum-config-manager --add-repo https://repo.radeon.com/rocm/yum/5.4/main/
      - wget https://repo.radeon.com/rocm/rocm.gpg.key
      - sudo rpm --import rocm.gpg.key
      - sudo yum install rocm-opencl* -y
