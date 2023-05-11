@@ -530,7 +530,7 @@ def plot_memory_bandwidth():
     axes[1].grid(zorder=-50, axis='y')
     #axes[2].grid(zorder=-50)
 
-    axes[0].legend((nvidia_t4_1[0], nvidia_t4_4[0], nvidia_t4_8[0], t4_line_approx,  t4_line),
+    axes[0].legend((nvidia_t4_1[0], nvidia_t4_4[0], nvidia_t4_8[0], t4_line, t4_line_approx),
                ('Interleave = 1 Byte', 'Interleave = 4 Bytes', 'Interleave = 8 Bytes', 'Theoretical Max B.w.', 'Prev. Measured Max B.w.'),
                prop={'size': 28}, bbox_to_anchor=(0, -0.4, 2, 2), loc='upper center',
                ncol=2, mode="expand", borderaxespad=0.)
@@ -1154,10 +1154,10 @@ def plot_bars(results, per_dollar=False):
         else:
             # Strings-Go/Strings-AScript
             # normalize to Strings-Rust x86 instead
-            x86_best = get_best("Strings-Rust", "t4", "x86", per_dollar=per_dollar)
-            print ("rust-strings", x86_best)
-            best_vals = np.array([t4_best, a10g_best, amd_best, 0, wasm_best]) / x86_best
- 
+            #x86_best = get_best("Strings-Rust", "t4", "x86", per_dollar=per_dollar)
+            #best_vals = np.array([t4_best, a10g_best, amd_best, 0, wasm_best]) / x86_best
+            best_vals = np.array([t4_best, a10g_best, amd_best, 0, wasm_best]) / wasm_best
+
         print (bench, best_vals)
         if per_dollar:
             axes[row, col].set_ylim(0, 2)
