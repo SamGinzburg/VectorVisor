@@ -1056,6 +1056,13 @@ def dump_table(results, per_dollar=False):
         vals = np.array(vals) / 1.212
     print ("a10g cuda 2x", np.array(vals))
 
+def myLogFormat(y,pos):
+    # Find the number of decimal places required
+    decimalplaces = int(np.maximum(-np.log10(y),0))     # =0 for numbers >=1
+    # Insert that number into a format string
+    formatstring = '{{:.{:1d}f}}'.format(decimalplaces)
+    # Return the formatted tick label
+    return formatstring.format(y)
 
 def plot_bars(results, per_dollar=False):
     plt.rc('xtick', labelsize=10)
@@ -1149,32 +1156,61 @@ def plot_bars(results, per_dollar=False):
         x86_best = get_best(bench, "t4", "x86", per_dollar=per_dollar)
         wasm_best = get_best(bench, "t4", "wasm", per_dollar=per_dollar)
 
+        missing_x86 = False
         if x86_best > 0: 
             best_vals = np.array([t4_best, a10g_best, amd_best, x86_best, wasm_best]) / x86_best
         else:
             # Strings-Go/Strings-AScript
             # normalize to Strings-Rust x86 instead
-            #x86_best = get_best("Strings-Rust", "t4", "x86", per_dollar=per_dollar)
-            #best_vals = np.array([t4_best, a10g_best, amd_best, 0, wasm_best]) / x86_best
-            best_vals = np.array([t4_best, a10g_best, amd_best, 0, wasm_best]) / wasm_best
+            x86_best = get_best("Strings-Rust", "t4", "x86", per_dollar=per_dollar)
+            best_vals = np.array([t4_best, a10g_best, amd_best, x86_best, wasm_best]) / x86_best
+            #best_vals = np.array([t4_best, a10g_best, amd_best, 0, wasm_best]) / wasm_best
+            missing_x86 = True
+
+        missing_amd = False
+        if amd_best == 0:
+            missing_amd = True
+            #best_vals[2] = 1
 
         print (bench, best_vals)
-        if per_dollar:
-            axes[row, col].set_ylim(0, 2)
-            axes[row, col].set_yticks([0, 1, 2])
-        else:
-            axes[row, col].set_ylim(0, 12)
-            axes[row, col].set_yticks([1, 5, 10])
         #axes[row, col].set_xticks(["T4", "A10G", "v520", "x86-64", "WASM"])
+
         labels = ["T4", "A10G", "v520", "x86-64", "WASM"]
         colors = ['blue', 'lightgrey', 'black', 'green', 'orange']
         hatches = ['.', '/\\', 'o.', 'o', 'x']
-        axes[row, col].bar(labels, best_vals, label=labels, color=colors, hatch=hatches)
+        axes[row, col].set_yscale('log')
+        #plt.yscale('log')
+        bars = axes[row, col].bar(labels, best_vals, label=labels, color=colors, hatch=hatches)
         axes[row, col].set_xticklabels(labels, rotation=50)
         axes[row, col].set_title(bench)
         axes[row, col].set_xticks([])
+        if per_dollar:
+            axes[row, col].set_ylim(0, 2)
+            axes[row, col].set_yticks([0.01, 0.1, 1, 2])
+            axes[row, col].set_yticklabels(["0.01x", "0.1x", "1x", "2x"])
+        else:
+            #axes[row, col].set_ylim(0.1, 12)
+            #plt.setp(axes[row, col].get_yminorticklabels(), visible=False)
+            axes[row, col].set_yticks([0.01, 0.1, 1, 10])
+            axes[row, col].set_yticklabels(["0.01x", "0.1x", "1x", "10x"])
+            axes[row, col].set_ylim(0, 12)
+
+
+
         handles, labels = axes[row, col].get_legend_handles_labels()
-        #axes[row, col].set_yscale('log')
+
+        if missing_amd and per_dollar:
+            bar_height = bars[2].get_height()
+            axes[row, col].text(x=bars[2].get_x() + bars[2].get_width() / 2, y=bar_height+1.2,
+                                s="v520 N/A",
+                                ha='center',
+                                fontsize=8)
+        elif missing_amd:
+            bar_height = bars[2].get_height()
+            axes[row, col].text(x=bars[2].get_x() + bars[2].get_width() / 2, y=bar_height+6,
+                                s="v520 N/A",
+                                ha='center',
+                                fontsize=8)
         col += 1
         if col >= 6:
             col = 0
@@ -1182,7 +1218,10 @@ def plot_bars(results, per_dollar=False):
 
     #axes[0, 0].set_ylabel("Normalized Throughput")
     #axes[1, 0].set_ylabel("Normalized Throughput")
-    fig.supylabel("Normalized Throughput")
+    if per_dollar:
+        fig.supylabel("Normalized Throughput/$")
+    else:
+        fig.supylabel("Normalized Throughput")
 
     #fig.legend(handles, labels, loc='upper center', ncol=5)
     fig.legend(handles, labels, loc='upper center', ncol=5, bbox_to_anchor=(0.5, 1.1, 0, 0))
