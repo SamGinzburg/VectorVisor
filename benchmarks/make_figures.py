@@ -1178,27 +1178,58 @@ def plot_bars(results, per_dollar=False):
         labels = ["T4", "A10G", "v520", "x86-64", "WASM"]
         colors = ['blue', 'lightgrey', 'black', 'green', 'orange']
         hatches = ['.', '/\\', 'o.', 'o', 'x']
-        axes[row, col].set_yscale('log')
+        #axes[row, col].set_yscale('log')
         #plt.yscale('log')
         bars = axes[row, col].bar(labels, best_vals, label=labels, color=colors, hatch=hatches)
         axes[row, col].set_xticklabels(labels, rotation=50)
-        axes[row, col].set_title(bench)
+        
+        if missing_amd:
+            axes[row, col].set_title(bench + "*")
+        else:
+            axes[row, col].set_title(bench)
+
         axes[row, col].set_xticks([])
         if per_dollar:
             axes[row, col].set_ylim(0, 2)
-            axes[row, col].set_yticks([0.01, 0.1, 1, 2])
-            axes[row, col].set_yticklabels(["0.01x", "0.1x", "1x", "2x"])
+            axes[row, col].set_yticks([1, 2])
+            axes[row, col].set_yticklabels(["1x", "2x"])
         else:
             #axes[row, col].set_ylim(0.1, 12)
             #plt.setp(axes[row, col].get_yminorticklabels(), visible=False)
-            axes[row, col].set_yticks([0.01, 0.1, 1, 10])
-            axes[row, col].set_yticklabels(["0.01x", "0.1x", "1x", "10x"])
+            axes[row, col].set_yticks([1, 5, 10])
+            axes[row, col].set_yticklabels(["1x", "5x", "10x"])
             axes[row, col].set_ylim(0, 12)
 
+        # Strings-AScript
+        #inset axes for non per_dollar
+        if bench in ["Pbkdf2", "Blur-Jpeg", "PHash", 
+                     "Histogram", "LZ4", "Strings-Rust", "Strings-Go", "Strings-AScript"] and not per_dollar:
+            axins = inset_axes(axes[row, col], width=0.4, height=0.7, loc=1)
+            mark_inset(axes[row, col], axins, loc1=1, loc2=2, fc="none", ec="black", linewidth=0.2)
+            axins.set_xlim([-0.5,4.5])
+            axins.set_ylim([0, 2.5])
+            axins.set_yticks([1, 2])
+            axins.set_yticklabels(["1x", "2x"])
+            axins.bar(labels, best_vals, label=labels, color=colors, hatch=hatches)
+            axins.set_xticks([])
+            [x.set_linewidth(0.2) for x in axins.spines.values()]
+
+        if bench in ["Strings-AScript"] and per_dollar: 
+            axins = inset_axes(axes[row, col], width=0.4, height=0.3, loc=1)
+            mark_inset(axes[row, col], axins, loc1=1, loc2=2, fc="none", ec="black", linewidth=0.2)
+            axins.set_xlim([-0.5, 1.7])
+            axins.set_ylim([0, 0.05])
+            axins.set_yticks([0, 0.05])
+            axins.set_yticklabels(["0x", "0.05x"])
+            axins.bar(labels, best_vals, label=labels, color=colors, hatch=hatches)
+            axins.set_xticks([])
+            [x.set_linewidth(0.2) for x in axins.spines.values()]
 
 
         handles, labels = axes[row, col].get_legend_handles_labels()
 
+
+        """
         if missing_amd and per_dollar:
             bar_height = bars[2].get_height()
             axes[row, col].text(x=bars[2].get_x() + bars[2].get_width() / 2, y=bar_height+1.2,
@@ -1211,6 +1242,7 @@ def plot_bars(results, per_dollar=False):
                                 s="v520 N/A",
                                 ha='center',
                                 fontsize=8)
+        """
         col += 1
         if col >= 6:
             col = 0
