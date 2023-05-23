@@ -532,7 +532,7 @@ def plot_memory_bandwidth():
 
     axes[0].legend((nvidia_t4_1[0], nvidia_t4_4[0], nvidia_t4_8[0], t4_line, t4_line_approx),
                ('Interleave = 1 Byte', 'Interleave = 4 Bytes', 'Interleave = 8 Bytes', 'Theoretical Max B.w.', 'Prev. Measured Max B.w.'),
-               prop={'size': 28}, bbox_to_anchor=(0, -0.4, 2, 2), loc='upper center',
+               prop={'size': 32}, bbox_to_anchor=(0, -0.2, 2.025, 2), loc='upper center',
                ncol=2, mode="expand", borderaxespad=0.)
 
     """
@@ -781,7 +781,7 @@ def plot_breakdowns(results):
     axes[1].grid(zorder=-50, axis='y')
     plt.legend((p4[0], p3[0], p2[0], p1[0]),
     ('Network', 'VMM Overhead', 'On Device Execution Time', 'Continuations Overhead'),
-    prop={'size': 30}, bbox_to_anchor=(-3.3, -2.3, 4, 4), loc='upper center',
+    prop={'size': 32}, bbox_to_anchor=(-3.76, -2.3, 4.78, 4), loc='upper center',
                       ncol=2, mode="expand", borderaxespad=0.)
 
     plt.savefig(input_dir+"/breakdown.eps", bbox_inches='tight')
@@ -1070,6 +1070,7 @@ def plot_bars_long(results, per_dollar=False):
     width = 0.7
     print(plt.gcf())
 
+    plt.grid(which='minor', color='lightgrey')
     # mapping of index to bench
     mapping = dict()
     mapping["Scrypt"] = 0
