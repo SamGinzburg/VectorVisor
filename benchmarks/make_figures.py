@@ -11,6 +11,9 @@ from mpl_toolkits.axes_grid1.inset_locator import mark_inset
 plt.rc('axes', axisbelow=True)
 plt.grid(c='lightgrey')
 
+# Get rid of type 3 fonts
+matplotlib.rcParams['pdf.fonttype'] = 42
+matplotlib.rcParams['ps.fonttype'] = 42
 
 sysname = "VectorVisor"
 
