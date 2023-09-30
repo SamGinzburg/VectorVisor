@@ -70,6 +70,8 @@ pub enum VMMRuntimeStatus {
     StatusUnknownError,
 }
 
+// this unsafe code is the result of some earlier experimentation w/handling memory interleavings
+// it isn't relevant anymore
 pub struct UnsafeCellWrapper<T: 'static> {
     pub buf: UnsafeCell<&'static mut [T]>,
 }
@@ -361,7 +363,7 @@ impl OpenCLRunner {
                     vm_recv,
                     req_timeout,
                     data_segment,
-                    is_nvidia
+                    is_nvidia,
                 ),
             };
 
@@ -1178,7 +1180,16 @@ impl OpenCLRunner {
             }
         }
         unsafe {
-            let stack_result = ocl::core::enqueue_fill_buffer(&queue, &buffers.sp, 0u8, 0, (self.num_vms*8).try_into().unwrap(), None::<Event>, None::<&mut Event>, None);
+            let stack_result = ocl::core::enqueue_fill_buffer(
+                &queue,
+                &buffers.sp,
+                0u8,
+                0,
+                (self.num_vms * 8).try_into().unwrap(),
+                None::<Event>,
+                None::<&mut Event>,
+                None,
+            );
             match stack_result {
                 Err(e) => panic!("failed to fill hcall_retval_result, Error: {}", e),
                 _ => (),
@@ -1214,7 +1225,16 @@ impl OpenCLRunner {
         };
 
         unsafe {
-            let overhead_tracker_result = ocl::core::enqueue_fill_buffer(&queue, &buffers.overhead_tracker, 0u8, 0, (self.num_vms*8).try_into().unwrap(), None::<Event>, None::<&mut Event>, None);
+            let overhead_tracker_result = ocl::core::enqueue_fill_buffer(
+                &queue,
+                &buffers.overhead_tracker,
+                0u8,
+                0,
+                (self.num_vms * 8).try_into().unwrap(),
+                None::<Event>,
+                None::<&mut Event>,
+                None,
+            );
             match overhead_tracker_result {
                 Err(e) => panic!("failed to fill overhead_tracker_result, Error: {}", e),
                 _ => (),
@@ -1247,7 +1267,16 @@ impl OpenCLRunner {
         };
 
         unsafe {
-            let entry_result = ocl::core::enqueue_fill_buffer(&queue, &buffers.entry, 0u8, 0, (self.num_vms*4).try_into().unwrap(), None::<Event>, None::<&mut Event>, None);
+            let entry_result = ocl::core::enqueue_fill_buffer(
+                &queue,
+                &buffers.entry,
+                0u8,
+                0,
+                (self.num_vms * 4).try_into().unwrap(),
+                None::<Event>,
+                None::<&mut Event>,
+                None,
+            );
             match entry_result {
                 Err(e) => panic!("failed to fill entry_result, Error: {}", e),
                 _ => (),
@@ -1280,7 +1309,16 @@ impl OpenCLRunner {
         };
 
         unsafe {
-            let hcall_num_result = ocl::core::enqueue_fill_buffer(&queue, &buffers.hypercall_num, 0u8, 0, (self.num_vms*4).try_into().unwrap(), None::<Event>, None::<&mut Event>, None);
+            let hcall_num_result = ocl::core::enqueue_fill_buffer(
+                &queue,
+                &buffers.hypercall_num,
+                0u8,
+                0,
+                (self.num_vms * 4).try_into().unwrap(),
+                None::<Event>,
+                None::<&mut Event>,
+                None,
+            );
             match hcall_num_result {
                 Err(e) => panic!("failed to fill hcall_num_result, Error: {}", e),
                 _ => (),
@@ -1325,7 +1363,16 @@ impl OpenCLRunner {
         };
 
         unsafe {
-            let hcall_retval_result = ocl::core::enqueue_fill_buffer(&queue, &hcall_retval_buffer, 0u8, 0, (self.num_vms*4).try_into().unwrap(), None::<Event>, None::<&mut Event>, None);
+            let hcall_retval_result = ocl::core::enqueue_fill_buffer(
+                &queue,
+                &hcall_retval_buffer,
+                0u8,
+                0,
+                (self.num_vms * 4).try_into().unwrap(),
+                None::<Event>,
+                None::<&mut Event>,
+                None,
+            );
             match hcall_retval_result {
                 Err(e) => panic!("failed to fill hcall_retval_result, Error: {}", e),
                 _ => (),
@@ -1388,7 +1435,16 @@ impl OpenCLRunner {
         };
 
         unsafe {
-            let hcall_zero_result = ocl::core::enqueue_fill_buffer(&queue, &hypercall_buffer, 0u8, 0, (self.num_vms*hypercall_buffer_size).try_into().unwrap(), None::<Event>, None::<&mut Event>, None);
+            let hcall_zero_result = ocl::core::enqueue_fill_buffer(
+                &queue,
+                &hypercall_buffer,
+                0u8,
+                0,
+                (self.num_vms * hypercall_buffer_size).try_into().unwrap(),
+                None::<Event>,
+                None::<&mut Event>,
+                None,
+            );
             match hcall_zero_result {
                 Err(e) => panic!("failed to fill hcall buf, Error: {}", e),
                 _ => (),
@@ -1405,8 +1461,7 @@ impl OpenCLRunner {
          *   https://developer.amd.com/wordpress/media/2013/12/AMD_OpenCL_Programming_Optimization_Guide2.pdf
          *
          * The key difference is that NVIDIA only requires a single map, while on AMD
-         * unmap operations are required to persist data back to the GPU. map/unmap is cheaper on
-         * AMD as a result.
+         * unmap operations are required to persist data back to the GPU.
          *
          * hcallbuf is already allocated as pinned memory, so we can instead call map/unmap
          * when we need to read/write.
@@ -1431,8 +1486,9 @@ impl OpenCLRunner {
             hcall_write_buf.fill(0);
             unsafe { Arc::new(Mutex::new(UnsafeCellWrapper::new(hcall_write_buf))) }
         } else {
-            let mut hcall_write_buf: &'static mut [u8] =
-                Box::leak(vec![0u8; (hypercall_buffer_size * self.num_vms) as usize].into_boxed_slice());
+            let mut hcall_write_buf: &'static mut [u8] = Box::leak(
+                vec![0u8; (hypercall_buffer_size * self.num_vms) as usize].into_boxed_slice(),
+            );
             hcall_write_buf.fill(0);
             unsafe { Arc::new(Mutex::new(UnsafeCellWrapper::new(hcall_write_buf))) }
         };
@@ -1452,14 +1508,16 @@ impl OpenCLRunner {
                 .unwrap()
             };
             unsafe {
-                let read_map = hcall_read_map.as_slice_mut((hypercall_buffer_size * self.num_vms) as usize);
+                let read_map =
+                    hcall_read_map.as_slice_mut((hypercall_buffer_size * self.num_vms) as usize);
                 read_map.fill(0);
                 Arc::new(UnsafeCellWrapper::new(read_map))
             }
         } else {
-            let mut read_map: &'static mut [u8] =
-                Box::leak(vec![0u8; (hypercall_buffer_size * self.num_vms) as usize].into_boxed_slice());
-                unsafe { Arc::new(UnsafeCellWrapper::new(read_map)) }
+            let mut read_map: &'static mut [u8] = Box::leak(
+                vec![0u8; (hypercall_buffer_size * self.num_vms) as usize].into_boxed_slice(),
+            );
+            unsafe { Arc::new(UnsafeCellWrapper::new(read_map)) }
         };
 
         /*
@@ -1613,11 +1671,12 @@ impl OpenCLRunner {
                             let worker_vm_idx = *vm_id_mapping.get(vm_idx).unwrap() as usize;
                             let wasi_context = &mut worker_vms[worker_vm_idx];
                             // Try to poll the first channel
-                            if !is_empty_vm.contains(&worker_vm_idx) && wasi_context.input_msg_len == 0 {
+                            if !is_empty_vm.contains(&worker_vm_idx)
+                                && wasi_context.input_msg_len == 0
+                            {
                                 let (vm_recv_copy1, _) = &vm_recv_copy[*vm_idx as usize];
                                 //let wasi_context = &mut worker_vms[worker_vm_idx];
-                                match vm_recv_copy1.lock().unwrap().poll_recv(&mut cx)
-                                {
+                                match vm_recv_copy1.lock().unwrap().poll_recv(&mut cx) {
                                     Poll::Ready(Some((msg, _, uuid))) => {
                                         // Queue the input in the VM
                                         let buffer = async_buffer.clone();
@@ -1627,15 +1686,15 @@ impl OpenCLRunner {
                                         recv_reqs += 1;
                                         is_empty_vm.insert(worker_vm_idx);
                                     }
-                                    _ => {
-                                    },
+                                    _ => {}
                                 }
                             }
                             // Poll the second channel
-                            if !is_empty_vm.contains(&worker_vm_idx) && wasi_context.input_msg_len == 0 {
+                            if !is_empty_vm.contains(&worker_vm_idx)
+                                && wasi_context.input_msg_len == 0
+                            {
                                 let (_, vm_recv_copy2) = &vm_recv_copy[*vm_idx as usize];
-                                match vm_recv_copy2.lock().unwrap().poll_recv(&mut cx)
-                                {
+                                match vm_recv_copy2.lock().unwrap().poll_recv(&mut cx) {
                                     Poll::Ready(Some((msg, _, uuid))) => {
                                         // Queue the input in the VM
                                         let buffer = async_buffer.clone();
@@ -1645,8 +1704,7 @@ impl OpenCLRunner {
                                         recv_reqs += 1;
                                         is_empty_vm.insert(worker_vm_idx);
                                     }
-                                    _ => {
-                                    },
+                                    _ => {}
                                 }
                             }
                         }
@@ -1669,7 +1727,7 @@ impl OpenCLRunner {
                             }
                         };
                     }
-                    
+
                     if (recv_reqs == avail_vm_count && block_on_inputs)
                         || (ellapsed_time >= buffer_timeout)
                     {
@@ -1706,7 +1764,7 @@ impl OpenCLRunner {
                                 recv_reqs = 0;
                                 ellapsed_time = 0;
                                 // data is flushed to the VMs now, so we can resume req buffering
-                                is_empty_vm.clear();    
+                                is_empty_vm.clear();
                                 finalize_buffer = false;
                             }
                             _ => (),
@@ -1736,31 +1794,78 @@ impl OpenCLRunner {
         // first, set up the default values for the VMs
         unsafe {
             // setup some initial values
-            let sp_result = ocl::core::enqueue_fill_buffer(&queue, &buffers.sp, 0u8, 0, (self.num_vms*8).try_into().unwrap(), None::<Event>, None::<&mut Event>, None);
+            let sp_result = ocl::core::enqueue_fill_buffer(
+                &queue,
+                &buffers.sp,
+                0u8,
+                0,
+                (self.num_vms * 8).try_into().unwrap(),
+                None::<Event>,
+                None::<&mut Event>,
+                None,
+            );
             match sp_result {
                 Err(e) => panic!("failed to fill sp, Error: {}", e),
                 _ => (),
             }
 
-            let stack_frame_result = ocl::core::enqueue_fill_buffer(&queue, &buffers.stack_frames, 0u8, 0, (self.num_vms*per_vm_stack_frames_size).try_into().unwrap(), None::<Event>, None::<&mut Event>, None);
+            let stack_frame_result = ocl::core::enqueue_fill_buffer(
+                &queue,
+                &buffers.stack_frames,
+                0u8,
+                0,
+                (self.num_vms * per_vm_stack_frames_size)
+                    .try_into()
+                    .unwrap(),
+                None::<Event>,
+                None::<&mut Event>,
+                None,
+            );
             match stack_frame_result {
                 Err(e) => panic!("failed to fill stack frames, Error: {}", e),
                 _ => (),
             }
 
-            let cs_result = ocl::core::enqueue_fill_buffer(&queue, &buffers.call_stack, 0u8, 0, (self.num_vms*call_stack_size).try_into().unwrap(), None::<Event>, None::<&mut Event>, None);
+            let cs_result = ocl::core::enqueue_fill_buffer(
+                &queue,
+                &buffers.call_stack,
+                0u8,
+                0,
+                (self.num_vms * call_stack_size).try_into().unwrap(),
+                None::<Event>,
+                None::<&mut Event>,
+                None,
+            );
             match cs_result {
                 Err(e) => panic!("failed to fill call stack, Error: {}", e),
                 _ => (),
             }
 
-            let crs_result = ocl::core::enqueue_fill_buffer(&queue, &buffers.call_return_stack, 0u8, 0, (self.num_vms*call_stack_size).try_into().unwrap(), None::<Event>, None::<&mut Event>, None);
+            let crs_result = ocl::core::enqueue_fill_buffer(
+                &queue,
+                &buffers.call_return_stack,
+                0u8,
+                0,
+                (self.num_vms * call_stack_size).try_into().unwrap(),
+                None::<Event>,
+                None::<&mut Event>,
+                None,
+            );
             match crs_result {
                 Err(e) => panic!("failed to fill call return stack, Error: {}", e),
                 _ => (),
             }
 
-            let is_calling_result = ocl::core::enqueue_fill_buffer(&queue, &buffers.is_calling, 0u8, 0, (self.num_vms).try_into().unwrap(), None::<Event>, None::<&mut Event>, None);
+            let is_calling_result = ocl::core::enqueue_fill_buffer(
+                &queue,
+                &buffers.is_calling,
+                0u8,
+                0,
+                (self.num_vms).try_into().unwrap(),
+                None::<Event>,
+                None::<&mut Event>,
+                None,
+            );
             match is_calling_result {
                 Err(e) => panic!("failed to fill is_calling, Error: {}", e),
                 _ => (),
@@ -2361,7 +2466,8 @@ impl OpenCLRunner {
                     non_serverless_invoke_call_found,
                 ));
                 let serverless_invoke = if hypercall_num_temp[*vm_idx as usize]
-                    == (WasiSyscalls::ServerlessInvoke as i32) && !non_serverless_invoke_call_found
+                    == (WasiSyscalls::ServerlessInvoke as i32)
+                    && !non_serverless_invoke_call_found
                 {
                     true
                 } else {
@@ -2423,8 +2529,7 @@ impl OpenCLRunner {
                 // we want to special case proc_exit to exit the VM
                 match result.get_type() {
                     WasiSyscalls::ProcExit => {
-                        entry_point_temp[result.get_vm_id() as usize] =
-                            ((-1) as i32) as u32;
+                        entry_point_temp[result.get_vm_id() as usize] = ((-1) as i32) as u32;
                     }
                     WasiSyscalls::ServerlessInvoke => is_serverless_invoke = true,
                     WasiSyscalls::ServerlessResponse => (),
@@ -2503,20 +2608,21 @@ impl OpenCLRunner {
                     } else {
                         // On AMD, we map the pinned buffer, do a memcpy, and unpin
                         let mut hcall_write_map: ocl::core::MemMap<u8> = unsafe {
-                        ocl::core::enqueue_map_buffer(
-                            &queue,
-                            &hypercall_buffer,
-                            true,
-                            ocl::core::MapFlags::WRITE_INVALIDATE_REGION,
-                            0,
-                            (hypercall_buffer_size * self.num_vms) as usize,
-                            None::<Event>,
-                            None::<&mut Event>,
-                        )
-                        .unwrap()
+                            ocl::core::enqueue_map_buffer(
+                                &queue,
+                                &hypercall_buffer,
+                                true,
+                                ocl::core::MapFlags::WRITE_INVALIDATE_REGION,
+                                0,
+                                (hypercall_buffer_size * self.num_vms) as usize,
+                                None::<Event>,
+                                None::<&mut Event>,
+                            )
+                            .unwrap()
                         };
                         let mut hcall_write_buf: &mut [u8] = unsafe {
-                            hcall_write_map.as_slice_mut((hypercall_buffer_size * self.num_vms) as usize)
+                            hcall_write_map
+                                .as_slice_mut((hypercall_buffer_size * self.num_vms) as usize)
                         };
                         hcall_write_buf.copy_from_slice(&hcall_buf);
                         ocl::core::enqueue_unmap_mem_object(

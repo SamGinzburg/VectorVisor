@@ -1,28 +1,27 @@
 use crate::{VmRecvType, VmSenderType};
 use chrono::prelude::*;
+use core::task::Poll;
+use rmp_serde::encode;
+use serde::Serialize;
 use serde_json::Value;
+use std::collections::HashMap;
 use std::convert::TryInto;
 use std::error::Error;
+use std::fs::File;
+use std::io::Write;
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::collections::HashMap;
-use serde::Serialize;
+use std::time::Duration;
+use std::{thread, time};
 use tokio::sync::mpsc::{Receiver, Sender};
 use wasi_cap_std_sync::WasiCtxBuilder;
 use wasi_common::WasiCtx;
 use wasmtime::*;
-use rmp_serde::encode;
-use std::fs::File;
-use std::io::Write;
-use core::task::Poll;
-use std::time::Duration;
-use std::{thread, time};
 
 #[derive(Serialize, Debug)]
 struct Profiling {
     map: HashMap<usize, Vec<i32>>,
 }
-
 
 pub struct WasmtimeRunner {
     vm_idx: usize,
@@ -91,14 +90,14 @@ impl WasmtimeRunner {
                         Poll::Ready(Some((msg, _, uuid))) => {
                             *curr_id_invoke.lock().unwrap() = 0;
                             break (msg, uuid);
-                        },
+                        }
                         _ => (),
                     }
                     match chan2.lock().unwrap().poll_recv(&mut cx) {
                         Poll::Ready(Some((msg, _, uuid))) => {
                             *curr_id_invoke.lock().unwrap() = 1;
                             break (msg, uuid);
-                        },
+                        }
                         _ => (),
                     }
                     std::thread::sleep(time::Duration::from_millis(5));
@@ -138,7 +137,8 @@ impl WasmtimeRunner {
                         let mut results = vec![];
                         for count in 0..50 {
                             let global = match caller
-                                    .get_export(&format!("profiling_global_{}_{}", idx, count)) {
+                                .get_export(&format!("profiling_global_{}_{}", idx, count))
+                            {
                                 Some(Extern::Global(g)) => g,
                                 _ => continue,
                             };
@@ -146,34 +146,37 @@ impl WasmtimeRunner {
                             results.push(global.get(caller.as_context_mut()).unwrap_i32());
                         }
                         if results.len() > 0 {
-                            value_map.insert(idx as usize,
-                                             results);
+                            value_map.insert(idx as usize, results);
                         } else {
                             break;
                         }
                     }
-                    println!("Wrote profiling data to: {}", format!("{}.profile", input_file));
+                    println!(
+                        "Wrote profiling data to: {}",
+                        format!("{}.profile", input_file)
+                    );
                     let profile = Profiling { map: value_map };
                     dbg!(&profile);
                     let prof_bytes = encode::to_vec(&profile).unwrap();
                     let mut file = File::create(format!("{}.profile", input_file)).unwrap();
                     file.write_all(&prof_bytes).unwrap();
 
-                    let global = match caller
-                            .get_export(&format!("slowcalls")) {
+                    let global = match caller.get_export(&format!("slowcalls")) {
                         Some(Extern::Global(g)) => g,
                         _ => panic!("Not running with an instrumented binary!"),
                     };
                     let slowcalls = global.get(caller.as_context_mut()).unwrap_i32();
-                    let global = match caller
-                            .get_export(&format!("indirect")) {
+                    let global = match caller.get_export(&format!("indirect")) {
                         Some(Extern::Global(g)) => g,
                         _ => panic!("Not running with an instrumented binary!"),
                     };
                     let indirect = global.get(caller.as_context_mut()).unwrap_i32();
 
                     let mut file = File::create(format!("{}.slowcalls", input_file)).unwrap();
-                    file.write_all(format!("slowcalls: {}\nindirect: {}\n", slowcalls, indirect).as_bytes()).unwrap();
+                    file.write_all(
+                        format!("slowcalls: {}\nindirect: {}\n", slowcalls, indirect).as_bytes(),
+                    )
+                    .unwrap();
 
                     std::process::exit(0);
                 }
@@ -234,10 +237,8 @@ impl WasmtimeRunner {
             },
         );
 
-        let vv_barrier = Func::wrap(
-            &mut store,
-            move |mut caller: Caller<'_, _>| -> () {
-                // This func is a no-op here
+        let vv_barrier = Func::wrap(&mut store, move |mut caller: Caller<'_, _>| -> () {
+            // This func is a no-op here
         });
 
         let mut linker = Linker::new(&engine);

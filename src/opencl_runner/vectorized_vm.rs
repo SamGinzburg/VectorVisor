@@ -189,7 +189,7 @@ pub struct VectorizedVM {
     pub no_resp: bool,
     pub uuid_queue: VecDeque<(String, u32)>,
     pub async_buffer1: &'static mut [u8],
-    pub async_buffer2: &'static mut [u8]
+    pub async_buffer2: &'static mut [u8],
 }
 
 impl VectorizedVM {
@@ -236,10 +236,10 @@ impl VectorizedVM {
 
         // Allocate the reply buffers to avoid allocs on the hot path
         let async_buffer1: &'static mut [u8] =
-                Box::leak(vec![0u8; hcall_buf_size as usize].into_boxed_slice());
+            Box::leak(vec![0u8; hcall_buf_size as usize].into_boxed_slice());
 
         let async_buffer2: &'static mut [u8] =
-                Box::leak(vec![0u8; hcall_buf_size as usize].into_boxed_slice());
+            Box::leak(vec![0u8; hcall_buf_size as usize].into_boxed_slice());
 
         VectorizedVM {
             ctx: wasi_ctx,
@@ -268,18 +268,33 @@ impl VectorizedVM {
         }
     }
 
-    pub fn queue_request(&mut self, msg: bytes::Bytes, hcall_buf: &mut [u8], uuid: String, chan_id: u32) -> () {
+    pub fn queue_request(
+        &mut self,
+        msg: bytes::Bytes,
+        hcall_buf: &mut [u8],
+        uuid: String,
+        chan_id: u32,
+    ) -> () {
         let hcall_buf_size: u32 = self.hcall_buf_size;
         let vm_hcall_buf = &mut hcall_buf
             [(self.vm_id * hcall_buf_size) as usize..((self.vm_id + 1) * hcall_buf_size) as usize];
-        assert!(msg.len() <= hcall_buf_size.try_into().unwrap(), "Input > hcall buf size");
+        assert!(
+            msg.len() <= hcall_buf_size.try_into().unwrap(),
+            "Input > hcall buf size"
+        );
         vm_hcall_buf[0..msg.len()].copy_from_slice(&msg);
         //self.ready_for_input.store(false, Ordering::Relaxed);
         assert!(self.input_msg_len == 0);
         self.input_msg_len = msg.len();
         self.uuid_queue.push_back((uuid, chan_id));
         // We should never have more than 2 requests queued up
-        assert!(self.uuid_queue.len() <= 2, "{:?}, no_resp: {}, len: {}", self.uuid_queue, self.no_resp, self.input_msg_len);
+        assert!(
+            self.uuid_queue.len() <= 2,
+            "{:?}, no_resp: {}, len: {}",
+            self.uuid_queue,
+            self.no_resp,
+            self.input_msg_len
+        );
     }
 
     /*
@@ -330,9 +345,11 @@ impl VectorizedVM {
             }
             WasiSyscalls::VectorVisorBarrier => {
                 // this call is a no-op, just for synchronization + performance
-                sender.send({
-                    HyperCallResult::new(0, hypercall.vm_id, WasiSyscalls::VectorVisorBarrier)
-                }).unwrap();
+                sender
+                    .send({
+                        HyperCallResult::new(0, hypercall.vm_id, WasiSyscalls::VectorVisorBarrier)
+                    })
+                    .unwrap();
             }
             WasiSyscalls::ServerlessInvoke => {
                 Serverless::hypercall_serverless_invoke(self, hypercall, sender);

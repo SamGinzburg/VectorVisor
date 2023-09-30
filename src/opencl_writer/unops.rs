@@ -31,7 +31,10 @@ pub fn emit_i32_ctz(
     let reg = stack_ctx.vstack_peak(StackType::i32, 0);
 
     if writer.patch_missing_builtins {
-        format!("\t{} = ({} == 0) ? 32 : 32 - (clz({} & -{}) + 1);\n", reg, reg, reg, reg)
+        format!(
+            "\t{} = ({} == 0) ? 32 : 32 - (clz({} & -{}) + 1);\n",
+            reg, reg, reg, reg
+        )
     } else {
         format!("\t{} = ctz({});\n", reg, reg)
     }
@@ -45,7 +48,10 @@ pub fn emit_i64_ctz(
     let reg = stack_ctx.vstack_peak(StackType::i64, 0);
 
     if writer.patch_missing_builtins {
-        format!("\t{} = ({} == 0) ? 64 : 64 - (clz({} & -{}) + 1);\n", reg, reg, reg, reg)
+        format!(
+            "\t{} = ({} == 0) ? 64 : 64 - (clz({} & -{}) + 1);\n",
+            reg, reg, reg, reg
+        )
     } else {
         format!("\t{} = ctz({});\n", reg, reg)
     }

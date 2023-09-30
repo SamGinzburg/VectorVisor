@@ -36,8 +36,6 @@ use wast::token::Index::*;
  *
  * We then perform a second pass to identify if any ambiguous functions can be fastcall-optimized as well.
  *
- * TODO: most of the functions we would like to optimize are actually stopped by panic! code - this can special cased
- *
  */
 
 #[derive(Clone)]

@@ -375,7 +375,8 @@ fn main() {
     let num_vm_groups = value_t!(matches.value_of("vmgroups"), u32).unwrap_or_else(|e| e.exit());
     let is_gpu = value_t!(matches.value_of("isgpu"), bool).unwrap_or_else(|e| e.exit());
     let is_nvidia_gpu = value_t!(matches.value_of("nvidia"), bool).unwrap_or_else(|e| e.exit());
-    let patch_missing_builtins = value_t!(matches.value_of("patch"), bool).unwrap_or_else(|e| e.exit());
+    let patch_missing_builtins =
+        value_t!(matches.value_of("patch"), bool).unwrap_or_else(|e| e.exit());
     let print_return = value_t!(matches.value_of("printreturn"), bool).unwrap_or_else(|e| e.exit());
     let debug_call_print =
         value_t!(matches.value_of("debugcallprint"), bool).unwrap_or_else(|e| e.exit());
@@ -391,7 +392,7 @@ fn main() {
     let batch_submit_port = value_t!(matches.value_of("port"), u32).unwrap_or_else(|e| e.exit());
     let max_part = value_t!(matches.value_of("partitions"), u32).unwrap_or_else(|e| e.exit());
     let max_loc = value_t!(matches.value_of("maxloc"), u32).unwrap_or_else(|e| e.exit());
-    let max_dup = value_t!(matches.value_of("maxdup"), u32).unwrap_or_else(|e| e.exit());
+    let mut max_dup = value_t!(matches.value_of("maxdup"), u32).unwrap_or_else(|e| e.exit());
     let disable_fastcalls =
         value_t!(matches.value_of("disablefastcalls"), bool).unwrap_or_else(|e| e.exit());
     let local_work_group =
@@ -406,8 +407,14 @@ fn main() {
         value_t!(matches.value_of("max_smem_demo_space"), u32).unwrap_or_else(|e| e.exit());
     let req_timeout = value_t!(matches.value_of("reqtimeout"), u32).unwrap_or_else(|e| e.exit());
 
+    // multi-execution was part of the research prototype and never implemented
     if mexec > 1 && interleave == 0 {
         panic!("Multi-Execution is only enabled for interleaved workloads!");
+    }
+
+    // if partition == false, then maxdup = 0. maxdup can only be greater than 0 if partitioning is enabled.
+    if !partition {
+        max_dup = 0;
     }
 
     dbg!(compile_args.clone());
@@ -898,7 +905,10 @@ fn main() {
                         tokio::sync::mpsc::Sender<VmRecvType>,
                         tokio::sync::mpsc::Receiver<VmRecvType>,
                     ) = mpsc::channel(16384);
-                    server_sender_vec.push((AsyncMutex::new(async_sender1), AsyncMutex::new(async_sender2)));
+                    server_sender_vec.push((
+                        AsyncMutex::new(async_sender1),
+                        AsyncMutex::new(async_sender2),
+                    ));
                     vm_recv_vec.push((Mutex::new(async_recv1), Mutex::new(async_recv2)));
 
                     let (sender1, recv1): (
@@ -975,11 +985,7 @@ fn main() {
             });
     } else {
         // If we are running the wasmtime runtime
-        let num_threads = if !profile {
-            num_cpus::get()
-        } else {
-            1
-        };
+        let num_threads = if !profile { num_cpus::get() } else { 1 };
         let wg = WaitGroup::new();
         let thread_pool = rayon::ThreadPoolBuilder::new()
             .num_threads(num_threads.try_into().unwrap())
@@ -1001,7 +1007,10 @@ fn main() {
                 tokio::sync::mpsc::Sender<VmRecvType>,
                 tokio::sync::mpsc::Receiver<VmRecvType>,
             ) = mpsc::channel(16384);
-            server_sender_vec.push((AsyncMutex::new(async_sender1), AsyncMutex::new(async_sender2)));
+            server_sender_vec.push((
+                AsyncMutex::new(async_sender1),
+                AsyncMutex::new(async_sender2),
+            ));
             vm_recv_vec.push((Mutex::new(async_recv1), Mutex::new(async_recv2)));
 
             let (sender1, recv1): (
@@ -1076,7 +1085,14 @@ fn main() {
                 let leaked_runner: &'static WasmtimeRunner = Box::leak(Box::new(wasmtime_runner));
 
                 // run the WASM VM...
-                match leaked_runner.run(filedata.clone(), hcall_size, heap_size / (1024 * 64), profile, file_path.clone(), idx) {
+                match leaked_runner.run(
+                    filedata.clone(),
+                    hcall_size,
+                    heap_size / (1024 * 64),
+                    profile,
+                    file_path.clone(),
+                    idx,
+                ) {
                     Ok(()) => {
                         println!("Wasmtime VM: {:?} finished running!", idx);
                     }

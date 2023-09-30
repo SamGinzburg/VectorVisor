@@ -114,21 +114,25 @@ impl BatchSubmitServer {
         fast_reply: bool,
         vm_idx: usize,
         vm_queue: Arc<VmQueue>,
-        sender: Arc<Vec<(Mutex<Sender<(bytes::Bytes, usize, String)>>, Mutex<Sender<(bytes::Bytes, usize, String)>>)>>,
+        sender: Arc<
+            Vec<(
+                Mutex<Sender<(bytes::Bytes, usize, String)>>,
+                Mutex<Sender<(bytes::Bytes, usize, String)>>,
+            )>,
+        >,
         receiver: Arc<Vec<(Mutex<Receiver<VmSenderType>>, Mutex<Receiver<VmSenderType>>)>>,
         vm_chan_ctr: Arc<Vec<AtomicU64>>,
         compile_time: u128,
     ) -> Result<impl warp::Reply, warp::Rejection> {
         //dbg!(&vm_idx);
         // Get an available VM first
-        let chan_id = (*vm_chan_ctr).get(vm_idx).unwrap().fetch_add(1, Ordering::SeqCst);
+        let chan_id = (*vm_chan_ctr)
+            .get(vm_idx)
+            .unwrap()
+            .fetch_add(1, Ordering::SeqCst);
         let (tx, tx2) = (*sender).get(vm_idx).unwrap();
         let (rx, rx2) = (*receiver).get(vm_idx).unwrap();
-        let actual_recv = if chan_id % 2 == 0 {
-            rx
-        } else {
-            rx2
-        };
+        let actual_recv = if chan_id % 2 == 0 { rx } else { rx2 };
 
         /*
         let (tx, rx, vm_idx) = match vm_queue.try_pop() {
@@ -148,11 +152,7 @@ impl BatchSubmitServer {
         let req_id = Uuid::new_v4().to_simple().to_string();
         let req_start;
         // Acquire both locks...
-        let sender = if chan_id % 2 == 0 {
-            tx
-        } else {
-            tx2
-        };
+        let sender = if chan_id % 2 == 0 { tx } else { tx2 };
         let sender = match sender.try_lock() {
             Ok(lock) => lock,
             Err(_) => return Err(warp::reject::custom(NoVmAvailable)),
@@ -168,11 +168,11 @@ impl BatchSubmitServer {
             match recv.try_recv() {
                 Ok(_) => {
                     // no-op
-                },
+                }
                 _ => {
                     // The queue is clear, we can continue
                     break;
-                },
+                }
             }
         }
 
@@ -182,8 +182,8 @@ impl BatchSubmitServer {
             .await
             .unwrap();
 
-       match recv.recv().await {
-           Some((
+        match recv.recv().await {
+            Some((
                 resp,
                 len,
                 on_dev_time,
@@ -207,8 +207,8 @@ impl BatchSubmitServer {
                         compile_time,
                     ));
                 }
-           }
-           _ => (),
+            }
+            _ => (),
         }
 
         //  If we got the wrong response
@@ -219,7 +219,12 @@ impl BatchSubmitServer {
         _hcall_buf_size: usize,
         fast_reply: bool,
         is_active: Arc<SyncMutex<bool>>,
-        sender: Arc<Vec<(Mutex<Sender<(bytes::Bytes, usize, String)>>, Mutex<Sender<(bytes::Bytes, usize, String)>>)>>,
+        sender: Arc<
+            Vec<(
+                Mutex<Sender<(bytes::Bytes, usize, String)>>,
+                Mutex<Sender<(bytes::Bytes, usize, String)>>,
+            )>,
+        >,
         receiver: Arc<Vec<(Mutex<Receiver<VmSenderType>>, Mutex<Receiver<VmSenderType>>)>>,
         num_vms: u32,
         server_ip: String,

@@ -1062,11 +1062,11 @@ def dump_table(results, per_dollar=False):
 
 def plot_bars_long(results, per_dollar=False):
     plt.clf()
-    fig = plt.figure(figsize=(11, 4))
-    plt.rc('xtick', labelsize=10)
-    plt.rc('ytick', labelsize=10)
-    plt.rc('axes', titlesize=10)
-    plt.rc('axes', labelsize=10)
+    fig = plt.figure(figsize=(16, 6))
+    plt.rc('xtick', labelsize=24)
+    plt.rc('ytick', labelsize=24)
+    plt.rc('axes', titlesize=20)
+    plt.rc('axes', labelsize=20)
     plt.xticks(rotation=50)
     N = 12 
     ind = np.arange(N)*4    # the x locations for the groups
@@ -1207,15 +1207,17 @@ def plot_bars_long(results, per_dollar=False):
     # plot x86
     baseline = plt.axhline(y=1, color='black', linestyle='dashed')
     plt.legend((baseline, p4[0], p3[0], p2[0], p1[0]),
-               ('x86-64 baseline', 'WASM', 'v520', 'A10G', 'T4'))
+               ('x86-64 baseline', 'WASM', 'v520', 'A10G', 'T4'), prop={'size': 24}, loc="upper center", ncols=5)
 
     print(plt.gcf())
     fig.tight_layout()
     print(plt.gcf())
     if per_dollar:
         plt.savefig(input_dir+"/barplots_per_dollar.eps", bbox_inches='tight')
+        plt.savefig(input_dir+"/barplots_per_dollar.png", bbox_inches='tight')
     else:
         plt.savefig(input_dir+"/barplots.eps", bbox_inches='tight')
+        plt.savefig(input_dir+"/barplots.png", bbox_inches='tight')
     plt.clf()
 
 def plot_bars(results, per_dollar=False):

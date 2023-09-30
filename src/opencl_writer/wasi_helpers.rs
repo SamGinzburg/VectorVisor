@@ -117,14 +117,15 @@ pub fn emit_fd_write_helpers(_writer: &opencl_writer::OpenCLCWriter, _debug: boo
     );
 
     // bounds checking, here we just compare ptr values since it is easier...
-    result += &format!(r#"
+    result += &format!(
+        r#"
     if (({} + next_buffer_start + 16 + buf_len) > {}) {{
         {}
     }}
 "#,
-    "(global char*)hypercall_buffer+(hcall_size*warp_idx)",
-    "(global uint*)((global char*)hypercall_buffer+(hcall_size*warp_idx)+hcall_size)",
-    &emit_trap(TrapCode::TrapOutOfBounds, true)
+        "(global char*)hypercall_buffer+(hcall_size*warp_idx)",
+        "(global uint*)((global char*)hypercall_buffer+(hcall_size*warp_idx)+hcall_size)",
+        &emit_trap(TrapCode::TrapOutOfBounds, true)
     );
 
     // write the iovec to the hypercall_buffer
@@ -134,7 +135,6 @@ pub fn emit_fd_write_helpers(_writer: &opencl_writer::OpenCLCWriter, _debug: boo
 
     result += &format!("\t*({}) = buf_len;\n",
                        "(global uint*)((global char*)hypercall_buffer+(hcall_size*warp_idx)+iovec_hypercall_offset+4)");
-
 
     result += &format!("\t___private_memcpy_gpu2cpu((ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), warp_idx, read_idx, thread_idx, scratch_space);\n",
                        &format!("(global char *)heap_u32+buf_ptr"),
@@ -286,13 +286,14 @@ pub fn emit_fd_prestat_dir_name_post(
     */
 
     // bounds checking
-    ret_str += &format!(r#"
+    ret_str += &format!(
+        r#"
     if ({} + 4 > hcall_size) {{
         {}
     }}
 "#,
-    str_len,
-    &emit_trap(TrapCode::TrapOutOfBounds, true)
+        str_len,
+        &emit_trap(TrapCode::TrapOutOfBounds, true)
     );
 
     ret_str += &format!("\t___private_memcpy_cpu2gpu((ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), (ulong)({}), warp_idx, read_idx, thread_idx, scratch_space);\n",
@@ -740,14 +741,15 @@ pub fn emit_environ_get_post(
     //ret_str += &format!("\t\tprintf(\"string buf %d\\n\", {});\n", string_buf);
 
     // bounds checking
-    ret_str += &format!(r#"
+    ret_str += &format!(
+        r#"
     if ((({}*4) + {} + 8) > hcall_size) {{
         {}
     }}
 "#,
-    env_count,
-    str_buf_len,
-    &emit_trap(TrapCode::TrapOutOfBounds, true)
+        env_count,
+        str_buf_len,
+        &emit_trap(TrapCode::TrapOutOfBounds, true)
     );
 
     // Remap the ptrs from the host VM to the GPU VM
@@ -799,28 +801,29 @@ pub fn emit_args_get_post(
     let arg_count =
         format!("*((global uint*)((global char*)hypercall_buffer+(hcall_size*warp_idx)))");
 
-    let string_data =
-        format!("(ulong)((global char *)hypercall_buffer+(hcall_size*warp_idx)+8+({}*4))", arg_count);
-     
-    let ptr_len =
-        "*((global uint*)((global char*)hypercall_buffer+(hcall_size*warp_idx)))";
+    let string_data = format!(
+        "(ulong)((global char *)hypercall_buffer+(hcall_size*warp_idx)+8+({}*4))",
+        arg_count
+    );
 
-     let string_len =
-        "*((global uint*)((global char*)hypercall_buffer+(hcall_size*warp_idx)+4))";
+    let ptr_len = "*((global uint*)((global char*)hypercall_buffer+(hcall_size*warp_idx)))";
+
+    let string_len = "*((global uint*)((global char*)hypercall_buffer+(hcall_size*warp_idx)+4))";
 
     let _size_string_buf = stack_ctx.vstack_pop(StackType::i32);
     let size_ptr_buf = stack_ctx.vstack_pop(StackType::i32);
     let result_register = stack_ctx.vstack_alloc(StackType::i32);
 
     // If ptr_buf_len + string_len > hcall size
-    ret_str += &format!(r#"
+    ret_str += &format!(
+        r#"
     if (({} + {}) > hcall_size) {{
         {}
     }}
 "#,
-    ptr_len,
-    string_len,
-    &emit_trap(TrapCode::TrapOutOfBounds, true)
+        ptr_len,
+        string_len,
+        &emit_trap(TrapCode::TrapOutOfBounds, true)
     );
 
     // copy over the buffer of pointers
@@ -897,14 +900,14 @@ pub fn emit_serverless_invoke_post(
     //ret_str += &format!("\tprintf(\"hcall_ret_val: %p\\n\", {});\n", "hcall_ret_val");
 
     // If hcall_ret_val > hcall size
-    ret_str += &format!(r#"
+    ret_str += &format!(
+        r#"
     if (hcall_ret_val > hcall_size) {{
         {}
     }}
 "#,
-    &emit_trap(TrapCode::TrapOutOfBounds, true)
+        &emit_trap(TrapCode::TrapOutOfBounds, true)
     );
-
 
     // we need to copy the data stored in the hcall buffer, to the json_buf_ptr
     // specifically, we need to de-interleave the data, so the CPU sees the data `normally`
@@ -916,9 +919,9 @@ pub fn emit_serverless_invoke_post(
                         &format!("(global char *)heap_u32+{}", json_buf_ptr), //dst
                         "heap_u32", // mem_start_dst
                         "hcall_ret_val"); // hcall_ret_val is the number of bytes read;
-    //ret_str += &format!("\tulong t2 = get_clock();\n");
-    //ret_str += &format!("\tprintf(\"time: %ld\\n\", t2-t1);\n");
-    //ret_str += &format!("\t}}\n");
+                                          //ret_str += &format!("\tulong t2 = get_clock();\n");
+                                          //ret_str += &format!("\tprintf(\"time: %ld\\n\", t2-t1);\n");
+                                          //ret_str += &format!("\t}}\n");
 
     // this function returns the length of the message in bytes
     ret_str += &format!("\t{} = {};\n", result_register, "hcall_ret_val");
@@ -937,13 +940,14 @@ pub fn emit_serverless_response_pre(
     let json_buf_ptr = stack_ctx.vstack_peak(StackType::i32, 1);
 
     // If our (response len + 4) > hcall size
-    ret_str += &format!(r#"
+    ret_str += &format!(
+        r#"
     if (({} + 4) > hcall_size) {{
         {}
     }}
 "#,
-    json_buf_len,
-    &emit_trap(TrapCode::TrapOutOfBounds, true)
+        json_buf_len,
+        &emit_trap(TrapCode::TrapOutOfBounds, true)
     );
 
     // copy the buffer to the hcall buf so we can return it back via our middleware setup
@@ -1304,13 +1308,14 @@ pub fn emit_random_get_post(
     let result_register = stack_ctx.vstack_alloc(StackType::i32);
 
     // If random_buf_len > hcall size
-    ret_str += &format!(r#"
+    ret_str += &format!(
+        r#"
     if ({} > hcall_size) {{
         {}
     }}
 "#,
-    random_buf_len,
-    &emit_trap(TrapCode::TrapOutOfBounds, true)
+        random_buf_len,
+        &emit_trap(TrapCode::TrapOutOfBounds, true)
     );
 
     // Copy the random bytes back from the hcall_buf to the heap

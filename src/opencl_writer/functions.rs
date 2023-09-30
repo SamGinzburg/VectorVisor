@@ -21,7 +21,7 @@ use wast::token::Index::*;
 /*
  * Notes on Irreducible Control Flow (ICF):
  *
- * WASM includes a set of branching instructions that behave as GOTOs essentially (br, br_if).
+ * WASM includes a set of branching instructions that behave as (structured) GOTOs essentially (br, br_if).
  * These instructions jump directly to a specific label in the program and then continue execution.
  *
  * Using GOTOs is the easiest way to implement this - in fact the official wasm2c compiler uses GOTOs to do

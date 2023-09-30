@@ -1,12 +1,12 @@
 #[derive(Debug)]
 pub enum TrapCode {
-    TrapUnreachable, // unreachable instruction
-    TrapIntOverflow, // used in convops
-    TrapInvalidConversion, // also convops
+    TrapUnreachable,          // unreachable instruction
+    TrapIntOverflow,          // used in convops
+    TrapInvalidConversion,    // also convops
     TrapCallIndirectNotFound, // used when checking call_indirect targets
-    TrapUnimplemented, // used internally for unimplemented WASI call stubs
-    TrapOutOfBounds, // check for OOB access when using the hcall buffer
-                     // (only case where we bypass the software MMU)
+    TrapUnimplemented,        // used internally for unimplemented WASI call stubs
+    TrapOutOfBounds,          // check for OOB access when using the hcall buffer
+                              // (only case where we bypass the software MMU)
 }
 
 pub fn emit_trap(code: TrapCode, emit_semicolon: bool) -> String {
