@@ -243,7 +243,7 @@ pub fn emit_fn_call(
 
     // Now, we need to save the intermediate context
     if !is_indirect && !is_fastcall {
-        ret_str += &stack_ctx.save_context(false, false);
+        ret_str += &stack_ctx.save_context(false, false, false);
     }
 
     // We need to manually write the parameters to the stack
@@ -1095,7 +1095,7 @@ pub fn emit_call_indirect(
         _ => (),
     };
 
-    let save_ctx = stack_ctx.save_context(false, false);
+    let save_ctx = stack_ctx.save_context(false, false, false);
     let restore_ctx = stack_ctx.restore_context(false, false);
 
     // First, generate the code for fastcall optimized cases for the indirect call

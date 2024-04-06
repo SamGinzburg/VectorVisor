@@ -154,7 +154,7 @@ pub fn emit_br(
             if !is_fastcall {
                 // we have to save locals on exiting the stack frame, unless we do it in br_table
                 if !from_br_table {
-                    ret_str += &stack_ctx.save_context(true, false);
+                    ret_str += &stack_ctx.save_context(true, false, false);
                 }
                 ret_str += &format!(
                     "\t{}\n",
@@ -184,7 +184,7 @@ pub fn emit_br(
                 // save the context, since we are about to call a function (ourself)
                 // in br_table we unconditionally save the current locals
                 if !from_br_table {
-                    ret_str += &stack_ctx.save_context(true, false);
+                    ret_str += &stack_ctx.save_context(true, false, false);
                 }
 
                 ret_str += &format!("\t{}\n", "*sfp += 1;");
@@ -309,17 +309,17 @@ pub fn emit_end<'a>(
 
     // before unwinding the stack frame, save the current locals for blocks & loops
     if !is_fastcall && block_type == WasmBlockType::BasicBlock {
-        result += &stack_ctx.save_context(true, false);
+        result += &stack_ctx.save_context(true, false, true);
     } else if !is_fastcall && block_type == WasmBlockType::LoopBlock {
         // For loops that are tainted, we emit a normal save ctx, for optimized loops we want to
         // save everything that would have been saved while nested
         let is_tainted = stack_ctx.is_loop_tainted((loop_idx).try_into().unwrap());
         if is_tainted {
-            result += &stack_ctx.save_context(true, false);
+            result += &stack_ctx.save_context(true, false, false);
         } else {
             // If we are closing an optimized loop, we have to decrement the counter here
             stack_ctx.close_opt_loop();
-            result += &stack_ctx.save_context(true, false);
+            result += &stack_ctx.save_context(true, false, false);
         }
     }
 
@@ -434,7 +434,7 @@ pub fn emit_loop(
 
     if !is_fastcall && is_loop_tainted {
         // We need to save before we push the new stack frame
-        result += &stack_ctx.save_context(false, false);
+        result += &stack_ctx.save_context(false, false, false);
         stack_ctx.vstack_push_stack_frame(false, false);
         stack_ctx.vstack_push_stack_info(stack_ctx.stack_frame_size().try_into().unwrap());
 
@@ -454,7 +454,7 @@ pub fn emit_loop(
     } else {
         // we need to save locals in these cases as well
         if !is_fastcall {
-            result += &stack_ctx.save_context(true, false);
+            result += &stack_ctx.save_context(true, false, false);
         }
 
         // save a stack frame but don't save the context here
@@ -506,7 +506,7 @@ pub fn emit_block(
     let mut result: String = String::from("");
 
     if !is_fastcall {
-        result += &stack_ctx.save_context(false, false);
+        result += &stack_ctx.save_context(false, false, false);
     }
 
     stack_ctx.vstack_push_stack_frame(false, false);
@@ -639,7 +639,7 @@ pub fn emit_br_table(
 
     // save locals
     if !is_fastcall {
-        ret_str += &stack_ctx.save_context(true, false);
+        ret_str += &stack_ctx.save_context(true, false, false);
     }
 
     // generate a switch case for each label index

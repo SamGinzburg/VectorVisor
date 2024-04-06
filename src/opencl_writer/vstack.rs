@@ -2640,6 +2640,27 @@ impl<'a> StackCtx {
             *reduction_size = 0;
         }
 
+        /*
+         * what happens in the nested loop case?
+         * “if a loop is not tainted, extend the restore set through all the nested loops”
+         *
+         * loop 0:
+         *   loop 1:
+         *        save l1
+         *        call fd_write
+         *        restore l0 + l1
+         *   end l1
+         *   // what if we want to read values here?
+         *   // we have to restore them inside loop 1
+         * end l0
+         *
+         * this preserves the invariant that it is impossible to exit a stack frame without
+         * reading the associated context into memory
+         * (relevant when nested loops perform system/recursive/indirect calls).
+         *
+         * i.e.,. when l1 (and in turn l0) ends, all of the values needed for l0 are in memory
+         */
+
         for (key, val) in loop_nested_context_map {
             // For each nested loop, if it is not tainted, we want to add all of the nested stack
             // frame local contexts to it
@@ -3409,10 +3430,13 @@ impl<'a> StackCtx {
 
     /*
      * Generate the code to save the context of the current function
-     * We can statically determine the minimum
+     * We can statically determine the minimum context
      */
 
-    pub fn save_context(&mut self, save_locals_only: bool, save_intermediate_only: bool) -> String {
+    pub fn save_context(&mut self,
+                        save_locals_only: bool,
+                        save_intermediate_only: bool,
+                        fallthrough_case: bool) -> String {
         let mut ret_str = String::from("");
 
         // save the local_cache context
@@ -3440,7 +3464,28 @@ impl<'a> StackCtx {
         let sfp_ptr = "sfp_ptr";
 
         let map_idx = self.stack_frame_stack.last().unwrap();
-        let locals_set = self.save_context_map.get(map_idx).unwrap().clone();
+        let mut locals_set = self.save_context_map.get(map_idx).unwrap().clone();
+
+        /*
+         * If we are in the fallthrough case, we are just immediately reloading values right
+         * after this context save.
+         *
+         * In this case, we get the set of locals we are about to read, and we don't
+         * save anything we would just reload anyways. We can keep these values "dirty" in memory
+         * and this will both prevent the initial write and subsequent unnecessary read.
+         */
+        if fallthrough_case {
+            // check the stack frame we are returning to
+            let read_set = if map_idx-1 > 0{
+                self.restore_context_map.get(&(map_idx-1)).unwrap().clone()
+            } else {
+                HashSet::new()
+            };
+            for local in read_set {
+                dbg!("removing", &local);
+                locals_set.remove(&local);
+            }
+        }
 
         // save the locals to the stack frame
         if !save_intermediate_only {
@@ -3802,9 +3847,31 @@ impl<'a> StackCtx {
         // First, load all locals from memory
         if !restore_intermediates_only {
             let map_idx = self.stack_frame_stack.last().unwrap();
-            let locals_set = self.restore_context_map.get(map_idx).unwrap().clone();
-
-            // ret_str += &self.emit_restore_local_cache();
+            /*
+             * Invariant: All reads from the nested stack frame are in memory when it unwinds
+             * Ex:
+             *
+             * block 0
+             *  block 1:
+             *   ....
+             *  end1
+             *
+             *  all values from block 1 are in memory here still, so no need to restore them
+             *
+             * end0
+             *
+             */
+            let mut locals_set = self.restore_context_map.get(map_idx).unwrap().clone();
+            let prev_local_set = if self.restore_context_map.len() > (*map_idx + 1) as usize {
+                self.restore_context_map.get(&(map_idx + 1)).unwrap().clone()
+            } else {
+                HashSet::new()
+            };
+            dbg!(&prev_local_set);
+            for local in prev_local_set {
+                println!("removing: {}", &local);
+                locals_set.remove(&local);
+            }
 
             for (tmp_local, ty) in self.local_types.iter() {
                 let local: &mut String = &mut tmp_local.clone();
