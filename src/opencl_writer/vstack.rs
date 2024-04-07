@@ -132,6 +132,31 @@ pub struct StackCtx {
     interleave: u32,
     // Track which indirect calls should be optimized (and only emit fastcalls)
     indirect_call_map: HashMap<u32, bool>,
+    /*
+     * Keep track of the previous stack frame for context saving opts
+     * e.g.,
+     *
+     * block 0:
+     *  block 1:
+     *
+     *  end
+     *  block 2:
+     *  end
+     * end
+     *
+     * The parent of block 1,2 is block 0.
+     *
+     * In fallthrough cases:
+     * e.g.,
+     * block 0
+     *  block 1
+     *      // save b1 pre-fallthrough
+     *  end
+     *  // restore b0 post-fallthrough
+     * end
+     *
+     */
+    prev_stack_frame: u32,
 }
 
 type ControlStackType = Vec<(
@@ -2722,6 +2747,7 @@ impl<'a> StackCtx {
             fastcall_opt_possible: is_fastcall,
             interleave: interleave,
             indirect_call_map: indirect_call_map,
+            prev_stack_frame: 0,
         }
     }
 
@@ -2792,6 +2818,7 @@ impl<'a> StackCtx {
 
         // save the context idx values so we can return to them later
         if !is_if_frame {
+            self.prev_stack_frame = *self.stack_frame_stack.last().unwrap_or(&0);
             self.stack_frame_stack.push(self.stack_frame_idx);
             self.stack_frame_idx += 1;
         }
@@ -2808,7 +2835,7 @@ impl<'a> StackCtx {
 
         // restore_context tracking
         if !is_if_frame {
-            self.stack_frame_stack.pop().unwrap();
+            self.prev_stack_frame = self.stack_frame_stack.pop().unwrap();
         }
     }
 
@@ -3471,21 +3498,21 @@ impl<'a> StackCtx {
          * after this context save.
          *
          * In this case, we get the set of locals we are about to read, and we don't
-         * save anything we would just reload anyways. We can keep these values "dirty" in memory
-         * and this will both prevent the initial write and subsequent unnecessary read.
+         * mark the value as written (local_cache[N] = 1) when saving it.
+         *
+         * This prevents a duplicate read of an in-memory value. Later on, if the value is written to again,
+         * it should be saved within that scope, so there is no need to mark it as written.
+         * We can't avoid the write itself, because it could be read later in another scope.
+         *
          */
-        if fallthrough_case {
+        let read_set: HashSet<String> = if fallthrough_case && self.prev_stack_frame > 0 {
             // check the stack frame we are returning to
-            let read_set = if map_idx-1 > 0{
-                self.restore_context_map.get(&(map_idx-1)).unwrap().clone()
-            } else {
-                HashSet::new()
-            };
-            for local in read_set {
-                dbg!("removing", &local);
-                locals_set.remove(&local);
-            }
-        }
+            // we can track whatever the previous frame was
+            self.restore_context_map.get(&self.prev_stack_frame).unwrap().clone()
+            //HashSet::new()
+        } else {
+            HashSet::new()
+        };
 
         // save the locals to the stack frame
         if !save_intermediate_only {
@@ -3621,7 +3648,9 @@ impl<'a> StackCtx {
                         ret_str += &format!("\t}}\n");
                     }
                 }
-                ret_str += &format!("\tlocal_cache[{}] = 0;\n", cache_idx);
+                if !read_set.contains(local) {
+                    ret_str += &format!("\tlocal_cache[{}] = 0;\n", cache_idx);
+                }
             }
         }
 
@@ -3821,6 +3850,7 @@ impl<'a> StackCtx {
         &mut self,
         restore_locals_only: bool,
         restore_intermediates_only: bool,
+        fallthrough_case: bool,
     ) -> String {
         let mut ret_str = String::from("");
         let mut is_empty = true;
@@ -3862,14 +3892,14 @@ impl<'a> StackCtx {
              *
              */
             let mut locals_set = self.restore_context_map.get(map_idx).unwrap().clone();
-            let prev_local_set = if self.restore_context_map.len() > (*map_idx + 1) as usize {
-                self.restore_context_map.get(&(map_idx + 1)).unwrap().clone()
+            let prev_local_set = if fallthrough_case && self.prev_stack_frame > 0 && self.restore_context_map.len() > self.prev_stack_frame as usize {
+                self.restore_context_map.get(&self.prev_stack_frame).unwrap().clone()
             } else {
                 HashSet::new()
             };
-            dbg!(&prev_local_set);
+            //dbg!(&prev_local_set, self.prev_stack_frame, &map_idx);
             for local in prev_local_set {
-                println!("removing: {}", &local);
+                //println!("removing: {}", &local);
                 locals_set.remove(&local);
             }
 
@@ -4176,6 +4206,7 @@ impl<'a> StackCtx {
         &mut self,
         restore_locals_only: bool,
         restore_intermediates_only: bool,
+        fallthrough_case: bool,
         ret_val_type: Option<StackType>,
     ) -> String {
         // Temporarily account for an extra value at the top of the stack
@@ -4188,7 +4219,7 @@ impl<'a> StackCtx {
             None => (),
         }
 
-        let result = self.restore_context(restore_locals_only, restore_intermediates_only);
+        let result = self.restore_context(restore_locals_only, restore_intermediates_only, fallthrough_case);
         // restore prev val
         match ret_val_type {
             Some(StackType::i32) => self.i32_idx += 1,

@@ -490,7 +490,7 @@ pub fn emit_fn_call(
     // We do this here because if we alloc for the return value, we don't want to delete more space
 
     let restore_context = if !is_indirect && !is_fastcall {
-        stack_ctx.restore_context(false, false)
+        stack_ctx.restore_context(false, false, false)
     } else {
         String::from("")
     };
@@ -1096,7 +1096,7 @@ pub fn emit_call_indirect(
     };
 
     let save_ctx = stack_ctx.save_context(false, false, false);
-    let restore_ctx = stack_ctx.restore_context(false, false);
+    let restore_ctx = stack_ctx.restore_context(false, false, false);
 
     // First, generate the code for fastcall optimized cases for the indirect call
     // Allocate a register for return values

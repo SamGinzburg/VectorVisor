@@ -381,11 +381,11 @@ pub fn emit_end<'a>(
         // we only want to load values if we saved them previously for optimized loops!
         // this is because we only emit the save for tainted loops
         if is_tainted {
-            result += &stack_ctx.restore_context_with_result_val(false, false, result_type);
+            result += &stack_ctx.restore_context_with_result_val(false, false, false, result_type);
         }
     } else if !is_fastcall && block_type == WasmBlockType::BasicBlock {
         // for blocks only restore locals
-        result += &stack_ctx.restore_context_with_result_val(false, false, result_type);
+        result += &stack_ctx.restore_context_with_result_val(false, false, true, result_type);
     }
 
     result
@@ -448,7 +448,7 @@ pub fn emit_loop(
         // We have to issue a restore here because on subsequent invocations the state will have changed
         // only restore locals here
 
-        result += &stack_ctx.restore_context(true, false);
+        result += &stack_ctx.restore_context(true, false, false);
 
         *call_ret_idx += 1;
     } else {
@@ -474,7 +474,7 @@ pub fn emit_loop(
         } else {
             // Emit optimized loops for non-tainted cases
             // We want to load all the values we could need, so we disable liveness analysis here
-            result += &stack_ctx.restore_context(true, false);
+            result += &stack_ctx.restore_context(true, false, false);
             result += &format!(
                 "{}\n",
                 format!(
@@ -514,7 +514,7 @@ pub fn emit_block(
 
     // we need to load the locals at the top of each block
     if !is_fastcall {
-        result += &stack_ctx.restore_context(true, false);
+        result += &stack_ctx.restore_context(true, false, false);
     }
 
     // we don't emit a label for block statements here, any br's goto the END of the block

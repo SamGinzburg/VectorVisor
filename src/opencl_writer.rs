@@ -376,7 +376,7 @@ impl<'a> OpenCLCWriter<'_> {
 
         // restore the context
         if !is_proc_exit_start {
-            ret_str += &stack_ctx.restore_context(false, false);
+            ret_str += &stack_ctx.restore_context(false, false, false);
         }
 
         // after the hypercall, we need to reset values on re-entry, and possible copy data back from the hcall buf
