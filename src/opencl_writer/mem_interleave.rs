@@ -1441,7 +1441,7 @@ pub fn generate_bulkmem(fill: bool, interleave: u32) -> String {
     }
 
     match (fill, interleave) {
-        (true, 1) => {
+        (true, 1 | 4 | 8) => {
             result += &format!(
                 "\t\t\t\t\t{};\n",
                 &emit_write_u32_aligned(
@@ -1478,75 +1478,8 @@ pub fn generate_bulkmem(fill: bool, interleave: u32) -> String {
                     "warp_id"
                 ),
             );
-        }
-        (true, 4) => {
-            result += &format!(
-                "\t\t\t\t\t{};\n",
-                &emit_write_u32_fast(
-                    "(ulong)(dst+counter+unroll)",
-                    "(ulong)(heap_base)",
-                    &"fillval",
-                ),
-            );
-            result += &format!(
-                "\t\t\t\t\t{};\n",
-                &emit_write_u32_fast(
-                    "(ulong)(dst+counter+unroll+4)",
-                    "(ulong)(heap_base)",
-                    &"fillval",
-                ),
-            );
-            result += &format!(
-                "\t\t\t\t\t{};\n",
-                &emit_write_u32_fast(
-                    "(ulong)(dst+counter+unroll+8)",
-                    "(ulong)(heap_base)",
-                    &"fillval",
-                ),
-            );
-            result += &format!(
-                "\t\t\t\t\t{};\n",
-                &emit_write_u32_fast(
-                    "(ulong)(dst+counter+unroll+12)",
-                    "(ulong)(heap_base)",
-                    &"fillval",
-                ),
-            );
-        }
-        (true, _) => {
-            result += &format!(
-                "\t\t\t\t\t{};\n",
-                &emit_write_u64_fast(
-                    "(ulong)(dst+counter+unroll)",
-                    "(ulong)(heap_base)",
-                    &"fillval",
-                ),
-            );
-            result += &format!(
-                "\t\t\t\t\t{};\n",
-                &emit_write_u64_fast(
-                    "(ulong)(dst+counter+unroll+8)",
-                    "(ulong)(heap_base)",
-                    &"fillval",
-                ),
-            );
-            result += &format!(
-                "\t\t\t\t\t{};\n",
-                &emit_write_u64_fast(
-                    "(ulong)(dst+counter+unroll+16)",
-                    "(ulong)(heap_base)",
-                    &"fillval",
-                ),
-            );
-            result += &format!(
-                "\t\t\t\t\t{};\n",
-                &emit_write_u64_fast(
-                    "(ulong)(dst+counter+unroll+24)",
-                    "(ulong)(heap_base)",
-                    &"fillval",
-                ),
-            );
-        }
+        },
+        (true, _) => panic!("invalid interleave specified for bulkmemfill"),
         // For interleaves of 1/8 it is better to emit standard ops
         // But only for memcpy, for memfill this is not needed
         (false, 1) => {
