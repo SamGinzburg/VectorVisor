@@ -1571,21 +1571,26 @@ impl OpenCLRunner {
          *
          */
 
-        let num_threads = if num_cpus::get() as u32 > self.num_vms {
-            self.num_vms as u32
-        } else {
-            num_cpus::get() as u32
-        };
+        // fix bug which happens when # vms % core count != 0
+        let number_vms = self.num_vms.clone();
+        let mut num_threads = num_cpus::get() as u32;
 
-        //let num_threads = 1;
-        //let num_threads = num_cpus::get() as u32;
+        for idx in (1..=num_threads).rev() {
+            if number_vms % idx == 0 {
+                num_threads = idx;
+                break;
+            }
+            num_threads -= 1;
+        }
+
+        dbg!(num_threads);
+
         let thread_pool = rayon::ThreadPoolBuilder::new()
             .num_threads(num_threads.try_into().unwrap())
             .stack_size(1024 * 256)
             .build()
             .unwrap();
 
-        let number_vms = self.num_vms.clone();
         let (result_sender, result_receiver): (
             SyncSender<HyperCallResult>,
             SyncReceiver<HyperCallResult>,
@@ -1628,6 +1633,7 @@ impl OpenCLRunner {
                 let mut worker_vms: Vec<VectorizedVM> = vec![];
                 let mut vm_id_vec = vec![];
                 let mut vm_id_mapping: HashMap<u32, u32> = HashMap::new();
+
                 for idx in 0..number_vms / num_threads {
                     let vm_index = idx + (thread_idx * (number_vms / num_threads));
                     //let vm_index = vm_counter.fetch_add(1, Ordering::Relaxed);
